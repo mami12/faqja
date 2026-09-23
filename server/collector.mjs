@@ -79,7 +79,26 @@ export function statsFromRow(row) {
   const home = homeId ? map[homeId] ?? null : null;
   const away = awayId ? map[awayId] ?? null : null;
   if (!home && !away) return null;
-  return { home, away };
+
+  // if the feed ever reports goals per team, surface them as a usable score
+  let goals = null;
+  if (home && away) {
+    const key = Object.keys(home).find((k) => k.startsWith('goals:'));
+    if (key && home[key] !== null && away[key] !== null) goals = { home: home[key], away: away[key] };
+  }
+  return { home, away, goals };
+}
+
+/**
+ * Score priority: explicit home_score/away_score (from periodsScore) first,
+ * then a goals value inside scoreBoard if the feed ever sends one.
+ */
+export function scoreFromRow(row) {
+  if (row?.home_score !== null && row?.home_score !== undefined) {
+    return { home: row.home_score, away: row.away_score };
+  }
+  const stats = statsFromRow(row);
+  return stats?.goals ?? null;
 }
 
 export function serializeMatch(row, oddsRows = [], now = Date.now()) {
@@ -99,7 +118,7 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     tournament: { id: row.tournament_id, name: row.tournament_name },
     home: row.home,
     away: row.away,
-    score: row.home_score === null || row.home_score === undefined ? null : { home: row.home_score, away: row.away_score },
+    score: scoreFromRow(row),
     periodsScore: row.periods_score ?? null,
     stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,

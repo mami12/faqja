@@ -197,10 +197,27 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 
     let matchInfoApplied = 0;
     for (const info of infos) {
-      const updated = await applyMatchInfo(info);
+      // if scoreBoard carried per-team goals, keep them as the match score even
+      // when later frames only report corners/cards
+      let enriched = info;
+      if (info.stats && info.homeScore === null) {
+        const row = await getMatchById(info.matchId);
+        const hId = row?.raw?.homeTeam?.id != null ? String(row.raw.homeTeam.id) : null;
+        const aId = row?.raw?.awayTeam?.id != null ? String(row.raw.awayTeam.id) : null;
+        const goalsOf = (s) => {
+          if (!s) return null;
+          const hit = Object.entries(s).find(([k]) => k.startsWith('goals:'));
+          return hit ? hit[1] : null;
+        };
+        const hg = hId ? goalsOf(info.stats[hId]) : null;
+        const ag = aId ? goalsOf(info.stats[aId]) : null;
+        if (hg !== null && ag !== null) enriched = { ...info, homeScore: hg, awayScore: ag };
+      }
+
+      const updated = await applyMatchInfo(enriched);
       if (updated) {
         matchInfoApplied++;
-        io?.emit('match:info', { ...info, ...updated, stats: statsFromRow(updated) });
+        io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
       }
     }
 

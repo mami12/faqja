@@ -166,6 +166,7 @@ export function decodePushMessage(message) {
     const away = periods.reduce((s, p) => s + (Number(p.t2) || 0), 0);
 
     // per-team live statistics, e.g. {"87150":{"corners":"2","yellowCards":"1","redCards":"0"}, ...}
+    // parsed generically so a goals/score field would be picked up too
     const rawResults = data.scoreBoard?.results;
     let stats = null;
     if (rawResults && typeof rawResults === 'object') {
@@ -173,11 +174,18 @@ export function decodePushMessage(message) {
       for (const [competitorId, r] of Object.entries(rawResults)) {
         if (!r || typeof r !== 'object') continue;
         const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
-        stats[competitorId] = {
+        const entry = {
           corners: n(r.corners),
           yellow: n(r.yellowCards),
           red: n(r.redCards),
         };
+        for (const [k, v] of Object.entries(r)) {
+          if (/^(corners|yellowCards|redCards)$/i.test(k)) continue;
+          if (!/goal|score|point/i.test(k)) continue;
+          const num = n(v);
+          if (num !== null) entry[`goals:${k}`] = num;
+        }
+        stats[competitorId] = entry;
       }
     }
 
