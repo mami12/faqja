@@ -1,0 +1,31 @@
+{
+  "name": "faqja",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Real-football live/prematch board: Render backend (Node) + GitHub Pages frontend + Supabase Postgres",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "probe:db": "node scripts/probe-db.mjs",
+    "probe:gateway": "node scripts/probe-gateway.mjs",
+    "probe:sockets": "node scripts/probe-sockets.mjs",
+    "probe:subscribe": "node scripts/probe-subscribe.mjs",
+    "probe:push": "node scripts/probe-push2.mjs",
+    "probe:local": "node scripts/probe-local-socket.mjs",
+    "test:frames": "node scripts/test-frames.mjs",
+    "test:ingest": "node scripts/test-live-ingest.mjs",
+    "test:markets": "node scripts/test-markets.mjs",
+    "odds:clean": "node scripts/clean-odds.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "socket.io": "^4.8.3",
+    "ws": "^8.21.3"
+  }
+}

@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: faqja-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22.11.0"
+      - key: DATABASE_URL
+        sync: false           # paste the Supabase pooler URL in the dashboard
+      - key: UPSTREAM_GATEWAY
+        value: https://api-gateway.gw-lucky-bet.com
+      - key: PARTNER_ID
+        value: d3edfa27-7cac-4f77-9e6e-4e2fa2d1ab5f
+      - key: LANG_CODE
+        value: en-001
+      - key: POLL_INTERVAL_MS
+        value: "10000"
+      - key: ALLOWED_ORIGINS
+        sync: false           # e.g. https://yourname.github.io
+      - key: INGEST_TOKEN
+        generateValue: true   # copy this value into your odds pusher
+      - key: ODDS_SOCKET
+        value: "false"        # set true once ODDS_SUBSCRIBE_FRAMES are known
