@@ -98,15 +98,16 @@ const isTotalPair = (outcomes) =>
 
 /** /subgames/get-many?sportId=18 -> market family per subgame id (verified against the API) */
 const SUBGAME_FAMILY = {
-  2: 'result',   // Main
   3: 'total',    // Total
   6: 'other',    // Handicap
   11: 'other',   // Correct Score
   13: 'corners', // Corners
   174: 'cards',  // Cards/Penalties
 };
-// checked in this order, so "Corners. Odd/Even" ([3,13]) counts as corners
-const SUBGAME_PRIORITY = ['13', '174', '3', '2'];
+// checked in this order, so "Corners. Odd/Even" ([3,13]) counts as corners.
+// NOTE: subgame 2 ("Main") is a bucket marker present on most markets, so it is
+// deliberately not mapped - otherwise everything lands in the 1X2 column.
+const SUBGAME_PRIORITY = ['13', '174', '3', '6', '11'];
 
 function columnFromSubgames(subgames = '') {
   const ids = String(subgames).split(',').map((s) => s.trim()).filter(Boolean);
@@ -118,9 +119,13 @@ function columnFromSubgames(subgames = '') {
 function columnFromName(name) {
   const s = String(name).toLowerCase();
   if (/corner/.test(s)) return 'corners';
-  if (/card|booking|penalt|yellow|red/.test(s)) return 'cards';
-  if (/1x2|1 ?x ?2|result|winner|double chance|moneyline|to win|to qualify/.test(s)) return 'result';
-  if (/total|over\/?under|goals|handicap|asian|odd\/even/.test(s)) return 'total';
+  // word boundaries matter: "scored" must not match "red"
+  if (/\bcards?\b|\bbookings?\b|penalt|yellow|\bred\b/.test(s)) return 'cards';
+  if (/1x2|1 ?x ?2|full time result|match result|winner|double chance|moneyline|to win|to qualify/.test(s)) {
+    return 'result';
+  }
+  if (/handicap|fora|asian/.test(s)) return 'other';
+  if (/total|over\/?under|\bgoals?\b|odd\/even/.test(s)) return 'total';
   return 'other';
 }
 
@@ -134,7 +139,11 @@ function describeMarket({ name, typeId, groupId, line, renderType, outcomes, sub
 
   const subColumn = columnFromSubgames(subgames);
 
-  if (name) return { column: subColumn ?? columnFromName(name), name };
+  if (name) {
+    // the feed's own market name is the most reliable signal; subgames only fill gaps
+    const byName = columnFromName(name);
+    return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name };
+  }
 
   const fromType = MARKET_MAP.types[String(typeId)];
   if (fromType) return { column: subColumn ?? fromType.column, name: fromType.name };
@@ -160,10 +169,18 @@ export function decodePushMessage(message) {
   const type = message?.messageType;
   const data = message?.data ?? {};
 
-  if (type === 'match-info') {
+  if (type === 'match-info' || type === 'match-info-snapshot') {
     const periods = Array.isArray(data.periodsScore) ? data.periodsScore : [];
-    const home = periods.reduce((s, p) => s + (Number(p.t1) || 0), 0);
-    const away = periods.reduce((s, p) => s + (Number(p.t2) || 0), 0);
+    const periodHome = periods.reduce((s, p) => s + (Number(p.t1) || 0), 0);
+    const periodAway = periods.reduce((s, p) => s + (Number(p.t2) || 0), 0);
+
+    // matchScore.t1/t2 is the current score ("1","0"); periodsScore is the per-period breakdown
+    const hasScore = data.matchScore && data.matchScore.t1 !== undefined && data.matchScore.t2 !== undefined;
+    const score = hasScore
+      ? { home: Number(data.matchScore.t1), away: Number(data.matchScore.t2) }
+      : periods.length
+        ? { home: periodHome, away: periodAway }
+        : null;
 
     // per-team live statistics, e.g. {"87150":{"corners":"2","yellowCards":"1","redCards":"0"}, ...}
     // parsed generically so a goals/score field would be picked up too
@@ -198,14 +215,19 @@ export function decodePushMessage(message) {
         providerId: data.providerId ?? null,
         enabledOddsCount: data.enabledOddsCount ?? null,
         periodsScore: periods,
-        homeScore: periods.length ? home : null,
-        awayScore: periods.length ? away : null,
+        homeScore: score ? score.home : null,
+        awayScore: score ? score.away : null,
+        // real clock + feed state
+        matchTimeMs: Number.isFinite(Number(data.matchTime)) ? Number(data.matchTime) : null,
+        feedStatus: typeof data.status === 'string' ? data.status : null,
+        hasOpenOdds: data.hasOpenOdds === true ? true : null,
+        broadcastUrl: typeof data.broadcast?.url === 'string' ? data.broadcast.url : null,
         stats,
       },
     };
   }
 
-  if (type === 'match-odds') {
+  if (type === 'match-odds' || type === 'match-odds-snapshot') {
     const matchId = Number(data.matchId);
     const rows = [];
     let groups = 0;
@@ -227,7 +249,16 @@ export function decodePushMessage(message) {
 
         const tuple = extractOddsTuple(item.id);
         const period = tuple?.period ?? 0;
-        const rawLine = tuple ? (tuple.line ?? null) : null;
+        // provider-10 ids carry no line in the bracket, but the price object does
+        // ("vars":{"v1":"1.5"}); fall back to it before inventing a synthetic line
+        const varsLine = item.vars
+          ? Object.values(item.vars).find((v) => /^-?\d+(\.\d+)?$/.test(String(v)))
+          : null;
+        const rawLine = tuple && tuple.line !== null && tuple.line !== undefined
+          ? tuple.line
+          : varsLine !== undefined && varsLine !== null
+            ? Number(varsLine)
+            : null;
         const missingLine = rawLine === null || rawLine === undefined || rawLine === '';
         // ids from some providers carry no line, and one group then repeats
         // under/over for several lines -> keep a synthetic line so keys stay unique

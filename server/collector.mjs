@@ -11,11 +11,24 @@ export function buildMarkets(oddsRows) {
   for (const o of oddsRows) {
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
+      // classify from the name at read time; the provider stops re-sending
+      // unchanged markets, so a stored column can go stale. market-map.json
+      // overrides still apply because they set the market *name*.
+      const name = o.market_name ?? '';
+      const byName = marketColumn(o.market_key, name);
+      const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)?$/i.test(String(name).trim());
+      const column = /handicap|fora|asian/i.test(String(name))
+        ? 'other'
+        : byName !== 'other'
+          ? byName
+          : named
+            ? 'other'
+            : o.board_column ?? 'other';
       markets.set(key, {
         key: o.market_key,
         name: o.market_name,
         line: o.line,
-        column: o.board_column ?? marketColumn(o.market_key, o.market_name),
+        column,
         period: Number(o.period ?? 0),
         isBase: o.is_base === true,
         order: Number(o.grp_order ?? 0),
@@ -89,6 +102,18 @@ export function statsFromRow(row) {
   return { home, away, goals };
 }
 
+/** "Break Time" / H1 / H2 / Finished -> board phase */
+export function phaseFromStatus(status) {
+  const s = String(status ?? '').toLowerCase();
+  if (!s) return null;
+  if (/break|half.?time|interval|\bht\b/.test(s)) return 'HT';
+  if (/(^|[^a-z])h1\b|\b1st|first half/.test(s)) return '1H';
+  if (/(^|[^a-z])h2\b|\b2nd|second half/.test(s)) return '2H';
+  if (/finish|ended|\bft\b|after (match|penalt)/.test(s)) return 'FT';
+  if (/not.?started|prepar|upcoming|scheduled/.test(s)) return 'pre';
+  return null;
+}
+
 /**
  * Score priority: explicit home_score/away_score (from periodsScore) first,
  * then a goals value inside scoreBoard if the feed ever sends one.
@@ -103,7 +128,18 @@ export function scoreFromRow(row) {
 
 export function serializeMatch(row, oddsRows = [], now = Date.now()) {
   const startAt = row.start_at instanceof Date ? row.start_at : new Date(row.start_at);
-  const clock = row.service === 'LIVE' ? liveClock(startAt, now) : { minute: null, phase: 'pre', status: 'scheduled' };
+  const derived = row.service === 'LIVE' ? liveClock(startAt, now) : { minute: null, phase: 'pre', status: 'scheduled' };
+
+  // match-info gives the real clock (matchTime in ms) and feed state ("Break Time", H1/H2, Finished)
+  const feedMs = Number(row.match_time_ms);
+  const feedMinute = Number.isFinite(feedMs) && feedMs >= 0 ? Math.floor(feedMs / 60000) : null;
+  const feedPhase = phaseFromStatus(row.feed_status);
+
+  const clock = {
+    minute: feedMinute ?? derived.minute,
+    phase: feedPhase ?? derived.phase,
+    status: row.service === 'LIVE' ? (feedPhase === 'FT' ? 'ended' : 'live') : derived.status,
+  };
   const markets = buildMarkets(oddsRows);
 
   return {
@@ -113,6 +149,10 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     status: clock.status,
     phase: clock.phase,
     minute: clock.minute,
+    minuteSource: feedMinute !== null || feedPhase ? 'feed' : 'derived',
+    feedStatus: row.feed_status ?? null,
+    hasOpenOdds: row.has_open_odds ?? null,
+    watchUrl: row.broadcast_url ?? null,
     startAt: startAt.toISOString(),
     league: { slug: row.category_slug, name: row.category_name },
     tournament: { id: row.tournament_id, name: row.tournament_name },

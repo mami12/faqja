@@ -71,6 +71,12 @@ alter table matches add column if not exists odds_count    int;
 alter table matches add column if not exists stats         jsonb;
 alter table odds_current add column if not exists subgames text;
 
+-- from match-info: the real clock, feed state and stream link
+alter table matches add column if not exists match_time_ms  bigint;
+alter table matches add column if not exists feed_status   text;
+alter table matches add column if not exists has_open_odds boolean;
+alter table matches add column if not exists broadcast_url text;
+
 -- added later: full market tree (every odds group the feed sends, not just the board columns)
 alter table odds_current add column if not exists is_base     boolean not null default false;
 alter table odds_current add column if not exists grp_order   int     not null default 0;

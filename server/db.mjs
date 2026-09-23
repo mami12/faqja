@@ -165,6 +165,14 @@ export async function getOddsForMatches(matchIds) {
 export async function saveOdds(rows) {
   if (!rows.length) return { changed: [] };
 
+  // a buffered batch can hold the same outcome twice (snapshot + delta), and
+  // Postgres refuses to update the same row twice in one INSERT..ON CONFLICT
+  const dedup = new Map();
+  for (const row of rows) {
+    dedup.set(`${row.matchId}|${row.marketKey}|${row.line ?? ''}|${row.outcomeKey}`, row);
+  }
+  rows = [...dedup.values()];
+
   const matchIds = [...new Set(rows.map((r) => r.matchId))];
   const before = await getOddsForMatches(matchIds);
   const beforeMap = new Map(
@@ -238,7 +246,7 @@ export async function logRawFrame(source, payload) {
   await query('insert into raw_frames (source, payload) values ($1, $2)', [source, JSON.stringify(payload ?? {})]);
 }
 
-/** live score / period info pushed as "match-info" */
+/** live score / clock / stats pushed as "match-info" or "match-info-snapshot" */
 export async function applyMatchInfo(info) {
   if (!info?.matchId) return null;
   const res = await query(
@@ -248,9 +256,14 @@ export async function applyMatchInfo(info) {
         periods_score = coalesce($4::jsonb, periods_score),
         odds_count    = coalesce($5, odds_count),
         stats         = coalesce($6::jsonb, stats),
+        match_time_ms = coalesce($7, match_time_ms),
+        feed_status   = coalesce($8, feed_status),
+        has_open_odds = coalesce($9, has_open_odds),
+        broadcast_url = coalesce($10, broadcast_url),
         updated_at    = now()
       where match_id = $1
-      returning match_id, home_score, away_score, periods_score, odds_count, stats, raw`,
+      returning match_id, home_score, away_score, periods_score, odds_count, stats, raw,
+                match_time_ms, feed_status, has_open_odds, broadcast_url`,
     [
       info.matchId,
       Number.isFinite(info.homeScore) ? info.homeScore : null,
@@ -258,6 +271,10 @@ export async function applyMatchInfo(info) {
       info.periodsScore?.length ? JSON.stringify(info.periodsScore) : null,
       Number.isFinite(info.enabledOddsCount) ? info.enabledOddsCount : null,
       info.stats && Object.keys(info.stats).length ? JSON.stringify(info.stats) : null,
+      Number.isFinite(info.matchTimeMs) ? info.matchTimeMs : null,
+      typeof info.feedStatus === 'string' ? info.feedStatus : null,
+      typeof info.hasOpenOdds === 'boolean' ? info.hasOpenOdds : null,
+      typeof info.broadcastUrl === 'string' ? info.broadcastUrl : null,
     ],
   );
   return res.rows[0] ?? null;
@@ -281,6 +298,23 @@ export async function getOddsHistory(matchId, limit = 200) {
     [matchId, Math.min(Number(limit) || 200, 1000)],
   );
   return res.rows;
+}
+
+/** ids the push channel should be subscribed to */
+export async function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150 } = {}) {
+  const live = await query(
+    `select match_id from matches
+      where active and service = 'LIVE' and status <> 'ended'
+      order by start_at limit $1`,
+    [liveLimit],
+  );
+  const prematch = await query(
+    `select match_id from matches
+      where active and service = 'PREMATCH' and status <> 'ended'
+      order by start_at limit $1`,
+    [prematchLimit],
+  );
+  return { live: live.rows.map((r) => r.match_id), prematch: prematch.rows.map((r) => r.match_id) };
 }
 
 export async function closePool() {

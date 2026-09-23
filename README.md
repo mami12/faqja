@@ -98,7 +98,36 @@ match 40370446 Malawi U20 - Comoros U20 (82')
 Alternatives that also work today: `POST /ingest/odds` (documented below) for any other source, or
 `ODDS_SUBSCRIBE_FRAMES` + `ODDS_SOCKET=true` for a future server-side socket connection.
 
-### Corners / cards naming
+### Server-side subscription (no browser needed)
+
+`ODDS_SOCKET=true` makes the backend subscribe to the push channel itself — verified working:
+
+```
+-> 40
+<- 40{"sid":…,"pid":…}
+-> 42["subscribe",{"messageType":"subscribe-match-odds","data":{"matchIds":[…50…],"isBaseOddsGroups":true|false}}]
+-> 42["subscribe",{"messageType":"subscribe-match-info","data":{"matchIds":[…50…]}}]
+<- 42["u",{"messageType":"match-odds-snapshot"|"match-odds"|"match-info-snapshot"|"match-info",…},id]
+<- 2  /  -> 3        heartbeat
+```
+
+Live run (`[pusher] subscribed live=19 (full markets 19) prematch=100`):
+
+| | |
+|---|---|
+| frames / odds messages / info messages | 633 / 462 / 171 in ~55 s |
+| live matches with odds | 18 of 19 |
+| markets per live match | 48–71 (incl. **cards** and **corners** columns) |
+| score | `Iraq - Oman 1-0`, `Al-Bataeh - Palm City 0-1` … from `matchScore.t1/t2` |
+| clock | `54' 2nd Half` from `matchTime` (ms) + `status` — no more guessing |
+| corners/cards | `corners 3-3`, `0-3` from `scoreBoard.results` |
+| suspension | `status !== 1` per outcome, `hasOpenOdds` per match |
+
+Env knobs: `SUBSCRIBE_FULL_LIMIT` (live matches that get the full market list, default 60),
+`SUBSCRIBE_LIVE_LIMIT` / `SUBSCRIBE_PREMATCH_LIMIT` (how many ids to subscribe),
+`SUBSCRIBE_FULL_MARKETS=false` (base markets only). The browser relay (`/ingest/frames`) keeps
+working and is the fallback if the channel ever blocks the server's IP again.
+
 
 Market **names** are not in the payload and there's no REST lookup for them, so columns come from
 `market-map.json` (copy `market-map.example.json`) plus heuristics:

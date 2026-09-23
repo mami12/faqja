@@ -51,14 +51,15 @@ export function marketLabel(key) {
   return MARKET_LABELS[k] ?? String(key);
 }
 
-/** Which board column a market belongs to. */
+/** Which board column a market belongs to (read-time classification). */
 export function marketColumn(key = '', name = '') {
   const s = `${key} ${name}`.toLowerCase();
   if (/corner/.test(s)) return 'corners';
-  if (/card|booking|yellow|red/.test(s)) return 'cards';
-  if (/1x2|1 ?x ?2|result|winner|moneyline|match ?winner|full time/.test(s)) return 'result';
-  if (/total|over\s*\/?\s*under|\bou\b|goals/.test(s)) return 'total';
-  if (/handicap|fora/.test(s)) return 'other';
+  // word boundaries matter: "goals sco-red" must not look like a red card
+  if (/\bcards?\b|\bbookings?\b|penalt|yellow|\bred\b/.test(s)) return 'cards';
+  if (/1x2|1 ?x ?2|full time result|match result|winner|double chance|moneyline/.test(s)) return 'result';
+  if (/handicap|fora|asian/.test(s)) return 'other';
+  if (/total|over\/?under|\bgoals?\b|odd\/even/.test(s)) return 'total';
   return 'other';
 }
 

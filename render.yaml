@@ -26,4 +26,6 @@ services:
       - key: INGEST_TOKEN
         generateValue: true   # copy this value into your odds pusher
       - key: ODDS_SOCKET
-        value: "false"        # set true once ODDS_SUBSCRIBE_FRAMES are known
+        value: "true"         # backend subscribes to the push channel itself
+      - key: SUBSCRIBE_FULL_LIMIT
+        value: "60"           # live matches with the full market list (corners, cards, ...)

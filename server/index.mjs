@@ -6,15 +6,18 @@ import { config } from './config.mjs';
 import {
   initSchema, dbHealth, getMatches, getMatchById, getLeagues, getCounts,
   getOddsForMatches, getOddsHistory, recentRawFrames, closePool, applyMatchInfo, logRawFrame, knownMatchIds,
+  getSubscriptionIds,
 } from './db.mjs';
-import { normalizeOddsPayload, applyOddsRows, startOddsSocket, groupByMatch } from './odds.mjs';
+import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
 import { decodePushBatch } from './push-decode.mjs';
+import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
 
 let collector = null;
+let pusher = null;
 let oddsStatus = { connected: false };
 
 app.use(cors({ origin: corsOrigin }));
@@ -47,6 +50,7 @@ app.get('/health', async (_req, res) => {
     db,
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
+    pusher: pusher?.stats() ?? null,
     upstream: config.gateway,
     at: new Date().toISOString(),
   });
@@ -119,6 +123,56 @@ function broadcastOdds(changed) {
     });
   }
 }
+
+/** applies a decoded match-info (score / clock / stats) and broadcasts it */
+async function applyInfoFromFeed(info) {
+  // if scoreBoard carried per-team goals, keep them as the match score even
+  // when later frames only report corners/cards
+  let enriched = info;
+  if (info.stats && info.homeScore === null) {
+    const row = await getMatchById(info.matchId);
+    const hId = row?.raw?.homeTeam?.id != null ? String(row.raw.homeTeam.id) : null;
+    const aId = row?.raw?.awayTeam?.id != null ? String(row.raw.awayTeam.id) : null;
+    const goalsOf = (s) => {
+      if (!s) return null;
+      const hit = Object.entries(s).find(([k]) => k.startsWith('goals:'));
+      return hit ? hit[1] : null;
+    };
+    const hg = hId ? goalsOf(info.stats[hId]) : null;
+    const ag = aId ? goalsOf(info.stats[aId]) : null;
+    if (hg !== null && ag !== null) enriched = { ...info, homeScore: hg, awayScore: ag };
+  }
+
+  const updated = await applyMatchInfo(enriched);
+  if (updated) io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
+  return updated;
+}
+
+/* ---- coalescer for the server-side subscription (frames arrive in bursts) ---- */
+const oddsBuffer = [];
+const infoBuffer = new Map();
+let flushing = false;
+
+async function flushFeedBuffer() {
+  if (flushing || (!oddsBuffer.length && !infoBuffer.size)) return;
+  flushing = true;
+  try {
+    if (oddsBuffer.length) {
+      const rows = oddsBuffer.splice(0, oddsBuffer.length);
+      broadcastOdds(await applyOddsRows(rows));
+    }
+    if (infoBuffer.size) {
+      const infos = [...infoBuffer.values()];
+      infoBuffer.clear();
+      for (const info of infos) await applyInfoFromFeed(info);
+    }
+  } catch (e) {
+    console.error('[feed] flush failed:', e.message);
+  } finally {
+    flushing = false;
+  }
+}
+setInterval(flushFeedBuffer, 1000);
 
 app.post('/ingest/odds', requireToken, async (req, res, next) => {
   try {
@@ -197,28 +251,7 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 
     let matchInfoApplied = 0;
     for (const info of infos) {
-      // if scoreBoard carried per-team goals, keep them as the match score even
-      // when later frames only report corners/cards
-      let enriched = info;
-      if (info.stats && info.homeScore === null) {
-        const row = await getMatchById(info.matchId);
-        const hId = row?.raw?.homeTeam?.id != null ? String(row.raw.homeTeam.id) : null;
-        const aId = row?.raw?.awayTeam?.id != null ? String(row.raw.awayTeam.id) : null;
-        const goalsOf = (s) => {
-          if (!s) return null;
-          const hit = Object.entries(s).find(([k]) => k.startsWith('goals:'));
-          return hit ? hit[1] : null;
-        };
-        const hg = hId ? goalsOf(info.stats[hId]) : null;
-        const ag = aId ? goalsOf(info.stats[aId]) : null;
-        if (hg !== null && ag !== null) enriched = { ...info, homeScore: hg, awayScore: ag };
-      }
-
-      const updated = await applyMatchInfo(enriched);
-      if (updated) {
-        matchInfoApplied++;
-        io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
-      }
+      if (await applyInfoFromFeed(info)) matchInfoApplied++;
     }
 
     if (unknown.length) {
@@ -282,24 +315,25 @@ async function boot() {
 
   collector = startCollector({ io });
 
-  if (process.env.ODDS_SOCKET === 'true' || config.subscribeFrames.length > 0) {
-    const sock = startOddsSocket({
-      onRows: async (rows) => {
-        try {
-          broadcastOdds(await applyOddsRows(rows));
-        } catch (e) {
-          console.error('[odds] persist failed:', e.message);
-        }
-      },
+  if (process.env.ODDS_SOCKET === 'true') {
+    pusher = startPusher({
+      getIds: () =>
+        getSubscriptionIds({
+          liveLimit: Number(process.env.SUBSCRIBE_LIVE_LIMIT ?? 250),
+          prematchLimit: Number(process.env.SUBSCRIBE_PREMATCH_LIMIT ?? 150),
+        }),
+      fullMarkets: process.env.SUBSCRIBE_FULL_MARKETS !== 'false',
+      fullMarketsLiveLimit: Number(process.env.SUBSCRIBE_FULL_LIMIT ?? 60),
+      onOdds: (rows) => oddsBuffer.push(...rows),
+      onInfo: (info) => infoBuffer.set(info.matchId, info),
       onStatus: (s) => {
         oddsStatus = { ...oddsStatus, ...s };
         io.emit('odds:socket', oddsStatus);
       },
     });
-    process.on('SIGTERM', () => sock.close());
-    process.on('SIGINT', () => sock.close());
+    console.log('[pusher] server-side odds subscription enabled');
   } else {
-    console.log('[odds] upstream socket disabled (set ODDS_SOCKET=true or ODDS_SUBSCRIBE_FRAMES=.. to enable)');
+    console.log('[odds] server-side subscription off (set ODDS_SOCKET=true); the browser relay still feeds /ingest/frames');
   }
 }
 
@@ -309,6 +343,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, async () => {
     console.log(`[app] ${sig} received, shutting down`);
     collector?.stop();
+    pusher?.close();
     io.close();
     server.close();
     await closePool();

@@ -30,6 +30,10 @@ for (const i of infos) {
     `  match ${i.matchId} service=${i.service} provider=${i.providerId} oddsCount=${i.enabledOddsCount} score=${i.homeScore}-${i.awayScore} periods=${JSON.stringify(i.periodsScore)}`,
   );
   if (i.stats) console.log(`      stats by competitor: ${JSON.stringify(i.stats)}`);
+  if (i.matchTimeMs !== null && i.matchTimeMs !== undefined) {
+    console.log(`      clock: ${Math.floor(i.matchTimeMs / 60000)}' (${i.matchTimeMs} ms)  feedStatus=${i.feedStatus}  hasOpenOdds=${i.hasOpenOdds}`);
+  }
+  if (i.broadcastUrl) console.log(`      watch: ${i.broadcastUrl.slice(0, 80)}...`);
 }
 
 console.log('\n--- match-odds ---');
