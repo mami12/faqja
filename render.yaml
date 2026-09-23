@@ -22,7 +22,7 @@ services:
       - key: POLL_INTERVAL_MS
         value: "10000"
       - key: ALLOWED_ORIGINS
-        sync: false           # e.g. https://yourname.github.io
+        value: https://mami12.github.io      # add more, comma separated, e.g. http://localhost:8080
       - key: INGEST_TOKEN
         generateValue: true   # copy this value into your odds pusher
       - key: ODDS_SOCKET
