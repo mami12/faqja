@@ -45,6 +45,13 @@ Your captured frames gave the payload format, which is now implemented in `serve
 ```
 
 * `cf` = price, `status: 1` = active (**anything else = suspended** → dimmed + struck through)
+* `match-info.scoreBoard.results` → **per-team live statistics** (`{"87150":{"corners":"2","yellowCards":"1","redCards":"0"}}`),
+  mapped to home/away through the competitor ids and shown as `corners 2-3 · cards 1-0` on the row
+* `oddsGroups[].name` → the feed's **own market name** (`"Corners. Result"`, `"Corners. Double chance"`),
+  and each price carries `outcome` (`"1x"`, `"odd"`) plus `name` (`"Iraq Or Draw"`) — no guessing needed for those
+* `oddsGroups[].subgameIds` → market family, from `/subgames/get-many?sportId=18`:
+  `2 Main · 3 Total · 6 Handicap · 7 Halves · 11 Correct Score · 13 Corners · 174 Cards/Penalties`;
+  corners wins over total when both are present (`[3,13]` = Corners. Odd/Even)
 * `outcomes[]` aligns positionally with `oddsList[]` (repeating when a group holds several lines)
 * in provider-12 ids `12:L:<ref>:[<type>,[line],[period],1,<outcomeIdx>,[]]` the line and period are
   parsed; `period > 0` (halves/quarters) is stored but not shown on the board
@@ -53,13 +60,13 @@ Your captured frames gave the payload format, which is now implemented in `serve
 * every group is stored — including `isBase: false` and half/quarter markets (`period > 0`), which the
   board columns ignore but the row drill-down shows
 
-**What the frames do *not* contain.** The `match-odds` message is flagged `"isBaseOddsGroups": true`:
-it carries the **base** groups only. In your capture the basketball match reported
-`enabledOddsCount: 150` while the frame held 12 outcomes, so a match with 150 enabled odds sends a
-subset over the push. The complete market tree for one match is served by **`/b/get-many`** — the very
-call the match page makes — which answers **403** without that page's session token/Cookie. If you copy
-that request's headers (DevTools → Network → `b/get-many` → *Copy as cURL*) the full market list can be
-pulled server-side with no browser relay at all.
+**What the frames contain (updated after the football capture).** The first capture was flagged
+`"isBaseOddsGroups": true` (base groups only); the football one for `40159037 Iraq - Oman` arrived with
+`"isBaseOddsGroups": false` and included `Corners. Result`, `Corners. Double chance`, `Corners. Odd/Even`
+— so non-base groups do flow too, it depends on what the page has subscribed to. `enabledOddsCount`
+(70 for that match) still exceeds what had arrived (23 outcomes), so the push is not necessarily the
+whole tree; the complete list per match comes from **`/b/get-many`** (the call the match page makes),
+which answers **403** without that page's session token/Cookie.
 
 **Suspension:** `status` is per outcome — `1` = active, **anything else = suspended**. Your capture only
 contained `status: 1`, so the exact value the book uses when it pulls the markets at a goal chance is

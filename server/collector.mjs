@@ -20,6 +20,7 @@ export function buildMarkets(oddsRows) {
         isBase: o.is_base === true,
         order: Number(o.grp_order ?? 0),
         renderType: o.render_type ?? null,
+        subgames: o.subgames ?? null,
         suspended: false,
         outcomes: [],
       });
@@ -62,7 +63,24 @@ export const toDbOddsShape = (rows) =>
     render_type: r.renderType ?? null,
     period: Number(r.period ?? 0),
     board_column: r.column ?? null,
+    subgames: r.subgames ?? null,
   }));
+
+/**
+ * match-info pushes per-team stats keyed by competitor id:
+ *   {"87150":{"corners":2,"yellow":1,"red":0}, ...}
+ * This maps them onto home/away using the competitor ids stored in `raw`.
+ */
+export function statsFromRow(row) {
+  const map = row?.stats;
+  if (!map || typeof map !== 'object') return null;
+  const homeId = row.raw?.homeTeam?.id != null ? String(row.raw.homeTeam.id) : null;
+  const awayId = row.raw?.awayTeam?.id != null ? String(row.raw.awayTeam.id) : null;
+  const home = homeId ? map[homeId] ?? null : null;
+  const away = awayId ? map[awayId] ?? null : null;
+  if (!home && !away) return null;
+  return { home, away };
+}
 
 export function serializeMatch(row, oddsRows = [], now = Date.now()) {
   const startAt = row.start_at instanceof Date ? row.start_at : new Date(row.start_at);
@@ -83,6 +101,7 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     away: row.away,
     score: row.home_score === null || row.home_score === undefined ? null : { home: row.home_score, away: row.away_score },
     periodsScore: row.periods_score ?? null,
+    stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,
     isHot: row.is_hot === true,
     suspended: markets.length > 0 && markets.every((m) => m.suspended),

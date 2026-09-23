@@ -112,6 +112,7 @@ tbody tr:hover { background: #171b21; }
 .match { font-weight: 600; }
 .score { color: #ffd54f; margin-left: 6px; }
 .mkts { color: #4a4f58; margin-left: 8px; font-size: 11px; }
+.stats { color: #7f8794; margin-left: 8px; font-size: 11px; }
 .tour { color: var(--dim); font-weight: 400; }
 
 /* full market list (row drill-down) */

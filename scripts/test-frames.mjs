@@ -5,9 +5,15 @@
  * Run: node scripts/test-frames.mjs [--post]
  */
 import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { decodePushBatch } from '../server/push-decode.mjs';
 
-const file = new URL('./sample-frames.txt', import.meta.url);
+// optional file argument, default scripts/sample-frames.txt
+const fileArg = process.argv.slice(2).find((a) => !a.startsWith('--'));
+const file = fileArg
+  ? pathToFileURL(path.resolve(process.cwd(), fileArg))
+  : new URL('./sample-frames.txt', import.meta.url);
 const frames = fs
   .readFileSync(file, 'utf8')
   .split('\n')
@@ -23,6 +29,7 @@ for (const i of infos) {
   console.log(
     `  match ${i.matchId} service=${i.service} provider=${i.providerId} oddsCount=${i.enabledOddsCount} score=${i.homeScore}-${i.awayScore} periods=${JSON.stringify(i.periodsScore)}`,
   );
+  if (i.stats) console.log(`      stats by competitor: ${JSON.stringify(i.stats)}`);
 }
 
 console.log('\n--- match-odds ---');

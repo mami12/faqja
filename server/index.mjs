@@ -9,7 +9,7 @@ import {
 } from './db.mjs';
 import { normalizeOddsPayload, applyOddsRows, startOddsSocket, groupByMatch } from './odds.mjs';
 import { decodePushBatch } from './push-decode.mjs';
-import { startCollector, withOdds, buildMarkets, toDbOddsShape } from './collector.mjs';
+import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -200,7 +200,7 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
       const updated = await applyMatchInfo(info);
       if (updated) {
         matchInfoApplied++;
-        io?.emit('match:info', { ...info, ...updated });
+        io?.emit('match:info', { ...info, ...updated, stats: statsFromRow(updated) });
       }
     }
 

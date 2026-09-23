@@ -37,13 +37,19 @@ const periodLabel = (p) => (p === 1 ? '1st half' : p === 2 ? '2nd half' : p ? `p
 /** every market the feed has sent for this match (all periods, base first) */
 function detailHtml(m) {
   const list = m.markets || [];
+  const st = m.stats;
+  const statsLine = st
+    ? `<div class="dim">live stats — corners ${st.home?.corners ?? '–'}-${st.away?.corners ?? '–'} ·
+        yellow ${st.home?.yellow ?? '–'}-${st.away?.yellow ?? '–'} · red ${st.home?.red ?? '–'}-${st.away?.red ?? '–'}
+        ${m.score ? `· score ${m.score.home}-${m.score.away}` : ''}</div>`
+    : '';
   const head = `<div class="detail-head">
       <b>${esc(m.home)} – ${esc(m.away)}</b>
       <span class="dim">${list.length} market${list.length === 1 ? '' : 's'}${
         m.oddsCount ? ` · feed reports ${m.oddsCount} enabled odds` : ''
       }</span>
       <button class="close-detail" data-close="1">close</button>
-    </div>`;
+    </div>${statsLine}`;
 
   if (!list.length) {
     return `<tr class="detail"><td colspan="12">${head}<div class="dim">no odds received yet for this match (relay the frames while this match is open on the site)</div></td></tr>`;
@@ -137,11 +143,18 @@ function rowHtml(m) {
   const tour = m.tournament && m.tournament.name ? `<span class="tour"> · ${esc(m.tournament.name)}</span>` : '';
   const score = m.score ? ` <b class="score">${esc(m.score.home)}-${esc(m.score.away)}</b>` : '';
   const mkts = m.marketCount ? `<span class="mkts">${m.marketCount} mkts</span>` : '';
+  const st = m.stats;
+  const stats = st
+    ? `<span class="stats">corners ${st.home?.corners ?? '–'}-${st.away?.corners ?? '–'}` +
+      ` · cards ${(st.home?.yellow ?? 0) + (st.home?.red ?? 0)}-${(st.away?.yellow ?? 0) + (st.away?.red ?? 0)}` +
+      (st.home?.red || st.away?.red ? ' (red!)' : '') +
+      `</span>`
+    : '';
 
   return `<tr${cls} data-id="${m.id}">
     <td class="c-time">${timeCell(m)}</td>
     <td class="c-league"><span class="league">${esc(m.league.name || m.league.slug || '')}</span></td>
-    <td class="c-match"><span class="match">${esc(m.home)} – ${esc(m.away)}</span>${score}${tour}${mkts}</td>
+    <td class="c-match"><span class="match">${esc(m.home)} – ${esc(m.away)}</span>${score}${tour}${mkts}${stats}</td>
     ${RESULT_KEYS.map((keys) => `<td class="c-num">${priceCell(m.id, resultMkt, outcomeByKey(resultMkt, keys))}</td>`).join('')}
     <td class="c-num">${priceCell(m.id, totalMkt, outcomeByKey(totalMkt, OVER_KEYS))}</td>
     <td class="c-num">${priceCell(m.id, totalMkt, outcomeByKey(totalMkt, UNDER_KEYS))}</td>
@@ -286,6 +299,7 @@ function connectSocket() {
       }
       if (info.periods_score) m.periodsScore = info.periods_score;
       if (info.odds_count) m.oddsCount = info.odds_count;
+      if (info.stats) m.stats = info.stats;
     };
     apply(state.matches.get(info.match_id));
     apply(state.liveCache.map.get(info.match_id));

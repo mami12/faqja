@@ -173,21 +173,21 @@ export async function saveOdds(rows) {
 
   const values = [];
   const tuples = rows.map((row, i) => {
-    const base = i * 13;
+    const base = i * 14;
     values.push(
       row.matchId, row.marketKey, row.marketName, row.line ?? '', row.outcomeKey,
       row.outcomeName, row.price ?? null, row.suspended === true,
       row.isBase === true, Number.isFinite(Number(row.order)) ? Number(row.order) : 0,
       row.renderType ?? null, Number.isFinite(Number(row.period)) ? Number(row.period) : 0,
-      row.column ?? null,
+      row.column ?? null, row.subgames ?? null,
     );
-    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13}, now())`;
+    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14}, now())`;
   });
 
   await query(
     `insert into odds_current
        (match_id, market_key, market_name, line, outcome_key, outcome_name, price, suspended,
-        is_base, grp_order, render_type, period, board_column, updated_at)
+        is_base, grp_order, render_type, period, board_column, subgames, updated_at)
      values ${tuples.join(',')}
      on conflict (match_id, market_key, line, outcome_key) do update set
        market_name  = excluded.market_name,
@@ -198,6 +198,7 @@ export async function saveOdds(rows) {
        grp_order    = excluded.grp_order,
        render_type  = excluded.render_type,
        board_column = excluded.board_column,
+       subgames     = excluded.subgames,
        updated_at   = now()`,
     values,
   );
@@ -246,15 +247,17 @@ export async function applyMatchInfo(info) {
         away_score    = coalesce($3, away_score),
         periods_score = coalesce($4::jsonb, periods_score),
         odds_count    = coalesce($5, odds_count),
+        stats         = coalesce($6::jsonb, stats),
         updated_at    = now()
       where match_id = $1
-      returning match_id, home_score, away_score, periods_score, odds_count`,
+      returning match_id, home_score, away_score, periods_score, odds_count, stats, raw`,
     [
       info.matchId,
       Number.isFinite(info.homeScore) ? info.homeScore : null,
       Number.isFinite(info.awayScore) ? info.awayScore : null,
       info.periodsScore?.length ? JSON.stringify(info.periodsScore) : null,
       Number.isFinite(info.enabledOddsCount) ? info.enabledOddsCount : null,
+      info.stats && Object.keys(info.stats).length ? JSON.stringify(info.stats) : null,
     ],
   );
   return res.rows[0] ?? null;

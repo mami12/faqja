@@ -96,17 +96,52 @@ export function outcomeLabel(key) {
 const isTotalPair = (outcomes) =>
   outcomes.length > 0 && outcomes.every((o) => ['under', 'over', 'u', 'o'].includes(String(o).toLowerCase()));
 
+/** /subgames/get-many?sportId=18 -> market family per subgame id (verified against the API) */
+const SUBGAME_FAMILY = {
+  2: 'result',   // Main
+  3: 'total',    // Total
+  6: 'other',    // Handicap
+  11: 'other',   // Correct Score
+  13: 'corners', // Corners
+  174: 'cards',  // Cards/Penalties
+};
+// checked in this order, so "Corners. Odd/Even" ([3,13]) counts as corners
+const SUBGAME_PRIORITY = ['13', '174', '3', '2'];
+
+function columnFromSubgames(subgames = '') {
+  const ids = String(subgames).split(',').map((s) => s.trim()).filter(Boolean);
+  for (const want of SUBGAME_PRIORITY) if (ids.includes(want)) return SUBGAME_FAMILY[want];
+  for (const id of ids) if (SUBGAME_FAMILY[id]) return SUBGAME_FAMILY[id];
+  return null;
+}
+
+function columnFromName(name) {
+  const s = String(name).toLowerCase();
+  if (/corner/.test(s)) return 'corners';
+  if (/card|booking|penalt|yellow|red/.test(s)) return 'cards';
+  if (/1x2|1 ?x ?2|result|winner|double chance|moneyline|to win|to qualify/.test(s)) return 'result';
+  if (/total|over\/?under|goals|handicap|asian|odd\/even/.test(s)) return 'total';
+  return 'other';
+}
+
 /**
- * Names/columns are guessed; market-map.json (types / groups) wins when present.
- * Football heuristic: an under/over line >= 6.5 is almost never total goals.
+ * Names/columns come from, in order: market-map.json -> the feed's own
+ * `name` + `subgameIds` -> the odds type id -> heuristics.
  */
-function describeMarket({ typeId, groupId, line, renderType, outcomes }) {
+function describeMarket({ name, typeId, groupId, line, renderType, outcomes, subgames }) {
   const fromGroup = MARKET_MAP.groups[String(groupId)];
   if (fromGroup) return { column: fromGroup.column, name: fromGroup.name };
 
-  const fromType = MARKET_MAP.types[String(typeId)];
-  if (fromType) return { column: fromType.column, name: fromType.name };
+  const subColumn = columnFromSubgames(subgames);
 
+  if (name) return { column: subColumn ?? columnFromName(name), name };
+
+  const fromType = MARKET_MAP.types[String(typeId)];
+  if (fromType) return { column: subColumn ?? fromType.column, name: fromType.name };
+
+  if (subColumn) {
+    return { column: subColumn, name: subColumn === 'corners' ? 'Corners' : subColumn === 'cards' ? 'Cards' : 'Market' };
+  }
   if (outcomes.some((o) => String(o).toLowerCase() === 'x')) {
     return { column: 'result', name: 'Full Time Result' };
   }
@@ -129,6 +164,23 @@ export function decodePushMessage(message) {
     const periods = Array.isArray(data.periodsScore) ? data.periodsScore : [];
     const home = periods.reduce((s, p) => s + (Number(p.t1) || 0), 0);
     const away = periods.reduce((s, p) => s + (Number(p.t2) || 0), 0);
+
+    // per-team live statistics, e.g. {"87150":{"corners":"2","yellowCards":"1","redCards":"0"}, ...}
+    const rawResults = data.scoreBoard?.results;
+    let stats = null;
+    if (rawResults && typeof rawResults === 'object') {
+      stats = {};
+      for (const [competitorId, r] of Object.entries(rawResults)) {
+        if (!r || typeof r !== 'object') continue;
+        const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+        stats[competitorId] = {
+          corners: n(r.corners),
+          yellow: n(r.yellowCards),
+          red: n(r.redCards),
+        };
+      }
+    }
+
     return {
       kind: 'info',
       info: {
@@ -140,6 +192,7 @@ export function decodePushMessage(message) {
         periodsScore: periods,
         homeScore: periods.length ? home : null,
         awayScore: periods.length ? away : null,
+        stats,
       },
     };
   }
@@ -156,6 +209,8 @@ export function decodePushMessage(message) {
 
       const outcomes = (Array.isArray(group.outcomes) ? group.outcomes : []).map(String);
       const renderType = group.renderType ?? 'cols-2';
+      const groupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
+      const subgames = Array.isArray(group.subgameIds) ? group.subgameIds.join(',') : '';
 
       for (let i = 0; i < oddsList.length; i++) {
         const item = oddsList[i];
@@ -171,8 +226,18 @@ export function decodePushMessage(message) {
         const repeats = outcomes.length > 0 && oddsList.length > outcomes.length;
         const line = missingLine ? (repeats ? `#${Math.floor(i / outcomes.length) + 1}` : '') : String(rawLine);
 
-        const outcomeKey = outcomes.length ? outcomes[i % outcomes.length] : String(i);
+        // the feed usually tells us the outcome itself ("outcome":"1x", "name":"Iraq Or Draw")
+        const outcomeKey =
+          item.outcome !== null && item.outcome !== undefined
+            ? String(item.outcome)
+            : outcomes.length
+              ? outcomes[i % outcomes.length]
+              : `#${i + 1}`;
+        const outcomeName = item.name !== null && item.name !== undefined ? String(item.name) : outcomeLabel(outcomeKey);
+
         const { column, name } = describeMarket({
+          name: groupName,
+          subgames,
           typeId: tuple?.typeId ?? null,
           groupId: group.id,
           line: missingLine ? '' : rawLine,
@@ -186,13 +251,14 @@ export function decodePushMessage(message) {
           marketName: name,
           line,
           outcomeKey,
-          outcomeName: outcomeLabel(outcomeKey),
+          outcomeName,
           price,
           suspended: Number(item.status) !== 1,
           column,
           period,
           groupId: String(group.id),
           renderType,
+          subgames,
           isBase: group.isBase === true,
           order: Number.isFinite(Number(group.order)) ? Number(group.order) : 0,
           baseOrder: Number.isFinite(Number(group.baseOrder)) ? Number(group.baseOrder) : 0,

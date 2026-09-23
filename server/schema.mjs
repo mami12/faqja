@@ -68,6 +68,8 @@ alter table matches add column if not exists home_score    int;
 alter table matches add column if not exists away_score    int;
 alter table matches add column if not exists periods_score jsonb;
 alter table matches add column if not exists odds_count    int;
+alter table matches add column if not exists stats         jsonb;
+alter table odds_current add column if not exists subgames text;
 
 -- added later: full market tree (every odds group the feed sends, not just the board columns)
 alter table odds_current add column if not exists is_base     boolean not null default false;
