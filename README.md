@@ -1,10 +1,10 @@
 # faqja — football board (live + prematch)
 
 Minimal, dark, **real football only** board for the `bitgames6205.com` / `api-gateway.gw-lucky-bet.com`
-sports feed. Backend on **Render**, frontend on **GitHub Pages**, storage on **Supabase Postgres**.
+sports feed. Backend on **Railway**, frontend on **GitHub Pages**, storage on **Supabase Postgres**.
 
 ```
-upstream API ──► collector (Render) ──► Supabase Postgres
+upstream API ──► collector (Railway) ──► Supabase Postgres
                       │
                       └── Socket.IO ──► browser (GitHub Pages)
 ```
@@ -165,7 +165,7 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | Var | Default | Meaning |
 |---|---|---|
 | `DATABASE_URL` | – | Supabase pooler URL. `sslmode` is stripped in code because pg ≥ 8.16 turns `require` into `verify-full` and that fails on the pooler chain. |
-| `PORT` | `3000` | Render sets this itself. |
+| `PORT` | `3000` | Railway injects and assigns `PORT` dynamically. |
 | `UPSTREAM_GATEWAY` | `https://api-gateway.gw-lucky-bet.com` | Sports API host. |
 | `PARTNER_ID` | `d3edfa27-7cac-4f77-9e6e-4e2fa2d1ab5f` | `p=` partner id from the captured URLs. |
 | `LANG_CODE` | `en-001` | `l=` locale. |
@@ -180,12 +180,16 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 
 ## Deploy
 
-**Backend (Render)** — `render.yaml` is a blueprint: push the repo, then in Render
-*New → Blueprint*. Fill `DATABASE_URL` and `ALLOWED_ORIGINS` in the dashboard, copy the generated
-`INGEST_TOKEN`. Check `https://<service>.onrender.com/health`.
+**Backend (Railway)** — `railway.json` configures the service (Nixpacks build, `npm start`,
+healthcheck `/health`): push the repo, then in Railway *New Project → Deploy from GitHub repo* and
+pick this repository (Railway detects Node.js and reads `railway.json`). Paste the variables from
+`.env.example` — `DATABASE_URL`, `ALLOWED_ORIGINS`, `INGEST_TOKEN`, ... — in
+*Variables → RAW Editor*, then *Settings → Networking → Generate Domain* and check
+`https://<service>.up.railway.app/health`.
 
-Notes for Render: free instances sleep after ~15 min idle (first request after that is slow) and
-the collector restarts cleanly because the schema is created with `IF NOT EXISTS` on every boot.
+Notes for Railway: services run continuously (no idle sleep like Render's free tier), `PORT` is
+injected dynamically, and the collector restarts cleanly because the schema is created with
+`IF NOT EXISTS` on every boot.
 
 **Frontend (GitHub Pages)** — Pages serves from the repo root or `/docs`; this project already keeps
 the frontend in `docs/`, so: *Settings → Pages → Branch: main, Folder: /docs*.
@@ -193,7 +197,7 @@ Then edit `docs/config.js`:
 
 ```js
 window.APP_CONFIG = {
-  API_BASE: 'https://<your-service>.onrender.com',
+  API_BASE: 'https://<your-service>.up.railway.app',
   ...
 };
 ```
@@ -223,7 +227,7 @@ Socket.IO events: client gets `hello`, `meta`, `matches:live`, `odds:update`, `m
 ## Odds ingest format
 
 ```bash
-curl -X POST https://<service>.onrender.com/ingest/odds \
+curl -X POST https://<service>.up.railway.app/ingest/odds \
   -H 'content-type: application/json' -H 'x-ingest-token: <token>' \
   -d '{
     "matchId": 40408005,
@@ -294,5 +298,5 @@ server/   config.mjs  schema.mjs  db.mjs  minute.mjs  upstream.mjs  odds.mjs  pu
 docs/     index.html  styles.css  app.js  config.js  vendor/socket.io.min.js  frames-relay.user.js   <- GitHub Pages
 scripts/  probe-db / probe-gateway / probe-sockets / probe-subscribe / probe-push2 / probe-local-socket
           test-frames.mjs  test-live-ingest.mjs  sample-frames.txt (your captured frames)
-render.yaml  market-map.example.json  README.md
+railway.json  market-map.example.json  README.md
 ```

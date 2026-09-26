@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Real-football live/prematch board: Render backend (Node) + GitHub Pages frontend + Supabase Postgres",
+  "description": "Real-football live/prematch board: Railway backend (Node) + GitHub Pages frontend + Supabase Postgres",
   "engines": {
     "node": ">=20"
   },

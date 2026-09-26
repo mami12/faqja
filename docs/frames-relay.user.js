@@ -12,7 +12,7 @@
   'use strict';
 
   /* ------------------------------- settings ------------------------------ */
-  const API_BASE = 'https://YOUR-SERVICE.onrender.com';   // <- your Render URL
+  const API_BASE = 'https://YOUR-SERVICE.up.railway.app'; // <- your Railway URL
   const TOKEN = 'YOUR_INGEST_TOKEN';                       // <- INGEST_TOKEN
   const SOCKET_RE = /push-server-v2|v4\/socket\.io/;       // only these sockets
   const RELAY_OUTGOING = true;                             // archive subscription frames too

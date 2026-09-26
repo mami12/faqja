@@ -372,7 +372,7 @@ setInterval(loadLeagues, 300000);
 (async function init() {
   if (!API && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     document.getElementById('foot-note').textContent =
-      'API_BASE is empty in config.js — set it to your Render URL before deploying.';
+      'API_BASE is empty in config.js — set it to your Railway URL before deploying.';
   }
   await loadLeagues();
   await loadMatches();
