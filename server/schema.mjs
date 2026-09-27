@@ -77,6 +77,12 @@ alter table matches add column if not exists feed_status   text;
 alter table matches add column if not exists has_open_odds boolean;
 alter table matches add column if not exists broadcast_url text;
 
+-- freshness anchors: when the feed last really reported the clock / the score.
+-- match_time_ms and home_score only change on snapshot frames, so these timestamps
+-- are what let the board tell "1-0 five minutes ago" apart from "1-0 right now".
+alter table matches add column if not exists clock_at timestamptz;
+alter table matches add column if not exists score_at timestamptz;
+
 -- added later: full market tree (every odds group the feed sends, not just the board columns)
 alter table odds_current add column if not exists is_base     boolean not null default false;
 alter table odds_current add column if not exists grp_order   int     not null default 0;

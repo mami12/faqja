@@ -270,7 +270,7 @@ function connectSocket() {
   });
   socket.on('hello', (h) => {
     document.getElementById('foot-note').textContent =
-      `live minute is derived from kickoff (1H 0-45, HT, 2H 46-90). backend refresh ${Math.round((h.pollMs || 10000) / 1000)}s.`;
+      `live minute: real feed clock when available, otherwise derived from kickoff (1H 0-45, HT, 2H 46-90). backend refresh ${Math.round((h.pollMs || 10000) / 1000)}s.`;
   });
   socket.on('meta', (meta) => {
     state.counts = { live: meta.live, prematch: meta.prematch };

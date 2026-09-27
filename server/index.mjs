@@ -6,7 +6,7 @@ import { config } from './config.mjs';
 import {
   initSchema, dbHealth, getMatches, getMatchById, getLeagues, getCounts,
   getOddsForMatches, getOddsHistory, recentRawFrames, closePool, applyMatchInfo, logRawFrame, knownMatchIds,
-  getSubscriptionIds,
+  getSubscriptionIds, getFeedFreshness,
 } from './db.mjs';
 import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
 import { decodePushBatch } from './push-decode.mjs';
@@ -45,9 +45,16 @@ app.get('/health', async (_req, res) => {
   } catch (e) {
     db = { ok: false, error: e.message };
   }
+  let feed = null;
+  try {
+    feed = await getFeedFreshness();
+  } catch (e) {
+    feed = { error: e.message };
+  }
   res.status(db.ok ? 200 : 503).json({
     ok: db.ok,
     db,
+    feed,
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
@@ -146,6 +153,30 @@ async function applyInfoFromFeed(info) {
   const updated = await applyMatchInfo(enriched);
   if (updated) io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
   return updated;
+}
+
+/**
+ * The feed sends the clock and the score only in `match-info-snapshot` frames; the
+ * periodic `match-info` deltas that follow carry neither. Coalescing a burst by
+ * replacing the whole object therefore threw the snapshot away, which is what froze
+ * scores and minutes for ~60% of live matches. Merge field by field instead, so a
+ * stats-only delta can never erase a clock or a score.
+ */
+function mergeInfo(prev, next) {
+  if (!prev) return next;
+  if (!next) return prev;
+  return {
+    ...next,
+    matchTimeMs: Number.isFinite(next.matchTimeMs) ? next.matchTimeMs : prev.matchTimeMs,
+    homeScore: Number.isFinite(next.homeScore) ? next.homeScore : prev.homeScore,
+    awayScore: Number.isFinite(next.awayScore) ? next.awayScore : prev.awayScore,
+    periodsScore: next.periodsScore?.length ? next.periodsScore : prev.periodsScore,
+    stats: next.stats ? { ...(prev.stats ?? {}), ...next.stats } : prev.stats,
+    feedStatus: next.feedStatus ?? prev.feedStatus,
+    hasOpenOdds: next.hasOpenOdds ?? prev.hasOpenOdds,
+    broadcastUrl: next.broadcastUrl ?? prev.broadcastUrl,
+    enabledOddsCount: next.enabledOddsCount ?? prev.enabledOddsCount,
+  };
 }
 
 /* ---- coalescer for the server-side subscription (frames arrive in bursts) ---- */
@@ -324,8 +355,10 @@ async function boot() {
         }),
       fullMarkets: process.env.SUBSCRIBE_FULL_MARKETS !== 'false',
       fullMarketsLiveLimit: Number(process.env.SUBSCRIBE_FULL_LIMIT ?? 60),
+      // re-subscribing is what makes the feed resend the clock+score snapshot
+      resubscribeMs: Number(process.env.RESUBSCRIBE_MS ?? 20000),
       onOdds: (rows) => oddsBuffer.push(...rows),
-      onInfo: (info) => infoBuffer.set(info.matchId, info),
+      onInfo: (info) => infoBuffer.set(info.matchId, mergeInfo(infoBuffer.get(info.matchId), info)),
       onStatus: (s) => {
         oddsStatus = { ...oddsStatus, ...s };
         io.emit('odds:socket', oddsStatus);

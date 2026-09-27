@@ -162,6 +162,20 @@ export async function getOddsForMatches(matchIds) {
  * Writes current odds and records a history row whenever a price actually moves.
  * Returns the rows that changed (price or suspension) for real-time broadcast.
  */
+/**
+ * Postgres refuses a statement with more than 65535 bind parameters. A subscribe
+ * burst holds thousands of odds rows, and without chunking the INSERT failed with
+ * "bind message has N parameter formats but 0 parameters" - which aborted the whole
+ * flush cycle, throwing away the clock/score snapshots buffered alongside it.
+ */
+const MAX_BIND_PARAMS = 60000;
+const chunkRows = (rows, paramsPerRow) => {
+  const size = Math.max(1, Math.floor(MAX_BIND_PARAMS / paramsPerRow));
+  const out = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+};
+
 export async function saveOdds(rows) {
   if (!rows.length) return { changed: [] };
 
@@ -179,37 +193,39 @@ export async function saveOdds(rows) {
     before.map((b) => [`${b.match_id}|${b.market_key}|${b.line}|${b.outcome_key}`, b]),
   );
 
-  const values = [];
-  const tuples = rows.map((row, i) => {
-    const base = i * 14;
-    values.push(
-      row.matchId, row.marketKey, row.marketName, row.line ?? '', row.outcomeKey,
-      row.outcomeName, row.price ?? null, row.suspended === true,
-      row.isBase === true, Number.isFinite(Number(row.order)) ? Number(row.order) : 0,
-      row.renderType ?? null, Number.isFinite(Number(row.period)) ? Number(row.period) : 0,
-      row.column ?? null, row.subgames ?? null,
-    );
-    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14}, now())`;
-  });
+  for (const part of chunkRows(rows, 14)) {
+    const values = [];
+    const tuples = part.map((row, i) => {
+      const base = i * 14;
+      values.push(
+        row.matchId, row.marketKey, row.marketName, row.line ?? '', row.outcomeKey,
+        row.outcomeName, row.price ?? null, row.suspended === true,
+        row.isBase === true, Number.isFinite(Number(row.order)) ? Number(row.order) : 0,
+        row.renderType ?? null, Number.isFinite(Number(row.period)) ? Number(row.period) : 0,
+        row.column ?? null, row.subgames ?? null,
+      );
+      return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14}, now())`;
+    });
 
-  await query(
-    `insert into odds_current
-       (match_id, market_key, market_name, line, outcome_key, outcome_name, price, suspended,
-        is_base, grp_order, render_type, period, board_column, subgames, updated_at)
-     values ${tuples.join(',')}
-     on conflict (match_id, market_key, line, outcome_key) do update set
-       market_name  = excluded.market_name,
-       outcome_name = excluded.outcome_name,
-       price        = excluded.price,
-       suspended    = excluded.suspended,
-       is_base      = excluded.is_base,
-       grp_order    = excluded.grp_order,
-       render_type  = excluded.render_type,
-       board_column = excluded.board_column,
-       subgames     = excluded.subgames,
-       updated_at   = now()`,
-    values,
-  );
+    await query(
+      `insert into odds_current
+         (match_id, market_key, market_name, line, outcome_key, outcome_name, price, suspended,
+          is_base, grp_order, render_type, period, board_column, subgames, updated_at)
+       values ${tuples.join(',')}
+       on conflict (match_id, market_key, line, outcome_key) do update set
+         market_name  = excluded.market_name,
+         outcome_name = excluded.outcome_name,
+         price        = excluded.price,
+         suspended    = excluded.suspended,
+         is_base      = excluded.is_base,
+         grp_order    = excluded.grp_order,
+         render_type  = excluded.render_type,
+         board_column = excluded.board_column,
+         subgames     = excluded.subgames,
+         updated_at   = now()`,
+      values,
+    );
+  }
 
   const changed = [];
   const history = [];
@@ -226,16 +242,18 @@ export async function saveOdds(rows) {
   }
 
   if (history.length) {
-    const params = [];
-    const rowsSql = history.map((h, i) => {
-      const b = i * 6;
-      params.push(...h);
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6})`;
-    });
-    await query(
-      `insert into odds_history (match_id, market_key, line, outcome_key, price, suspended) values ${rowsSql.join(',')}`,
-      params,
-    );
+    for (const part of chunkRows(history, 6)) {
+      const params = [];
+      const rowsSql = part.map((h, i) => {
+        const b = i * 6;
+        params.push(...h);
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6})`;
+      });
+      await query(
+        `insert into odds_history (match_id, market_key, line, outcome_key, price, suspended) values ${rowsSql.join(',')}`,
+        params,
+      );
+    }
   }
 
   return { changed };
@@ -246,38 +264,77 @@ export async function logRawFrame(source, payload) {
   await query('insert into raw_frames (source, payload) values ($1, $2)', [source, JSON.stringify(payload ?? {})]);
 }
 
-/** live score / clock / stats pushed as "match-info" or "match-info-snapshot" */
+/**
+ * Live score / clock / stats pushed as "match-info" or "match-info-snapshot".
+ *
+ * Only snapshot frames carry matchTime / matchScore (the periodic deltas never do),
+ * so a frame without a clock or a score must leave the stored value untouched - and
+ * must NOT bump its freshness anchor either. `clock_at` / `score_at` record when the
+ * feed last really reported each value, which is what the board extrapolates from.
+ */
 export async function applyMatchInfo(info) {
   if (!info?.matchId) return null;
+
+  const hasClock = Number.isFinite(info.matchTimeMs);
+  const hasScore = Number.isFinite(info.homeScore) && Number.isFinite(info.awayScore);
+
   const res = await query(
     `update matches set
-        home_score    = coalesce($2, home_score),
-        away_score    = coalesce($3, away_score),
+        home_score    = case when $10::boolean then $2::int    else home_score end,
+        away_score    = case when $10::boolean then $3::int    else away_score end,
+        score_at      = case when $10::boolean then now()      else score_at end,
         periods_score = coalesce($4::jsonb, periods_score),
         odds_count    = coalesce($5, odds_count),
         stats         = coalesce($6::jsonb, stats),
-        match_time_ms = coalesce($7, match_time_ms),
+        match_time_ms = case when $11::boolean then $7::bigint else match_time_ms end,
+        clock_at      = case when $11::boolean then now()      else clock_at end,
         feed_status   = coalesce($8, feed_status),
         has_open_odds = coalesce($9, has_open_odds),
-        broadcast_url = coalesce($10, broadcast_url),
+        broadcast_url = coalesce($12, broadcast_url),
         updated_at    = now()
       where match_id = $1
       returning match_id, home_score, away_score, periods_score, odds_count, stats, raw,
-                match_time_ms, feed_status, has_open_odds, broadcast_url`,
+                match_time_ms, clock_at, score_at, feed_status, has_open_odds, broadcast_url`,
     [
       info.matchId,
-      Number.isFinite(info.homeScore) ? info.homeScore : null,
-      Number.isFinite(info.awayScore) ? info.awayScore : null,
+      hasScore ? info.homeScore : null,
+      hasScore ? info.awayScore : null,
       info.periodsScore?.length ? JSON.stringify(info.periodsScore) : null,
       Number.isFinite(info.enabledOddsCount) ? info.enabledOddsCount : null,
       info.stats && Object.keys(info.stats).length ? JSON.stringify(info.stats) : null,
-      Number.isFinite(info.matchTimeMs) ? info.matchTimeMs : null,
+      hasClock ? info.matchTimeMs : null,
       typeof info.feedStatus === 'string' ? info.feedStatus : null,
       typeof info.hasOpenOdds === 'boolean' ? info.hasOpenOdds : null,
+      hasScore,
+      hasClock,
       typeof info.broadcastUrl === 'string' ? info.broadcastUrl : null,
     ],
   );
   return res.rows[0] ?? null;
+}
+
+/**
+ * How fresh the push feed's clock/score are for the live board. A silent freeze
+ * (the bug where scores stuck at 0-0 while odds kept moving) shows up here first.
+ */
+export async function getFeedFreshness(olderThanSeconds = 90) {
+  const res = await query(
+    `select
+        count(*) filter (where active and service = 'LIVE')::int as live,
+        count(*) filter (where active and service = 'LIVE'
+              and (clock_at is null or clock_at < now() - make_interval(secs => $1::int)))::int as stale_clock,
+        count(*) filter (where active and service = 'LIVE'
+              and (score_at is null or score_at < now() - make_interval(secs => $1::int)))::int as stale_score
+       from matches`,
+    [olderThanSeconds],
+  );
+  const r = res.rows[0];
+  return {
+    live: r.live,
+    staleClock: r.stale_clock,
+    staleScore: r.stale_score,
+    olderThanSeconds,
+  };
 }
 
 export async function recentRawFrames(limit = 20) {

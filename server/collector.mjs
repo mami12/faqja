@@ -126,18 +126,48 @@ export function scoreFromRow(row) {
   return stats?.goals ?? null;
 }
 
+/** the feed clock is a snapshot: anything older than this gets extrapolated against kickoff */
+const STALE_CLOCK_MS = 6 * 60 * 1000;
+
+/** the board never shows more than 90', and the break holds at 45' */
+function clampMinute(minute, phase) {
+  if (minute === null || minute === undefined) return null;
+  if (phase === 'HT') return 45;
+  if (phase === 'FT') return 90;
+  if (phase === '1H') return Math.min(Math.max(1, minute), 45);
+  if (phase === '2H') return Math.min(Math.max(46, minute), 90);
+  return Math.max(0, minute);
+}
+
 export function serializeMatch(row, oddsRows = [], now = Date.now()) {
   const startAt = row.start_at instanceof Date ? row.start_at : new Date(row.start_at);
   const derived = row.service === 'LIVE' ? liveClock(startAt, now) : { minute: null, phase: 'pre', status: 'scheduled' };
 
-  // match-info gives the real clock (matchTime in ms) and feed state ("Break Time", H1/H2, Finished)
-  const feedMs = Number(row.match_time_ms);
-  const feedMinute = Number.isFinite(feedMs) && feedMs >= 0 ? Math.floor(feedMs / 60000) : null;
+  // match-info gives the real clock (matchTime in ms) and feed state ("Break Time", H1/H2, Finished).
+  // That frame is a snapshot - it only arrives on subscribe - so anchor it to the moment it was
+  // stored and run it forward: a missing or stale clock must never freeze the minute, and
+  // `Number(null)` must never turn "no clock" into a permanent 0'.
+  const hasFeedClock = row.match_time_ms !== null && row.match_time_ms !== undefined;
+  const clockAt = row.clock_at ? new Date(row.clock_at).getTime() : null;
+  const anchoredMinute = hasFeedClock
+    ? Math.floor(Number(row.match_time_ms) / 60000) +
+      (clockAt === null ? 0 : Math.max(0, Math.floor((now - clockAt) / 60000)))
+    : null;
   const feedPhase = phaseFromStatus(row.feed_status);
+  const phase = feedPhase ?? derived.phase;
+  const clockStale = clockAt === null || now - clockAt > STALE_CLOCK_MS;
+
+  let minute = anchoredMinute ?? derived.minute;
+  let minuteSource = anchoredMinute === null ? 'derived' : clockStale ? 'feed+drift' : 'feed';
+  if (clockStale && derived.minute !== null && (minute === null || derived.minute > minute)) {
+    minute = derived.minute;
+    minuteSource = 'derived';
+  }
+  minute = clampMinute(minute, phase);
 
   const clock = {
-    minute: feedMinute ?? derived.minute,
-    phase: feedPhase ?? derived.phase,
+    minute,
+    phase,
     status: row.service === 'LIVE' ? (feedPhase === 'FT' ? 'ended' : 'live') : derived.status,
   };
   const markets = buildMarkets(oddsRows);
@@ -149,7 +179,9 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     status: clock.status,
     phase: clock.phase,
     minute: clock.minute,
-    minuteSource: feedMinute !== null || feedPhase ? 'feed' : 'derived',
+    minuteSource,
+    clockAt: row.clock_at ? new Date(row.clock_at).toISOString() : null,
+    scoreAt: row.score_at ? new Date(row.score_at).toISOString() : null,
     feedStatus: row.feed_status ?? null,
     hasOpenOdds: row.has_open_odds ?? null,
     watchUrl: row.broadcast_url ?? null,

@@ -174,6 +174,7 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | `ALLOWED_ORIGINS` | `*` | CORS/Socket.IO origins, comma separated. Set to `https://<user>.github.io` in production. |
 | `INGEST_TOKEN` | – | Shared secret for `POST /ingest/odds` and `GET /api/raw-frames`. Empty = open. |
 | `ODDS_SOCKET` | `false` | Connect to the upstream push channel. |
+| `RESUBSCRIBE_MS` | `20000` | How often the pusher re-subscribes live matches. The feed only sends the real clock (`matchTime`) and score (`matchScore`) in a snapshot on (re)subscribe, so this is what keeps minutes and scores fresh. |
 | `ODDS_SUBSCRIBE_FRAMES` | – | Socket.IO frames to send after connect, separated by `||`. |
 | `LOG_RAW_FRAMES` | `true` | Store unparsed upstream frames (max 300/session). |
 | `FOOTBALL_SPORT_ID` | `18` | Verified football sport id in this feed. |
@@ -208,7 +209,7 @@ and make sure the backend allows that origin (`ALLOWED_ORIGINS=https://<user>.gi
 
 | Route | Description |
 |---|---|
-| `GET /health` | DB + collector + odds-socket status. |
+| `GET /health` | DB + collector + odds-socket status, and `feed` freshness (`live` / `staleClock` / `staleScore` — a frozen score or minute shows up here first). |
 | `GET /api/meta` | Live/prematch/finished counts, last sync. |
 | `GET /api/leagues` | Leagues with live/prematch counts. |
 | `GET /api/matches?service=live\|prematch\|all&league=&q=&limit=&offset=` | Matches incl. grouped markets. `odds=0` to skip odds. |

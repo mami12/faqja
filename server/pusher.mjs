@@ -54,10 +54,16 @@ export function startPusher({
   let closed = false;
   let attempt = 0;
   let timer = null;
-  const counts = { connect: 0, frames: 0, oddsMessages: 0, infoMessages: 0, subscribedIds: 0 };
+  const counts = {
+    connect: 0, frames: 0, oddsMessages: 0, infoMessages: 0, subscribedIds: 0,
+    // only snapshot frames carry the clock (matchTime) and the score (matchScore);
+    // these counters are what make a silent score/minute freeze visible in /health
+    snapshots: 0, clockFrames: 0, scoreFrames: 0, subscribeCalls: 0, lastSnapshotAt: null,
+  };
 
   const subscribe = async () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    counts.subscribeCalls++;
     try {
       const { live = [], prematch = [] } = (await getIds?.()) ?? {};
 
@@ -132,6 +138,12 @@ export function startPusher({
       }
       for (const i of infos) {
         counts.infoMessages++;
+        if (Number.isFinite(i.matchTimeMs)) counts.clockFrames++;
+        if (Number.isFinite(i.homeScore)) counts.scoreFrames++;
+        if (Number.isFinite(i.matchTimeMs) || Number.isFinite(i.homeScore)) {
+          counts.snapshots++;
+          counts.lastSnapshotAt = new Date().toISOString();
+        }
         onInfo?.(i);
       }
     });
