@@ -1,4 +1,4 @@
-import { config } from './config.mjs';
+import { config, dbErrorHint } from './config.mjs';
 import { liveClock } from './minute.mjs';
 import { fetchRealFootball } from './upstream.mjs';
 import { upsertMatches, expireStaleMatches, getCounts, getMatches, getOddsForMatches } from './db.mjs';
@@ -266,7 +266,7 @@ export function startCollector({ io } = {}) {
       }
     } catch (e) {
       state.lastError = e.message;
-      console.error('[collector] error:', e.message);
+      console.error('[collector] error:', dbErrorHint(e.message));
     } finally {
       state.running = false;
     }

@@ -13,7 +13,7 @@
  * Subscriptions must be repeated every ~20s; ids are chunked by 50.
  */
 import WebSocket from 'ws';
-import { config } from './config.mjs';
+import { config, dbErrorHint } from './config.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 
 const CHUNK = 50;
@@ -96,7 +96,7 @@ export function startPusher({
         );
       }
     } catch (e) {
-      console.error('[pusher] subscribe failed:', e.message);
+      console.error('[pusher] subscribe failed:', dbErrorHint(e.message));
     }
   };
 

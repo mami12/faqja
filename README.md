@@ -164,7 +164,8 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 
 | Var | Default | Meaning |
 |---|---|---|
-| `DATABASE_URL` | – | Supabase pooler URL. `sslmode` is stripped in code because pg ≥ 8.16 turns `require` into `verify-full` and that fails on the pooler chain. |
+| `DATABASE_URL` | – | Supabase pooler URL. `sslmode` is stripped in code because pg ≥ 8.16 turns `require` into `verify-full` and that fails on the pooler chain. The resolved target (`user@host:port/db`, no password) is logged at boot and returned by `/health` as `target`. |
+| `DB_INIT_STRICT` | `true` in production | Exit on boot when the database is unreachable, so the deploy fails the Railway healthcheck instead of serving a half-alive API. Local/dev defaults to off (retry and keep polling). |
 | `PORT` | `3000` | Railway injects and assigns `PORT` dynamically. |
 | `UPSTREAM_GATEWAY` | `https://api-gateway.gw-lucky-bet.com` | Sports API host. |
 | `PARTNER_ID` | `d3edfa27-7cac-4f77-9e6e-4e2fa2d1ab5f` | `p=` partner id from the captured URLs. |

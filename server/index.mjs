@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
-import { config } from './config.mjs';
+import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
 import {
   initSchema, dbHealth, getMatches, getMatchById, getLeagues, getCounts,
   getOddsForMatches, getOddsHistory, recentRawFrames, closePool, applyMatchInfo, logRawFrame, knownMatchIds,
@@ -43,7 +43,7 @@ app.get('/health', async (_req, res) => {
   try {
     db = await dbHealth();
   } catch (e) {
-    db = { ok: false, error: e.message };
+    db = { ok: false, error: dbErrorHint(e.message) };
   }
   let feed = null;
   try {
@@ -54,6 +54,7 @@ app.get('/health', async (_req, res) => {
   res.status(db.ok ? 200 : 503).json({
     ok: db.ok,
     db,
+    target: dbTarget(),
     feed,
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
@@ -311,7 +312,7 @@ const docsDir = fileURLToPath(new URL('../docs/', import.meta.url));
 app.use(express.static(docsDir));
 
 app.use((err, _req, res, _next) => {
-  console.error('[http]', err.message);
+  console.error('[http]', dbErrorHint(err.message));
   res.status(500).json({ error: err.message });
 });
 
@@ -337,11 +338,23 @@ io.on('connection', async (socket) => {
 });
 
 async function boot() {
+  const target = dbTarget();
+  console.log(`[db] target ${dbTargetLabel(target)}`);
+  if (target.ipv6OnlyDirectHost) {
+    console.warn(
+      '[db] DATABASE_URL uses the IPv6-only direct host db.<ref>.supabase.co - use the pooler host (aws-<n>-<region>.pooler.supabase.com) unless this host has IPv6',
+    );
+  }
+
   try {
     await initSchema();
     console.log('[db] schema ready');
   } catch (e) {
-    console.error('[db] schema init failed:', e.message);
+    console.error('[db] schema init failed:', dbErrorHint(e.message));
+    if (config.dbInitStrict) {
+      console.error('[db] DB_INIT_STRICT on: exiting so the deploy fails instead of serving a half-alive API');
+      process.exit(1);
+    }
   }
 
   collector = startCollector({ io });
