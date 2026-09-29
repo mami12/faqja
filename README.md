@@ -4,10 +4,26 @@ Minimal, dark, **real football only** board for the `bitgames6205.com` / `api-ga
 sports feed. Backend on **Railway**, frontend on **GitHub Pages**, storage on **Supabase Postgres**.
 
 ```
-upstream API ──► collector (Railway) ──► Supabase Postgres
-                      │
-                      └── Socket.IO ──► browser (GitHub Pages)
+                            ┌──► in-memory odds store ──► Socket.IO ──► browser (GitHub Pages)
+upstream API ──► collector ─┤        (no odds writes)          + REST
+                            └──► Postgres: matches (+ users / tickets / results)
 ```
+
+## Where odds live
+
+Prices are the hottest data in the app (thousands of row changes a minute) and the browser only
+ever needs the **current** price, which it already receives by push (`odds:update`). So they are
+not written to the database at all: the backend keeps them in RAM (`server/odds-store.mjs`) and
+serves every board payload from there.
+
+* `ODDS_STORE=memory` (default) — no odds writes. `/api/odds/:matchId/history` then covers the
+  current process lifetime only, and a restart shows matches without prices for the ~1-3s until
+  the feed resends its snapshots.
+* `ODDS_STORE=db` — the previous behaviour: every price mirrored into `odds_current`
+  (+ `odds_history` on a move). Useful for A/B comparison or if you want price history in SQL.
+
+The database keeps what must survive a restart: `matches`, and the ticket/user ledger that goes
+with it (`users`, `tickets`, `results`) — the read path for the board no longer depends on it.
 
 ## Status: what is real and what is not
 
@@ -17,6 +33,7 @@ upstream API ──► collector (Railway) ──► Supabase Postgres
 | League/tournament names, kickoff times | **works** |
 | Live minute `72'`, `HT`, `FT` | **works, but derived** from kickoff time (see limitations) |
 | Storage + history in Postgres | **works** (schema auto-created on boot) |
+| Where odds live | **in memory, pushed straight to browsers** (`ODDS_STORE=memory`) — the DB sees no odds writes |
 | Real-time push to the browser (Socket.IO) | **works** (verified `matches:live` + `odds:update` broadcasts) |
 | Odds: 1X2, totals, corners, cards | **works** — 4 board columns + a row drill-down showing every market the feed sends |
 | All markets / half markets | **stored and displayed** (`is_base`, `grp_order`, `render_type`, `period` are kept) |
@@ -175,6 +192,7 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | `ALLOWED_ORIGINS` | `*` | CORS/Socket.IO origins, comma separated. Set to `https://<user>.github.io` in production. |
 | `INGEST_TOKEN` | – | Shared secret for `POST /ingest/odds` and `GET /api/raw-frames`. Empty = open. |
 | `ODDS_SOCKET` | `false` | Connect to the upstream push channel. |
+| `ODDS_STORE` | `memory` | `memory` keeps prices in RAM and pushes them to browsers (no DB writes); `db` mirrors them into `odds_current`/`odds_history`. |
 | `RESUBSCRIBE_MS` | `20000` | How often the pusher re-subscribes live matches. The feed only sends the real clock (`matchTime`) and score (`matchScore`) in a snapshot on (re)subscribe, so this is what keeps minutes and scores fresh. |
 | `ODDS_SUBSCRIBE_FRAMES` | – | Socket.IO frames to send after connect, separated by `||`. |
 | `LOG_RAW_FRAMES` | `true` | Store unparsed upstream frames (max 300/session). |
@@ -210,12 +228,12 @@ and make sure the backend allows that origin (`ALLOWED_ORIGINS=https://<user>.gi
 
 | Route | Description |
 |---|---|
-| `GET /health` | DB + collector + odds-socket status, and `feed` freshness (`live` / `staleClock` / `staleScore` — a frozen score or minute shows up here first). |
+| `GET /health` | DB + collector + odds-socket status, `feed` freshness (`live` / `staleClock` / `staleScore`) and the in-memory `odds` store stats. Returns **200 even when the database is down** — `db.ok` / `feed.error` carry the detail. |
 | `GET /api/meta` | Live/prematch/finished counts, last sync. |
 | `GET /api/leagues` | Leagues with live/prematch counts. |
 | `GET /api/matches?service=live\|prematch\|all&league=&q=&limit=&offset=` | Matches incl. grouped markets. `odds=0` to skip odds. |
 | `GET /api/matches/:id` | One match with markets. |
-| `GET /api/odds/:matchId/history?limit=` | Price-change history. |
+| `GET /api/odds/:matchId/history?limit=` | Price-change history — in memory by default, so it covers this process lifetime only (`ODDS_STORE=db` reads the table). |
 | `POST /ingest/odds` | Push odds (header `x-ingest-token`). |
 | `POST /ingest/frames` | Push native push-channel frames; `?direction=out` archives client frames, `?storeUnknown=1` keeps odds for matches outside the football table. |
 | `GET /api/raw-frames?limit=` | Unparsed/archived frames (token required). |

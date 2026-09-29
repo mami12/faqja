@@ -9,6 +9,7 @@ import {
   getSubscriptionIds, getFeedFreshness,
 } from './db.mjs';
 import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
+import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
@@ -38,24 +39,45 @@ const asInt = (v, def, max) => {
 
 app.get('/api/info', (_req, res) => res.json({ name: 'faqja-football-board', ok: true }));
 
-app.get('/health', async (_req, res) => {
-  let db = { ok: false };
+/* --- database status is probed in the background: a dead database must never
+   hang /health (Railway healthcheck) or stop the odds board ------------------ */
+let dbStatus = { ok: false, error: 'probing' };
+let feedStatus = null;
+let dbProbe = { at: null, ms: null };
+let probing = false;
+
+async function probeDb() {
+  if (probing) return; // a slow/dead database must not pile up probes
+  probing = true;
+  const started = Date.now();
   try {
-    db = await dbHealth();
+    dbStatus = await dbHealth();
   } catch (e) {
-    db = { ok: false, error: dbErrorHint(e.message) };
+    dbStatus = { ok: false, error: dbErrorHint(e.message) };
   }
-  let feed = null;
   try {
-    feed = await getFeedFreshness();
+    feedStatus = await getFeedFreshness();
   } catch (e) {
-    feed = { error: e.message };
+    feedStatus = { error: dbErrorHint(e.message) };
+  } finally {
+    probing = false;
+    dbProbe = { at: new Date().toISOString(), ms: Date.now() - started };
   }
-  res.status(db.ok ? 200 : 503).json({
-    ok: db.ok,
-    db,
+}
+
+probeDb();
+setInterval(probeDb, 15000).unref?.();
+
+app.get('/health', (_req, res) => {
+  // 200 even when the database is down: prices come from memory, so a database outage
+  // must not restart-loop the service. db.ok / feed.error carry the detail.
+  res.json({
+    ok: true,
+    db: dbStatus,
+    dbProbe,
     target: dbTarget(),
-    feed,
+    feed: feedStatus,
+    odds: { ...oddsStore.stats(), mode: config.oddsStore },
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
@@ -112,7 +134,12 @@ app.get('/api/matches/:id', async (req, res, next) => {
 
 app.get('/api/odds/:matchId/history', async (req, res, next) => {
   try {
-    res.json({ items: await getOddsHistory(Number(req.params.matchId), asInt(req.query.limit, 200, 1000)) });
+    const matchId = Number(req.params.matchId);
+    const limit = asInt(req.query.limit, 200, 1000);
+    // prices live in memory by default, so the history covers this process lifetime only
+    const items =
+      config.oddsStore === 'db' ? await getOddsHistory(matchId, limit) : oddsStore.getHistory(matchId, limit);
+    res.json({ items, store: config.oddsStore });
   } catch (e) {
     next(e);
   }

@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { config } from './config.mjs';
 import { saveOdds, logRawFrame } from './db.mjs';
+import * as oddsStore from './odds-store.mjs';
 
 /**
  * Odds normalisation.
@@ -242,10 +243,21 @@ export function normalizeOddsPayload(payload, defaults = {}) {
   return rows;
 }
 
-/** Persists normalised odds and returns what actually changed. */
+/**
+ * Stores normalised odds and returns what actually changed.
+ *
+ * Default (ODDS_STORE=memory): prices stay in RAM and go straight to the browser via
+ * io.emit('odds:update') - no DB writes. ODDS_STORE=db keeps the old behaviour of
+ * mirroring every price into odds_current/odds_history.
+ */
 export async function applyOddsRows(rows) {
   if (!rows.length) return [];
-  const { changed } = await saveOdds(rows);
+  if (config.oddsStore === 'db') {
+    const { changed } = await saveOdds(rows);
+    oddsStore.applyRows(rows); // keep the in-memory board view warm too
+    return changed;
+  }
+  const { changed } = oddsStore.applyRows(rows);
   return changed;
 }
 

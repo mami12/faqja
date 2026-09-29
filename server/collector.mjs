@@ -1,7 +1,8 @@
 import { config, dbErrorHint } from './config.mjs';
 import { liveClock } from './minute.mjs';
 import { fetchRealFootball } from './upstream.mjs';
-import { upsertMatches, expireStaleMatches, getCounts, getMatches, getOddsForMatches } from './db.mjs';
+import { upsertMatches, expireStaleMatches, getCounts, getMatches, getOddsForMatches as getOddsFromDb } from './db.mjs';
+import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
 
 /** groups odds_current rows into markets for the UI */
@@ -205,7 +206,10 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
 
 /** loads current odds for the given match rows and serialises everything */
 export async function withOdds(rows, now = Date.now()) {
-  const odds = await getOddsForMatches(rows.map((r) => r.match_id));
+  const ids = rows.map((r) => r.match_id);
+  // prices are served from memory by default (no DB read on the board path);
+  // ODDS_STORE=db restores the previous behaviour
+  const odds = config.oddsStore === 'db' ? await getOddsFromDb(ids) : getOddsFromMemory(ids);
   const byMatch = new Map();
   for (const o of odds) {
     if (!byMatch.has(o.match_id)) byMatch.set(o.match_id, []);

@@ -29,8 +29,13 @@ export const config = {
   // browser clients
   allowedOrigins: list(process.env.ALLOWED_ORIGINS, '*'),
 
+  // odds storage: 'memory' (default) keeps prices in RAM and pushes them straight to
+  // browsers - no odds writes at all; 'db' mirrors them into odds_current/odds_history
+  oddsStore: (process.env.ODDS_STORE ?? 'memory').toLowerCase(),
+
   // odds ingestion
   ingestToken: process.env.INGEST_TOKEN ?? '',
+
   subscribeFrames: (process.env.ODDS_SUBSCRIBE_FRAMES ?? '')
     .split('||')
     .map((s) => s.trim())
