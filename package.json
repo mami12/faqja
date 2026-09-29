@@ -17,6 +17,7 @@
     "probe:local": "node scripts/probe-local-socket.mjs",
     "test:frames": "node scripts/test-frames.mjs",
     "test:store": "node scripts/test-odds-store.mjs",
+    "test:matches": "node scripts/test-match-store.mjs",
     "test:ingest": "node scripts/test-live-ingest.mjs",
     "test:markets": "node scripts/test-markets.mjs",
     "odds:clean": "node scripts/clean-odds.mjs"

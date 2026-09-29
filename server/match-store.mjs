@@ -1,0 +1,252 @@
+/**
+ * In-memory match store.
+ *
+ * The match list is rebuilt from the public feed every poll cycle (10s), so keeping it
+ * in the database was only buying durability for something the feed re-sends anyway.
+ * Holding it in RAM means the board (matches + odds) keeps serving while the database
+ * is unreachable - the database is now only needed for the ledger (users, tickets,
+ * results) and for the optional raw-frame archive.
+ *
+ * Field-for-field compatible with the old `matches` table: the poll only overwrites the
+ * columns it owns, so score/clock/stats written by match-info frames survive an upsert,
+ * exactly like the `on conflict ... do update` did. No imports: pure and testable.
+ */
+
+const MATCH_COLUMNS = [
+  'match_id', 'sport_id', 'sport_tag', 'category_id', 'category_slug', 'category_name',
+  'tournament_id', 'tournament_slug', 'tournament_name', 'home', 'away', 'service',
+  'start_at', 'is_hot', 'is_real', 'live_minute', 'phase', 'status', 'raw',
+];
+
+/** columns that only match-info frames write */
+const FEED_COLUMNS = {
+  home_score: null,
+  away_score: null,
+  periods_score: null,
+  odds_count: null,
+  stats: null,
+  match_time_ms: null,
+  clock_at: null,
+  score_at: null,
+  feed_status: null,
+  has_open_odds: null,
+  broadcast_url: null,
+};
+
+const byId = new Map(); // match_id -> row (snake_case, same shape the board serializer reads)
+let lastUpdatedAt = null;
+let upserts = 0;
+
+const time = (v) => (v instanceof Date ? v.getTime() : v ? new Date(v).getTime() : 0);
+
+/**
+ * Applies one poll cycle. Only the polled columns are written; anything a match-info
+ * frame set (score, clock, stats, stream URL) is preserved, and a match that reappears
+ * becomes active again.
+ */
+export function upsert(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  const at = new Date();
+  let written = 0;
+
+  for (const row of rows) {
+    const id = Number(row.match_id);
+    if (!Number.isFinite(id)) continue;
+
+    let match = byId.get(id);
+    if (!match) {
+      match = { ...FEED_COLUMNS, first_seen_at: at };
+      byId.set(id, match);
+    }
+
+    for (const col of MATCH_COLUMNS) match[col] = row[col] ?? null;
+    match.raw = row.raw ?? {};
+    match.active = true;
+    match.last_seen_at = at;
+    match.updated_at = at;
+    written++;
+  }
+
+  upserts++;
+  lastUpdatedAt = at;
+  return written;
+}
+
+/** Marks matches that vanished from the feed as finished/inactive. */
+export function expireStale(graceSeconds = 150, at = Date.now()) {
+  const cutoff = at - graceSeconds * 1000;
+  const expired = [];
+
+  for (const match of byId.values()) {
+    if (!match.active) continue;
+    if (time(match.last_seen_at) >= cutoff) continue;
+    match.active = false;
+    if (match.status === 'live' || match.status === 'scheduled') match.status = 'ended';
+    match.updated_at = new Date(at);
+    expired.push(match.match_id);
+  }
+
+  return expired;
+}
+
+/** same filters/order as the old SQL: active, service/league/q, live first, then kickoff */
+export function getMatches({ service = null, league = null, q = null, limit = 500, offset = 0, includeEnded = false } = {}) {
+  const wantService = service ? String(service).toUpperCase() : null;
+  const needle = q ? String(q).toLowerCase() : null;
+  const out = [];
+
+  for (const match of byId.values()) {
+    if (!match.active) continue;
+    if (wantService && match.service !== wantService) continue;
+    if (league && match.category_slug !== league) continue;
+    if (!includeEnded && match.status === 'ended') continue;
+    if (needle) {
+      const hay = `${match.home ?? ''} ${match.away ?? ''} ${match.category_name ?? ''} ${match.tournament_name ?? ''}`.toLowerCase();
+      if (!hay.includes(needle)) continue;
+    }
+    out.push(match);
+  }
+
+  out.sort(
+    (a, b) =>
+      (b.service === 'LIVE' ? 1 : 0) - (a.service === 'LIVE' ? 1 : 0) ||
+      time(a.start_at) - time(b.start_at),
+  );
+
+  const from = Math.max(0, Number(offset) || 0);
+  return out.slice(from, from + Math.min(Number(limit) || 500, 2000));
+}
+
+export function getById(matchId) {
+  return byId.get(Number(matchId)) ?? null;
+}
+
+/** leagues with their live/prematch counts (what /api/leagues serves) */
+export function getLeagues() {
+  const groups = new Map();
+
+  for (const match of byId.values()) {
+    if (!match.active) continue;
+    const slug = match.category_slug ?? '';
+    let group = groups.get(slug);
+    if (!group) {
+      group = { slug, name: match.category_name ?? null, live: 0, prematch: 0, total: 0 };
+      groups.set(slug, group);
+    }
+    if (!group.name && match.category_name) group.name = match.category_name;
+    group.total++;
+    if (match.service === 'LIVE') group.live++;
+    else if (match.service === 'PREMATCH') group.prematch++;
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => b.live - a.live || b.total - a.total)
+    .map(({ slug, name, live, prematch }) => ({ slug, name, live, prematch }));
+}
+
+export function getCounts() {
+  let live = 0;
+  let prematch = 0;
+  let finished = 0;
+
+  for (const match of byId.values()) {
+    if (!match.active) continue;
+    if (match.status === 'ended') finished++;
+    else if (match.service === 'LIVE') live++;
+    else if (match.service === 'PREMATCH') prematch++;
+  }
+
+  return { live, prematch, finished, updatedAt: lastUpdatedAt };
+}
+
+/** ids the push channel should be subscribed to, oldest kickoff first */
+export function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150 } = {}) {
+  const pick = (service, limit) =>
+    [...byId.values()]
+      .filter((m) => m.active && m.service === service && m.status !== 'ended')
+      .sort((a, b) => time(a.start_at) - time(b.start_at))
+      .slice(0, Math.max(0, Number(limit) || 0))
+      .map((m) => m.match_id);
+
+  return { live: pick('LIVE', liveLimit), prematch: pick('PREMATCH', prematchLimit) };
+}
+
+/** which of the given ids we track (used to drop third-party matches from ingest) */
+export function knownIds(ids = []) {
+  return new Set(ids.filter((id) => byId.has(Number(id))));
+}
+
+/**
+ * Applies a decoded match-info (score / clock / stats / stream). A frame without a score
+ * or a clock leaves the stored value alone - only the freshness anchor moves when the
+ * feed really reported it. Returns the updated row (what the socket broadcasts).
+ */
+export function applyInfo(info) {
+  if (!info?.matchId) return null;
+  const match = byId.get(Number(info.matchId));
+  if (!match) return null;
+
+  const at = new Date();
+  const hasClock = Number.isFinite(info.matchTimeMs);
+  const hasScore = Number.isFinite(info.homeScore) && Number.isFinite(info.awayScore);
+
+  if (hasScore) {
+    match.home_score = info.homeScore;
+    match.away_score = info.awayScore;
+    match.score_at = at;
+  }
+  if (Array.isArray(info.periodsScore) && info.periodsScore.length) match.periods_score = info.periodsScore;
+  if (Number.isFinite(info.enabledOddsCount)) match.odds_count = info.enabledOddsCount;
+  if (info.stats && Object.keys(info.stats).length) match.stats = { ...(match.stats ?? {}), ...info.stats };
+  if (hasClock) {
+    match.match_time_ms = info.matchTimeMs;
+    match.clock_at = at;
+  }
+  if (typeof info.feedStatus === 'string') match.feed_status = info.feedStatus;
+  if (typeof info.hasOpenOdds === 'boolean') match.has_open_odds = info.hasOpenOdds;
+  if (typeof info.broadcastUrl === 'string') match.broadcast_url = info.broadcastUrl;
+  match.updated_at = at;
+
+  return match;
+}
+
+/** how fresh the push feed's clock/score are for the live board (drives /health) */
+export function getFeedFreshness(olderThanSeconds = 90, at = Date.now()) {
+  const cutoff = at - olderThanSeconds * 1000;
+  let live = 0;
+  let staleClock = 0;
+  let staleScore = 0;
+
+  for (const match of byId.values()) {
+    if (!match.active || match.service !== 'LIVE') continue;
+    live++;
+    if (time(match.clock_at) < cutoff) staleClock++;
+    if (time(match.score_at) < cutoff) staleScore++;
+  }
+
+  return { live, staleClock, staleScore, olderThanSeconds };
+}
+
+export function stats(at = Date.now()) {
+  let active = 0;
+  let live = 0;
+  for (const match of byId.values()) {
+    if (!match.active) continue;
+    active++;
+    if (match.service === 'LIVE') live++;
+  }
+  return {
+    matches: byId.size,
+    active,
+    live,
+    upserts,
+    lastUpdatedAt: lastUpdatedAt ? lastUpdatedAt.toISOString() : null,
+  };
+}
+
+/** test helper */
+export function clear() {
+  byId.clear();
+  lastUpdatedAt = null;
+  upserts = 0;
+}

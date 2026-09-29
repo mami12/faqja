@@ -1,7 +1,8 @@
 import { config, dbErrorHint } from './config.mjs';
 import { liveClock } from './minute.mjs';
 import { fetchRealFootball } from './upstream.mjs';
-import { upsertMatches, expireStaleMatches, getCounts, getMatches, getOddsForMatches as getOddsFromDb } from './db.mjs';
+import { upsertMatches, expireStaleMatches, getCounts, getMatches } from './matches.mjs';
+import { getOddsForMatches as getOddsFromDb } from './db.mjs';
 import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
 

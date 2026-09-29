@@ -6,24 +6,25 @@ sports feed. Backend on **Railway**, frontend on **GitHub Pages**, storage on **
 ```
                             ┌──► in-memory odds store ──► Socket.IO ──► browser (GitHub Pages)
 upstream API ──► collector ─┤        (no odds writes)          + REST
-                            └──► Postgres: matches (+ users / tickets / results)
+                            └──► Postgres: the ledger only (users / tickets / results)
 ```
 
-## Where odds live
+## Where the data lives
 
-Prices are the hottest data in the app (thousands of row changes a minute) and the browser only
-ever needs the **current** price, which it already receives by push (`odds:update`). So they are
-not written to the database at all: the backend keeps them in RAM (`server/odds-store.mjs`) and
-serves every board payload from there.
+The board (match list + prices) runs entirely from memory; the database holds only what must
+survive a restart: the ledger (`users`, `tickets`, `results`) and the optional raw-frame archive.
+A database outage therefore no longer stops the board — it only disables the ledger.
 
-* `ODDS_STORE=memory` (default) — no odds writes. `/api/odds/:matchId/history` then covers the
-  current process lifetime only, and a restart shows matches without prices for the ~1-3s until
-  the feed resends its snapshots.
-* `ODDS_STORE=db` — the previous behaviour: every price mirrored into `odds_current`
-  (+ `odds_history` on a move). Useful for A/B comparison or if you want price history in SQL.
+* **Matches** — `MATCH_STORE=memory` (default, `server/match-store.mjs`): the feed resends the whole
+  list every poll cycle, so storing it was only buying durability for data we receive again 10s
+  later. `MATCH_STORE=db` puts them back in Postgres.
+* **Odds** — `ODDS_STORE=memory` (default, `server/odds-store.mjs`): prices are the hottest data in
+  the app (thousands of row changes a minute) and the browser only needs the **current** price,
+  which it already receives by push (`odds:update`). `/api/odds/:matchId/history` then covers the
+  current process lifetime only. `ODDS_STORE=db` mirrors them into `odds_current`/`odds_history`.
 
-The database keeps what must survive a restart: `matches`, and the ticket/user ledger that goes
-with it (`users`, `tickets`, `results`) — the read path for the board no longer depends on it.
+`/health` reports both stores (`matches`, `odds`) plus `ledger.ready`, and stays **200 even when the
+database is down**, so a ledger outage cannot restart-loop the service.
 
 ## Status: what is real and what is not
 
@@ -34,6 +35,7 @@ with it (`users`, `tickets`, `results`) — the read path for the board no longe
 | Live minute `72'`, `HT`, `FT` | **works, but derived** from kickoff time (see limitations) |
 | Storage + history in Postgres | **works** (schema auto-created on boot) |
 | Where odds live | **in memory, pushed straight to browsers** (`ODDS_STORE=memory`) — the DB sees no odds writes |
+| Where matches live | **in memory** (`MATCH_STORE=memory`) — the board keeps serving while the DB is down; the DB is the ledger only |
 | Real-time push to the browser (Socket.IO) | **works** (verified `matches:live` + `odds:update` broadcasts) |
 | Odds: 1X2, totals, corners, cards | **works** — 4 board columns + a row drill-down showing every market the feed sends |
 | All markets / half markets | **stored and displayed** (`is_base`, `grp_order`, `render_type`, `period` are kept) |
@@ -182,7 +184,8 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | Var | Default | Meaning |
 |---|---|---|
 | `DATABASE_URL` | – | Supabase pooler URL. `sslmode` is stripped in code because pg ≥ 8.16 turns `require` into `verify-full` and that fails on the pooler chain. The resolved target (`user@host:port/db`, no password) is logged at boot and returned by `/health` as `target`. |
-| `DB_INIT_STRICT` | `true` in production | Exit on boot when the database is unreachable, so the deploy fails the Railway healthcheck instead of serving a half-alive API. Local/dev defaults to off (retry and keep polling). |
+| `MATCH_STORE` | `memory` | `memory` keeps the match list in RAM, so the board survives a database outage; `db` stores it in Postgres. |
+| `DB_INIT_STRICT` | `false` | Exit when the ledger schema cannot be created instead of running without it. The board itself no longer needs the database. |
 | `PORT` | `3000` | Railway injects and assigns `PORT` dynamically. |
 | `UPSTREAM_GATEWAY` | `https://api-gateway.gw-lucky-bet.com` | Sports API host. |
 | `PARTNER_ID` | `d3edfa27-7cac-4f77-9e6e-4e2fa2d1ab5f` | `p=` partner id from the captured URLs. |

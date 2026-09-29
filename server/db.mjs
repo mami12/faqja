@@ -259,9 +259,22 @@ export async function saveOdds(rows) {
   return { changed };
 }
 
+let rawFrameWriteFailed = false;
+
+/**
+ * Raw frames are an archive, not board data - and the database is only the ledger now, so
+ * an insert failure must not break the ingest request that triggered it.
+ */
 export async function logRawFrame(source, payload) {
   if (!config.logRawFrames) return;
-  await query('insert into raw_frames (source, payload) values ($1, $2)', [source, JSON.stringify(payload ?? {})]);
+  try {
+    await query('insert into raw_frames (source, payload) values ($1, $2)', [source, JSON.stringify(payload ?? {})]);
+  } catch (e) {
+    if (!rawFrameWriteFailed) {
+      rawFrameWriteFailed = true;
+      console.warn('[db] raw-frame archive unavailable:', e.message);
+    }
+  }
 }
 
 /**

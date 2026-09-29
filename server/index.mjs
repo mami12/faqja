@@ -3,11 +3,11 @@ import cors from 'cors';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
+import { initSchema, dbHealth, getOddsHistory, recentRawFrames, closePool, logRawFrame } from './db.mjs';
 import {
-  initSchema, dbHealth, getMatches, getMatchById, getLeagues, getCounts,
-  getOddsForMatches, getOddsHistory, recentRawFrames, closePool, applyMatchInfo, logRawFrame, knownMatchIds,
-  getSubscriptionIds, getFeedFreshness,
-} from './db.mjs';
+  getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
+  getSubscriptionIds, getFeedFreshness, matchStats,
+} from './matches.mjs';
 import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
 import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
@@ -63,6 +63,27 @@ async function probeDb() {
     probing = false;
     dbProbe = { at: new Date().toISOString(), ms: Date.now() - started };
   }
+
+  // the ledger schema is created/retried whenever the database actually answers
+  if (dbStatus.ok && !ledgerReady) await ensureLedgerSchema();
+}
+
+/** the ledger tables (users/tickets/results) are created on boot and retried until the database answers */
+let ledgerReady = false;
+async function ensureLedgerSchema() {
+  if (ledgerReady) return true;
+  try {
+    await initSchema();
+    ledgerReady = true;
+    console.log('[db] ledger schema ready');
+  } catch (e) {
+    console.error('[db] ledger schema not ready yet:', dbErrorHint(e.message));
+    if (config.dbInitStrict) {
+      console.error('[db] DB_INIT_STRICT on: exiting instead of running without the ledger schema');
+      process.exit(1);
+    }
+  }
+  return ledgerReady;
 }
 
 probeDb();
@@ -77,6 +98,8 @@ app.get('/health', (_req, res) => {
     dbProbe,
     target: dbTarget(),
     feed: feedStatus,
+    matches: matchStats(),
+    ledger: { ready: ledgerReady },
     odds: { ...oddsStore.stats(), mode: config.oddsStore },
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
@@ -373,16 +396,7 @@ async function boot() {
     );
   }
 
-  try {
-    await initSchema();
-    console.log('[db] schema ready');
-  } catch (e) {
-    console.error('[db] schema init failed:', dbErrorHint(e.message));
-    if (config.dbInitStrict) {
-      console.error('[db] DB_INIT_STRICT on: exiting so the deploy fails instead of serving a half-alive API');
-      process.exit(1);
-    }
-  }
+  await ensureLedgerSchema(); // the board does not need the ledger, so a failure here is not fatal
 
   collector = startCollector({ io });
 

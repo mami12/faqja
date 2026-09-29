@@ -12,10 +12,13 @@ export const config = {
 
   databaseUrl: process.env.DATABASE_URL ?? '',
 
-  // a dead database should fail the deploy (Railway healthcheck + restart policy) instead
-  // of leaving the API half-alive and retrying forever; off by default outside production
-  dbInitStrict:
-    (process.env.DB_INIT_STRICT ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false')) === 'true',
+  // the database is only the ledger now (users / tickets / results): the board runs from
+  // memory, so a dead database must NOT stop the service. Set DB_INIT_STRICT=true if you
+  // would rather fail the deploy when the ledger is unreachable.
+  dbInitStrict: (process.env.DB_INIT_STRICT ?? 'false') === 'true',
+
+  // where the match list lives: 'memory' (default - survives a database outage) or 'db'
+  matchStore: (process.env.MATCH_STORE ?? 'memory').toLowerCase(),
 
   // upstream sports API
   gateway: process.env.UPSTREAM_GATEWAY ?? 'https://api-gateway.gw-lucky-bet.com',
