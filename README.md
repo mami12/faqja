@@ -26,6 +26,46 @@ A database outage therefore no longer stops the board — it only disables the l
 `/health` reports both stores (`matches`, `odds`) plus `ledger.ready`, and stays **200 even when the
 database is down**, so a ledger outage cannot restart-loop the service.
 
+## Betting app (React) — served at `/app`
+
+A betting/admin UI (login, sportsbook, betslip, my-bets, admin and manager panels, 4 languages)
+is served by this same backend under **`/app`**, using the board's live matches and prices. It
+never talks to the database for the board: matches come from the in-memory store and prices from
+the in-memory odds store, so an outage of the ledger only disables the panels that need it.
+
+```
+/app               the React app (built from web/ -> web/dist)
+/app/api/*         its API  (server/ledger/routes.mjs)
+/app/api/auth/...  login / me            -> JWT + bcrypt
+/app/api/matches   the live board in the app's own shape (server/ledger/view.mjs)
+/socket.io         the same realtime feed the board uses (odds:update, matches:live, match:info)
+```
+
+**Default accounts** (created on first boot when missing, see `server/ledger/auth.mjs`):
+
+| Account | Password | Role | Notes |
+|---|---|---|---|
+| `admin` | `admin123` | ADMIN | admin panel, users, deposits, ticket audit |
+| `demo` | `demo` | PLAYER | starts with 1000 LEK so the betslip is usable |
+
+Change them (or set `SEED_DEFAULT_ACCOUNTS=false`) before going live — they are created with a
+warning in the log, and the passwords are stored as bcrypt hashes.
+
+**Ledger tables** (additive, create-only, `app_` prefix so nothing existing is touched):
+`app_user`, `app_transaction` (every balance movement with `balance_after`), `app_ticket`,
+`app_ticket_line` (odds and names frozen at placement) and `app_feed_override` (admin
+suspend/price overrides that survive the next feed frame).
+
+**Build / run**
+
+```bash
+npm install                # installs the app's build tooling too
+npm run build:web          # vite build -> web/dist (Railway runs this on deploy)
+npm start                  # serves the board (/) and the app (/app)
+
+npm run dev:web            # vite dev server on :5173, proxies /app/api and /socket.io
+```
+
 ## Status: what is real and what is not
 
 | Feature | State |

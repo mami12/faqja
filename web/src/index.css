@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .animate-flash-green {
+    animation: flashGreen 1s ease-out;
+  }
+  .animate-flash-red {
+    animation: flashRed 1s ease-out;
+  }
+}
+
+@keyframes flashGreen {
+  0% { background-color: #10b981; }
+  100% { background-color: transparent; }
+}
+@keyframes flashRed {
+  0% { background-color: #ef4444; }
+  100% { background-color: transparent; }
+}

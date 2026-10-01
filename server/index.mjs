@@ -1,9 +1,14 @@
 import express from 'express';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
 import { initSchema, dbHealth, getOddsHistory, recentRawFrames, closePool, logRawFrame } from './db.mjs';
+import { initLedgerSchema } from './ledger/store.mjs';
+import { ensureDefaultAccounts } from './ledger/auth.mjs';
+import { ledgerRouter } from './ledger/routes.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
   getSubscriptionIds, getFeedFreshness, matchStats,
@@ -74,6 +79,8 @@ async function ensureLedgerSchema() {
   if (ledgerReady) return true;
   try {
     await initSchema();
+    await initLedgerSchema(); // users / transactions / tickets (additive, create-only)
+    await ensureDefaultAccounts();
     ledgerReady = true;
     console.log('[db] ledger schema ready');
   } catch (e) {
@@ -355,6 +362,22 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
     return next(e);
   }
 });
+
+/* --------------------------------------- React app (betting / admin panels) */
+
+app.use('/app/api', ledgerRouter);
+
+const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
+if (existsSync(webDist)) {
+  app.use('/app', express.static(webDist));
+  // deep links (/app/login, /app/admin, ...) fall through to the SPA shell
+  app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  console.log(`[app] serving the React app from ${webDist}`);
+} else {
+  app.get('/app', (_req, res) =>
+    res.status(503).json({ error: 'app not built yet', hint: 'run npm run build:web' }),
+  );
+}
 
 /* ---------------------------------------------------------------- delivery */
 

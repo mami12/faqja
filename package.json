@@ -18,16 +18,36 @@
     "test:frames": "node scripts/test-frames.mjs",
     "test:store": "node scripts/test-odds-store.mjs",
     "test:matches": "node scripts/test-match-store.mjs",
+    "build:web": "npm --prefix web run build",
+    "dev:web": "npm --prefix web run dev",
     "test:ingest": "node scripts/test-live-ingest.mjs",
     "test:markets": "node scripts/test-markets.mjs",
     "odds:clean": "node scripts/clean-odds.mjs"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
     "socket.io": "^4.8.3",
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.6.1",
+    "axios": "^1.20.0",
+    "lucide-react": "^0.294.0",
+    "postcss": "^8.5.28",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6",
+    "socket.io-client": "^4.8.4",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
   }
 }

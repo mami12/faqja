@@ -20,6 +20,16 @@ export const config = {
   // where the match list lives: 'memory' (default - survives a database outage) or 'db'
   matchStore: (process.env.MATCH_STORE ?? 'memory').toLowerCase(),
 
+  // ledger + auth (users, tickets, admin panel). Default accounts are created on boot
+  // when they are missing - change these or set SEED_DEFAULT_ACCOUNTS=false before going live.
+  jwtSecret: process.env.JWT_SECRET ?? 'faqja-dev-secret-change-me',
+  jwtTtl: process.env.JWT_TTL ?? '7d',
+  seedDefaultAccounts: process.env.SEED_DEFAULT_ACCOUNTS !== 'false',
+  adminUser: process.env.ADMIN_USER ?? 'admin',
+  adminPassword: process.env.ADMIN_PASSWORD ?? 'admin123',
+  demoUser: process.env.DEMO_USER ?? 'demo',
+  demoPassword: process.env.DEMO_PASSWORD ?? 'demo',
+
   // upstream sports API
   gateway: process.env.UPSTREAM_GATEWAY ?? 'https://api-gateway.gw-lucky-bet.com',
   partnerId: process.env.PARTNER_ID ?? 'd3edfa27-7cac-4f77-9e6e-4e2fa2d1ab5f',
