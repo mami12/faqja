@@ -56,6 +56,20 @@ warning in the log, and the passwords are stored as bcrypt hashes.
 `app_ticket_line` (odds and names frozen at placement) and `app_feed_override` (admin
 suspend/price overrides that survive the next feed frame).
 
+**Bets** (`server/ledger/bets.mjs` — the same rules the original app had):
+
+| Endpoint | What it does |
+|---|---|
+| `POST /app/api/bets/place` | validates every selection against the **live feed**, then charges the stake, freezes the prices into `app_ticket_line` and records the movement — all in one transaction |
+| `POST /app/api/bets/book` | same validation, no stake/account: returns a shareable 6-char booking code |
+| `GET /app/api/bets/active` / `history` | My Bets: open tickets / the last 50 settled |
+| `POST /app/api/bets/cashout/:id` | pays **70%** of the potential payout early and closes the ticket as WON |
+| `GET /app/api/tickets/search?q=` / `booking/:code` | find a ticket by code or id fragment (public) |
+
+Rules enforced (verified): minimum stake **100 LEK**, only `ACTIVE` accounts, balance checked under a row lock,
+prices taken from the server (a client-sent price is refused if it drifts more than 10%), live odds must be
+fresher than 2 minutes, and settled tickets cannot be cashed out twice.
+
 **Build / run**
 
 ```bash

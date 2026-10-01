@@ -7,13 +7,25 @@
 import express from 'express';
 import { authenticate, requireAuth } from './auth.mjs';
 import * as ledger from './store.mjs';
+import * as bets from './bets.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
 
 export const ledgerRouter = express.Router();
 
-const guard = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+/**
+ * Async wrapper that also maps a thrown error to its intended status. Bet rules throw
+ * errors carrying `status` (400 for a refused bet, 403 for a blocked account); without
+ * this they would surface as 500 and the betslip would show a generic failure instead of
+ * the real reason. Both `message` and `error` are set: the app reads either.
+ */
+const guard = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch((e) => {
+    const status = Number(e?.status) >= 400 && Number(e?.status) < 600 ? Number(e.status) : 500;
+    if (status >= 500) console.error('[app api]', req.method, req.originalUrl, '-', e?.message);
+    res.status(status).json({ message: e?.message ?? 'error', error: e?.message ?? 'error' });
+  });
 const asLimit = (v, def, max) => Math.min(Math.max(1, Number(v) || def), max);
 
 /**
@@ -46,6 +58,86 @@ ledgerRouter.get(
   requireLedger,
   requireAuth,
   guard(async (req, res) => res.json(await ledger.listTransactions(req.user.id, asLimit(req.query.limit, 100, 500)))),
+);
+
+/* ------------------------------------------------------- bets (stage 2) */
+
+/** place a real ticket: validates against the live feed, then charges the balance */
+ledgerRouter.post(
+  '/bets/place',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    const { stake, selections, ticketType, type, systemType } = req.body ?? {};
+    const ticket = await bets.placeBet({
+      user: req.user,
+      stake,
+      selections,
+      ticketType: ticketType ?? type ?? null,
+      systemType: systemType ?? null,
+    });
+    res.json(ticket);
+  }),
+);
+
+/** shareable booking code: no stake, no account */
+ledgerRouter.post(
+  '/bets/book',
+  requireLedger,
+  guard(async (req, res) => {
+    const { stake, selections, ticketType, type, systemType } = req.body ?? {};
+    res.json(
+      await bets.bookTicket({
+        stake,
+        selections,
+        ticketType: ticketType ?? type ?? null,
+        systemType: systemType ?? null,
+      }),
+    );
+  }),
+);
+
+ledgerRouter.get(
+  '/bets/active',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => res.json(await bets.listActive(req.user.id))),
+);
+
+ledgerRouter.get(
+  '/bets/history',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => res.json(await bets.listHistory(req.user.id))),
+);
+
+ledgerRouter.post(
+  '/bets/cashout/:ticketId',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => res.json(await bets.cashOut(req.params.ticketId, req.user.id))),
+);
+
+/** the betslip's "find ticket" box: booking code or a ticket id fragment */
+ledgerRouter.get(
+  '/tickets/search',
+  requireLedger,
+  guard(async (req, res) => {
+    const ticket = await bets.searchTickets(req.query.q);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    return res.json(ticket);
+  }),
+);
+
+/** a booking code can be opened by anyone (that is the point of sharing it) */
+ledgerRouter.get(
+  '/booking/:code',
+  requireLedger,
+  guard(async (req, res) => {
+    const ticket = await bets.getBookingTicket(req.params.code);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    return res.json(ticket);
+  }),
 );
 
 /* ------------------------------------------------------------ board views */
