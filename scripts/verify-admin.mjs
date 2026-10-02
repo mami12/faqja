@@ -3,11 +3,10 @@
  * roles/scoping, ticket revert, match control through overrides, stats, settlement.
  * Run against a live server:
  *
- *   npm start
+ *   ODDS_SOCKET=true npm start         # or LOCAL_URL=... to point at a deployed instance
  *   npm run verify:admin
  *
- * Requires the seeded admin/admin123 account and a quiet settlement pass (a ticket that
- * gets graded mid-test can no longer be reverted); everything it creates is deleted again.
+ * Requires the seeded admin/admin123 account; everything it creates is deleted again.
  */
 const B = process.env.LOCAL_URL ?? 'http://localhost:3100';
 const API = `${B}/app/api`;
@@ -140,18 +139,36 @@ check('reactivating lets them bet again', activeBet.status === 200, JSON.stringi
 // --- ticket revert ----------------------------------------------------------------
 const tickets = await asAdmin('/admin/tickets');
 check('GET /admin/tickets lists tickets', tickets.status === 200 && tickets.body.length >= 1, `${tickets.body?.length} tickets`);
-const openTicket = tickets.body.find((t) => t.status === 'PENDING' && t.userId === created.body.id);
-check('our player has an open ticket with its lines', !!openTicket && openTicket.lines.length > 0, `${openTicket?.id} user=${openTicket?.userId} want=${created.body.id}`);
+let openTicket = tickets.body.find((t) => t.status === 'PENDING' && t.userId === created.body.id);
+check('our player has an open ticket with its lines', !!openTicket && openTicket.lines.length > 0, String(openTicket?.id));
 check('the list never leaks a password hash', !JSON.stringify(tickets.body).toLowerCase().includes('hash'));
 
-const balanceBefore = Number((await call('/auth/me', playerToken)).body.balance);
-const revert = await asAdmin(`/admin/tickets/${openTicket.id}/revert`, { method: 'POST' });
-check('POST /admin/tickets/:id/revert refunds the stake', revert.status === 200 && Number(revert.body.refunded) === Number(openTicket.stake), JSON.stringify(revert.body).slice(0, 180));
+// the settlement pass can grade our ticket while we work (that is the point of it), in which case
+// the revert is refused by design - place another bet and retry with a fresh ticket
+let revert = null;
+let balanceBefore = 0;
+let stake = 0;
+for (let attempt = 0; attempt < 5 && !revert; attempt++) {
+  if (!openTicket) {
+    if ((await placeAtLivePrice(100, target.id)).status !== 200) continue;
+    const list = (await asAdmin('/admin/tickets')).body;
+    openTicket = list.find((t) => t.status === 'PENDING' && t.userId === created.body.id);
+    if (!openTicket) continue;
+  }
+
+  balanceBefore = Number((await call('/auth/me', playerToken)).body.balance);
+  stake = Number(openTicket.stake);
+  const res = await asAdmin(`/admin/tickets/${openTicket.id}/revert`, { method: 'POST' });
+  if (res.status === 200) revert = res;
+  else openTicket = null; // graded in the meantime
+}
+
+check('POST /admin/tickets/:id/revert refunds the stake', revert?.status === 200 && Number(revert.body.refunded) === stake, JSON.stringify(revert?.body).slice(0, 180));
 const balanceAfter = Number((await call('/auth/me', playerToken)).body.balance);
-check('the refund reached the player', balanceAfter === balanceBefore + Number(openTicket.stake), `${balanceBefore} -> ${balanceAfter}`);
-check('the ticket is now REVERTED', revert.body.ticket?.status === 'REVERTED');
-check('its lines were voided', revert.body.ticket?.lines.every((l) => l.status === 'VOID'));
-const revertTwice = await asAdmin(`/admin/tickets/${openTicket.id}/revert`, { method: 'POST' });
+check('the refund reached the player', balanceAfter === balanceBefore + stake, `${balanceBefore} -> ${balanceAfter}`);
+check('the ticket is now REVERTED', revert?.body.ticket?.status === 'REVERTED');
+check('its lines were voided', revert?.body.ticket?.lines.every((l) => l.status === 'VOID'));
+const revertTwice = await asAdmin(`/admin/tickets/${revert.body.ticket.id}/revert`, { method: 'POST' });
 check('reverting twice is refused', revertTwice.status === 400, revertTwice.body?.message);
 
 // --- match control (overrides) ----------------------------------------------------
