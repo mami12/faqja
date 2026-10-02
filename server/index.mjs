@@ -7,8 +7,10 @@ import { Server as SocketServer } from 'socket.io';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
 import { initSchema, dbHealth, getOddsHistory, recentRawFrames, closePool, logRawFrame } from './db.mjs';
 import { initLedgerSchema } from './ledger/store.mjs';
+import * as overrides from './ledger/overrides.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
+import { adminRouter } from './ledger/admin.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
@@ -82,6 +84,9 @@ async function ensureLedgerSchema() {
     await initSchema();
     await initLedgerSchema(); // users / transactions / tickets (additive, create-only)
     await ensureDefaultAccounts();
+    // admin overrides live in the database and are read through a snapshot: warm it now so a
+    // restart does not silently drop a suspension or a pinned price until someone edits again
+    await overrides.refresh(true);
     ledgerReady = true;
     console.log('[db] ledger schema ready');
   } catch (e) {
@@ -366,6 +371,7 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 
 /* --------------------------------------- React app (betting / admin panels) */
 
+app.use('/app/api', adminRouter);
 app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));

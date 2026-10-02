@@ -9,6 +9,7 @@
  * everything needed to resolve the bet. Ours is `matchId|marketKey|line|outcomeKey`.
  */
 const FOOTBALL = { id: 18, name: 'Football', slug: 'football', iconName: 'Activity', sortOrder: 1, isActive: true };
+import * as overrides from './overrides.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -49,20 +50,32 @@ const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 /** one serialised board match (see collector.serializeMatch) -> the app's Match shape */
 export function toClientMatch(m) {
   const matchId = String(m.id);
+  const matchOverride = overrides.matchOverride(matchId);
+  // a suspended match makes every one of its prices unbettable
+  const matchSuspended = m.suspended === true || matchOverride?.suspended === true;
   const markets = [];
 
   for (const mk of m.markets ?? []) {
     const line = mk.line ?? '';
+    const marketOverride = overrides.marketOverride(matchId, mk.key, line);
     const outcomes = (mk.outcomes ?? [])
       .filter((o) => o.price !== null && o.price !== undefined)
-      .map((o) => ({
-        id: outcomeIdOf(matchId, mk.key, line, o.key),
-        marketId: marketIdOf(matchId, mk.key, line),
-        name: outcomeName(o.key, o.name),
-        code: String(o.key),
-        odds: Number(o.price),
-        status: o.suspended || mk.suspended ? 'SUSPENDED' : 'ACTIVE',
-      }));
+      .map((o) => {
+        // an admin override wins over the feed: a pinned price, or a forced suspension
+        const forced = overrides.outcomeOverride(matchId, mk.key, line, o.key);
+        const price = forced?.price ?? Number(o.price);
+        return {
+          id: outcomeIdOf(matchId, mk.key, line, o.key),
+          marketId: marketIdOf(matchId, mk.key, line),
+          name: outcomeName(o.key, o.name),
+          code: String(o.key),
+          odds: price,
+          status:
+            o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended
+              ? 'SUSPENDED'
+              : 'ACTIVE',
+        };
+      });
 
     if (!outcomes.length) continue;
     markets.push({
@@ -73,7 +86,7 @@ export function toClientMatch(m) {
       name: mk.name ?? mk.column ?? 'Market',
       specifier: line === '' ? undefined : String(line),
       line: String(line),
-      status: mk.suspended ? 'SUSPENDED' : 'ACTIVE',
+      status: mk.suspended || matchSuspended || marketOverride?.suspended ? 'SUSPENDED' : 'ACTIVE',
       sortOrder: Number(mk.order ?? 0),
       isBase: mk.isBase === true,
       period: Number(mk.period ?? 0),
@@ -97,7 +110,7 @@ export function toClientMatch(m) {
     awayScore: num(m.score?.away) ?? 0,
     currentMinute: num(m.minute) ?? 0,
     period: m.phase ?? m.feedStatus ?? null,
-    isSuspended: m.suspended === true,
+    isSuspended: m.suspended === true || matchOverride?.suspended === true,
     isSimulated: false,
     // extra context our board has and the app can show
     liveMinuteSource: m.minuteSource ?? null,

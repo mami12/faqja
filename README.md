@@ -88,6 +88,33 @@ collects the loss. The pass runs every `SETTLE_INTERVAL_MS` (default 30s) and is
 pays twice. Admins can also settle by hand: `POST /app/api/admin/matches/:id/settle {homeScore, awayScore}`,
 and see stored results in `GET /app/api/admin/settlement`.
 
+**Admin & manager panels** (`server/ledger/admin.mjs`, mounted under `/app/api`):
+
+| Endpoint | Who | What it does |
+|---|---|---|
+| `GET /admin/stats` | ADMIN | dashboard numbers (users, open tickets, stake, revenue, balance) |
+| `GET /admin/users`, `POST /admin/users` | ADMIN | list / create any role |
+| `PATCH /admin/users/:id/status` | ADMIN | freeze or reactivate an account |
+| `POST /admin/users/:id/deposit` / `withdraw` | ADMIN | move money, always through the ledger |
+| `DELETE /admin/users/:id` | ADMIN | remove an account |
+| `GET /admin/tickets` | ADMIN | ticket audit list with lines |
+| `POST /admin/tickets/:id/revert` | ADMIN | refund the stake, void the lines, close as `REVERTED` |
+| `GET /admin/matches` | ADMIN | the board as the panel sees it, plus active overrides |
+| `PATCH /admin/matches/:id/suspend` | ADMIN | suspend/unsuspend a whole match (all its prices become unbettable) |
+| `PATCH /admin/markets/:id/suspend`, `/admin/outcomes/:id/suspend` | ADMIN | narrower suspensions |
+| `PATCH /admin/outcomes/:id/odds`, `/admin/markets/:id/odds-adjust` | ADMIN | pin or shift a price; the override wins over the next feed frame |
+| `DELETE /admin/overrides?kind=&ref=` | ADMIN | clear one override (no query = clear all) |
+| `GET /admin/feed-status`, `/admin/settlement` | STAFF | feed counters, stored results, settlement pass |
+| `/manager/*` | MANAGER | the same routes, scoped to the players that manager created |
+
+Overrides live in `app_feed_override` and are applied when the board is built *and* when a bet is
+validated (`server/ledger/view.mjs`, `bets.mjs`), so a suspension actually sticks instead of being
+overwritten by the next price frame. Reads come from a 4s snapshot that is warmed at boot
+(`server/ledger/overrides.mjs`), so a restart cannot silently drop an override.
+
+Scoping is enforced, not just hidden: a manager gets `403` on every `/admin/*` route, on another
+manager's player, and on a player-less (guest) ticket — verified by `npm run verify:admin`.
+
 **Build / run**
 
 ```bash
@@ -249,6 +276,18 @@ npm run probe:gateway       # upstream API + which sports exist
 node scripts/probe-local-socket.mjs   # realtime end-to-end against the running backend
 ```
 
+End-to-end checks for the betting app (they need a running server; both create and delete their own
+accounts, so the seeded `demo` balance is never touched):
+
+```bash
+ODDS_SOCKET=true npm start  # the server subscribes to the feed, so the board has real prices
+npm run verify:app          # auth, board, betslip, booking codes, cash-out, settlement payout  (33 checks)
+npm run verify:admin        # users, money, account status, roles, ticket revert, match control  (48 checks)
+```
+
+Set `LOCAL_URL=https://<service>.up.railway.app` to run them against a deployed instance instead
+(e.g. `LOCAL_URL=... npm run verify:app`).
+
 Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `docs/`.
 
 ## Environment variables
@@ -393,5 +432,6 @@ server/   config.mjs  schema.mjs  db.mjs  minute.mjs  upstream.mjs  odds.mjs  pu
 docs/     index.html  styles.css  app.js  config.js  vendor/socket.io.min.js  frames-relay.user.js   <- GitHub Pages
 scripts/  probe-db / probe-gateway / probe-sockets / probe-subscribe / probe-push2 / probe-local-socket
           test-frames.mjs  test-live-ingest.mjs  sample-frames.txt (your captured frames)
+          verify-app.mjs  verify-admin.mjs  start-local.mjs
 railway.json  market-map.example.json  README.md
 ```

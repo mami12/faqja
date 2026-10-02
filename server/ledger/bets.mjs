@@ -14,6 +14,7 @@ import crypto from 'node:crypto';
 import { pool, query } from '../db.mjs';
 import { getOddsForMatches } from '../odds-store.mjs';
 import { getMatchById } from '../matches.mjs';
+import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
 
 const MIN_STAKE = 100; // LEK
@@ -23,22 +24,6 @@ const PRICE_TOLERANCE = 0.1; // 10% drift between the shown price and the server
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
 
 const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
-
-/** blocking overrides written by the admin panel (a suspended match must not take bets) */
-async function isSuspendedByAdmin(matchId, marketKey, line, outcomeKey) {
-  try {
-    const refs = [`${matchId}`, `${matchId}|${marketKey}|${line}`, `${matchId}|${marketKey}|${line}|${outcomeKey}`];
-    const res = await query(
-      `select 1 from app_feed_override
-        where suspended = true and ((kind = 'match' and ref = $1) or (kind = 'market' and ref = $2) or (kind = 'outcome' and ref = $3))
-        limit 1`,
-      [refs[0], refs[1], refs[2]],
-    );
-    return res.rows.length > 0;
-  } catch {
-    return false; // overrides are optional; never block betting because of a read error
-  }
-}
 
 /**
  * Turns one selection from the client ({ outcomeId, oddsAtPlacement }) into the row we
@@ -57,10 +42,18 @@ async function resolveSelection(selection) {
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
   if (row.suspended === true) throw badRequest('Kjo kuotë është pezulluar për momentin.');
-  if (row.price === null || row.price === undefined) throw badRequest('Kjo kuotë nuk ka çmim.');
-  if (await isSuspendedByAdmin(matchId, parsed.marketKey, parsed.line, parsed.outcomeKey)) {
+
+  // admin overrides win over the feed: a suspended match/market/outcome blocks the bet, and
+  // a pinned price is the price the ticket gets
+  const matchOverride = overrides.matchOverride(matchId);
+  const marketOverride = overrides.marketOverride(matchId, parsed.marketKey, parsed.line);
+  const outcomeOverride = overrides.outcomeOverride(matchId, parsed.marketKey, parsed.line, parsed.outcomeKey);
+  if (matchOverride?.suspended || marketOverride?.suspended || outcomeOverride?.suspended) {
     throw badRequest('Ndeshja ose kuota është pezulluar nga administrata.');
   }
+
+  const price = outcomeOverride?.price ?? (row.price === null || row.price === undefined ? null : Number(row.price));
+  if (price === null) throw badRequest('Kjo kuotë nuk ka çmim.');
 
   // live prices must be fresh, otherwise a bet could take a pre-goal price
   if (String(match.service).toUpperCase() === 'LIVE') {
@@ -70,7 +63,6 @@ async function resolveSelection(selection) {
     }
   }
 
-  const price = Number(row.price);
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds ?? price);
   if (Number.isFinite(shown) && shown > 0 && Math.abs(price - shown) / shown > PRICE_TOLERANCE) {
     throw badRequest('Koeficientët kanë ndryshuar gjatë vendosjes. Ju lutem pranoni koeficientët e rinj.');

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node server/index.mjs",
+    "start:local": "node scripts/start-local.mjs",
     "probe:db": "node scripts/probe-db.mjs",
     "probe:gateway": "node scripts/probe-gateway.mjs",
     "probe:sockets": "node scripts/probe-sockets.mjs",
@@ -22,7 +23,9 @@
     "dev:web": "npm --prefix web run dev",
     "test:ingest": "node scripts/test-live-ingest.mjs",
     "test:markets": "node scripts/test-markets.mjs",
-    "odds:clean": "node scripts/clean-odds.mjs"
+    "odds:clean": "node scripts/clean-odds.mjs",
+    "verify:app": "node scripts/verify-app.mjs",
+    "verify:admin": "node scripts/verify-admin.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
