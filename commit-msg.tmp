@@ -1,6 +1,0 @@
-verify: keep the admin suite reliable while the settlement pass is running
-
-The revert check assumed the ticket it listed would still be open a moment later, which is not
-true when a match finishes in between - the settler grades it and the revert is refused by design.
-It now bets again and retries with a fresh ticket, so the suite passes with the normal 30s pass.
-Also documents SETTLE_INTERVAL_MS in .env.example.
