@@ -8,6 +8,8 @@ import express from 'express';
 import { authenticate, requireAuth } from './auth.mjs';
 import * as ledger from './store.mjs';
 import * as bets from './bets.mjs';
+import { settleMatch, settleAll } from './settler.mjs';
+import { recentResults, storeResult } from './results.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
@@ -137,6 +139,48 @@ ledgerRouter.get(
     const ticket = await bets.getBookingTicket(req.params.code);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
     return res.json(ticket);
+  }),
+);
+
+/* ------------------------------------------ settlement (stage 3, admin only) */
+
+/**
+ * Settlement engine status: finished matches with their scores, plus any match that still
+ * has unsettled lines. This backs the admin panel's settlement screen.
+ */
+ledgerRouter.get(
+  '/admin/settlement',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'admin only' });
+    const pending = await settleAll(); // safe: idempotent, settles whatever is ready
+    return res.json({
+      results: await recentResults(50),
+      lastPass: pending,
+    });
+  }),
+);
+
+/** admin settles a match by hand (or corrects a score), then the engine recalculates */
+ledgerRouter.post(
+  '/admin/matches/:id/settle',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ message: 'admin only' });
+
+    const matchId = Number(req.params.id);
+    const body = req.body ?? {};
+    const homeScore = Number(body.homeScore ?? body.home_score ?? body.home ?? NaN);
+    const awayScore = Number(body.awayScore ?? body.away_score ?? body.away ?? NaN);
+
+    if (Number.isFinite(homeScore) && Number.isFinite(awayScore)) {
+      await storeResult(matchId, homeScore, awayScore, { homeTeam: body.homeTeam, awayTeam: body.awayTeam });
+    }
+
+    const settled = await settleMatch(matchId);
+    return res.json({ ...settled, ok: true });
   }),
 );
 

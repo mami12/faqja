@@ -71,6 +71,22 @@ create table if not exists app_ticket_line (
 create index if not exists app_ticket_line_ticket_idx on app_ticket_line (ticket_id);
 create index if not exists app_ticket_line_match_idx  on app_ticket_line (match_id);
 
+-- final results, persisted the moment a match is seen finished: settlement must work even
+-- if the process restarts or the match later leaves the feed
+create table if not exists app_match_result (
+  match_id     bigint primary key,
+  home_team    text,
+  away_team    text,
+  home_score   int not null,
+  away_score   int not null,
+  corners_home int,
+  corners_away int,
+  cards_home   int,
+  cards_away   int,
+  finished_at  timestamptz not null default now(),
+  settled_at   timestamptz
+);
+
 -- admin overrides survive the next feed frame (suspend a match/market/outcome, pin a price)
 create table if not exists app_feed_override (
   kind        text not null,      -- match | market | outcome

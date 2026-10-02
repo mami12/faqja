@@ -9,6 +9,7 @@ import { initSchema, dbHealth, getOddsHistory, recentRawFrames, closePool, logRa
 import { initLedgerSchema } from './ledger/store.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
+import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
   getSubscriptionIds, getFeedFreshness, matchStats,
@@ -420,6 +421,24 @@ async function boot() {
   }
 
   await ensureLedgerSchema(); // the board does not need the ledger, so a failure here is not fatal
+
+  // settlement: every pass stores newly finished results, then closes any ticket whose
+  // lines are all decided. Idempotent, so a missed pass is harmless.
+  if (ledgerReady) {
+    const runSettlement = async () => {
+      try {
+        const out = await settleAll();
+        if (out.closed) {
+          console.log(`[settle] captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`);
+        }
+        if (out.captured || out.matches) await voidUnresolved(12);
+      } catch (e) {
+        console.error('[settle] pass failed:', e.message);
+      }
+    };
+    runSettlement();
+    setInterval(runSettlement, Number(process.env.SETTLE_INTERVAL_MS ?? 30000)).unref?.();
+  }
 
   collector = startCollector({ io });
 

@@ -133,7 +133,7 @@ export function normalizeOddsPayload(payload, defaults = {}) {
   const fromMarket = (market, ctx) => {
     const matchId = pickMatchId(market) ?? ctx.matchId ?? defaults.matchId ?? null;
     const marketKey = market.marketKey ?? market.market_key ?? market.market ?? market.type ?? market.key ?? ctx.marketKey ?? null;
-    const marketName = market.marketName ?? market.market_name ?? market.marketTitle ?? ctx.marketName ?? null;
+    const marketName = market.marketName ?? market.market_name ?? market.marketTitle ?? market.name ?? ctx.marketName ?? null;
     const line = market.line ?? market.handicap ?? market.hcp ?? market.total ?? market.points ?? ctx.line ?? '';
     const suspended = pickSuspended(market);
 

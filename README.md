@@ -70,6 +70,24 @@ Rules enforced (verified): minimum stake **100 LEK**, only `ACTIVE` accounts, ba
 prices taken from the server (a client-sent price is refused if it drifts more than 10%), live odds must be
 fresher than 2 minutes, and settled tickets cannot be cashed out twice.
 
+**Settlement** (`server/ledger/settler.mjs`, `server/ledger/results.mjs`):
+
+When the feed reports a match finished, its final score (and corners/cards when present) is copied into
+`app_match_result` — so settlement survives a restart — and then every pending line of that match is graded:
+
+| Outcome | Result |
+|---|---|
+| every non-void line won | ticket **WON**, payout = stake × (odds of the lines that were not void) |
+| any line lost | ticket **LOST**, nothing credited |
+| all lines void | ticket **VOID**, stake refunded |
+| can't be judged (no data for that market) | that line is **VOID** and drops out of the price |
+
+Gradable markets: 1X2, double chance, BTTS, totals (goals), **corners and cards** (our feed delivers those, so
+they settle instead of voiding), handicaps (a push voids). A manager who owns the player carries the win or
+collects the loss. The pass runs every `SETTLE_INTERVAL_MS` (default 30s) and is idempotent — a second pass never
+pays twice. Admins can also settle by hand: `POST /app/api/admin/matches/:id/settle {homeScore, awayScore}`,
+and see stored results in `GET /app/api/admin/settlement`.
+
 **Build / run**
 
 ```bash
