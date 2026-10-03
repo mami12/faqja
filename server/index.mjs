@@ -14,7 +14,7 @@ import { adminRouter } from './ledger/admin.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
-  getSubscriptionIds, getFeedFreshness, matchStats,
+  getSubscriptionIds, getFeedFreshness, matchStats, boostMatch,
 } from './matches.mjs';
 import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
 import * as oddsStore from './odds-store.mjs';
@@ -28,6 +28,10 @@ const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOr
 let collector = null;
 let pusher = null;
 let oddsStatus = { connected: false };
+
+// prices for one selection can arrive from two books at once ("10:…" and "12:L:…"): keep one
+// of them per selection so the board cannot show a price that changes and then changes back
+oddsStore.configure({ pinProvider: config.oddsProviderPin });
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '4mb' }));
@@ -114,6 +118,7 @@ app.get('/health', (_req, res) => {
     matches: matchStats(),
     ledger: { ready: ledgerReady },
     odds: { ...oddsStore.stats(), mode: config.oddsStore },
+    providers: oddsStore.providerReport(10),
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
@@ -161,6 +166,7 @@ app.get('/api/matches/:id', async (req, res, next) => {
   try {
     const row = await getMatchById(Number(req.params.id));
     if (!row) return res.status(404).json({ error: 'match not found' });
+    boostMatch(row.match_id); // opened matches always get their full market list
     const [match] = await withOdds([row]);
     res.json(match);
   } catch (e) {
@@ -197,6 +203,12 @@ function broadcastOdds(changed) {
 
 /** applies a decoded match-info (score / clock / stats) and broadcasts it */
 async function applyInfoFromFeed(info) {
+  // match-info names the book the site itself sells this match from: prefer its prices over
+  // whatever priced the selection first, so our odds match the source site's
+  if (info.providerId !== null && info.providerId !== undefined && Number.isFinite(Number(info.providerId))) {
+    oddsStore.setProvider(info.matchId, info.providerId);
+  }
+
   // if scoreBoard carried per-team goals, keep them as the match score even
   // when later frames only report corners/cards
   let enriched = info;
@@ -457,6 +469,8 @@ async function boot() {
         }),
       fullMarkets: process.env.SUBSCRIBE_FULL_MARKETS !== 'false',
       fullMarketsLiveLimit: Number(process.env.SUBSCRIBE_FULL_LIMIT ?? 60),
+      // 'recent' (default) spends the full-market quota on the matches that just kicked off
+      fullMarketsOrder: process.env.SUBSCRIBE_FULL_ORDER ?? 'recent',
       // re-subscribing is what makes the feed resend the clock+score snapshot
       resubscribeMs: Number(process.env.RESUBSCRIBE_MS ?? 20000),
       onOdds: (rows) => oddsBuffer.push(...rows),

@@ -30,6 +30,7 @@ const FEED_COLUMNS = {
   score_at: null,
   feed_status: null,
   has_open_odds: null,
+  provider_id: null,
   broadcast_url: null,
 };
 
@@ -160,15 +161,49 @@ export function getCounts() {
 }
 
 /** ids the push channel should be subscribed to, oldest kickoff first */
-export function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150 } = {}) {
+export function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150, feedEvidenceMs = 900000 } = {}) {
+  const cutoff = Date.now() - feedEvidenceMs;
   const pick = (service, limit) =>
     [...byId.values()]
-      .filter((m) => m.active && m.service === service && m.status !== 'ended')
+      .filter((m) => {
+        if (!m.active || m.service !== service) return false;
+        // A match whose derived clock already says full time must stay subscribed while the
+        // feed keeps reporting a clock for it - unsubscribing there froze its minute, its
+        // score and its prices for the rest of the game (matches "disappeared" around 70').
+        if (m.status !== 'ended') return true;
+        return time(m.clock_at) >= cutoff;
+      })
       .sort((a, b) => time(a.start_at) - time(b.start_at))
       .slice(0, Math.max(0, Number(limit) || 0))
       .map((m) => m.match_id);
 
-  return { live: pick('LIVE', liveLimit), prematch: pick('PREMATCH', prematchLimit) };
+  return { live: pick('LIVE', liveLimit), prematch: pick('PREMATCH', prematchLimit), full: boostedIds() };
+}
+
+/* ------------------------------------------------------------------- market boost
+ * Full markets (corners, cards, all totals) are only subscribed for a slice of the live
+ * list, so most matches used to show base markets only. Opening a match in the app adds it
+ * to that slice for a few minutes, which keeps the frame volume flat because a user looks
+ * at one match at a time.
+ * ------------------------------------------------------------------------------- */
+const boosted = new Map(); // matchId -> expires at (ms)
+
+/** full markets for this match for the next `ttlMs` (5 min by default) */
+export function boost(matchId, ttlMs = 5 * 60 * 1000) {
+  const id = Number(matchId);
+  if (!Number.isFinite(id)) return false;
+  boosted.set(id, Date.now() + Math.max(5000, Number(ttlMs) || 0));
+  return true;
+}
+
+/** boosted ids that have not expired yet (also drops the expired ones) */
+export function boostedIds(at = Date.now()) {
+  const out = [];
+  for (const [id, until] of boosted) {
+    if (until <= at) boosted.delete(id);
+    else out.push(id);
+  }
+  return out;
 }
 
 /** which of the given ids we track (used to drop third-party matches from ingest) */
@@ -204,6 +239,10 @@ export function applyInfo(info) {
   }
   if (typeof info.feedStatus === 'string') match.feed_status = info.feedStatus;
   if (typeof info.hasOpenOdds === 'boolean') match.has_open_odds = info.hasOpenOdds;
+  // the book the site itself sells this match from (match-info.providerId)
+  if (info.providerId !== null && info.providerId !== undefined && Number.isFinite(Number(info.providerId))) {
+    match.provider_id = Number(info.providerId);
+  }
   if (typeof info.broadcastUrl === 'string') match.broadcast_url = info.broadcastUrl;
   match.updated_at = at;
 

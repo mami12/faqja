@@ -23,6 +23,7 @@
     "dev:web": "npm --prefix web run dev",
     "test:ingest": "node scripts/test-live-ingest.mjs",
     "test:markets": "node scripts/test-markets.mjs",
+    "test:providers": "node scripts/test-provider-pin.mjs",
     "odds:clean": "node scripts/clean-odds.mjs",
     "verify:app": "node scripts/verify-app.mjs",
     "verify:admin": "node scripts/verify-admin.mjs"

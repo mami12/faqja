@@ -1,15 +1,20 @@
 import { config, dbErrorHint } from './config.mjs';
 import { liveClock } from './minute.mjs';
 import { fetchRealFootball } from './upstream.mjs';
-import { upsertMatches, expireStaleMatches, getCounts, getMatches } from './matches.mjs';
+import { upsertMatches, expireStaleMatches, getCounts, getMatches, getMatchById } from './matches.mjs';
 import { getOddsForMatches as getOddsFromDb } from './db.mjs';
 import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
 
+/** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
+const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
+
+/** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
+const hideSyntheticLines = config.oddsHideSyntheticLines;
+
 /** groups odds_current rows into markets for the UI */
 export function buildMarkets(oddsRows) {
   const markets = new Map();
-
   for (const o of oddsRows) {
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
@@ -52,14 +57,35 @@ export function buildMarkets(oddsRows) {
   for (const m of list) {
     m.suspended = m.outcomes.length > 0 && m.outcomes.every((o) => o.suspended);
   }
-  list.sort(
+
+  // The feed frames some groups twice: once with the line in the odds id / vars ("Total 2.5")
+  // and once with no line at all, where we can only key the rows by inventing "#1". Both were
+  // shown, so one selection appeared twice with two prices that updated independently - which
+  // reads as "different odds for a while, and then the same again". The invented rows are our
+  // own artefact, so they are hidden as soon as the group has a real line to show instead. A
+  // group that is only ever line-less keeps them, otherwise there would be no market at all.
+  const HIDDEN = hideSyntheticLines ? list : [];
+  if (hideSyntheticLines) {
+    const families = new Map();
+    for (const m of list) {
+      if (!families.has(m.key)) families.set(m.key, []);
+      families.get(m.key).push(m);
+    }
+    for (const rows of families.values()) {
+      if (!rows.some((m) => !isSyntheticLine(m.line))) continue;
+      for (const m of rows) if (isSyntheticLine(m.line)) m.hidden = true;
+    }
+  }
+
+  const visible = hideSyntheticLines ? list.filter((m) => !m.hidden) : list;
+  visible.sort(
     (a, b) =>
       Number(b.isBase) - Number(a.isBase) ||
       a.order - b.order ||
       String(a.key).localeCompare(String(b.key)) ||
       String(a.line).localeCompare(String(b.line)),
   );
-  return list;
+  return visible;
 }
 
 /** converts normalised (camelCase) odds rows to the DB row shape buildMarkets expects */
@@ -173,6 +199,10 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     status: row.service === 'LIVE' ? (feedPhase === 'FT' ? 'ended' : 'live') : derived.status,
   };
   const markets = buildMarkets(oddsRows);
+  // The feed's own "no open odds" flag: every price on the match is unbettable, even though
+  // each outcome still arrives with status 1 - which is how a closed book quoting 51.00 /
+  // 51.00 / 1.02 was shown as an ACTIVE, bettable market.
+  const oddsClosed = row.has_open_odds === false;
 
   return {
     id: row.match_id,
@@ -197,8 +227,8 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,
     isHot: row.is_hot === true,
-    suspended: markets.length > 0 && markets.every((m) => m.suspended),
-    hasSuspended: markets.some((m) => m.suspended),
+    suspended: oddsClosed || (markets.length > 0 && markets.every((m) => m.suspended)),
+    hasSuspended: markets.some((m) => m.suspended) || oddsClosed,
     marketCount: markets.length,
     markets,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
@@ -239,6 +269,21 @@ export function startCollector({ io } = {}) {
         r.live_minute = c.minute;
         r.phase = c.phase;
         r.status = c.status;
+
+        // Kickoff + 105 minutes is only an approximation of full time: a delayed kickoff, a
+        // long break or heavy stoppage makes it say "finished" while the feed is still
+        // reporting the match in play. That status is what hid the match from the board and
+        // dropped it from the push subscription, so its minute and its prices froze and the
+        // match seemed to vanish around 70'. Only the feed ends a match it still reports.
+        if (c.status === 'ended') {
+          const known = await getMatchById(r.match_id);
+          const clockAt = known?.clock_at ? new Date(known.clock_at).getTime() : null;
+          const inPlay = clockAt !== null && now - clockAt <= config.feedEvidenceMs;
+          if (inPlay && phaseFromStatus(known.feed_status) !== 'FT') {
+            r.status = 'live';
+            r.phase = phaseFromStatus(known.feed_status) ?? c.phase;
+          }
+        }
       }
 
       await upsertMatches(rows);

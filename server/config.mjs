@@ -49,6 +49,21 @@ export const config = {
   // odds ingestion
   ingestToken: process.env.INGEST_TOKEN ?? '',
 
+  // A selection can be priced by two providers at the same time (the frames carry both
+  // "10:…" and "12:L:…" odds ids for one match). Without this, the two books overwrite each
+  // other in the odds store and the board shows whichever frame arrived last - a price that
+  // changes and then changes back. Pin the provider that match-info reports for the match.
+  oddsProviderPin: (process.env.ODDS_PROVIDER_PIN ?? 'true') !== 'false',
+
+  // The feed frames some groups twice - once with the line ("Total 2.5") and once with none,
+  // where the line can only be invented ("#1"). Showing both put one selection on the board
+  // twice, with two prices that moved independently. Hide the invented copy.
+  oddsHideSyntheticLines: (process.env.ODDS_HIDE_SYNTHETIC_LINES ?? 'true') !== 'false',
+
+  // how long a match may sit past the derived full-time clock before we believe it is over,
+  // when the push feed has stopped reporting a clock for it (ms)
+  feedEvidenceMs: Number(process.env.FEED_EVIDENCE_MS ?? 900000),
+
   subscribeFrames: (process.env.ODDS_SUBSCRIBE_FRAMES ?? '')
     .split('||')
     .map((s) => s.trim())

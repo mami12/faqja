@@ -8,7 +8,7 @@ import express from 'express';
 import { authenticate, requireAuth } from './auth.mjs';
 import * as ledger from './store.mjs';
 import * as bets from './bets.mjs';
-import { getMatches as getMatchRows, getMatchById as getMatchRow } from '../matches.mjs';
+import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
 
@@ -177,6 +177,9 @@ ledgerRouter.get(
   guard(async (req, res) => {
     const row = await getMatchRow(Number(req.params.id));
     if (!row) return res.status(404).json({ message: 'match not found' });
+    // somebody is looking at this match: make sure it gets its full market list (corners,
+    // cards, every total) on the next subscribe cycle, instead of base markets only
+    boostMatch(row.match_id);
     const [serialized] = await withOdds([row]);
     return res.json(toClientMatch(serialized));
   }),
@@ -191,6 +194,7 @@ ledgerRouter.get(
   guard(async (req, res) => {
     const row = await getMatchRow(Number(req.params.id));
     if (!row) return res.status(404).json({ message: 'match not found' });
+    boostMatch(row.match_id);
 
     const [serialized] = await withOdds([row]);
     const m = toClientMatch(serialized);

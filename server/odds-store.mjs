@@ -23,7 +23,73 @@ const EVICT_EVERY_MS = 60 * 1000; // how often the TTL sweep runs
 const byMatch = new Map(); // matchId -> Map("market|line|outcome" -> stored row)
 const historyByMatch = new Map(); // matchId -> [ price-change entries ]
 const counters = { applied: 0, changed: 0, evictedMatches: 0, lastChangeAt: null };
+
+/* --------------------------------------------------------------- provider pinning
+ * The feed prices one selection from more than one book at a time (odds ids are prefixed
+ * "10:…" and "12:L:…") and both used to write the same market|line|outcome key, so the board
+ * showed whichever frame arrived last - a price that changed and then changed back on the
+ * next 20s snapshot. Now a single provider owns each selection: the first one to price it,
+ * unless match-info reports which book the site itself sells from, which then takes over.
+ * Rows that lose the pin are dropped (counting as a conflict), so nothing is invented.
+ * ------------------------------------------------------------------------------------ */
+const TAKEOVER_MS = Number(process.env.ODDS_PROVIDER_TAKEOVER_MS ?? 60000);
+const pinByKey = new Map(); // `${matchId}|${keyOf}` -> providerId that owns that selection
+const preferredByMatch = new Map(); // matchId -> providerId the site's own match-info reports
+const providerSeen = new Map(); // `${matchId}|${providerId}` -> last ms we received a price
+const conflicts = []; // newest last, capped at CONFLICTS_MAX
+const CONFLICTS_MAX = 500;
+
+let pinProvider = true;
 let lastEvict = 0;
+
+const normalizeProvider = (v) => {
+  const s = v === null || v === undefined ? '' : String(v).trim();
+  return s ? s : null;
+};
+
+/**
+ * Turns the pin on/off (ODDS_PROVIDER_PIN, and off for a store used on its own in tests).
+ * "off" restores the old last-writer-wins behaviour.
+ */
+export function configure(options = {}) {
+  if (options.pinProvider !== undefined) pinProvider = options.pinProvider !== false;
+}
+
+/**
+ * The book the site's own feed reports for a match (match-info.providerId). Preferring it is
+ * what makes our displayed prices match the source site's, not just one book's.
+ */
+export function setProvider(matchId, providerId) {
+  const id = Number(matchId);
+  const provider = normalizeProvider(providerId);
+  if (!Number.isFinite(id) || !provider) return false;
+  if (preferredByMatch.get(id) === provider) return true;
+  preferredByMatch.set(id, provider);
+  return true;
+}
+
+export const getProvider = (matchId) => preferredByMatch.get(Number(matchId)) ?? null;
+
+/** who owns what, and where two books disagreed - for /health and the odds history view */
+export function providerReport(limit = 20) {
+  const n = Math.min(Math.max(1, Number(limit) || 20), 200);
+  return {
+    pinning: pinProvider,
+    preferredMatches: preferredByMatch.size,
+    pinnedSelections: pinByKey.size,
+    conflicts: conflicts.length,
+    ignoredForeignRows: counters.ignoredForeignRows ?? 0,
+    recent: conflicts.slice(-n).reverse(),
+  };
+}
+
+/** forgets the pin bookkeeping of one match (eviction / clearMatch) */
+function dropProviderState(matchId) {
+  const prefix = `${matchId}|`;
+  for (const k of [...pinByKey.keys()]) if (k.startsWith(prefix)) pinByKey.delete(k);
+  for (const k of [...providerSeen.keys()]) if (k.startsWith(prefix)) providerSeen.delete(k);
+  preferredByMatch.delete(Number(matchId));
+}
 
 const keyOf = (row) => `${row.marketKey ?? row.market_key}|${row.line ?? ''}|${row.outcomeKey ?? row.outcome_key}`;
 
@@ -54,6 +120,7 @@ function toStored(row, at) {
     period: Number.isFinite(Number(row.period)) ? Number(row.period) : 0,
     board_column: row.column ?? null,
     subgames: row.subgames ?? null,
+    provider_id: normalizeProvider(row.providerId),
     updated_at: at,
   };
 }
@@ -76,6 +143,7 @@ function pushHistory(matchId, row) {
     outcome_name: row.outcome_name,
     price: row.price,
     suspended: row.suspended,
+    provider_id: row.provider_id ?? null,
     at: row.updated_at,
   });
   if (list.length > HISTORY_PER_MATCH) list.splice(0, list.length - HISTORY_PER_MATCH);
@@ -116,6 +184,7 @@ function evictIfNeeded() {
     if (oldestId === null) break;
     byMatch.delete(oldestId);
     historyByMatch.delete(oldestId);
+    dropProviderState(oldestId);
     counters.evictedMatches++;
   }
 }
@@ -142,6 +211,47 @@ export function applyRows(rows) {
     }
 
     const key = keyOf(row);
+    const provider = normalizeProvider(row.providerId);
+
+    // One book owns each selection, so two providers can never trade the same key back and
+    // forth. Rows from the losing book are dropped rather than stored: we never invent a
+    // price, we just keep showing the same book's.
+    if (provider && pinProvider) {
+      const atMs = at.getTime();
+      providerSeen.set(`${matchId}|${provider}`, atMs);
+
+      const pinKey = `${matchId}|${key}`;
+      const pinned = pinByKey.get(pinKey) ?? null;
+      if (!pinned) {
+        pinByKey.set(pinKey, provider);
+      } else if (pinned !== provider) {
+        const preferred = preferredByMatch.get(matchId) ?? null;
+        const pinnedLastSeen = providerSeen.get(`${matchId}|${pinned}`) ?? 0;
+        // the book the site itself reports always wins; otherwise only take the selection
+        // over once the pinned book has gone quiet (it stopped pricing this match)
+        if (preferred === provider || atMs - pinnedLastSeen > TAKEOVER_MS) {
+          pinByKey.set(pinKey, provider);
+        } else {
+          counters.ignoredForeignRows = (counters.ignoredForeignRows ?? 0) + 1;
+          if (conflicts.length < CONFLICTS_MAX) {
+            conflicts.push({
+              match_id: matchId,
+              market_key: row.marketKey,
+              line: row.line ?? '',
+              outcome_key: row.outcomeKey,
+              price: row.price,
+              kept: pinned,
+              dropped: provider,
+              at: at.toISOString(),
+            });
+          }
+          continue;
+        }
+      }
+    } else if (provider) {
+      providerSeen.set(`${matchId}|${provider}`, at.getTime());
+    }
+
     const prev = bucket.get(key);
     const priceChanged = !prev || Number(prev.price) !== Number(row.price);
     const suspendedChanged = !prev || prev.suspended !== (row.suspended === true);
@@ -194,6 +304,7 @@ export function clearMatch(matchId) {
   const id = Number(matchId);
   const had = byMatch.delete(id);
   historyByMatch.delete(id);
+  dropProviderState(id);
   return had;
 }
 
@@ -211,5 +322,10 @@ export function stats() {
     changed: counters.changed,
     evictedMatches: counters.evictedMatches,
     lastChangeAt: counters.lastChangeAt ? counters.lastChangeAt.toISOString() : null,
+    // provider pinning: who owns the prices, and where two books disagreed
+    pinnedSelections: pinByKey.size,
+    preferredMatches: preferredByMatch.size,
+    ignoredForeignRows: counters.ignoredForeignRows ?? 0,
+    providerConflicts: conflicts.length,
   };
 }

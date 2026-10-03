@@ -5,6 +5,7 @@ import SportsSidebar from '../components/Layout/SportsSidebar';
 import BetslipSidebar from '../components/Layout/BetslipSidebar';
 import MatchList from '../components/Sports/MatchList';
 import MatchDetail from '../components/Sports/MatchDetail';
+import { LiveFeedProvider } from '../api/liveFeed';
 
 export default function SportsbookPage() {
   const { id } = useParams<{ id?: string }>();
@@ -60,6 +61,7 @@ export default function SportsbookPage() {
   };
 
   return (
+    <LiveFeedProvider>
     <div className="h-screen flex flex-col overflow-hidden bg-primary">
       <Header />
       <div className="flex-1 flex overflow-hidden">
@@ -90,5 +92,6 @@ export default function SportsbookPage() {
         <BetslipSidebar />
       </div>
     </div>
+    </LiveFeedProvider>
   );
 }

@@ -53,6 +53,14 @@ export interface Match {
   isSimulated?: boolean;
   tournament?: Tournament & { category?: Category & { sport?: Sport } };
   markets?: Market[];
+  /** the feed's own phase, e.g. "2nd Half" or "Break Time" */
+  period?: string | null;
+  /** where the minute comes from: the feed clock, drift, or the kickoff-based estimate */
+  liveMinuteSource?: 'feed' | 'feed+drift' | 'derived' | null;
+  /** live counters the feed reports with the match (shown in the market panel) */
+  corners?: { home: number; away: number } | null;
+  cards?: { home: number; away: number } | null;
+  watchUrl?: string | null;
 }
 
 export interface Market {
@@ -64,6 +72,10 @@ export interface Market {
   status: 'ACTIVE' | 'SUSPENDED' | 'SETTLED';
   sortOrder: number;
   outcomes?: Outcome[];
+  /** the feed's own line for this market ("" when the market has none) */
+  line?: string;
+  isBase?: boolean;
+  period?: number;
 }
 
 export interface Outcome {

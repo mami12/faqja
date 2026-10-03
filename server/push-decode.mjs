@@ -93,6 +93,47 @@ export function outcomeLabel(key) {
   return OUTCOME_NAMES[String(key).toLowerCase()] ?? String(key);
 }
 
+/** "12:L:18636614:[…]" -> "12"; "10:53552314920213864:1" -> "10" */
+export function providerOfOddsId(idStr) {
+  const m = String(idStr ?? '').match(/^(\d+)\s*:/);
+  return m ? m[1] : null;
+}
+
+/**
+ * One odds group can repeat the same outcome pattern for several lines while its ids carry
+ * no line at all. The synthetic `#n` line is derived from the position, so the order must be
+ * stable: a partial or reordered frame would otherwise re-key the same selection (the old key
+ * keeps its price and the new one gets the new price, which looks like a price that "jumps"
+ * and later comes back). Chunks are ordered by their lowest odds id, which the feed keeps
+ * stable per selection.
+ */
+function stableChunks(oddsList, size) {
+  if (!oddsList || !(size > 1) || oddsList.length <= size) return oddsList;
+  const chunks = [];
+  for (let s = 0; s < oddsList.length; s += size) chunks.push(oddsList.slice(s, s + size));
+  chunks.sort((a, b) => String(a[0]?.id ?? '').localeCompare(String(b[0]?.id ?? '')));
+  return chunks.flat();
+}
+
+/**
+ * Odds ids of a line-less repeated group ("10:…" with no vars) cannot say which line a price
+ * belongs to. A complete frame can, so remember what we assigned per odds id and reuse it when
+ * a later frame carries only part of the group - otherwise the price was written under an empty
+ * line and showed up as a market of its own, with a price that looked absurd next to the real
+ * lines. Bounded, and dropped wholesale if it ever grows too large.
+ */
+const SLOT_CACHE = new Map(); // `${matchId}|${groupId}|${oddsId}` -> { line, outcomeKey }
+const SLOT_CACHE_MAX = 20000;
+
+function rememberedSlot(matchId, groupId, oddsId) {
+  return SLOT_CACHE.get(`${matchId}|${groupId}|${oddsId}`) ?? null;
+}
+
+function rememberSlot(matchId, groupId, oddsId, slot) {
+  if (SLOT_CACHE.size >= SLOT_CACHE_MAX) SLOT_CACHE.clear();
+  SLOT_CACHE.set(`${matchId}|${groupId}|${oddsId}`, slot);
+}
+
 const isTotalPair = (outcomes) =>
   outcomes.length > 0 && outcomes.every((o) => ['under', 'over', 'u', 'o'].includes(String(o).toLowerCase()));
 
@@ -220,7 +261,8 @@ export function decodePushMessage(message) {
         // real clock + feed state
         matchTimeMs: Number.isFinite(Number(data.matchTime)) ? Number(data.matchTime) : null,
         feedStatus: typeof data.status === 'string' ? data.status : null,
-        hasOpenOdds: data.hasOpenOdds === true ? true : null,
+        // keep an explicit false: "this match has no open odds" is what locks its prices
+        hasOpenOdds: typeof data.hasOpenOdds === 'boolean' ? data.hasOpenOdds : null,
         broadcastUrl: typeof data.broadcast?.url === 'string' ? data.broadcast.url : null,
         stats,
       },
@@ -242,8 +284,20 @@ export function decodePushMessage(message) {
       const groupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
       const subgames = Array.isArray(group.subgameIds) ? group.subgameIds.join(',') : '';
 
-      for (let i = 0; i < oddsList.length; i++) {
-        const item = oddsList[i];
+      // The ids of some provider groups carry no line at all while the group repeats one
+      // outcome pattern per line, so the synthetic `#n` line comes from the position. Derive
+      // that position from a stable ordering (see stableChunks) so a partial or reordered
+      // frame cannot re-key a selection the board already shows.
+      const groupHasLine = oddsList.some((it) => {
+        const t = extractOddsTuple(it.id);
+        if (t && t.line !== null && t.line !== undefined) return true;
+        return !!(it.vars && Object.values(it.vars).some((v) => /^-?\d+(\.\d+)?$/.test(String(v))));
+      });
+      const repeats = outcomes.length > 0 && oddsList.length > outcomes.length;
+      const ordered = !groupHasLine && repeats ? stableChunks(oddsList, outcomes.length) : oddsList;
+
+      for (let i = 0; i < ordered.length; i++) {
+        const item = ordered[i];
         const price = Number(item.cf);
         if (!Number.isFinite(price)) continue;
 
@@ -260,18 +314,29 @@ export function decodePushMessage(message) {
             ? Number(varsLine)
             : null;
         const missingLine = rawLine === null || rawLine === undefined || rawLine === '';
-        // ids from some providers carry no line, and one group then repeats
-        // under/over for several lines -> keep a synthetic line so keys stay unique
-        const repeats = outcomes.length > 0 && oddsList.length > outcomes.length;
-        const line = missingLine ? (repeats ? `#${Math.floor(i / outcomes.length) + 1}` : '') : String(rawLine);
+        // A frame that does not carry whole outcome chunks cannot say which line its prices
+        // belong to (the ids have no line and they repeat the same outcomes). Reuse what a
+        // complete frame already told us for these exact odds ids instead of inventing an
+        // empty line, which used to land the price on a phantom market of its own.
+        const remembered = missingLine && !repeats ? rememberedSlot(matchId, group.id, item.id) : null;
+        const line = !missingLine
+          ? String(rawLine)
+          : repeats
+            ? `#${Math.floor(i / outcomes.length) + 1}`
+            : remembered?.line ?? '';
 
         // the feed usually tells us the outcome itself ("outcome":"1x", "name":"Iraq Or Draw")
+        const positionalOutcome = outcomes.length ? outcomes[i % outcomes.length] : `#${i + 1}`;
         const outcomeKey =
           item.outcome !== null && item.outcome !== undefined
             ? String(item.outcome)
-            : outcomes.length
-              ? outcomes[i % outcomes.length]
-              : `#${i + 1}`;
+            : remembered?.outcomeKey ?? positionalOutcome;
+
+        // only a frame carrying whole outcome chunks can be trusted to say which line a price
+        // belongs to, so that is the only thing we remember for later partial frames
+        if (missingLine && repeats && outcomes.length > 0 && oddsList.length % outcomes.length === 0) {
+          rememberSlot(matchId, group.id, item.id, { line, outcomeKey });
+        }
         const outcomeName = item.name !== null && item.name !== undefined ? String(item.name) : outcomeLabel(outcomeKey);
 
         const { column, name } = describeMarket({
@@ -293,6 +358,9 @@ export function decodePushMessage(message) {
           outcomeName,
           price,
           suspended: Number(item.status) !== 1,
+          // the frame's odds id is prefixed with the book that priced it ("12:L:…", "10:…");
+          // the odds store uses this so two books cannot overwrite each other
+          providerId: providerOfOddsId(item.id),
           column,
           period,
           groupId: String(group.id),

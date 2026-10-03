@@ -163,7 +163,7 @@ for (let attempt = 0; attempt < 5 && !revert; attempt++) {
   else openTicket = null; // graded in the meantime
 }
 
-check('POST /admin/tickets/:id/revert refunds the stake', revert?.status === 200 && Number(revert.body.refunded) === stake, JSON.stringify(revert?.body).slice(0, 180));
+check('POST /admin/tickets/:id/revert refunds the stake', revert?.status === 200 && Number(revert.body.refunded) === stake, JSON.stringify(revert?.body ?? null).slice(0, 180));
 const balanceAfter = Number((await call('/auth/me', playerToken)).body.balance);
 check('the refund reached the player', balanceAfter === balanceBefore + stake, `${balanceBefore} -> ${balanceAfter}`);
 check('the ticket is now REVERTED', revert?.body.ticket?.status === 'REVERTED');

@@ -241,7 +241,7 @@ Live run (`[pusher] subscribed live=19 (full markets 19) prematch=100`):
 | corners/cards | `corners 3-3`, `0-3` from `scoreBoard.results` |
 | suspension | `status !== 1` per outcome, `hasOpenOdds` per match |
 
-Env knobs: `SUBSCRIBE_FULL_LIMIT` (live matches that get the full market list, default 60),
+Env knobs: `SUBSCRIBE_FULL_LIMIT` (live matches that get the full market list, default 60; the matches that just kicked off are served first — `SUBSCRIBE_FULL_ORDER=oldest` restores the previous order — and a match opened in the app is always included for ~5 minutes),
 `SUBSCRIBE_LIVE_LIMIT` / `SUBSCRIBE_PREMATCH_LIMIT` (how many ids to subscribe),
 `SUBSCRIBE_FULL_MARKETS=false` (base markets only). The browser relay (`/ingest/frames`) keeps
 working and is the fallback if the channel ever blocks the server's IP again.
@@ -307,6 +307,9 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | `INGEST_TOKEN` | – | Shared secret for `POST /ingest/odds` and `GET /api/raw-frames`. Empty = open. |
 | `ODDS_SOCKET` | `false` | Connect to the upstream push channel. |
 | `ODDS_STORE` | `memory` | `memory` keeps prices in RAM and pushes them to browsers (no DB writes); `db` mirrors them into `odds_current`/`odds_history`. |
+| `ODDS_PROVIDER_PIN` | `true` | One book owns each selection, so two books pricing the same selection can no longer overwrite each other (the book `match-info` reports for the match wins). `false` restores last-writer-wins. |
+| `ODDS_HIDE_SYNTHETIC_LINES` | `true` | The feed frames some groups twice (with the line, and with none). Hides the copy whose line had to be invented (`#1`), so one selection is not on the board twice. |
+| `FEED_EVIDENCE_MS` | `900000` | A match is only ended when the feed says so, as long as we saw its clock within this window. The kickoff-based clock alone used to end matches early and unsubscribe them (matches vanished around 70'). |
 | `RESUBSCRIBE_MS` | `20000` | How often the pusher re-subscribes live matches. The feed only sends the real clock (`matchTime`) and score (`matchScore`) in a snapshot on (re)subscribe, so this is what keeps minutes and scores fresh. |
 | `ODDS_SUBSCRIBE_FRAMES` | – | Socket.IO frames to send after connect, separated by `||`. |
 | `LOG_RAW_FRAMES` | `true` | Store unparsed upstream frames (max 300/session). |

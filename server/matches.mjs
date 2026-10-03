@@ -57,3 +57,11 @@ export async function getFeedFreshness(olderThanSeconds = 90) {
 export function matchStats() {
   return inMemory() ? { ...memory.stats(), mode: config.matchStore } : { mode: config.matchStore };
 }
+
+/**
+ * Asks the push subscription to include this match in the full-market slice for a while
+ * (corners, cards, every total). Memory store only: the DB driver keeps no subscription state.
+ */
+export function boostMatch(matchId, ttlMs) {
+  return inMemory() ? memory.boost(matchId, ttlMs) : false;
+}

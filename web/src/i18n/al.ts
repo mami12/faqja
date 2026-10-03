@@ -43,6 +43,12 @@ export default {
     tomorrow: 'Nesër'
   },
   markets: {
+    result: 'Rezultati (1X2)',
+    totals: 'Golat',
+    corners: 'Këndet',
+    cards: 'Kartonat',
+    other: 'Tregje të tjera',
+    market: 'Tregu',
     match_result: 'Rezultati i Ndeshjes (1X2)',
     over_under: 'Mbi / Nën Gola',
     both_teams_score: 'Të Dyja Ekipet Shënojnë',

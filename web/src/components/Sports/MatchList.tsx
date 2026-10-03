@@ -3,6 +3,8 @@ import { apiClient } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { Match } from '../../types';
 import OddsButton from './OddsButton';
+import MarketPanel from './MarketPanel';
+import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays } from 'lucide-react';
 
@@ -20,8 +22,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  // which match has its extra markets (corners, cards, totals) open in the list
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  // minute / score / corners / cards arrive over the socket, so the list is live between polls
+  const { livePatches } = useLiveFeed();
 
   const fetchMatches = async () => {
     try {
@@ -103,7 +109,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     );
   }
 
-  const renderMatchCard = (m: any) => {
+  const renderMatchCard = (raw: any) => {
+    // merge what the socket pushed for this match (live minute, score, corners, cards)
+    const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
+
     // Find 1X2 market
     const market1X2 = m.markets?.find((mk: any) => mk.marketType === '1X2' || mk.name === '1X2' || mk.name.includes('Winner'));
     const outcome1 = market1X2?.outcomes?.find((o: any) => o.name === '1');
@@ -184,17 +193,23 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               </div>
             )}
 
-            {/* Link to Full Markets */}
+            {/* Opens the extra markets (corners, cards, totals, ...) right here */}
             <button
-              onClick={() => navigate(`/match/${m.id}`)}
+              onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
               className="p-2.5 bg-tertiary/60 hover:bg-tertiary text-text-secondary hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0"
               title={t('sections.view_markets')}
+              aria-expanded={expandedId === String(m.id)}
             >
               <span>+{totalMarketsCount}</span>
-              <ChevronRight size={14} />
+              <ChevronRight
+                size={14}
+                className={`transition-transform ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
+              />
             </button>
           </div>
         </div>
+
+        {expandedId === String(m.id) && <MarketPanel match={m} />}
       </div>
     );
   };

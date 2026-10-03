@@ -43,6 +43,7 @@ export function startPusher({
   onStatus,
   fullMarkets = false,
   fullMarketsLiveLimit = 60,
+  fullMarketsOrder = 'recent',
   resubscribeMs = 20000,
   verbose = true,
 } = {}) {
@@ -65,7 +66,7 @@ export function startPusher({
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     counts.subscribeCalls++;
     try {
-      const { live = [], prematch = [] } = (await getIds?.()) ?? {};
+      const { live = [], prematch = [], full = [] } = (await getIds?.()) ?? {};
 
       const send = (messageType, ids, isBaseOddsGroups) => {
         for (const part of chunk(ids, CHUNK)) {
@@ -75,10 +76,17 @@ export function startPusher({
         }
       };
 
-      // full market list for the first N live matches (corners, cards, ...),
-      // base markets (1X2 / handicap / total) for everything else
-      const fullLive = fullMarkets ? live.slice(0, fullMarketsLiveLimit) : [];
-      const baseLive = fullMarkets ? live.slice(fullMarketsLiveLimit) : live;
+      // full market list (corners, cards, every total) for a slice of the live list, base
+      // markets (1X2 / handicap / total) for the rest. `live` is ordered oldest kickoff
+      // first, so taking the tail puts the quota on the matches that just started - the ones
+      // a user is most likely to open. Matches the app has opened are always included (`full`).
+      const ordered = fullMarketsOrder === 'oldest' ? live : [...live].reverse();
+      const boostedLive = new Set(full.filter((id) => live.includes(id)));
+      const fullLive = fullMarkets
+        ? [...new Set([...ordered.slice(0, fullMarketsLiveLimit), ...boostedLive])]
+        : [];
+      const fullSet = new Set(fullLive);
+      const baseLive = fullMarkets ? live.filter((id) => !fullSet.has(id)) : live;
 
       send('subscribe-match-odds', fullLive, false);
       send('subscribe-match-odds', baseLive, true);
@@ -90,9 +98,10 @@ export function startPusher({
 
       counts.subscribedIds = live.length + near.length;
       counts.fullMarketsIds = fullLive.length;
+      counts.boostedIds = boostedLive.size;
       if (verbose) {
         console.log(
-          `[pusher] subscribed live=${live.length} (full markets ${fullLive.length}) prematch=${near.length}`,
+          `[pusher] subscribed live=${live.length} (full markets ${fullLive.length}, ${boostedLive.size} boosted) prematch=${near.length}`,
         );
       }
     } catch (e) {
