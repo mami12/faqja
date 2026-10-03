@@ -14,6 +14,7 @@
     "probe:gateway": "node scripts/probe-gateway.mjs",
     "probe:sockets": "node scripts/probe-sockets.mjs",
     "probe:subscribe": "node scripts/probe-subscribe.mjs",
+    "probe:suspension": "node scripts/probe-suspension.mjs",
     "probe:push": "node scripts/probe-push2.mjs",
     "probe:local": "node scripts/probe-local-socket.mjs",
     "test:frames": "node scripts/test-frames.mjs",
@@ -26,7 +27,8 @@
     "test:providers": "node scripts/test-provider-pin.mjs",
     "odds:clean": "node scripts/clean-odds.mjs",
     "verify:app": "node scripts/verify-app.mjs",
-    "verify:admin": "node scripts/verify-admin.mjs"
+    "verify:admin": "node scripts/verify-admin.mjs",
+    "verify:suspension": "node scripts/verify-suspension.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

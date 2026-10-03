@@ -27,7 +27,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { t } = useLanguage();
   const navigate = useNavigate();
   // minute / score / corners / cards arrive over the socket, so the list is live between polls
-  const { livePatches } = useLiveFeed();
+  const { livePatches, lockedMatches } = useLiveFeed();
 
   const fetchMatches = async () => {
     try {
@@ -87,8 +87,19 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return true;
   });
 
-  const liveMatches = filteredMatches.filter(m => m.status === 'LIVE');
-  const prematchMatches = filteredMatches.filter(m => m.status !== 'LIVE');
+  // A match the feed has not priced is not bettable: its card used to sit on the board as
+  // "Loading..." forever. It is dropped instead, and comes back on its own as soon as prices
+  // exist for it - the live board carries marketCount, so this does not wait for the 15s poll.
+  const pricedMatches = filteredMatches.filter(m => {
+    const patch = livePatches[String(m.id)];
+    if (patch?.marketCount && patch.marketCount > 0) return true;
+    return (m.markets ?? []).some((mk: any) =>
+      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 1),
+    );
+  });
+
+  const liveMatches = pricedMatches.filter(m => m.status === 'LIVE');
+  const prematchMatches = pricedMatches.filter(m => m.status !== 'LIVE');
 
   if (loading && matches.length === 0) {
     return (
@@ -119,7 +130,19 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const outcomeX = market1X2?.outcomes?.find((o: any) => o.name === 'X');
     const outcome2 = market1X2?.outcomes?.find((o: any) => o.name === '2');
 
-    const totalMarketsCount = m.markets?.length || 0;
+    const pricedMarkets = (m.markets ?? []).filter((mk: any) =>
+      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 1),
+    );
+    const hasFull1X2 = !!(market1X2 && outcome1 && outcomeX && outcome2);
+    // if there is no complete 1X2, show the first market that does have prices rather than
+    // leaving the column stuck on "Loading..."
+    const quickMarket = hasFull1X2 ? market1X2 : pricedMarkets[0] ?? null;
+    const quickOutcomes = hasFull1X2
+      ? [outcome1, outcomeX, outcome2]
+      : (quickMarket?.outcomes ?? []).filter((o: any) => typeof o.odds === 'number').slice(0, 3);
+    const isLocked = lockedMatches[String(m.id)] === true;
+
+    const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
 
     return (
       <div 
@@ -135,6 +158,14 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="flex items-center gap-2">
+            {isLocked && (
+              <span
+                className="inline-flex items-center gap-1 bg-accent-red text-white text-[10px] font-black px-2 py-0.5 rounded-full"
+                title={t('sections.odds_locked')}
+              >
+                🔒 {t('sections.odds_locked')}
+              </span>
+            )}
             {m.status === 'LIVE' ? (
               <span className="inline-flex items-center gap-1 bg-accent-red text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
                 <Radio size={10} />
@@ -181,16 +212,14 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
           {/* 1X2 Odds Buttons Column */}
           <div className="flex items-center gap-2">
-            {market1X2 && outcome1 && outcomeX && outcome2 ? (
-              <div className="grid grid-cols-3 gap-1.5 w-64">
-                <OddsButton match={m} market={market1X2} outcome={outcome1} />
-                <OddsButton match={m} market={market1X2} outcome={outcomeX} />
-                <OddsButton match={m} market={market1X2} outcome={outcome2} />
+            {quickMarket && quickOutcomes.length >= 2 ? (
+              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 w-64`}>
+                {quickOutcomes.map((o: any) => (
+                  <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
+                ))}
               </div>
             ) : (
-              <div className="text-xs text-text-secondary italic">
-                {t('common.loading')}
-              </div>
+              <div className="text-xs text-text-secondary italic w-64 text-center">—</div>
             )}
 
             {/* Opens the extra markets (corners, cards, totals, ...) right here */}
@@ -296,6 +325,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
           <div className="text-4xl">📅</div>
           <div className="font-bold text-white text-base">{t('common.no_matches_date')}</div>
+        </div>
+      )}
+
+      {/* there are fixtures, but the feed has not priced any of them yet */}
+      {filteredMatches.length > 0 && pricedMatches.length === 0 && (
+        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+          <div className="font-bold text-white text-base">{t('common.no_results')}</div>
         </div>
       )}
 

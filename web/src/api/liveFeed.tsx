@@ -24,6 +24,8 @@ export interface LivePatch {
   awayScore?: number;
   corners?: { home: number; away: number } | null;
   cards?: { home: number; away: number } | null;
+  /** how many markets the board currently prices for this match (0 = nothing to bet yet) */
+  marketCount?: number;
   isSuspended?: boolean;
   updatedAt: string;
 }
@@ -33,9 +35,21 @@ interface LiveFeedValue {
   livePatches: Record<string, LivePatch>;
   matchEvents: MatchEvent[];
   connected: boolean;
+  /** prices the feed has locked right now, keyed exactly like the REST payload ids */
+  lockedOutcomes: Record<string, boolean>;
+  lockedMarkets: Record<string, boolean>;
+  lockedMatches: Record<string, boolean>;
 }
 
-const EMPTY: LiveFeedValue = { oddsDeltas: {}, livePatches: {}, matchEvents: [], connected: false };
+const EMPTY: LiveFeedValue = {
+  oddsDeltas: {},
+  livePatches: {},
+  matchEvents: [],
+  connected: false,
+  lockedOutcomes: {},
+  lockedMarkets: {},
+  lockedMatches: {},
+};
 
 const LiveFeedContext = createContext<LiveFeedValue>(EMPTY);
 
@@ -66,6 +80,9 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [livePatches, setLivePatches] = useState<Record<string, LivePatch>>({});
   const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [lockedOutcomes, setLockedOutcomes] = useState<Record<string, boolean>>({});
+  const [lockedMarkets, setLockedMarkets] = useState<Record<string, boolean>>({});
+  const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const prevOdds = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -76,18 +93,39 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
     socket.on('odds:update', (payload: { matchId: string | number; markets?: any[] }) => {
       const deltas: Record<string, OddsDelta> = {};
+      const outcomeLocks: Record<string, boolean> = {};
+      const marketLocks: Record<string, boolean> = {};
+
       for (const market of payload?.markets ?? []) {
+        const marketId = `${payload.matchId}|${market.key}|${market.line ?? ''}`;
+
         for (const outcome of market?.outcomes ?? []) {
+          const outcomeId = `${marketId}|${outcome.key}`;
+
+          // The feed locks a price around a goal or a dangerous attack: "status":2 arrives as
+          // suspended. This is the whole point of using the socket - by REST poll the market
+          // stayed open for up to 15s, which is exactly the window nobody may bet in.
+          if (outcome?.suspended === true || outcome?.suspended === false) {
+            outcomeLocks[outcomeId] = outcome.suspended === true;
+          }
+
           if (outcome?.price === null || outcome?.price === undefined) continue;
-          const outcomeId = `${payload.matchId}|${market.key}|${market.line ?? ''}|${outcome.key}`;
           const next = Number(outcome.price);
           const before = prevOdds.current[outcomeId];
           prevOdds.current[outcomeId] = next;
           if (before === undefined || before === next) continue;
           deltas[outcomeId] = { outcomeId, newOdds: next, direction: next > before ? 'up' : 'down' };
         }
+
+        // only the rows that moved are pushed, so "every row in this frame is suspended" is
+        // what a fully locked market looks like over the socket
+        const outcomes = market?.outcomes ?? [];
+        if (outcomes.length) marketLocks[marketId] = outcomes.every((o: any) => o.suspended === true);
       }
+
       if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
+      if (Object.keys(outcomeLocks).length) setLockedOutcomes(prev => ({ ...prev, ...outcomeLocks }));
+      if (Object.keys(marketLocks).length) setLockedMarkets(prev => ({ ...prev, ...marketLocks }));
     });
 
     // the whole live board, once per collector cycle
@@ -101,6 +139,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         patches[String(m.id)] = compact({
           status: m.status === 'live' ? 'LIVE' : m.status === 'ended' ? 'ENDED' : undefined,
           currentMinute: Number.isFinite(minute) ? minute : undefined,
+          marketCount: Number.isFinite(Number(m.marketCount)) ? Number(m.marketCount) : undefined,
           period: m.phase ?? null,
           homeScore: Number.isFinite(home) ? home : undefined,
           awayScore: Number.isFinite(away) ? away : undefined,
@@ -110,7 +149,13 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           updatedAt: new Date().toISOString(),
         }) as LivePatch;
       }
-      if (Object.keys(patches).length) setLivePatches(prev => ({ ...prev, ...patches }));
+      if (Object.keys(patches).length) {
+        setLivePatches(prev => ({ ...prev, ...patches }));
+        // the board's own view: a match whose every market is locked
+        const matchLocks: Record<string, boolean> = {};
+        for (const [id, p] of Object.entries(patches)) matchLocks[id] = p.isSuspended === true;
+        setLockedMatches(prev => ({ ...prev, ...matchLocks }));
+      }
     });
 
     // one match (score / clock / stats), between poll cycles
@@ -131,6 +176,10 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       }) as LivePatch;
 
       const key = String(id);
+      // the feed's own "this match has no open odds" flag locks every price on it
+      if (typeof info.has_open_odds === 'boolean') {
+        setLockedMatches(prev => ({ ...prev, [key]: info.has_open_odds === false }));
+      }
       setLivePatches(prev => ({ ...prev, [key]: { ...(prev[key] ?? { updatedAt: patch.updatedAt }), ...patch } }));
       setMatchEvents(prev => [
         ...prev.slice(-49),
@@ -152,8 +201,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected }),
-    [oddsDeltas, livePatches, matchEvents, connected],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, lockedOutcomes, lockedMarkets, lockedMatches }),
+    [oddsDeltas, livePatches, matchEvents, connected, lockedOutcomes, lockedMarkets, lockedMatches],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;

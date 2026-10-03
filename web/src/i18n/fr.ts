@@ -23,6 +23,7 @@ export default {
     all_competitions: 'Toutes les compétitions',
     view_markets: 'Plus de marchés',
     minute: 'min',
+    odds_locked: 'COTES SUSPENDUES',
     select_sport: 'Sélectionnez un sport ou une ligue dans la barre latérale gauche.'
   },
   dates: {

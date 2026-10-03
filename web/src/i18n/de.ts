@@ -23,6 +23,7 @@ export default {
     all_competitions: 'Alle Wettbewerbe',
     view_markets: 'Mehr Märkte',
     minute: 'min',
+    odds_locked: 'QUOTEN GESPERRT',
     select_sport: 'Wählen Sie links einen Sport oder eine Liga aus.'
   },
   dates: {

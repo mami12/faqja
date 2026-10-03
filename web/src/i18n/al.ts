@@ -32,6 +32,7 @@ export default {
     all_competitions: 'Të Gjitha Kampionatet',
     view_markets: 'Tregje shtesë',
     minute: 'min',
+    odds_locked: 'KUOTAT E PEZULLUARA',
     select_sport: 'Zgjidhni një sport ose kampionat nga menyja majtas.',
     back_to_matches: 'Kthehu tek ndeshjet',
     league: 'Kampionati',

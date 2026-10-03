@@ -91,7 +91,9 @@ export function startPusher({
       send('subscribe-match-odds', fullLive, false);
       send('subscribe-match-odds', baseLive, true);
       send('subscribe-match-info', live);
-      const near = prematch.slice(0, 100);
+      // every prematch id we track gets odds: a match without prices is hidden on the board now,
+      // so this is what decides how many upcoming matches are visible (SUBSCRIBE_PREMATCH_LIMIT)
+      const near = prematch;
       send('subscribe-match-odds', near, true);
       send('subscribe-match-info', near.slice(0, 25));
       for (const frame of config.subscribeFrames) ws.send(frame);

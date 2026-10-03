@@ -1,18 +1,27 @@
 import { useBetslip } from '../../context/BetslipContext';
 import { Match, Market, Outcome } from '../../types';
-import { useWebSocket } from '../../api/useWebSocket';
+import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
 
 interface Props { match: Match; market: Market; outcome: Outcome; }
 
 export default function OddsButton({ match, market, outcome }: Props) {
   const { selections, addSelection, removeSelection } = useBetslip();
-  const { oddsDeltas } = useWebSocket();
+  const { oddsDeltas, lockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
 
   const isSelected = selections.some(s => s.outcomeId === outcome.id);
-  const isSuspended = outcome.status === 'SUSPENDED' || market.status === 'SUSPENDED' || match.isSuspended;
+  // the feed locks prices around a goal or a dangerous attack (its own "status":2) and can close
+  // a whole match ("hasOpenOdds":false). Both arrive over the socket now, so the lock is on
+  // screen the moment it happens instead of up to 15s later with the REST board.
+  const isSuspended =
+    outcome.status === 'SUSPENDED' ||
+    market.status === 'SUSPENDED' ||
+    match.isSuspended ||
+    lockedOutcomes[outcome.id] === true ||
+    lockedMarkets[market.id] === true ||
+    lockedMatches[String(match.id)] === true;
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];

@@ -23,6 +23,7 @@ export default {
     all_competitions: 'All Competitions',
     view_markets: 'More markets',
     minute: 'min',
+    odds_locked: 'ODDS LOCKED',
     select_sport: 'Select a sport or league from the left sidebar.'
   },
   dates: {
