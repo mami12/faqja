@@ -46,13 +46,23 @@ const AppRoutes = () => {
       <Route path="/my-bets" element={<ProtectedRoute><MyBetsPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminPage /></ProtectedRoute>} />
       <Route path="/manager" element={<ProtectedRoute requireManager><ManagerPage /></ProtectedRoute>} />
+      {/* Unknown URLs must never render an empty page */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
 
+/**
+ * The app is built with vite `base: '/app/'` and served by the backend under /app,
+ * so the router must be told the same base; without it react-router sees "/app" as
+ * the path, matches no route and renders nothing. BASE_URL comes from vite ('/app/'),
+ * so this stays in sync with whatever base the build uses.
+ */
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE}>
       <LanguageProvider>
         <AuthProvider>
           <BetslipProvider>
