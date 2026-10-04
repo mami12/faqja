@@ -40,6 +40,13 @@ the in-memory odds store, so an outage of the ledger only disables the panels th
 /app/api/matches   the live board in the app's own shape (server/ledger/view.mjs)
 /socket.io         the same realtime feed the board uses (odds:update, matches:live, match:info)
 ```
+**Layout**: three columns on a desktop (leagues | matches | betslip); on a phone the two side
+columns become a drawer and a bottom sheet, the header keeps the balance and moves the account
+links behind a menu, and the admin/manager tables scroll sideways instead of squashing. While
+idle mode is starting the feed again the board says *"Kuotat po rifreskohen..."* rather than
+showing an empty list (see "Cost control" below).
+
+
 
 **Default accounts** (created on first boot when missing, see `server/ledger/auth.mjs`):
 
@@ -276,6 +283,15 @@ npm run probe:gateway       # upstream API + which sports exist
 node scripts/probe-local-socket.mjs   # realtime end-to-end against the running backend
 ```
 
+Offline (no server, no database - these pin the rules that are easy to break):
+
+```bash
+npm run test:plan           # subscription tiers + idle mode (when the feed is paused/woken)
+npm run test:matches        # the in-memory match store, incl. the prematch tiers
+npm run test:store          # the in-memory odds store, from captured frames
+npm run test:providers      # provider pinning (one book owns each selection)
+```
+
 End-to-end checks for the betting app (they need a running server; both create and delete their own
 accounts, so the seeded `demo` balance is never touched):
 
@@ -283,6 +299,15 @@ accounts, so the seeded `demo` balance is never touched):
 ODDS_SOCKET=true npm start  # the server subscribes to the feed, so the board has real prices
 npm run verify:app          # auth, board, betslip, booking codes, cash-out, settlement payout  (33 checks)
 npm run verify:admin        # users, money, account status, roles, ticket revert, match control  (48 checks)
+npm run verify:suspension   # a feed suspension reaches the board and the socket at once       (6 checks)
+```
+
+Idle mode needs a short window to be observable, so it is checked on its own (it leaves the
+server awake when it is done):
+
+```bash
+IDLE_FEED=true IDLE_AFTER_MS=15000 IDLE_COLD_BOOT_MS=8000 ODDS_SOCKET=true npm start
+npm run verify:idle         # pauses with no visitor, wakes on one, refuses a bet while waking (24 checks)
 ```
 
 Set `LOCAL_URL=https://<service>.up.railway.app` to run them against a deployed instance instead
@@ -310,7 +335,42 @@ Ports/paths: HTTP `:3000`, Socket.IO path `/socket.io`, static frontend from `do
 | `ODDS_PROVIDER_PIN` | `true` | One book owns each selection, so two books pricing the same selection can no longer overwrite each other (the book `match-info` reports for the match wins). `false` restores last-writer-wins. |
 | `ODDS_HIDE_SYNTHETIC_LINES` | `true` | The feed frames some groups twice (with the line, and with none). Hides the copy whose line had to be invented (`#1`), so one selection is not on the board twice. |
 | `FEED_EVIDENCE_MS` | `900000` | A match is only ended when the feed says so, as long as we saw its clock within this window. The kickoff-based clock alone used to end matches early and unsubscribe them (matches vanished around 70'). |
-| `RESUBSCRIBE_MS` | `20000` | How often the pusher re-subscribes live matches. The feed only sends the real clock (`matchTime`) and score (`matchScore`) in a snapshot on (re)subscribe, so this is what keeps minutes and scores fresh. |
+| `RESUBSCRIBE_MS` | `20000` | How often the pusher re-subscribes **live** matches. The feed only sends the real clock (`matchTime`) and score (`matchScore`) in a snapshot on (re)subscribe, so this is what keeps minutes and scores fresh. |
+| `PREMATCH_SOON_MIN` | `30` | A fixture kicking off within this many minutes counts as "soon". |
+| `PREMATCH_SOON_MS` | `300000` | How often "soon" fixtures are re-subscribed (5 min). |
+| `PREMATCH_REFRESH_MS` | `3600000` | How often every other prematch fixture is re-subscribed (1 h). **`0` restores the old behaviour**: prematch follows the live cadence. |
+| `PREMATCH_UNPRICED_MS` | `60000` | A prematch fixture the feed has not priced yet is asked for this often until it has a price (the board hides unpriced matches, so this is what makes a new fixture appear). |
+| `PREMATCH_STALE_MS` | `5400000` | Prematch prices older than this are refused (the hourly tier plus a margin). Live keeps its own 120s window. |
+| `IDLE_FEED` | `true` | Pause the feed when nobody is on the board: the upstream socket is closed and the collector, database probe and settlement stop, so no packet leaves the instance and the platform may sleep it. |
+| `IDLE_AFTER_MS` | `900000` | How long after the last visitor the feed pauses (15 min). |
+| `IDLE_COLD_BOOT_MS` | `120000` | Shorter window used when nobody has visited **since boot** (a deploy or a wake would otherwise warm the board for 15 minutes for nobody). |
+| `IDLE_STOP_DB_PROBE` | `true` | Also stop the 15s database probe while idle - it is outbound traffic, which is exactly what prevents the platform's sleep. |
+
+## Cost control: subscription tiers and idle mode
+
+Railway bills the container per minute (vCPU + RAM) and only sleeps a service when it sees no
+outbound packets for a few minutes. Both mechanisms below attack the same thing: the work this
+process does when nobody is reading the board.
+
+**Subscription tiers** (`server/subscribe-plan.mjs`). A re-subscribe is what makes the feed resend
+a match's prices - and its clock/score snapshot - so the cadence *is* the cost. Live keeps the
+~20s cadence, prematch is split by kickoff distance (soon = 5 min, later = 1 h) and a fixture the
+feed has not priced yet is asked for every minute until it has a price. Before this, 150 fixtures
+kicking off hours later cost as much as the whole live board.
+
+**Idle mode** (`server/idle-mode.mjs`). Sockets and app API calls count as visitors; `/health` and
+the static bundle deliberately do not (an uptime monitor or a crawler must not keep the feed - and
+the invoice - running). With no visitor for `IDLE_AFTER_MS` the upstream socket is closed, the
+collector, the database probe and settlement stop: nothing goes out, so the platform may sleep the
+instance. The first request wakes it, the collector's first cycle rebuilds the board and a
+settlement pass catches up on what finished while it was asleep.
+
+Because the board is empty for the few seconds that takes, the server publishes its state
+(`hello`/`feed:state` over the socket, `feedMode`/`idle` in `/health`) and the board shows
+*"Kuotat po rifreskohen..."* instead of "no matches". A bet placed in that window is refused
+(`Kuotat po rifreskohen`) rather than sold a price from before the pause; prematch prices older
+than `PREMATCH_STALE_MS` are refused for the same reason. `IDLE_FEED=false` or
+`PREMATCH_REFRESH_MS=0` return to the previous behaviour without a deploy.
 | `ODDS_SUBSCRIBE_FRAMES` | – | Socket.IO frames to send after connect, separated by `||`. |
 | `LOG_RAW_FRAMES` | `true` | Store unparsed upstream frames (max 300/session). |
 | `FOOTBALL_SPORT_ID` | `18` | Verified football sport id in this feed. |
@@ -431,10 +491,12 @@ so history survives.
 ## Layout
 
 ```
-server/   config.mjs  schema.mjs  db.mjs  minute.mjs  upstream.mjs  odds.mjs  push-decode.mjs  collector.mjs  index.mjs
+server/   config.mjs  schema.mjs  db.mjs  minute.mjs  upstream.mjs  odds.mjs  push-decode.mjs  collector.mjs
+          pusher.mjs  subscribe-plan.mjs  idle-mode.mjs  match-store.mjs  odds-store.mjs  index.mjs
 docs/     index.html  styles.css  app.js  config.js  vendor/socket.io.min.js  frames-relay.user.js   <- GitHub Pages
 scripts/  probe-db / probe-gateway / probe-sockets / probe-subscribe / probe-push2 / probe-local-socket
-          test-frames.mjs  test-live-ingest.mjs  sample-frames.txt (your captured frames)
-          verify-app.mjs  verify-admin.mjs  start-local.mjs
+          test-frames.mjs  test-live-ingest.mjs  test-odds-store.mjs  test-match-store.mjs
+          test-subscribe-plan.mjs  test-provider-pin.mjs  sample-frames.txt (your captured frames)
+          verify-app.mjs  verify-admin.mjs  verify-suspension.mjs  start-local.mjs
 railway.json  market-map.example.json  README.md
 ```

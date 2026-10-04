@@ -232,7 +232,10 @@ export default {
     results_found: 'rezultate të gjetura',
     no_search_results: 'Nuk u gjet asnjë ndeshje për kërkimin tënd',
     try_different_search: 'Provo një kërkim tjetër ose kontrollo drejtshkrimin.',
-    no_matches_date: 'Nuk ka ndeshje për këtë datë.'
+    no_matches_date: 'Nuk ka ndeshje për këtë datë.',
+    // idle mode: the server paused the feed with nobody on the board and is filling it again
+    feed_refreshing: 'Kuotat po rifreskohen...',
+    feed_refreshing_hint: 'Po marrim kuotat e freskëta nga feed-i. Ndeshjet shfaqen brenda disa sekondash.'
   },
   manager: {
     my_users: 'Përdoruesit e Mi',

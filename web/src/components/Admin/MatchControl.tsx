@@ -89,10 +89,10 @@ export default function MatchControl() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Match & Odds Management</h2>
+          <h2 className="text-2xl font-bold text-white">Match &amp; Odds Management</h2>
           <p className="text-text-secondary text-sm">Control live odds, suspend betting on specific fixtures, or settle final scores</p>
         </div>
         <button 

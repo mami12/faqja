@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { config, pgClientOptions } from './config.mjs';
 import { SCHEMA_SQL } from './schema.mjs';
+import { splitByKickoff, DEFAULT_SOON_MS } from './subscribe-plan.mjs';
 
 // bigint + numeric arrive as strings by default; normalise them for JSON output
 pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
@@ -370,8 +371,16 @@ export async function getOddsHistory(matchId, limit = 200) {
   return res.rows;
 }
 
-/** ids the push channel should be subscribed to */
-export async function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150 } = {}) {
+/**
+ * ids the push channel should be subscribed to. Prematch comes back split by kickoff distance
+ * as well (`prematchSoon` / `prematchLater`), so the DB driver answers exactly what the memory
+ * driver answers - the pusher must not care which store is in use.
+ */
+export async function getSubscriptionIds({
+  liveLimit = 250,
+  prematchLimit = 150,
+  soonMs = DEFAULT_SOON_MS,
+} = {}) {
   const live = await query(
     `select match_id from matches
       where active and service = 'LIVE' and status <> 'ended'
@@ -379,12 +388,23 @@ export async function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150 
     [liveLimit],
   );
   const prematch = await query(
-    `select match_id from matches
+    `select match_id, start_at from matches
       where active and service = 'PREMATCH' and status <> 'ended'
       order by start_at limit $1`,
     [prematchLimit],
   );
-  return { live: live.rows.map((r) => r.match_id), prematch: prematch.rows.map((r) => r.match_id) };
+  const ids = prematch.rows.map((r) => r.match_id);
+  const kickoff = {};
+  for (const row of prematch.rows) kickoff[row.match_id] = new Date(row.start_at).getTime();
+  const { soon, later } = splitByKickoff(ids, kickoff, { soonMs });
+
+  return {
+    live: live.rows.map((r) => r.match_id),
+    prematch: ids,
+    prematchSoon: soon,
+    prematchLater: later,
+    full: [], // full-market boosts are in-process state: the memory store only
+  };
 }
 
 export async function closePool() {

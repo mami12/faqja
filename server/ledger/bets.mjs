@@ -12,13 +12,19 @@
  */
 import crypto from 'node:crypto';
 import { pool, query } from '../db.mjs';
+import { config } from '../config.mjs';
 import { getOddsForMatches } from '../odds-store.mjs';
 import { getMatchById } from '../matches.mjs';
+import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
+// Prematch prices are refreshed hourly (SUBSCRIBE/PREMATCH_REFRESH_MS) unless the fixture is
+// about to start, so they are allowed to be older - but not unbounded: a price the feed has
+// stopped refreshing must not be sold, so the window is the hourly tier plus a margin.
+const STALE_PREMATCH_ODDS_MS = Number(config.prematchStaleMs) || 90 * 60 * 1000;
 const PRICE_TOLERANCE = 0.1; // 10% drift between the shown price and the server's
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
@@ -30,6 +36,12 @@ const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUp
  * will store, using our own live price. Throws a 400 with a user-facing message.
  */
 async function resolveSelection(selection) {
+  // idle mode: while the feed is paused (or starting again) the prices on the board have not
+  // been refreshed since before the pause - selling one of them would be selling a stale price
+  if (feedIsRefreshing()) {
+    throw badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.');
+  }
+
   const parsed = parseOutcomeId(selection?.outcomeId);
   if (!parsed) throw badRequest('Zgjedhja nuk u njoh. Rifresko faqen dhe provo përsëri.');
 
@@ -55,12 +67,12 @@ async function resolveSelection(selection) {
   const price = outcomeOverride?.price ?? (row.price === null || row.price === undefined ? null : Number(row.price));
   if (price === null) throw badRequest('Kjo kuotë nuk ka çmim.');
 
-  // live prices must be fresh, otherwise a bet could take a pre-goal price
-  if (String(match.service).toUpperCase() === 'LIVE') {
-    const at = row.updated_at instanceof Date ? row.updated_at.getTime() : new Date(row.updated_at ?? 0).getTime();
-    if (!at || Date.now() - at > STALE_LIVE_ODDS_MS) {
-      throw badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.');
-    }
+  // prices must be fresh, otherwise a bet could take a price that has already moved: live
+  // prices have 120s, prematch the hourly refresh window plus a margin (see the constants)
+  const at = row.updated_at instanceof Date ? row.updated_at.getTime() : new Date(row.updated_at ?? 0).getTime();
+  const maxAge = String(match.service).toUpperCase() === 'LIVE' ? STALE_LIVE_ODDS_MS : STALE_PREMATCH_ODDS_MS;
+  if (!at || Date.now() - at > maxAge) {
+    throw badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.');
   }
 
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds ?? price);

@@ -27,7 +27,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { t } = useLanguage();
   const navigate = useNavigate();
   // minute / score / corners / cards arrive over the socket, so the list is live between polls
-  const { livePatches, lockedMatches } = useLiveFeed();
+  const { livePatches, lockedMatches, feedMode } = useLiveFeed();
+  // idle mode: while the server is filling the board again there is nothing to show yet, and
+  // "no matches" would be a lie - the fixtures are coming back in a few seconds
+  const refreshing = feedMode !== 'live';
 
   const fetchMatches = async () => {
     try {
@@ -105,17 +108,23 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return (
       <div className="p-12 text-center text-text-secondary flex items-center justify-center gap-2">
         <span className="w-3 h-3 rounded-full bg-accent-green animate-ping"></span>
-        {t('common.loading')}
+        {t(refreshing ? 'common.feed_refreshing' : 'common.loading')}
       </div>
     );
   }
 
   if (matches.length === 0) {
     return (
-      <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
-        <div className="text-4xl">⚽</div>
-        <div className="font-bold text-white text-base">{t('common.no_results')}</div>
-        <p className="text-xs text-text-secondary">{t('sections.select_sport')}</p>
+      <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+        <div className="text-4xl">{refreshing ? '⏳' : '⚽'}</div>
+        <div className="font-bold text-white text-base">
+          {t(refreshing ? 'common.feed_refreshing' : 'common.no_results')}
+        </div>
+        {refreshing ? (
+          <p className="text-xs text-text-secondary">{t('common.feed_refreshing_hint')}</p>
+        ) : (
+          <p className="text-xs text-text-secondary">{t('sections.select_sport')}</p>
+        )}
       </div>
     );
   }
@@ -149,8 +158,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         key={m.id} 
         className="bg-secondary rounded-xl border border-tertiary shadow-md hover:border-text-secondary/40 transition overflow-hidden group"
       >
-        {/* Card Header: Tournament & Time/Status */}
-        <div className="bg-primary/50 px-4 py-2 border-b border-tertiary/60 flex items-center justify-between text-xs">
+        {/* Card Header: Tournament &amp; Time/Status */}
+        <div className="bg-primary/50 px-3 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 text-text-secondary truncate">
             <span className="font-semibold text-text-primary truncate">
               {m.tournament?.category?.name ? `${m.tournament.category.name} - ` : ''}{m.tournament?.name || 'League'}
@@ -181,7 +190,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
 
         {/* Card Body: Teams, Score & 1X2 Odds */}
-        <div className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           {/* Teams & Score (Clickable to detail) */}
           <div 
             className="flex-1 cursor-pointer space-y-1.5"
@@ -213,7 +222,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           {/* 1X2 Odds Buttons Column */}
           <div className="flex items-center gap-2">
             {quickMarket && quickOutcomes.length >= 2 ? (
-              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 w-64`}>
+              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 w-full md:w-64`}>
                 {quickOutcomes.map((o: any) => (
                   <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
                 ))}
@@ -244,7 +253,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-6xl mx-auto">
       {/* Search Bar */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -268,7 +277,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       </div>
 
       {/* Date Filter Tabs */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-text-secondary mr-1">
           <CalendarDays size={16} />
         </div>
@@ -330,8 +339,11 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {/* there are fixtures, but the feed has not priced any of them yet */}
       {filteredMatches.length > 0 && pricedMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
-          <div className="font-bold text-white text-base">{t('common.no_results')}</div>
+        <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+          <div className="font-bold text-white text-base">
+            {t(refreshing ? 'common.feed_refreshing' : 'common.no_results')}
+          </div>
+          {refreshing && <p className="text-xs text-text-secondary">{t('common.feed_refreshing_hint')}</p>}
         </div>
       )}
 

@@ -293,6 +293,28 @@ export function getOddsForMatches(matchIds = []) {
   return out;
 }
 
+/**
+ * True when this match has at least one row with a real price. Used to keep the board honest:
+ * a match with no price is hidden, so a fixture the feed has not sent yet has to be asked for
+ * immediately instead of waiting for the next scheduled pass (see subscribe-plan.mjs).
+ * Cheap on purpose - it stops at the first priced row, unlike getOddsForMatches() which sorts.
+ */
+export function hasPricedRows(matchId) {
+  const bucket = byMatch.get(Number(matchId));
+  if (!bucket) return false;
+  for (const row of bucket.values()) {
+    if (row.price !== null && row.price !== undefined) return true;
+  }
+  return false;
+}
+
+/** the ids among these that have no price at all yet */
+export function missingPrices(matchIds = []) {
+  const out = [];
+  for (const id of matchIds) if (!hasPricedRows(id)) out.push(id);
+  return out;
+}
+
 /** recent price changes for one match, newest first (only since this process started) */
 export function getHistory(matchId, limit = 200) {
   const list = historyByMatch.get(Number(matchId)) ?? [];

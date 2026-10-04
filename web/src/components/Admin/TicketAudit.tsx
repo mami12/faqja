@@ -35,10 +35,10 @@ export default function TicketAudit() {
   }, []);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Ticket Audit & Bets Monitor</h2>
+          <h2 className="text-2xl font-bold text-white">Ticket Audit &amp; Bets Monitor</h2>
           <p className="text-text-secondary text-sm">Real-time audit log of all bet tickets placed across the platform</p>
         </div>
         <button 

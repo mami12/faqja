@@ -22,8 +22,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-primary flex items-center justify-center relative">
-      <div className="bg-secondary p-8 rounded-2xl shadow-2xl w-full max-w-md border border-tertiary">
+    <div className="min-h-[100dvh] bg-primary flex items-center justify-center relative px-3">
+      <div className="bg-secondary p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md border border-tertiary">
         <h1 className="text-3xl font-black text-center text-accent-green mb-1 tracking-widest">NETFLY SPORT</h1>
         <p className="text-center text-xs text-text-secondary mb-8 uppercase tracking-wider">{t('auth.login_subtitle')}</p>
         

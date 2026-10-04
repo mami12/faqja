@@ -97,9 +97,9 @@ export default function MyBetsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-primary flex flex-col">
+    <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
-      <div className="p-6 max-w-4xl mx-auto w-full flex-1">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
         {!isAuthenticated ? (
           <div className="bg-secondary p-8 text-center text-text-secondary rounded border border-tertiary">
             <h2 className="text-xl font-bold text-white mb-2">{t('auth.login_title')}</h2>

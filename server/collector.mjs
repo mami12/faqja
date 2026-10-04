@@ -252,11 +252,13 @@ export async function withOdds(rows, now = Date.now()) {
 export function startCollector({ io } = {}) {
   const state = {
     syncedAt: null, lastError: null, received: 0, kept: 0, skipped: 0, cycles: 0, running: false,
+    // idle mode (server/idle-mode.mjs): while paused there is no upstream polling at all
+    paused: false, pauses: 0, resumes: 0,
   };
   let timer = null;
 
   const tick = async () => {
-    if (state.running) return;
+    if (state.running || state.paused) return;
     state.running = true;
     try {
       const { rows, received, skipped } = await fetchRealFootball();
@@ -322,8 +324,41 @@ export function startCollector({ io } = {}) {
     }
   };
 
-  tick();
-  timer = setInterval(tick, config.pollIntervalMs);
+  const arm = () => {
+    clearInterval(timer);
+    timer = setInterval(tick, config.pollIntervalMs);
+  };
 
-  return { state, stop: () => clearInterval(timer), tick };
+  arm();
+  tick();
+
+  return {
+    state,
+    stop() {
+      state.paused = true;
+      clearInterval(timer);
+      timer = null;
+    },
+    /** idle mode: stop polling upstream - with no visitor the board is not being read */
+    pause() {
+      if (state.paused) return false;
+      state.paused = true;
+      state.pauses++;
+      clearInterval(timer);
+      timer = null;
+      console.log('[collector] paused (idle mode): no upstream polling');
+      return true;
+    },
+    /** idle mode: poll now (one cycle) and keep polling on the interval again */
+    resume() {
+      if (!state.paused) return false;
+      state.paused = false;
+      state.resumes++;
+      console.log('[collector] resuming (a visitor is back)');
+      arm();
+      return tick();
+    },
+    isPaused: () => state.paused,
+    tick,
+  };
 }

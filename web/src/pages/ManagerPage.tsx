@@ -154,10 +154,10 @@ export default function ManagerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-primary flex flex-col">
+    <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
-      <div className="bg-secondary border-b border-tertiary px-6">
-        <div className="flex gap-8">
+      <div className="bg-secondary border-b border-tertiary px-3 sm:px-6">
+        <div className="flex gap-4 sm:gap-8 overflow-x-auto">
           <button 
             onClick={() => setTab('users')}
             className={`py-4 font-semibold capitalize flex items-center gap-2 ${tab === 'users' ? 'text-accent-green border-b-2 border-accent-green' : 'text-text-secondary hover:text-white'}`}
@@ -175,8 +175,8 @@ export default function ManagerPage() {
 
       <div className="flex-1 overflow-y-auto">
         {tab === 'users' ? (
-          <div className="p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
+          <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{t('manager.my_users')}</h2>
                 <p className="text-text-secondary text-sm">{t('manager.manage_your_users')}</p>
@@ -189,13 +189,13 @@ export default function ManagerPage() {
               </button>
             </div>
 
-            <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-hidden">
+            <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-x-auto">
               {loading ? (
                 <div className="p-12 text-center text-text-secondary">{t('admin.loading_accounts')}</div>
               ) : users.length === 0 ? (
                 <div className="p-12 text-center text-text-secondary">{t('manager.no_users')}</div>
               ) : (
-                <table className="w-full text-left text-text-primary text-sm">
+                <table className="w-full min-w-[560px] text-left text-text-primary text-sm">
                   <thead className="bg-tertiary/60 uppercase text-xs text-text-secondary">
                     <tr>
                       <th className="p-4">{t('admin.username')}</th>
@@ -290,8 +290,8 @@ export default function ManagerPage() {
             </div>
           </div>
         ) : (
-          <div className="p-6 max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
+          <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{t('manager.tickets')}</h2>
                 <p className="text-text-secondary text-sm">{t('manager.manage_tickets')}</p>

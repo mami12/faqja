@@ -152,8 +152,8 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white">{t('admin.users')}</h2>
           <p className="text-text-secondary text-sm">{t('admin.manage_players')}</p>
@@ -168,7 +168,7 @@ export default function UserManagement() {
 
       {/* Manager Filter */}
       {managers.length > 0 && (
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <UsersIcon size={16} className="text-text-secondary" />
           <select
             value={selectedManagerId}
@@ -185,11 +185,11 @@ export default function UserManagement() {
         </div>
       )}
 
-      <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-hidden">
+      <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-text-secondary">{t('admin.loading_accounts')}</div>
         ) : (
-          <table className="w-full text-left text-text-primary text-sm">
+          <table className="w-full min-w-[640px] text-left text-text-primary text-sm">
             <thead className="bg-tertiary/60 uppercase text-xs text-text-secondary">
               <tr>
                 <th className="p-4">{t('admin.username')}</th>

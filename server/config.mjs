@@ -70,6 +70,30 @@ export const config = {
     .filter(Boolean),
   logRawFrames: process.env.LOG_RAW_FRAMES !== 'false',
 
+  /* ------------------------------------------------------- subscription tiers
+   * A re-subscribe is what makes the feed resend a match's prices (and its clock/score
+   * snapshot), so the cadence is what it costs. Live and near-kickoff fixtures need it often;
+   * the rest are still on the board from the 6h the odds store keeps (server/subscribe-plan.mjs).
+   */
+  prematchSoonMin: Number(process.env.PREMATCH_SOON_MIN ?? 30),
+  prematchSoonRefreshMs: Number(process.env.PREMATCH_SOON_MS ?? 5 * 60 * 1000),
+  // PREMATCH_REFRESH_MS=0 restores the old behaviour (prematch follows the live cadence)
+  prematchRefreshMs: Number(process.env.PREMATCH_REFRESH_MS ?? 60 * 60 * 1000),
+  prematchUnpricedRefreshMs: Number(process.env.PREMATCH_UNPRICED_MS ?? 60 * 1000),
+  // prematch prices may be this old and still be sold (the hourly tier plus a margin); live
+  // keeps its own, much tighter window in ledger/bets.mjs
+  prematchStaleMs: Number(process.env.PREMATCH_STALE_MS ?? 90 * 60 * 1000),
+
+  /* ------------------------------------------------------------- idle mode
+   * With no visitor the feed is paused (upstream socket closed, collector/probe/settlement
+   * stopped) so the instance can be slept by the platform - see server/idle-mode.mjs. The
+   * first request wakes it again; the board shows "odds are being refreshed" meanwhile.
+   */
+  idleFeed: (process.env.IDLE_FEED ?? 'true') !== 'false',
+  idleAfterMs: Number(process.env.IDLE_AFTER_MS ?? 15 * 60 * 1000),
+  idleColdBootMs: Number(process.env.IDLE_COLD_BOOT_MS ?? 2 * 60 * 1000),
+  idleStopDbProbe: (process.env.IDLE_STOP_DB_PROBE ?? 'true') !== 'false',
+
   // this feed's football sport id (verified)
   footballSportId: Number(process.env.FOOTBALL_SPORT_ID ?? 18),
 };

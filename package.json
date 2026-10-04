@@ -20,6 +20,7 @@
     "test:frames": "node scripts/test-frames.mjs",
     "test:store": "node scripts/test-odds-store.mjs",
     "test:matches": "node scripts/test-match-store.mjs",
+    "test:plan": "node scripts/test-subscribe-plan.mjs",
     "build:web": "npm --prefix web run build",
     "dev:web": "npm --prefix web run dev",
     "test:ingest": "node scripts/test-live-ingest.mjs",
@@ -28,7 +29,8 @@
     "odds:clean": "node scripts/clean-odds.mjs",
     "verify:app": "node scripts/verify-app.mjs",
     "verify:admin": "node scripts/verify-admin.mjs",
-    "verify:suspension": "node scripts/verify-suspension.mjs"
+    "verify:suspension": "node scripts/verify-suspension.mjs",
+    "verify:idle": "node scripts/verify-idle.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

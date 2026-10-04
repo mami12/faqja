@@ -11,10 +11,10 @@ export default function AdminPage() {
   const [tab, setTab] = useState<'dashboard' | 'users' | 'matches' | 'tickets'>('dashboard');
 
   return (
-    <div className="min-h-screen bg-primary flex flex-col">
+    <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
-      <div className="bg-secondary border-b border-tertiary px-6">
-        <div className="flex gap-8">
+      <div className="bg-secondary border-b border-tertiary px-3 sm:px-6">
+        <div className="flex gap-4 sm:gap-8 overflow-x-auto">
           {['dashboard', 'users', 'matches', 'tickets'].map(tabId => (
             <button 
               key={tabId}

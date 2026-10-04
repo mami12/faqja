@@ -107,6 +107,32 @@ const expired = store.expireStale(0, Date.now() + 60 * 60 * 1000); // everything
 check('expireStale deactivates and ends matches', expired.length === 3 && !store.getMatches({ includeEnded: true }).length);
 check('expired live matches become ended', store.getById(1).status === 'ended');
 check('reappearing match becomes active again', store.upsert([mkRow({ match_id: 1 })]) === 1 && store.getById(1).active === true);
+// --- subscription tiers (what the pusher subscribes, and how often) --------------
+store.clear();
+store.upsert([
+  mkRow({ match_id: 11, service: 'PREMATCH', status: 'scheduled', start_at: minutesAgo(-10) }), // in 10 min
+  mkRow({ match_id: 12, service: 'PREMATCH', status: 'scheduled', start_at: minutesAgo(-120) }), // in 2h
+  mkRow({ match_id: 13, service: 'PREMATCH', status: 'scheduled', start_at: minutesAgo(5) }), // already started
+]);
+const tiers = store.getSubscriptionIds({ prematchLimit: 10 });
+check('prematch tiering: soon = within 30 min (started or starting)', tiers.prematchSoon.join() === '13,11', tiers.prematchSoon.join());
+check('prematch tiering: later = the fixtures hours away', tiers.prematchLater.join() === '12', tiers.prematchLater.join());
+check(
+  'prematch still lists everything (it decides how many fixtures are visible at all)',
+  tiers.prematch.join() === '13,11,12',
+  tiers.prematch.join(),
+);
+check(
+  'soonMs=0 (the kill switch) puts every fixture in the cheap tier',
+  store.getSubscriptionIds({ prematchLimit: 10, soonMs: 0 }).prematchSoon.length === 0,
+);
+check(
+  'the two tiers never overlap',
+  tiers.prematchSoon.every((id) => !tiers.prematchLater.includes(id)) &&
+    tiers.prematchSoon.length + tiers.prematchLater.length === tiers.prematch.length,
+);
+
+
 
 console.log(`\nstats: ${JSON.stringify(store.stats())}`);
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nall checks passed');

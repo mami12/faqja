@@ -35,17 +35,28 @@ interface LiveFeedValue {
   livePatches: Record<string, LivePatch>;
   matchEvents: MatchEvent[];
   connected: boolean;
+  /**
+   * 'live'   the feed is running: prices are fresh and bets are accepted
+   * 'idle'   the server paused the feed because nobody was on the board
+   * 'waking' it is collecting the first cycle again - the board is rebuilt in a few seconds
+   * While this is not 'live' the board shows "odds are being refreshed" instead of an empty
+   * list, and a bet would be refused by the server anyway.
+   */
+  feedMode: FeedMode;
   /** prices the feed has locked right now, keyed exactly like the REST payload ids */
   lockedOutcomes: Record<string, boolean>;
   lockedMarkets: Record<string, boolean>;
   lockedMatches: Record<string, boolean>;
 }
 
+export type FeedMode = 'live' | 'idle' | 'waking';
+
 const EMPTY: LiveFeedValue = {
   oddsDeltas: {},
   livePatches: {},
   matchEvents: [],
   connected: false,
+  feedMode: 'live',
   lockedOutcomes: {},
   lockedMarkets: {},
   lockedMatches: {},
@@ -83,6 +94,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [lockedOutcomes, setLockedOutcomes] = useState<Record<string, boolean>>({});
   const [lockedMarkets, setLockedMarkets] = useState<Record<string, boolean>>({});
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
+  const [feedMode, setFeedMode] = useState<FeedMode>('live');
   const prevOdds = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -90,6 +102,17 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
+
+    // idle mode: the server says when it paused the feed (nobody was on the board) and when it
+    // is filling it again, so the board can say "odds are being refreshed" instead of looking
+    // broken. `hello` carries the mode on connect, `feed:state` on every change.
+    const useMode = (payload: any) => {
+      const mode = payload?.mode;
+      if (mode === 'live' || mode === 'idle' || mode === 'waking') setFeedMode(mode);
+    };
+    socket.on('hello', useMode);
+    socket.on('meta', useMode);
+    socket.on('feed:state', useMode);
 
     socket.on('odds:update', (payload: { matchId: string | number; markets?: any[] }) => {
       const deltas: Record<string, OddsDelta> = {};
@@ -130,6 +153,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
     // the whole live board, once per collector cycle
     socket.on('matches:live', (payload: { matches?: any[] }) => {
+      useMode(payload); // the first board after a wake also announces the mode
       const patches: Record<string, LivePatch> = {};
       for (const m of payload?.matches ?? []) {
         if (!m || m.id === undefined || m.id === null) continue;
@@ -201,8 +225,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected, lockedOutcomes, lockedMarkets, lockedMatches }),
-    [oddsDeltas, livePatches, matchEvents, connected, lockedOutcomes, lockedMarkets, lockedMatches],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, lockedMarkets, lockedMatches }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, lockedMarkets, lockedMatches],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;

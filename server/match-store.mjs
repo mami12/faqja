@@ -9,8 +9,10 @@
  *
  * Field-for-field compatible with the old `matches` table: the poll only overwrites the
  * columns it owns, so score/clock/stats written by match-info frames survive an upsert,
- * exactly like the `on conflict ... do update` did. No imports: pure and testable.
+ * exactly like the `on conflict ... do update` did. The one import is the pure scheduling
+ * helper, so the subscription tiers are defined in exactly one place.
  */
+import { splitByKickoff, DEFAULT_SOON_MS } from './subscribe-plan.mjs';
 
 const MATCH_COLUMNS = [
   'match_id', 'sport_id', 'sport_tag', 'category_id', 'category_slug', 'category_name',
@@ -160,8 +162,19 @@ export function getCounts() {
   return { live, prematch, finished, updatedAt: lastUpdatedAt };
 }
 
-/** ids the push channel should be subscribed to, oldest kickoff first */
-export function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150, feedEvidenceMs = 900000 } = {}) {
+/**
+ * ids the push channel should be subscribed to, oldest kickoff first.
+ *
+ * Prematch is returned twice: `prematch` (everything we track, what the pusher uses to decide
+ * how many fixtures are visible) and, split by kickoff distance, `prematchSoon` / `prematchLater`
+ * so the pusher can refresh the fixtures that are about to start far more often than the rest.
+ */
+export function getSubscriptionIds({
+  liveLimit = 250,
+  prematchLimit = 150,
+  feedEvidenceMs = 900000,
+  soonMs = DEFAULT_SOON_MS,
+} = {}) {
   const cutoff = Date.now() - feedEvidenceMs;
   const pick = (service, limit) =>
     [...byId.values()]
@@ -174,10 +187,25 @@ export function getSubscriptionIds({ liveLimit = 250, prematchLimit = 150, feedE
         return time(m.clock_at) >= cutoff;
       })
       .sort((a, b) => time(a.start_at) - time(b.start_at))
-      .slice(0, Math.max(0, Number(limit) || 0))
-      .map((m) => m.match_id);
+      .slice(0, Math.max(0, Number(limit) || 0));
 
-  return { live: pick('LIVE', liveLimit), prematch: pick('PREMATCH', prematchLimit), full: boostedIds() };
+  const liveRows = pick('LIVE', liveLimit);
+  const prematchRows = pick('PREMATCH', prematchLimit);
+  const kickoff = {};
+  for (const m of prematchRows) kickoff[m.match_id] = time(m.start_at);
+  const { soon, later } = splitByKickoff(
+    prematchRows.map((m) => m.match_id),
+    kickoff,
+    { soonMs },
+  );
+
+  return {
+    live: liveRows.map((m) => m.match_id),
+    prematch: prematchRows.map((m) => m.match_id),
+    prematchSoon: soon,
+    prematchLater: later,
+    full: boostedIds(),
+  };
 }
 
 /* ------------------------------------------------------------------- market boost

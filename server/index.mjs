@@ -21,6 +21,7 @@ import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
+import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -103,8 +104,104 @@ async function ensureLedgerSchema() {
   return ledgerReady;
 }
 
-probeDb();
-setInterval(probeDb, 15000).unref?.();
+/** the probe is pure database traffic - idle mode stops it so nothing goes out on the wire */
+let probeTimer = null;
+function armProbe() {
+  if (probeTimer) return false;
+  probeDb();
+  probeTimer = setInterval(probeDb, 15000);
+  probeTimer.unref?.();
+  return true;
+}
+function stopProbe() {
+  clearInterval(probeTimer);
+  probeTimer = null;
+  return true;
+}
+
+armProbe();
+
+/* ---------------------------------------------------------------- idle mode
+ * With no visitor the feed is paused and the instance is free to sleep; the first request
+ * wakes it again (server/idle-mode.mjs explains why this is worth doing on Railway).
+ * ---------------------------------------------------------------------------- */
+
+const feedState = () => ({
+  ...idle.state(),
+  at: new Date().toISOString(),
+  oddsRows: oddsStore.stats().rows,
+});
+
+function broadcastFeedState() {
+  try {
+    io?.emit('feed:state', feedState());
+  } catch {
+    /* ignore: no clients */
+  }
+}
+
+/**
+ * Settlement pass: store the results of matches that have finished, then close every ticket
+ * whose lines are all decided. Idempotent, so a missed pass is harmless - which is what makes
+ * it safe to skip while the feed is stopped (no database round trips when nobody is looking)
+ * and to run once on wake, where it catches up on everything that ended while we were asleep.
+ */
+async function runSettlement(why = 'periodic') {
+  if (!ledgerReady || feedIsStopped()) return null;
+  try {
+    const out = await settleAll();
+    if (out.closed || why !== 'periodic') {
+      console.log(
+        `[settle] (${why}) captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`,
+      );
+    }
+    if (out.captured || out.matches) await voidUnresolved(12);
+    return out;
+  } catch (e) {
+    console.error('[settle] pass failed:', e.message);
+    return null;
+  }
+}
+
+let settleTimer = null;
+
+const idle = createIdleMonitor({
+  enabled: config.idleFeed,
+  idleAfterMs: config.idleAfterMs,
+  coldBootIdleMs: config.idleColdBootMs,
+  onIdle: () => {
+    pusher?.pause(); // closes the upstream socket: heartbeats are outbound traffic too
+    collector?.pause(); // no upstream polling
+    if (config.idleStopDbProbe) stopProbe(); // and no database probe
+    broadcastFeedState();
+  },
+  onWake: () => {
+    if (config.idleStopDbProbe) armProbe();
+    pusher?.resume();
+    broadcastFeedState();
+    // the board is rebuilt by the first collector cycle (it broadcasts matches:live itself);
+    // the settlement pass then catches up on whatever ended while the feed was paused
+    Promise.resolve(collector?.resume?.() ?? collector?.tick?.())
+      .then(() => runSettlement('after waking'))
+      .catch((e) => console.error('[idle] catch-up failed:', e.message))
+      .finally(() => {
+        idle.markLive();
+        broadcastFeedState();
+      });
+  },
+  onMode: () => broadcastFeedState(),
+});
+
+/**
+ * What counts as a visitor: a board socket (see io.on('connection')) or a call to the app's
+ * API. /health and the static bundle are deliberately NOT: an uptime monitor or a crawler
+ * pinging them must not keep the feed - and the invoice - running.
+ */
+const ACTIVITY_RE = /^\/(app\/api|api\/(matches|meta|leagues|odds|raw-frames|info)|ingest)\b/;
+app.use((req, _res, next) => {
+  if (ACTIVITY_RE.test(req.path)) idle.touch();
+  next();
+});
 
 app.get('/health', (_req, res) => {
   // 200 even when the database is down: prices come from memory, so a database outage
@@ -122,6 +219,22 @@ app.get('/health', (_req, res) => {
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
+    // idle mode: 'live' | 'idle' | 'waking' plus the visitor counters, and what the tiers cost
+    feedMode: getFeedMode(),
+    idle: {
+      ...idle.state(),
+      // the database probe is outbound traffic too: whether it is currently stopped is what
+      // decides if the instance is really free to sleep
+      stopDbProbeOnIdle: config.idleStopDbProbe,
+      dbProbeStopped: probeTimer === null,
+    },
+    tiers: {
+      soonMin: config.prematchSoonMin,
+      soonMs: config.prematchSoonRefreshMs,
+      laterMs: config.prematchRefreshMs,
+      unpricedMs: config.prematchUnpricedRefreshMs,
+      enabled: config.prematchRefreshMs > 0,
+    },
     upstream: config.gateway,
     at: new Date().toISOString(),
   });
@@ -418,16 +531,60 @@ const io = new SocketServer(server, {
 });
 
 io.on('connection', async (socket) => {
-  socket.emit('hello', { at: new Date().toISOString(), pollMs: config.pollIntervalMs });
+  // a visitor: the feed must be live while this socket is open (idle mode wakes it here)
+  idle.clientOpen();
+  socket.on('disconnect', () => idle.clientClose());
+
+  // `mode` lets the board say "odds are being refreshed" instead of showing an empty list
+  // while the first feed cycle is in flight
+  socket.emit('hello', { at: new Date().toISOString(), pollMs: config.pollIntervalMs, mode: getFeedMode() });
   try {
     const counts = await getCounts();
-    socket.emit('meta', counts);
+    socket.emit('meta', { ...counts, mode: getFeedMode() });
+    // while waking, the collector's own broadcast carries the first board (it emits to every
+    // socket), so this must not send an empty list first
+    if (getFeedMode() !== 'live') return;
     const rows = await getMatches({ service: 'LIVE', limit: 500 });
-    socket.emit('matches:live', { at: new Date().toISOString(), counts, matches: await withOdds(rows) });
+    socket.emit('matches:live', {
+      at: new Date().toISOString(),
+      counts,
+      mode: getFeedMode(),
+      matches: await withOdds(rows),
+    });
   } catch (e) {
     socket.emit('server:error', { message: e.message });
   }
 });
+
+/* ------------------------------------------------------- push subscription plan */
+
+/** PREMATCH_REFRESH_MS=0 turns the tiers off: prematch follows the live cadence again */
+const tieredPrematch = () => config.prematchRefreshMs > 0;
+
+/** how far ahead a kickoff counts as "soon" (0 = nothing is soon, everything is "later") */
+const soonWindowMs = () => (tieredPrematch() ? Math.max(0, config.prematchSoonMin * 60 * 1000) : 0);
+
+/**
+ * What the push channel should be subscribed to right now: the store's ids split by tier, plus
+ * the prematch fixtures the feed has not priced yet.
+ *
+ * The unpriced set is recomputed on every pass, so a fixture that appears without prices is
+ * asked for within a minute instead of waiting for the next scheduled refresh - without it the
+ * "hide matches without prices" rule would keep a new fixture invisible for up to an hour.
+ */
+async function subscriptionPlan() {
+  const ids = await getSubscriptionIds({
+    liveLimit: Number(process.env.SUBSCRIBE_LIVE_LIMIT ?? 250),
+    prematchLimit: Number(process.env.SUBSCRIBE_PREMATCH_LIMIT ?? 150),
+    soonMs: soonWindowMs(),
+  });
+  const prematch = ids.prematch ?? [];
+  return {
+    ...ids,
+    // ODDS_STORE=db keeps prices in Postgres, where there is no cheap "has a price?" check
+    unpriced: config.oddsStore === 'db' ? [] : oddsStore.missingPrices(prematch),
+  };
+}
 
 async function boot() {
   const target = dbTarget();
@@ -441,38 +598,33 @@ async function boot() {
   await ensureLedgerSchema(); // the board does not need the ledger, so a failure here is not fatal
 
   // settlement: every pass stores newly finished results, then closes any ticket whose
-  // lines are all decided. Idempotent, so a missed pass is harmless.
+  // lines are all decided. Idempotent, so a missed pass is harmless - see runSettlement(),
+  // which also skips itself while the feed is stopped and catches up after a wake.
   if (ledgerReady) {
-    const runSettlement = async () => {
-      try {
-        const out = await settleAll();
-        if (out.closed) {
-          console.log(`[settle] captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`);
-        }
-        if (out.captured || out.matches) await voidUnresolved(12);
-      } catch (e) {
-        console.error('[settle] pass failed:', e.message);
-      }
-    };
-    runSettlement();
-    setInterval(runSettlement, Number(process.env.SETTLE_INTERVAL_MS ?? 30000)).unref?.();
+    runSettlement('boot');
+    settleTimer = setInterval(() => runSettlement('periodic'), Number(process.env.SETTLE_INTERVAL_MS ?? 30000));
+    settleTimer.unref?.();
+  } else {
+    console.warn('[settle] ledger not ready: no settlement until the database answers');
   }
 
   collector = startCollector({ io });
 
   if (process.env.ODDS_SOCKET === 'true') {
+    const resubscribeMs = Number(process.env.RESUBSCRIBE_MS ?? 20000);
     pusher = startPusher({
-      getIds: () =>
-        getSubscriptionIds({
-          liveLimit: Number(process.env.SUBSCRIBE_LIVE_LIMIT ?? 250),
-          prematchLimit: Number(process.env.SUBSCRIBE_PREMATCH_LIMIT ?? 150),
-        }),
+      getIds: () => subscriptionPlan(),
       fullMarkets: process.env.SUBSCRIBE_FULL_MARKETS !== 'false',
       fullMarketsLiveLimit: Number(process.env.SUBSCRIBE_FULL_LIMIT ?? 60),
       // 'recent' (default) spends the full-market quota on the matches that just kicked off
       fullMarketsOrder: process.env.SUBSCRIBE_FULL_ORDER ?? 'recent',
       // re-subscribing is what makes the feed resend the clock+score snapshot
-      resubscribeMs: Number(process.env.RESUBSCRIBE_MS ?? 20000),
+      resubscribeMs,
+      // prematch tiers: near-kickoff fixtures are refreshed often, the rest hourly. With
+      // PREMATCH_REFRESH_MS=0 (kill switch) every group follows the live cadence again.
+      prematchSoonMs: tieredPrematch() ? config.prematchSoonRefreshMs : resubscribeMs,
+      prematchLaterMs: tieredPrematch() ? config.prematchRefreshMs : resubscribeMs,
+      prematchUnpricedMs: tieredPrematch() ? config.prematchUnpricedRefreshMs : resubscribeMs,
       onOdds: (rows) => oddsBuffer.push(...rows),
       onInfo: (info) => infoBuffer.set(info.matchId, mergeInfo(infoBuffer.get(info.matchId), info)),
       onStatus: (s) => {
@@ -480,10 +632,25 @@ async function boot() {
         io.emit('odds:socket', oddsStatus);
       },
     });
-    console.log('[pusher] server-side odds subscription enabled');
+    console.log(
+      `[pusher] server-side odds subscription enabled (prematch tiers: ` +
+        (tieredPrematch()
+          ? `soon<=${config.prematchSoonMin}min every ${Math.round(config.prematchSoonRefreshMs / 1000)}s, ` +
+            `later every ${Math.round(config.prematchRefreshMs / 60000)}min`
+          : 'off, live cadence for everything') +
+        `)`,
+    );
   } else {
     console.log('[odds] server-side subscription off (set ODDS_SOCKET=true); the browser relay still feeds /ingest/frames');
   }
+
+  // idle mode: with nobody on the board the feed is paused so the instance can sleep
+  idle.start();
+  console.log(
+    `[idle] ${config.idleFeed ? 'enabled' : 'disabled'}: pause after ${Math.round(config.idleAfterMs / 1000)}s ` +
+      `without a visitor (${Math.round(config.idleColdBootMs / 1000)}s when nobody has ever visited), ` +
+      `db probe ${config.idleStopDbProbe ? 'stopped' : 'kept'}`,
+  );
 }
 
 boot();
@@ -491,8 +658,11 @@ boot();
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, async () => {
     console.log(`[app] ${sig} received, shutting down`);
+    idle.stop();
     collector?.stop();
     pusher?.close();
+    stopProbe();
+    clearInterval(settleTimer);
     io.close();
     server.close();
     await closePool();
