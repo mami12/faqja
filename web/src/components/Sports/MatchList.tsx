@@ -133,39 +133,46 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     // merge what the socket pushed for this match (live minute, score, corners, cards)
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
 
-    // Find 1X2 market
-    const market1X2 = m.markets?.find((mk: any) => mk.marketType === '1X2' || mk.name === '1X2' || mk.name.includes('Winner'));
-    const outcome1 = market1X2?.outcomes?.find((o: any) => o.name === '1');
-    const outcomeX = market1X2?.outcomes?.find((o: any) => o.name === 'X');
-    const outcome2 = market1X2?.outcomes?.find((o: any) => o.name === '2');
+    const isPriced = (o: any) => typeof o.odds === 'number' && o.odds > 0;
+    const pricedOutcomes = (mk: any) => (mk.outcomes ?? []).filter(isPriced);
+    const pricedMarkets = (m.markets ?? []).filter((mk: any) => pricedOutcomes(mk).length > 0);
 
-    const pricedMarkets = (m.markets ?? []).filter((mk: any) =>
-      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
-    );
-    const hasFull1X2 = !!(market1X2 && outcome1 && outcomeX && outcome2);
-    // if there is no complete 1X2 with exact names, try harder: look for outcomes
-    // named Home/Draw/Away that should map to 1/X/2 after the server fix
-    let quickMarket = hasFull1X2 ? market1X2 : null;
-    let quickOutcomes: any[] = hasFull1X2
-      ? [outcome1, outcomeX, outcome2]
-      : [];
-    if (!hasFull1X2) {
-      // try the 1X2 market but with fuzzy outcome names
-      if (market1X2) {
-        const o1 = market1X2.outcomes?.find((o: any) => ['1', 'Home', 'home', 'W1'].includes(o.name));
-        const oX = market1X2.outcomes?.find((o: any) => ['X', 'Draw', 'draw', 'Tie'].includes(o.name));
-        const o2 = market1X2.outcomes?.find((o: any) => ['2', 'Away', 'away', 'W2'].includes(o.name));
-        if (o1 && oX && o2) {
-          quickMarket = market1X2;
-          quickOutcomes = [o1, oX, o2];
-        }
+    // Convenience detectors for the fallback chain: each market type is detected by its
+    // real name / type first, so one market can never be mistaken for another.
+    const is1X2 = (mk: any) =>
+      mk.marketType === '1X2' ||
+      /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mk.name ?? '');
+    const isBothScore = (mk: any) =>
+      /both teams? to score|both score|\bbtts\b|\bgg\/?ng\b|\bgg\b|\bng\b/i.test(mk.name ?? '');
+    const isOverUnder = (mk: any) =>
+      mk.marketType === 'OVER_UNDER' ||
+      /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
+
+    /** the main market of the card, chosen by priority: 1X2 -> both teams score -> over/under.
+     *  When none of them has prices the card shows "—" instead of borrowing odds from a
+     *  random market and pretending they are 1X2. */
+    const pickQuickMarket = (): { market: any; outcomes: any[]; mode: '1x2' | 'btts' | 'ou' } | null => {
+      const one = (mk: any) => mk.marketType === '1X2' || is1X2(mk);
+      const m1 = (m.markets ?? []).find(one);
+      if (m1) {
+        const out = m1.outcomes ?? [];
+        const o1 = out.find((o: any) => ['1', 'Home', 'home', 'W1'].includes(o.name));
+        const oX = out.find((o: any) => ['X', 'Draw', 'draw', 'Tie'].includes(o.name));
+        const o2 = out.find((o: any) => ['2', 'Away', 'away', 'W2'].includes(o.name));
+        if (o1 && oX && o2 && pricedOutcomes(m1).length >= 2) return { market: m1, outcomes: [o1, oX, o2], mode: '1x2' };
       }
-      if (!quickMarket) {
-        // last resort: first priced market
-        quickMarket = pricedMarkets[0] ?? null;
-        quickOutcomes = (quickMarket?.outcomes ?? []).filter((o: any) => typeof o.odds === 'number').slice(0, 3);
-      }
-    }
+      const m2 = (m.markets ?? []).find(isBothScore);
+      if (m2 && pricedOutcomes(m2).length >= 2) return { market: m2, outcomes: pricedOutcomes(m2).slice(0, 2), mode: 'btts' };
+      const m3 = (m.markets ?? []).find(isOverUnder);
+      if (m3 && pricedOutcomes(m3).length >= 2) return { market: m3, outcomes: pricedOutcomes(m3).slice(0, 3), mode: 'ou' };
+      return null;
+    };
+
+    const quick = pickQuickMarket();
+    const quickMarket = quick?.market ?? null;
+    const quickOutcomes: any[] = quick?.outcomes ?? [];
+    // a short label on the "+" row so the user always knows which market the card shows
+    const quickLabel = quick?.mode === '1x2' ? '1X2' : quick?.mode === 'btts' ? 'GG/NG' : quick?.mode === 'ou' ? 'O/U' : '';
     const isLocked = lockedMatches[String(m.id)] === true;
 
     const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
@@ -236,13 +243,20 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             </div>
           </div>
 
-          {/* 1X2 Odds Buttons Column */}
+          {/* Main Odds Buttons Column - shows 1X2 by priority, then GG/NG, then O/U, else "—" */}
           <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
             {quickMarket && quickOutcomes.length >= 2 ? (
-              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5 flex-1 sm:w-64`}>
-                {quickOutcomes.map((o: any) => (
-                  <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
-                ))}
+              <div className="flex-1 sm:w-64">
+                {quickLabel && quickLabel !== '1X2' && (
+                  <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-accent-green/80 mb-0.5">
+                    {quickLabel}
+                  </div>
+                )}
+                <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5`}>
+                  {quickOutcomes.map((o: any) => (
+                    <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="text-xs text-text-secondary italic text-center flex-1 sm:w-64">—</div>
