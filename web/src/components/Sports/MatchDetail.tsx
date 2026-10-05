@@ -52,7 +52,7 @@ export default function MatchDetail() {
       <div className="bg-secondary p-6 rounded-lg text-center shadow-lg border border-tertiary">
         {live.status === 'LIVE' && (
           <span className="bg-accent-red text-white text-xs px-2 py-1 rounded animate-pulse mb-2 inline-block">
-            LIVE {live.currentMinute || 0}'{live.period ? ` · ${live.period}` : ''}
+            LIVE {live.currentMinute || 0}:{String(live.currentSecond ?? 0).padStart(2, '0')}'{live.period ? ` · ${live.period}` : ''}
           </span>
         )}
         <div className="flex justify-between items-center px-12">

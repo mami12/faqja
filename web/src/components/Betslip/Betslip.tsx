@@ -253,6 +253,21 @@ export default function Betslip() {
               />
               {stakeError && <div className="text-accent-red text-xs mt-1">{stakeError}</div>}
             </div>
+<div className="flex flex-wrap gap-1.5 mt-2">
+              {[100, 200, 500, 1000, 2500, 5000].map(amount => (
+                <button
+                  key={amount}
+                  onClick={() => setStake(String(amount))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
+                    Number(stake) === amount
+                      ? 'bg-accent-green text-primary shadow-lg shadow-accent-green/30 scale-105'
+                      : 'bg-tertiary/60 text-text-secondary hover:bg-tertiary hover:text-white hover:scale-105 border border-tertiary/50'
+                  }`}
+                >
+                  {amount.toLocaleString()} Lëk
+                </button>
+              ))}
+            </div>
 
             <div className="flex justify-between items-center">
               <span className="text-text-secondary">{t('betslip.potential_payout')}:</span>

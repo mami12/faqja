@@ -19,6 +19,8 @@ import type { Match, MatchEvent, OddsDelta } from '../types';
 export interface LivePatch {
   status?: Match['status'];
   currentMinute?: number;
+  /** seconds within the current minute (0-59), from the feed clock */
+  currentSecond?: number;
   period?: string | null;
   homeScore?: number;
   awayScore?: number;
@@ -189,8 +191,10 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
       const clock = Number(info.match_time_ms);
       const minute = Number.isFinite(clock) ? Math.floor(clock / 60000) : undefined;
+      const second = Number.isFinite(clock) ? Math.floor((clock % 60000) / 1000) : undefined;
       const patch = compact({
         currentMinute: minute,
+        currentSecond: second,
         period: info.feed_status ?? null,
         homeScore: info.home_score === null || info.home_score === undefined ? undefined : Number(info.home_score),
         awayScore: info.away_score === null || info.away_score === undefined ? undefined : Number(info.away_score),
