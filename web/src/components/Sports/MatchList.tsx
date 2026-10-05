@@ -143,12 +143,29 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
     );
     const hasFull1X2 = !!(market1X2 && outcome1 && outcomeX && outcome2);
-    // if there is no complete 1X2, show the first market that does have prices rather than
-    // leaving the column stuck on "Loading..."
-    const quickMarket = hasFull1X2 ? market1X2 : pricedMarkets[0] ?? null;
-    const quickOutcomes = hasFull1X2
+    // if there is no complete 1X2 with exact names, try harder: look for outcomes
+    // named Home/Draw/Away that should map to 1/X/2 after the server fix
+    let quickMarket = hasFull1X2 ? market1X2 : null;
+    let quickOutcomes: any[] = hasFull1X2
       ? [outcome1, outcomeX, outcome2]
-      : (quickMarket?.outcomes ?? []).filter((o: any) => typeof o.odds === 'number').slice(0, 3);
+      : [];
+    if (!hasFull1X2) {
+      // try the 1X2 market but with fuzzy outcome names
+      if (market1X2) {
+        const o1 = market1X2.outcomes?.find((o: any) => ['1', 'Home', 'home', 'W1'].includes(o.name));
+        const oX = market1X2.outcomes?.find((o: any) => ['X', 'Draw', 'draw', 'Tie'].includes(o.name));
+        const o2 = market1X2.outcomes?.find((o: any) => ['2', 'Away', 'away', 'W2'].includes(o.name));
+        if (o1 && oX && o2) {
+          quickMarket = market1X2;
+          quickOutcomes = [o1, oX, o2];
+        }
+      }
+      if (!quickMarket) {
+        // last resort: first priced market
+        quickMarket = pricedMarkets[0] ?? null;
+        quickOutcomes = (quickMarket?.outcomes ?? []).filter((o: any) => typeof o.odds === 'number').slice(0, 3);
+      }
+    }
     const isLocked = lockedMatches[String(m.id)] === true;
 
     const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
@@ -178,7 +195,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             {m.status === 'LIVE' ? (
               <span className="inline-flex items-center gap-1 bg-accent-red text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
                 <Radio size={10} />
-                LIVE {m.currentMinute || 0}'
+                LIVE {m.currentMinute || 0}:{String(m.currentSecond ?? 0).padStart(2, '0')}'
               </span>
             ) : (
               <span className="text-text-secondary flex items-center gap-1">

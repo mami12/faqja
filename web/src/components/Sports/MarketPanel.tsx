@@ -84,7 +84,7 @@ export default function MarketPanel({ match }: { match: Match }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
         {match.status === 'LIVE' && (
           <span className="font-bold text-accent-red">
-            {match.currentMinute || 0}'{match.period ? ` · ${match.period}` : ''}
+            {match.currentMinute || 0}:{String(match.currentSecond ?? 0).padStart(2, '0')}'{match.period ? ` · ${match.period}` : ''}
           </span>
         )}
         {match.corners && (
