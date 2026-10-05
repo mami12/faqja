@@ -148,31 +148,48 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       mk.marketType === 'OVER_UNDER' ||
       /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
 
-    /** the main market of the card, chosen by priority: 1X2 -> both teams score -> over/under.
-     *  When none of them has prices the card shows "—" instead of borrowing odds from a
-     *  random market and pretending they are 1X2. */
-    const pickQuickMarket = (): { market: any; outcomes: any[]; mode: '1x2' | 'btts' | 'ou' } | null => {
-      const one = (mk: any) => mk.marketType === '1X2' || is1X2(mk);
-      const m1 = (m.markets ?? []).find(one);
+    /** Returns the best market to show on the card. The first market type that exists wins
+     *  (1X2 > GG/NG > O/U), even if it has only partial outcomes — missing positions show
+     *  a "-" instead of borrowing odds from another market. */
+    const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
+      const findOutcome = (mk: any, names: string[]) => (mk.outcomes ?? []).find((o: any) => names.includes(o.name));
+      // 1) 1X2 — always 3 slots: 1, X, 2
+      const m1 = (m.markets ?? []).find(is1X2);
       if (m1) {
-        const out = m1.outcomes ?? [];
-        const o1 = out.find((o: any) => ['1', 'Home', 'home', 'W1'].includes(o.name));
-        const oX = out.find((o: any) => ['X', 'Draw', 'draw', 'Tie'].includes(o.name));
-        const o2 = out.find((o: any) => ['2', 'Away', 'away', 'W2'].includes(o.name));
-        if (o1 && oX && o2 && pricedOutcomes(m1).length >= 2) return { market: m1, outcomes: [o1, oX, o2], mode: '1x2' };
+        const slots = [
+          findOutcome(m1, ['1', 'Home', 'home', 'W1']),
+          findOutcome(m1, ['X', 'Draw', 'draw', 'Tie']),
+          findOutcome(m1, ['2', 'Away', 'away', 'W2']),
+        ];
+        return { market: m1, slots, mode: '1x2' };
       }
+      // 2) BTTS — always 2 slots: Yes, No
       const m2 = (m.markets ?? []).find(isBothScore);
-      if (m2 && pricedOutcomes(m2).length >= 2) return { market: m2, outcomes: pricedOutcomes(m2).slice(0, 2), mode: 'btts' };
+      if (m2) {
+        const slots = [
+          findOutcome(m2, ['Yes', 'yes', 'GG', 'gg']),
+          findOutcome(m2, ['No', 'no', 'NG', 'ng']),
+        ];
+        return { market: m2, slots, mode: 'btts' };
+      }
+      // 3) Over/Under — always 2 slots: Over, Under (or the first 2 priced outcomes)
       const m3 = (m.markets ?? []).find(isOverUnder);
-      if (m3 && pricedOutcomes(m3).length >= 2) return { market: m3, outcomes: pricedOutcomes(m3).slice(0, 3), mode: 'ou' };
+      if (m3) {
+        const slots = [
+          findOutcome(m3, ['Over', 'over', 'O']),
+          findOutcome(m3, ['Under', 'under', 'U']),
+        ];
+        return { market: m3, slots, mode: 'ou' };
+      }
       return null;
     };
 
     const quick = pickQuickMarket();
     const quickMarket = quick?.market ?? null;
-    const quickOutcomes: any[] = quick?.outcomes ?? [];
+    const quickSlots: (any | null)[] = quick?.slots ?? [];
     // a short label on the "+" row so the user always knows which market the card shows
     const quickLabel = quick?.mode === '1x2' ? '1X2' : quick?.mode === 'btts' ? 'GG/NG' : quick?.mode === 'ou' ? 'O/U' : '';
+    const quickCols = quick?.mode === '1x2' ? 3 : 2; // 1X2=3cols, BTTS/O-U=2cols
     const isLocked = lockedMatches[String(m.id)] === true;
 
     const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
@@ -243,19 +260,30 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             </div>
           </div>
 
-          {/* Main Odds Buttons Column - shows 1X2 by priority, then GG/NG, then O/U, else "—" */}
+          {/* Main Odds Buttons Column — always uses the same number of slots (3 for 1X2,
+              2 for GG/NG or O/U); missing outcomes show a disabled "-" — never borrows
+              prices from another market. */}
           <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-            {quickMarket && quickOutcomes.length >= 2 ? (
+            {quickMarket && quickSlots.length >= 2 ? (
               <div className="flex-1 sm:w-64">
                 {quickLabel && quickLabel !== '1X2' && (
                   <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-accent-green/80 mb-0.5">
                     {quickLabel}
                   </div>
                 )}
-                <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5`}>
-                  {quickOutcomes.map((o: any) => (
-                    <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
-                  ))}
+                <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5`}>
+                  {quickSlots.map((slot: any, i: number) =>
+                    slot ? (
+                      <OddsButton key={slot.id ?? i} match={m} market={quickMarket} outcome={slot} />
+                    ) : (
+                      <div
+                        key={`empty-${i}`}
+                        className="p-2 sm:p-3 rounded border border-tertiary bg-primary/40 text-text-secondary text-center text-xs font-bold opacity-50 cursor-not-allowed"
+                      >
+                        —
+                      </div>
+                    ),
+                  )}
                 </div>
               </div>
             ) : (
