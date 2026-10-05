@@ -200,7 +200,7 @@ export default function Betslip() {
         <>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {selections.map(s => (
-              <div key={s.outcomeId} className="bg-primary p-3 rounded border border-tertiary relative group">
+              <div key={s.outcomeId} className="bg-primary p-2 sm:p-3 rounded border border-tertiary relative group">
                 <button onClick={() => removeSelection(s.outcomeId)} className="absolute top-2 right-2 text-text-secondary hover:text-accent-red">
                   <Trash2 size={16} />
                 </button>
@@ -256,7 +256,7 @@ export default function Betslip() {
 
             <div className="flex justify-between items-center">
               <span className="text-text-secondary">{t('betslip.potential_payout')}:</span>
-              <span className="font-bold text-accent-yellow text-lg">
+              <span className="font-bold text-accent-yellow text-base sm:text-lg">
                 {potentialPayout.toFixed(2)} Lëk
               </span>
             </div>

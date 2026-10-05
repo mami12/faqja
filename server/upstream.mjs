@@ -48,6 +48,8 @@ const BLOCKED_CATEGORY_SLUGS = new Set([
 const BLOCKED_CATEGORY_RE = /^(cyber|e-?replays?$|virtual|crypto|computer|vsport|express|special[-_]?\d)/i;
 const BLOCKED_TOURNAMENT_RE =
   /(\(2x4 min\)|esportsbattle|h2h gg|ehighlights|penalty shootout|highlights|long-term bets|outrights|singles only|simulat|virtual|cyber|short football|fantasy|bet ?by|instant|micro ?league)/i;
+const BLOCKED_MINOR_TOURNAMENT_RE =
+  /(U19|U20|U21|U23|Reserve League|Youth League|Cup U19|Cup U20|Club Friendly|Friendly|Women's International|Women's Cup|International Champions Cup|Premier League Asia Trophy|Intercontinental Cup|Confederation Cup|League Cup|Super Cup|Cup Qualifications|Group Stage Qualification|Relegation|Baltic Cup|Arabian Gulf|Gulf Cup|Arab Cup|WAFF|SAFF|EAFF|COSAFA|CECAFA|UNCAF|Caribbean Cup|Pacific Cup|Merdeka|Nehru|Kirin|King's Cup|Toulon|AFC Asian Cup|AFC Cup|CAF Champions|CAF Cup|CONCACAF League|OFC Champions|Nations League|World Cup Qualifying|European Qualifiers)/i;
 const SYNTHETIC_TEAM_RE = /\((v|replays?|franchise|highlights|sim|virtual)\)$/i;
 // "(w)" / "(women)" are real women's teams, so they are excluded from this check
 const NICKNAME_TEAM_RE = /\s\((?!w\)|women\))[a-z0-9_]{2,14}\)$/i;
@@ -109,6 +111,7 @@ export function isRealFootball(match, catalog) {
   if (BLOCKED_SPORT_TYPES.has(sportType)) return false;
   if (BLOCKED_CATEGORY_SLUGS.has(categorySlug) || BLOCKED_CATEGORY_RE.test(categorySlug)) return false;
   if (BLOCKED_TOURNAMENT_RE.test(tournament.name ?? '')) return false;
+  if (BLOCKED_MINOR_TOURNAMENT_RE.test(tournament.name ?? '')) return false;
 
   const competitors = match.competitors ?? [];
   const home = match.homeTeam?.name ?? competitors[0]?.name;

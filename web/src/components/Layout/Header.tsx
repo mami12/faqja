@@ -71,7 +71,7 @@ export default function Header({ onToggleNav }: Props) {
           <select
             value={lang}
             onChange={(e) => setLanguage(e.target.value as any)}
-            className="bg-primary border border-tertiary rounded px-1.5 sm:px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent-green cursor-pointer max-w-[5.5rem]"
+            className="bg-primary border border-tertiary rounded px-1 sm:px-2 py-1 text-[11px] sm:text-xs text-text-primary focus:outline-none focus:border-accent-green cursor-pointer max-w-[5rem] sm:max-w-[5.5rem]"
           >
             <option value="al">Shqip</option>
             <option value="en">English</option>

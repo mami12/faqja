@@ -97,7 +97,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const patch = livePatches[String(m.id)];
     if (patch?.marketCount && patch.marketCount > 0) return true;
     return (m.markets ?? []).some((mk: any) =>
-      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 1),
+      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
     );
   });
 
@@ -140,7 +140,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const outcome2 = market1X2?.outcomes?.find((o: any) => o.name === '2');
 
     const pricedMarkets = (m.markets ?? []).filter((mk: any) =>
-      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 1),
+      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
     );
     const hasFull1X2 = !!(market1X2 && outcome1 && outcomeX && outcome2);
     // if there is no complete 1X2, show the first market that does have prices rather than
@@ -190,29 +190,29 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
 
         {/* Card Body: Teams, Score & 1X2 Odds */}
-        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
           {/* Teams & Score (Clickable to detail) */}
           <div 
-            className="flex-1 cursor-pointer space-y-1.5"
+            className="flex-1 cursor-pointer space-y-1 min-w-0"
             onClick={() => navigate(`/match/${m.id}`)}
           >
             <div className="flex items-center justify-between">
-              <span className="font-bold text-white text-sm group-hover:text-accent-green transition">
+              <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate pr-1">
                 {m.homeTeam}
               </span>
               {m.status === 'LIVE' && (
-                <span className="text-accent-yellow font-black text-sm px-2 py-0.5 bg-primary rounded">
+                <span className="text-accent-yellow font-black text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 bg-primary rounded shrink-0">
                   {m.homeScore ?? 0}
                 </span>
               )}
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="font-bold text-white text-sm group-hover:text-accent-green transition">
+              <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate pr-1">
                 {m.awayTeam}
               </span>
               {m.status === 'LIVE' && (
-                <span className="text-accent-yellow font-black text-sm px-2 py-0.5 bg-primary rounded">
+                <span className="text-accent-yellow font-black text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 bg-primary rounded shrink-0">
                   {m.awayScore ?? 0}
                 </span>
               )}
@@ -220,27 +220,27 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           {/* 1X2 Odds Buttons Column */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
             {quickMarket && quickOutcomes.length >= 2 ? (
-              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 w-full md:w-64`}>
+              <div className={`grid ${quickOutcomes.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5 flex-1 sm:w-64`}>
                 {quickOutcomes.map((o: any) => (
                   <OddsButton key={o.id} match={m} market={quickMarket} outcome={o} />
                 ))}
               </div>
             ) : (
-              <div className="text-xs text-text-secondary italic w-64 text-center">—</div>
+              <div className="text-xs text-text-secondary italic text-center flex-1 sm:w-64">—</div>
             )}
 
             {/* Opens the extra markets (corners, cards, totals, ...) right here */}
             <button
               onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
-              className="p-2.5 bg-tertiary/60 hover:bg-tertiary text-text-secondary hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0"
+              className="p-2 sm:p-2.5 bg-tertiary/60 hover:bg-tertiary text-text-secondary hover:text-white rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center gap-1 shrink-0"
               title={t('sections.view_markets')}
               aria-expanded={expandedId === String(m.id)}
             >
               <span>+{totalMarketsCount}</span>
               <ChevronRight
-                size={14}
+                size={12}
                 className={`transition-transform ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
               />
             </button>

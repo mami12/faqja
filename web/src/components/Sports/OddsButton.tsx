@@ -54,12 +54,12 @@ export default function OddsButton({ match, market, outcome }: Props) {
     <button
       onClick={toggle}
       disabled={isSuspended}
-      className={`flex justify-between items-center p-3 rounded border transition-colors ${flashClass}
+      className={`flex justify-between items-center p-2 sm:p-3 rounded border transition-colors ${flashClass}
         ${isSuspended ? 'bg-tertiary opacity-50 cursor-not-allowed border-transparent' : 
           isSelected ? 'bg-primary border-accent-green text-white' : 'bg-primary border-tertiary hover:border-text-secondary text-text-primary'}`}
     >
-      <span className="text-sm">{outcome.name}</span>
-      <span className="font-bold">{isSuspended ? '🔒' : currentOdds.toFixed(2)}</span>
+      <span className="text-[11px] sm:text-sm truncate">{outcome.name}</span>
+      <span className="font-bold text-xs sm:text-sm ml-1 shrink-0">{isSuspended ? '🔒' : currentOdds.toFixed(2)}</span>
     </button>
   );
 }

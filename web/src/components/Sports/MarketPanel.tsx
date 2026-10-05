@@ -113,7 +113,7 @@ export default function MarketPanel({ match }: { match: Match }) {
           <div className="text-[11px] font-black uppercase tracking-wide text-accent-green/90">
             {t(COLUMN_TITLE[column])}
           </div>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
             {(grouped.get(column) ?? []).map(market => (
               <div key={market.id} className="bg-secondary rounded-lg border border-tertiary overflow-hidden">
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-text-secondary flex items-center justify-between gap-2">
@@ -123,7 +123,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   </span>
                   {market.status === 'SUSPENDED' && <span className="text-accent-red">🔒</span>}
                 </div>
-                <div className={`p-2 grid gap-1.5 ${(market.outcomes?.length ?? 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div className={`p-2 grid gap-1.5 ${(market.outcomes?.length ?? 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'} sm:gap-1.5`}>
                   {(market.outcomes ?? []).map(outcome => (
                     <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
                   ))}
