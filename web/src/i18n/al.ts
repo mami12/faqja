@@ -112,6 +112,8 @@ export default {
     won: 'Fituar',
     lost: 'Humbur',
     cancelled: 'Anuluar',
+    void: 'E pavlefshme',
+    reverted: 'Rivendosur',
     no_active_tickets: 'Nuk keni skedina aktive.',
     no_history_tickets: 'Nuk ka histori baste.',
     total_odds: 'Koeficienti Total',

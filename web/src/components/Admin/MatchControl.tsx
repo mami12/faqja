@@ -20,7 +20,7 @@ export default function MatchControl() {
     try {
       setLoading(true);
       const res = await apiClient.get('/admin/matches');
-      setMatches(res.data);
+      setMatches(res.data.items || []);
     } catch (e: any) {
       console.error(e);
     } finally {
