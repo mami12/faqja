@@ -150,6 +150,9 @@ const SUBGAME_FAMILY = {
 // deliberately not mapped - otherwise everything lands in the 1X2 column.
 const SUBGAME_PRIORITY = ['13', '174', '3', '6', '11'];
 
+/** groupId -> last known market name (snapshot frames carry names, incremental don't) */
+const GROUP_NAME_CACHE = new Map();
+
 function columnFromSubgames(subgames = '') {
   const ids = String(subgames).split(',').map((s) => s.trim()).filter(Boolean);
   for (const want of SUBGAME_PRIORITY) if (ids.includes(want)) return SUBGAME_FAMILY[want];
@@ -171,10 +174,10 @@ function columnFromName(name) {
 }
 
 /**
- * Names/columns come from, in order: market-map.json -> the feed's own
- * `name` + `subgameIds` -> the odds type id -> heuristics.
+ * Names/columns come from, in order: market-map.json -> group name cache ->
+ * the feed's own `name` -> the odds type id -> heuristics based on outcomes/period.
  */
-function describeMarket({ name, typeId, groupId, line, renderType, outcomes, subgames }) {
+function describeMarket({ name, typeId, groupId, line, renderType, outcomes, subgames, period = 0 }) {
   const fromGroup = MARKET_MAP.groups[String(groupId)];
   if (fromGroup) return { column: fromGroup.column, name: fromGroup.name };
 
@@ -186,23 +189,56 @@ function describeMarket({ name, typeId, groupId, line, renderType, outcomes, sub
     return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name };
   }
 
+  // Check the group name cache (snapshot frames carry names, incremental frames don't)
+  if (groupId) {
+    const cached = GROUP_NAME_CACHE.get(String(groupId));
+    if (cached) {
+      const byName = columnFromName(cached);
+      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: cached };
+    }
+  }
+
   const fromType = MARKET_MAP.types[String(typeId)];
   if (fromType) return { column: subColumn ?? fromType.column, name: fromType.name };
 
   if (subColumn) {
     return { column: subColumn, name: subColumn === 'corners' ? 'Corners' : subColumn === 'cards' ? 'Cards' : 'Market' };
   }
-  if (outcomes.some((o) => String(o).toLowerCase() === 'x')) {
-    return { column: 'result', name: 'Full Time Result' };
+
+  // Heuristics: derive name from outcomes + period
+  if (outcomes.length > 0) {
+    // 3-way with Draw (1, x, 2) -> Result market
+    if (outcomes.some((o) => String(o).toLowerCase() === 'x')) {
+      const periodLabel = period === 1 ? '1st Half' : period === 2 ? '2nd Half' : 'Full Time';
+      return { column: 'result', name: `${periodLabel} Result` };
+    }
+    // Double Chance (1x, 12, x2)
+    if (outcomes.some((o) => /^(1x|12|x2)$/i.test(String(o)))) {
+      return { column: 'result', name: 'Double Chance' };
+    }
+    // Both Teams To Score (yes, no)
+    if (outcomes.every((o) => /^(yes|no)$/i.test(String(o)))) {
+      return { column: 'total', name: 'Both Teams To Score' };
+    }
+    // Odd/Even
+    if (outcomes.every((o) => /^(odd|even)$/i.test(String(o)))) {
+      return { column: 'total', name: 'Odd/Even' };
+    }
+    // Under/Over pair
+    if (isTotalPair(outcomes)) {
+      const n = Number(line);
+      if (Number.isFinite(n) && n >= 6.5) return { column: 'corners', name: 'Total Corners' };
+      if (Number.isFinite(n) && n >= 4.5) return { column: 'cards', name: 'Total Cards' };
+      return { column: 'total', name: subColumn === 'corners' ? 'Total Corners' : subColumn === 'cards' ? 'Total Cards' : 'Total' };
+    }
+    // 2-way result
+    if (outcomes.length === 2) {
+      return { column: 'result', name: 'Match Result (2-way)' };
+    }
   }
-  if (isTotalPair(outcomes)) {
-    const n = Number(line);
-    if (Number.isFinite(n) && n >= 6.5) return { column: 'corners', name: 'Total Corners' };
-    return { column: 'total', name: 'Total' };
-  }
+
   if (renderType === 'fora-2') return { column: 'other', name: 'Handicap' };
-  if (outcomes.length === 2 && renderType === 'cols-2') return { column: 'result', name: 'Match Result (2-way)' };
-  return { column: 'other', name: String(renderType ?? 'market') };
+  return { column: subColumn ?? 'other', name: subColumn === 'corners' ? 'Corners' : subColumn === 'cards' ? 'Cards' : 'Market' };
 }
 
 /** one decoded push message: { kind: 'info' | 'odds' | 'unknown', ... } */
@@ -347,7 +383,13 @@ export function decodePushMessage(message) {
           line: missingLine ? '' : rawLine,
           renderType,
           outcomes,
+          period,
         });
+
+        // Cache the group name when the feed provides one (snapshot frames carry names)
+        if (groupName && group.id) {
+          GROUP_NAME_CACHE.set(String(group.id), groupName);
+        }
 
         rows.push({
           matchId,
