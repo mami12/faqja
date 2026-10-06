@@ -115,7 +115,7 @@ export default function MatchDetail() {
         {markets.map(market => (
           <div key={market.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 overflow-hidden shadow-sm">
             <div className="bg-primary/50 px-4 py-2.5 font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-tertiary/60">
-              <span className="truncate">
+              <span className="truncate" title={marketLabel(t, market.name) || t('markets.market')}>
                 {marketLabel(t, market.name) || t('markets.market')}
                 {market.line ? ` (${market.line})` : ''}
               </span>

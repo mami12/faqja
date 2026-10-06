@@ -46,12 +46,22 @@ export function buildMarkets(oddsRows) {
         outcomes: [],
       });
     }
-    markets.get(key).outcomes.push({
-      key: o.outcome_key,
-      name: o.outcome_name,
-      price: o.price === null ? null : Number(o.price),
-      suspended: o.suspended === true,
-    });
+    const outcomes = markets.get(key).outcomes;
+    // prevent duplicate outcome keys inside the same market group
+    const existing = outcomes.find((eo) => eo.key === o.outcome_key);
+    if (existing) {
+      // Same outcome in the same market from a different provider: update the price.
+      // This prevents duplicates like 2:1 appearing 5 times with different odds.
+      if (o.price !== null && o.price !== undefined) existing.price = Number(o.price);
+      if (o.suspended === true) existing.suspended = true;
+    } else {
+      outcomes.push({
+        key: o.outcome_key,
+        name: o.outcome_name,
+        price: o.price === null ? null : Number(o.price),
+        suspended: o.suspended === true,
+      });
+    }
   }
 
   const list = [...markets.values()];

@@ -122,7 +122,7 @@ export default function MarketPanel({ match }: { match: Match }) {
             {(grouped.get(column) ?? []).map(market => (
               <div key={market.id} className="bg-secondary/90 rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
                 <div className="px-3 py-2 text-[11px] font-bold text-text-secondary bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
-                  <span className="truncate text-slate-200">
+                  <span className="truncate text-slate-200" title={marketLabel(t, market.name) || t('markets.market')}>
                     {marketLabel(t, market.name) || t('markets.market')}
                     {market.line ? ` (${market.line})` : ''}
                   </span>

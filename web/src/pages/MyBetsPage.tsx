@@ -71,7 +71,7 @@ export default function MyBetsPage() {
           {ticket.lines?.map((line, idx) => (
             <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs bg-primary/40 p-2.5 rounded-xl border border-tertiary/40">
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-white truncate text-xs sm:text-sm">{line.matchName}</div>
+                <div className="font-bold text-white truncate text-xs sm:text-sm" title={line.matchName}>{line.matchName}</div>
                 <div className="text-text-secondary text-[11px] mt-0.5">{line.marketName} - <span className="text-accent-green font-semibold">{line.outcomeName}</span></div>
               </div>
               <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
