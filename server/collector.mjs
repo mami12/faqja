@@ -10,7 +10,7 @@ import { marketColumn } from './odds.mjs';
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 
 /** a market name that is just a render-type label because the feed omitted the real name */
-const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)?$/i.test(String(name).trim());
+const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
 
 /** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
 const hideSyntheticLines = config.oddsHideSyntheticLines;
@@ -27,7 +27,7 @@ export function buildMarkets(oddsRows) {
       // overrides still apply because they set the market *name*.
       const name = o.market_name ?? '';
       const byName = marketColumn(o.market_key, name);
-      const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)?$/i.test(String(name).trim());
+      const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
       const column = /handicap|fora|asian/i.test(String(name))
         ? 'other'
         : byName !== 'other'
