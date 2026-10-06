@@ -22,7 +22,8 @@ export default function OddsButton({ match, market, outcome }: Props) {
     match.isSuspended ||
     lockedOutcomes[outcome.id] === true ||
     lockedMarkets[market.id] === true ||
-    lockedMatches[String(match.id)] === true;
+    lockedMatches[String(match.id)] === true ||
+    currentOdds === null || currentOdds === undefined;
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
@@ -71,7 +72,7 @@ export default function OddsButton({ match, market, outcome }: Props) {
       <span className={`font-mono font-black text-xs sm:text-sm ml-1.5 tabular-nums shrink-0 ${
         isSuspended ? 'text-text-secondary' : isSelected ? 'text-white' : 'text-accent-yellow sm:text-text-primary group-hover:text-accent-yellow'
       }`}>
-        {isSuspended ? <Lock size={12} className="inline text-text-secondary" /> : currentOdds.toFixed(2)}
+        {isSuspended ? <Lock size={12} className="inline text-text-secondary" /> : currentOdds !== null && currentOdds !== undefined ? currentOdds.toFixed(2) : '-'}
       </span>
     </button>
   );

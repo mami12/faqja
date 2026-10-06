@@ -302,10 +302,15 @@ app.get('/api/odds/:matchId/history', async (req, res, next) => {
 
 /* ------------------------------------------------------------ odds ingestion */
 
-function broadcastOdds(changed) {
+async function broadcastOdds(changed) {
   if (!io || !changed.length) return;
   const byMatch = groupByMatch(changed);
   for (const [matchId, list] of byMatch) {
+    // If the feed reports no open odds for this match, skip broadcasting — the board
+    // already hides it via serializeMatch, and pushing placeholder prices (41.00 / 1.29)
+    // would only confuse the frontend.
+    const row = await getMatchById(Number(matchId));
+    if (row && row.has_open_odds === false) continue;
     io.emit('odds:update', {
       matchId,
       at: new Date().toISOString(),
@@ -379,7 +384,7 @@ async function flushFeedBuffer() {
   try {
     if (oddsBuffer.length) {
       const rows = oddsBuffer.splice(0, oddsBuffer.length);
-      broadcastOdds(await applyOddsRows(rows));
+      broadcastOdds(await applyOddsRows(rows)).catch((e) => console.warn('[feed] broadcast error:', e.message));
     }
     if (infoBuffer.size) {
       const infos = [...infoBuffer.values()];
@@ -407,7 +412,7 @@ app.post('/ingest/odds', requireToken, async (req, res, next) => {
       });
     }
     const changed = await applyOddsRows(rows);
-    broadcastOdds(changed);
+    broadcastOdds(changed).catch((e) => console.warn('[odds] broadcast error:', e.message));
     return res.json({
       accepted: rows.length,
       changed: changed.length,
@@ -467,7 +472,7 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
       oddsRows += rows.length;
       changed.push(...(await applyOddsRows(rows)));
     }
-    if (changed.length) broadcastOdds(changed);
+    if (changed.length) broadcastOdds(changed).catch((e) => console.warn('[frames] broadcast error:', e.message));
 
     let matchInfoApplied = 0;
     for (const info of infos) {

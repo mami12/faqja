@@ -64,11 +64,12 @@ export function toClientMatch(m) {
     const line = mk.line ?? '';
     const marketOverride = overrides.marketOverride(matchId, mk.key, line);
     const outcomes = (mk.outcomes ?? [])
-      .filter((o) => o.price !== null && o.price !== undefined)
       .map((o) => {
         // an admin override wins over the feed: a pinned price, or a forced suspension
         const forced = overrides.outcomeOverride(matchId, mk.key, line, o.key);
-        const price = forced?.price ?? Number(o.price);
+        const price = o.price !== null && o.price !== undefined
+          ? (forced?.price ?? Number(o.price))
+          : null;
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),

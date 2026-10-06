@@ -78,7 +78,51 @@ export function buildMarkets(oddsRows) {
     }
   }
 
-  const visible = hideSyntheticLines ? list.filter((m) => !m.hidden) : list;
+  let visible = hideSyntheticLines ? list.filter((m) => !m.hidden) : list;
+
+  // Deduplicate markets with the same name, column and overlapping outcomes.
+  // When two providers (different group IDs) send the same market, only keep one.
+  // The base market wins; otherwise the market with the most outcomes wins.
+  if (visible.length > 1) {
+    const deduped = [];
+    const merged = new Set();
+    for (let i = 0; i < visible.length; i++) {
+      if (merged.has(i)) continue;
+      const a = visible[i];
+      let best = i;
+      for (let j = i + 1; j < visible.length; j++) {
+        const b = visible[j];
+        if (a.name !== b.name || a.column !== b.column) continue;
+        // same conceptual market — keep the one with more (or priced) outcomes
+        merged.add(j);
+        const aPriced = a.outcomes.filter((o) => o.price !== null).length;
+        const bPriced = b.outcomes.filter((o) => o.price !== null).length;
+        if (bPriced > aPriced || (bPriced === aPriced && b.outcomes.length > a.outcomes.length)) {
+          best = j;
+        }
+      }
+      // merge outcomes from the discarded market into the best one
+      const bestM = visible[best];
+      for (let j = i; j < visible.length; j++) {
+        if (j === best || merged.has(j)) continue;
+        const b = visible[j];
+        if (a.name !== b.name || a.column !== b.column) continue;
+        for (const bo of b.outcomes) {
+          const existing = bestM.outcomes.find((o) => o.key === bo.key);
+          if (!existing) {
+            bestM.outcomes.push(bo);
+          } else if (existing.price === null && bo.price !== null) {
+            // take the priced one
+            existing.price = bo.price;
+            existing.suspended = bo.suspended;
+          }
+        }
+      }
+      if (!merged.has(i)) deduped.push(best === i ? a : visible[best]);
+    }
+    visible = deduped;
+  }
+
   visible.sort(
     (a, b) =>
       Number(b.isBase) - Number(a.isBase) ||
