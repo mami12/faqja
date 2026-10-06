@@ -9,6 +9,9 @@ import { marketColumn } from './odds.mjs';
 /** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 
+/** a market name that is just a render-type label because the feed omitted the real name */
+const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)?$/i.test(String(name).trim());
+
 /** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
 const hideSyntheticLines = config.oddsHideSyntheticLines;
 
@@ -90,6 +93,32 @@ export function buildMarkets(oddsRows) {
 
   let visible = hideSyntheticLines ? list.filter((m) => !m.hidden) : list;
 
+  // --- Hide markets whose name is only a render-type when a real counterpart exists ---
+  // When the feed sends a group without a name, describeMarket() falls back to
+  // "cols-2", "cols-3", "total-2", etc. If a real market in the same column carries
+  // the same outcomes, the synthetic-name market is only noise.
+  if (hideSyntheticLines && visible.length > 1) {
+    for (const m of visible) {
+      if (m.hidden || !isSyntheticName(m.name)) continue;
+      // look for a real market in the same column with matching outcomes
+      const real = visible.find(
+        (r) =>
+          !r.hidden &&
+          r !== m &&
+          r.column === m.column &&
+          !isSyntheticName(r.name) &&
+          r.outcomes.length === m.outcomes.length &&
+          // outcomes match by position — cross-provider keys may differ
+          r.outcomes.every((ro, idx) => {
+            const mo = m.outcomes[idx];
+            return mo && (ro.key === mo.key || (ro.name && mo.name && ro.name === mo.name));
+          }),
+      );
+      if (real) m.hidden = true;
+    }
+    visible = visible.filter((m) => !m.hidden);
+  }
+
   // Deduplicate markets with the same name, column and overlapping outcomes.
   // When two providers (different group IDs) send the same market, only keep one.
   // The base market wins; otherwise the market with the most outcomes wins.
@@ -102,7 +131,11 @@ export function buildMarkets(oddsRows) {
       let best = i;
       for (let j = i + 1; j < visible.length; j++) {
         const b = visible[j];
-        if (a.name !== b.name || a.column !== b.column) continue;
+        // Same name, or one name is synthetic and the other real → treat as same market
+        const sameMarket =
+          a.name === b.name ||
+          (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
+        if (!sameMarket) continue;
         // same conceptual market — keep the one with more (or priced) outcomes
         merged.add(j);
         const aPriced = a.outcomes.filter((o) => o.price !== null).length;
@@ -116,9 +149,17 @@ export function buildMarkets(oddsRows) {
       for (let j = i; j < visible.length; j++) {
         if (j === best || merged.has(j)) continue;
         const b = visible[j];
-        if (a.name !== b.name || a.column !== b.column) continue;
+        const sameMarket =
+          a.name === b.name ||
+          (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
+        if (!sameMarket) continue;
         for (const bo of b.outcomes) {
-          const existing = bestM.outcomes.find((o) => o.key === bo.key);
+          // First try matching by key (fast path for same-provider duplicates)
+          let existing = bestM.outcomes.find((o) => o.key === bo.key);
+          // When keys differ (cross-provider), match by name
+          if (!existing && bo.name) {
+            existing = bestM.outcomes.find((o) => o.name && o.name === bo.name);
+          }
           if (!existing) {
             bestM.outcomes.push(bo);
           } else if (existing.price === null && bo.price !== null) {
