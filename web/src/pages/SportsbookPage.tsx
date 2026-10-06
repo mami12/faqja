@@ -126,43 +126,57 @@ export default function SportsbookPage() {
           </div>
         </div>
 
-        {/* small screens: the two columns there is no room for, as buttons that never move */}
-        <div className="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary border-t border-tertiary flex items-stretch text-xs font-bold pb-[env(safe-area-inset-bottom)]">
+        {/* small screens: modern bottom navigation dock */}
+        <div className="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary/95 backdrop-blur-xl border-t border-tertiary/80 flex items-stretch text-xs font-bold shadow-2xl pb-[env(safe-area-inset-bottom)]">
           <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-text-secondary active:bg-tertiary"
+            className={`flex-1 flex items-center justify-center gap-2 py-3.5 transition-all ${
+              navOpen ? 'text-accent-green bg-primary/40' : 'text-text-secondary active:bg-tertiary/60'
+            }`}
             onClick={() => {
               setBetslipOpen(false);
               setNavOpen((v) => !v);
             }}
           >
-            <ListOrdered size={16} /> {t('nav.sports')}
+            <ListOrdered size={16} className={navOpen ? 'text-accent-green' : 'text-text-secondary'} />
+            <span className="tracking-wide">{t('nav.sports')}</span>
           </button>
           <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-white bg-accent-green/90 active:bg-accent-green"
+            className={`flex-1 flex items-center justify-center gap-2 py-3.5 transition-all ${
+              selections.length > 0
+                ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-glow-green font-black'
+                : 'text-text-secondary bg-primary/50 active:bg-tertiary/60'
+            }`}
             onClick={() => {
               setNavOpen(false);
               setBetslipOpen((v) => !v);
             }}
           >
-            <Ticket size={16} /> {t('betslip.betslip')} ({selections.length})
+            <Ticket size={16} />
+            <span>{t('betslip.betslip')}</span>
             {selections.length > 0 && (
-              <span className="text-[10px] font-black bg-primary/30 rounded px-1">{totalOdds.toFixed(2)}</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-primary text-accent-green border border-primary/20">
+                {selections.length}
+              </span>
+            )}
+            {selections.length > 0 && (
+              <span className="text-[10px] font-mono font-black bg-primary/20 rounded px-1.5 py-0.5">
+                @{totalOdds.toFixed(2)}
+              </span>
             )}
           </button>
         </div>
 
         {/* leagues drawer */}
         {navOpen && (
-          <div className="lg:hidden fixed inset-0 z-40 flex" onClick={() => setNavOpen(false)}>
-            <div className="relative h-full" onClick={(e) => e.stopPropagation()}>
+          <div className="lg:hidden fixed inset-0 z-40 flex bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setNavOpen(false)}>
+            <div className="relative h-full animate-in slide-in-from-left duration-250 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               {sidebar}
-              {/* the drawer has no chrome of its own, so the close button floats over it */}
               <button
-                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white"
+                className="absolute top-3 right-3 p-2 rounded-full bg-primary/80 hover:bg-primary border border-tertiary/80 text-white shadow-lg transition"
                 onClick={() => setNavOpen(false)}
                 aria-label={t('common.cancel')}
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
           </div>
@@ -170,8 +184,14 @@ export default function SportsbookPage() {
 
         {/* betslip sheet */}
         {betslipOpen && (
-          <div className="xl:hidden fixed inset-0 z-40 flex items-end" onClick={() => setBetslipOpen(false)}>
-            <BetslipSidebar className="w-full max-h-[80dvh] rounded-t-2xl border-t border-tertiary overflow-hidden" />
+          <div className="xl:hidden fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setBetslipOpen(false)}>
+            <div className="w-full max-h-[85dvh] bg-secondary rounded-t-3xl border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
+              {/* Sheet handle bar */}
+              <div className="w-full py-2 flex justify-center bg-secondary cursor-pointer" onClick={() => setBetslipOpen(false)}>
+                <div className="w-12 h-1.5 rounded-full bg-tertiary hover:bg-slate-500 transition"></div>
+              </div>
+              <BetslipSidebar className="w-full flex-1 overflow-hidden" />
+            </div>
           </div>
         )}
       </div>

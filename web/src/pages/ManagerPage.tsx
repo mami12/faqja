@@ -156,19 +156,27 @@ export default function ManagerPage() {
   return (
     <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
-      <div className="bg-secondary border-b border-tertiary px-3 sm:px-6">
-        <div className="flex gap-4 sm:gap-8 overflow-x-auto">
+      <div className="bg-secondary/95 border-b border-tertiary px-3 sm:px-6">
+        <div className="flex gap-2 sm:gap-4 overflow-x-auto py-2">
           <button 
             onClick={() => setTab('users')}
-            className={`py-4 font-semibold capitalize flex items-center gap-2 ${tab === 'users' ? 'text-accent-green border-b-2 border-accent-green' : 'text-text-secondary hover:text-white'}`}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              tab === 'users' 
+                ? 'bg-accent-green text-primary shadow-sm' 
+                : 'text-text-secondary hover:text-white hover:bg-tertiary/60'
+            }`}
           >
-            <UsersIcon size={16} /> {t('manager.my_users')}
+            <UsersIcon size={16} /> <span>{t('manager.my_users')}</span>
           </button>
           <button 
             onClick={() => setTab('tickets')}
-            className={`py-4 font-semibold capitalize flex items-center gap-2 ${tab === 'tickets' ? 'text-accent-green border-b-2 border-accent-green' : 'text-text-secondary hover:text-white'}`}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              tab === 'tickets' 
+                ? 'bg-accent-green text-primary shadow-sm' 
+                : 'text-text-secondary hover:text-white hover:bg-tertiary/60'
+            }`}
           >
-            <TicketIcon size={16} /> {t('manager.tickets')}
+            <TicketIcon size={16} /> <span>{t('manager.tickets')}</span>
           </button>
         </div>
       </div>

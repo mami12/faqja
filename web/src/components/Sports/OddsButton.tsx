@@ -2,6 +2,7 @@ import { useBetslip } from '../../context/BetslipContext';
 import { Match, Market, Outcome } from '../../types';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
+import { Lock } from 'lucide-react';
 
 interface Props { match: Match; market: Market; outcome: Outcome; }
 
@@ -54,12 +55,24 @@ export default function OddsButton({ match, market, outcome }: Props) {
     <button
       onClick={toggle}
       disabled={isSuspended}
-      className={`flex justify-between items-center p-2 sm:p-3 rounded border transition-colors ${flashClass}
-        ${isSuspended ? 'bg-tertiary opacity-50 cursor-not-allowed border-transparent' : 
-          isSelected ? 'bg-primary border-accent-green text-white' : 'bg-primary border-tertiary hover:border-text-secondary text-text-primary'}`}
+      className={`group relative flex justify-between items-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg border transition-all duration-150 select-none ${flashClass} ${
+        isSuspended
+          ? 'bg-primary/40 border-tertiary/40 opacity-50 cursor-not-allowed'
+          : isSelected
+          ? 'bg-accent-green/20 border-accent-green text-white shadow-glow-green scale-[1.01]'
+          : 'bg-primary/80 border-tertiary/80 hover:border-slate-500 hover:bg-tertiary/40 text-text-primary active:scale-[0.98]'
+      }`}
     >
-      <span className="text-[11px] sm:text-sm truncate">{outcome.name}</span>
-      <span className="font-bold text-xs sm:text-sm ml-1 shrink-0">{isSuspended ? '🔒' : currentOdds.toFixed(2)}</span>
+      <span className={`text-[11px] sm:text-xs font-semibold truncate transition-colors ${
+        isSelected ? 'text-accent-green font-bold' : 'text-text-secondary group-hover:text-slate-200'
+      }`}>
+        {outcome.name}
+      </span>
+      <span className={`font-mono font-black text-xs sm:text-sm ml-1.5 tabular-nums shrink-0 ${
+        isSuspended ? 'text-text-secondary' : isSelected ? 'text-white' : 'text-accent-yellow sm:text-text-primary group-hover:text-accent-yellow'
+      }`}>
+        {isSuspended ? <Lock size={12} className="inline text-text-secondary" /> : currentOdds.toFixed(2)}
+      </span>
     </button>
   );
 }

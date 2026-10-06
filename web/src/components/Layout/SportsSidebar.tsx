@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
-import { Globe, Radio, ChevronRight, ChevronDown, Flame } from 'lucide-react';
+import { Globe, Radio, ChevronRight, ChevronDown, Trophy } from 'lucide-react';
 
 interface Props {
   selectedTournamentId?: string;
@@ -55,46 +55,60 @@ export default function SportsSidebar({
     setExpandedCategories(p => ({ ...p, [id]: !p[id] }));
   };
 
+  const isAllActive = !selectedTournamentId && !selectedSportId && !isLiveOnly;
+
   return (
-    <div className="w-64 bg-secondary border-r border-tertiary h-full flex flex-col select-none">
+    <div className="w-64 sm:w-72 bg-secondary border-r border-tertiary h-full flex flex-col select-none text-text-primary">
       {/* Top Quick Filters */}
-      <div className="p-3 border-b border-tertiary space-y-1.5">
+      <div className="p-3 border-b border-tertiary space-y-2 bg-secondary/80">
         <button
           onClick={onSelectAll}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition ${
-            !selectedTournamentId && !selectedSportId && !isLiveOnly
-              ? 'bg-accent-green text-primary shadow-md'
-              : 'text-text-primary hover:bg-tertiary/60'
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            isAllActive
+              ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-glow-green'
+              : 'bg-primary/60 text-text-secondary hover:text-white hover:bg-tertiary/70 border border-tertiary/60'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Globe size={16} />
-            <span>{t('sports.all')}</span>
+          <div className="flex items-center gap-2.5">
+            <Globe size={16} className={isAllActive ? 'text-primary' : 'text-accent-green'} />
+            <span className="tracking-wide">{t('sports.all')}</span>
           </div>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-black ${
+            isAllActive ? 'bg-primary/20 text-primary' : 'bg-tertiary text-text-secondary'
+          }`}>
+            ALL
+          </span>
         </button>
 
         <button
           onClick={onSelectLive}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition ${
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
             isLiveOnly
-              ? 'bg-accent-red text-white shadow-md'
-              : 'text-rose-400 hover:bg-rose-500/10'
+              ? 'bg-gradient-to-r from-rose-600 to-accent-red text-white shadow-glow-red'
+              : 'bg-primary/60 text-text-secondary hover:text-rose-400 hover:bg-rose-500/10 border border-tertiary/60'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Radio size={16} className="animate-pulse" />
-            <span>{t('sports.live')}</span>
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-red"></span>
+            </span>
+            <Radio size={16} className={isLiveOnly ? 'text-white' : 'text-rose-400'} />
+            <span className="tracking-wide">{t('sports.live')}</span>
           </div>
-          <span className="bg-accent-red/20 text-accent-red px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+            isLiveOnly ? 'bg-white/20 text-white' : 'bg-rose-500/20 text-rose-400'
+          }`}>
             LIVE
           </span>
         </button>
       </div>
 
       {/* Sports Tree */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-1 text-xs">
-        <div className="px-2 py-1.5 text-[11px] font-bold text-text-secondary uppercase tracking-wider">
-          {t('nav.sports')}
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 text-xs">
+        <div className="px-2.5 py-1 text-[11px] font-black text-text-secondary/70 uppercase tracking-widest flex items-center gap-1.5">
+          <Trophy size={13} className="text-accent-yellow/80" />
+          <span>{t('nav.sports')}</span>
         </div>
 
         {sports.map(s => {
@@ -104,55 +118,63 @@ export default function SportsSidebar({
           const translatedName = t(`sports.${s.name}`) || s.name;
 
           return (
-            <div key={s.id} className="rounded-lg overflow-hidden">
+            <div key={s.id} className="rounded-xl overflow-hidden transition-colors">
               <div 
-                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition ${
-                  isSportSelected ? 'bg-primary border border-accent-green/50 text-white font-bold' : 'hover:bg-tertiary/50 text-text-primary'
+                className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+                  isSportSelected
+                    ? 'bg-primary border border-accent-green/50 text-white font-bold shadow-sm'
+                    : 'hover:bg-primary/60 text-text-primary'
                 }`}
                 onClick={() => onSelectSport(String(s.id))}
               >
                 <div className="flex items-center gap-2.5 truncate">
-                  <span className="text-base">{icon}</span>
-                  <span className="font-semibold truncate">{translatedName}</span>
+                  <span className="text-base select-none leading-none">{icon}</span>
+                  <span className="font-semibold truncate tracking-tight">{translatedName}</span>
                 </div>
                 <div 
-                  className="p-1 hover:bg-tertiary rounded text-text-secondary hover:text-white"
+                  className="p-1 hover:bg-tertiary rounded-lg text-text-secondary hover:text-white transition"
                   onClick={(e) => toggleSport(String(s.id), e)}
                 >
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                  />
                 </div>
               </div>
 
               {/* Categories & Tournaments */}
               {isExpanded && s.categories && (
-                <div className="ml-3 pl-2 border-l border-tertiary/80 my-1 space-y-0.5">
+                <div className="ml-3.5 pl-2.5 border-l border-tertiary/60 my-1 space-y-1">
                   {s.categories.map((c: any) => {
                     const isCatExpanded = !!expandedCategories[c.id];
                     return (
                       <div key={c.id}>
                         <div 
-                          className="flex items-center justify-between p-1.5 rounded hover:bg-tertiary/40 cursor-pointer text-text-secondary hover:text-white"
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-primary/50 cursor-pointer text-text-secondary hover:text-white transition"
                           onClick={(e) => {
                             toggleCat(String(c.id), e);
                             onSelectCategory(String(c.id));
                           }}
                         >
-                          <span className="truncate font-medium">{c.name}</span>
-                          {isCatExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          <span className="truncate font-medium text-[11px]">{c.name}</span>
+                          <ChevronDown
+                            size={12}
+                            className={`transition-transform duration-150 ${isCatExpanded ? 'rotate-0' : '-rotate-90'}`}
+                          />
                         </div>
 
                         {isCatExpanded && c.tournaments && (
-                          <div className="ml-2 pl-2 border-l border-tertiary/50 space-y-0.5 my-0.5">
+                          <div className="ml-2 pl-2 border-l border-tertiary/40 space-y-0.5 my-0.5">
                             {c.tournaments.map((tour: any) => {
                               const isTourSelected = selectedTournamentId === String(tour.id);
                               return (
                                 <button
                                   key={tour.id}
                                   onClick={() => onSelectTournament(String(tour.id))}
-                                  className={`w-full text-left px-2 py-1 rounded text-[11px] truncate transition ${
+                                  className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] truncate transition-all ${
                                     isTourSelected 
-                                      ? 'bg-accent-green/20 text-accent-green font-bold' 
-                                      : 'text-text-secondary hover:text-white hover:bg-tertiary/30'
+                                      ? 'bg-accent-green/20 text-accent-green font-bold border-l-2 border-accent-green pl-2.5' 
+                                      : 'text-text-secondary hover:text-white hover:bg-tertiary/40'
                                   }`}
                                 >
                                   {tour.name}

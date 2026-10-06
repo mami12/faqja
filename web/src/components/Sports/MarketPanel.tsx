@@ -80,50 +80,55 @@ export default function MarketPanel({ match }: { match: Match }) {
   }
 
   return (
-    <div className="border-t border-tertiary/60 bg-primary/30 px-4 py-3 space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
+    <div className="border-t border-tertiary/70 bg-primary/50 px-3.5 sm:px-5 py-4 space-y-4">
+      {/* Live match stats strip */}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary bg-secondary/80 p-2.5 rounded-xl border border-tertiary/60">
         {match.status === 'LIVE' && (
-          <span className="font-bold text-accent-red">
-            {match.currentMinute || 0}:{String(match.currentSecond ?? 0).padStart(2, '0')}'{match.period ? ` · ${match.period}` : ''}
+          <span className="font-bold text-accent-red flex items-center gap-1.5 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-red animate-ping"></span>
+            {match.currentMinute || 0}:{String((match as any).currentSecond ?? 0).padStart(2, '0')}'{match.period ? ` · ${match.period}` : ''}
           </span>
         )}
         {match.corners && (
-          <span>
+          <span className="bg-primary/60 px-2.5 py-0.5 rounded-md border border-tertiary/50">
             {t('markets.corners')}:{' '}
-            <span className="font-semibold text-text-primary">
+            <span className="font-bold text-white tabular-nums">
               {match.corners.home} - {match.corners.away}
             </span>
           </span>
         )}
         {match.cards && (
-          <span>
+          <span className="bg-primary/60 px-2.5 py-0.5 rounded-md border border-tertiary/50">
             {t('markets.cards')}:{' '}
-            <span className="font-semibold text-text-primary">
+            <span className="font-bold text-white tabular-nums">
               {match.cards.home} - {match.cards.away}
             </span>
           </span>
         )}
-        <span className="ml-auto">
+        <span className="ml-auto text-[11px] font-bold text-text-secondary">
           {totalMarkets} {t('markets.market')}
         </span>
       </div>
 
       {COLUMN_ORDER.filter(column => grouped.has(column)).map(column => (
-        <section key={column} className="space-y-2">
-          <div className="text-[11px] font-black uppercase tracking-wide text-accent-green/90">
-            {t(COLUMN_TITLE[column])}
+        <section key={column} className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-3.5 rounded-full bg-accent-green"></span>
+            <div className="text-xs font-black uppercase tracking-wider text-white">
+              {t(COLUMN_TITLE[column])}
+            </div>
           </div>
-          <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+          <div className="grid gap-2.5 grid-cols-1 md:grid-cols-2">
             {(grouped.get(column) ?? []).map(market => (
-              <div key={market.id} className="bg-secondary rounded-lg border border-tertiary overflow-hidden">
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-text-secondary flex items-center justify-between gap-2">
-                  <span className="truncate">
+              <div key={market.id} className="bg-secondary/90 rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
+                <div className="px-3 py-2 text-[11px] font-bold text-text-secondary bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
+                  <span className="truncate text-slate-200">
                     {marketLabel(t, market.name) || t('markets.market')}
-                    {market.line ? ` ${market.line}` : ''}
+                    {market.line ? ` (${market.line})` : ''}
                   </span>
-                  {market.status === 'SUSPENDED' && <span className="text-accent-red">🔒</span>}
+                  {market.status === 'SUSPENDED' && <span className="text-accent-red text-xs">🔒 Locked</span>}
                 </div>
-                <div className={`p-2 grid gap-1.5 ${(market.outcomes?.length ?? 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'} sm:gap-1.5`}>
+                <div className={`p-2.5 grid gap-1.5 ${(market.outcomes?.length ?? 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   {(market.outcomes ?? []).map(outcome => (
                     <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
                   ))}

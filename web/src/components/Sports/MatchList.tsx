@@ -197,88 +197,95 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return (
       <div 
         key={m.id} 
-        className="bg-secondary rounded-xl border border-tertiary shadow-md hover:border-text-secondary/40 transition overflow-hidden group"
+        className="bg-card-bg/90 hover:bg-card-hover/90 rounded-2xl border border-tertiary/80 hover:border-slate-600/70 shadow-md transition-all duration-200 overflow-hidden group"
       >
-        {/* Card Header: Tournament &amp; Time/Status */}
-        <div className="bg-primary/50 px-3 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
+        {/* Card Header: Tournament & Time/Status */}
+        <div className="bg-primary/60 px-3.5 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 text-text-secondary truncate">
-            <span className="font-semibold text-text-primary truncate">
-              {m.tournament?.category?.name ? `${m.tournament.category.name} - ` : ''}{m.tournament?.name || 'League'}
+            <span className="font-semibold text-text-primary text-[11px] sm:text-xs truncate tracking-wide">
+              {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || 'League'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {isLocked && (
               <span
-                className="inline-flex items-center gap-1 bg-accent-red text-white text-[10px] font-black px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 bg-accent-red/20 border border-accent-red/40 text-accent-red text-[10px] font-black px-2 py-0.5 rounded-full"
                 title={t('sections.odds_locked')}
               >
                 🔒 {t('sections.odds_locked')}
               </span>
             )}
             {m.status === 'LIVE' ? (
-              <span className="inline-flex items-center gap-1 bg-accent-red text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
-                <Radio size={10} />
+              <span className="inline-flex items-center gap-1.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-red"></span>
+                </span>
                 LIVE {m.currentMinute || 0}:{String(m.currentSecond ?? 0).padStart(2, '0')}'
               </span>
             ) : (
-              <span className="text-text-secondary flex items-center gap-1">
-                <Clock size={12} />
+              <span className="text-text-secondary flex items-center gap-1.5 text-[11px] font-medium bg-primary/40 px-2 py-0.5 rounded-md border border-tertiary/40">
+                <Clock size={12} className="text-text-muted" />
                 {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} &bull; {new Date(m.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}
               </span>
             )}
           </div>
         </div>
 
-        {/* Card Body: Teams, Score & 1X2 Odds */}
-        <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+        {/* Card Body: Teams, Score & Odds */}
+        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           {/* Teams & Score (Clickable to detail) */}
           <div 
-            className="flex-1 cursor-pointer space-y-1 min-w-0"
+            className="flex-1 cursor-pointer space-y-1.5 min-w-0"
             onClick={() => navigate(`/match/${m.id}`)}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate pr-1">
-                {m.homeTeam}
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
+                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
+                  {m.homeTeam}
+                </span>
+              </div>
               {m.status === 'LIVE' && (
-                <span className="text-accent-yellow font-black text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 bg-primary rounded shrink-0">
+                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
                   {m.homeScore ?? 0}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate pr-1">
-                {m.awayTeam}
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
+                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
+                  {m.awayTeam}
+                </span>
+              </div>
               {m.status === 'LIVE' && (
-                <span className="text-accent-yellow font-black text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 bg-primary rounded shrink-0">
+                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
                   {m.awayScore ?? 0}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Main Odds Buttons Column — always uses the same number of slots (3 for 1X2,
-              2 for GG/NG or O/U); missing outcomes show a disabled "-" — never borrows
-              prices from another market. */}
-          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+          {/* Main Odds Buttons Column */}
+          <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
             {quickMarket && quickSlots.length >= 2 ? (
-              <div className="flex-1 sm:w-64">
+              <div className="flex-1 md:w-72">
                 {quickLabel && quickLabel !== '1X2' && (
-                  <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-accent-green/80 mb-0.5">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-accent-green/90 mb-1 pl-1">
                     {quickLabel}
                   </div>
                 )}
-                <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1 sm:gap-1.5`}>
+                <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
                   {quickSlots.map((slot: any, i: number) =>
                     slot ? (
                       <OddsButton key={slot.id ?? i} match={m} market={quickMarket} outcome={slot} />
                     ) : (
                       <div
                         key={`empty-${i}`}
-                        className="p-2 sm:p-3 rounded border border-tertiary bg-primary/40 text-text-secondary text-center text-xs font-bold opacity-50 cursor-not-allowed"
+                        className="px-2.5 py-2 rounded-lg border border-tertiary/50 bg-primary/40 text-text-secondary text-center text-xs font-bold opacity-40 cursor-not-allowed"
                       >
                         —
                       </div>
@@ -287,20 +294,24 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-text-secondary italic text-center flex-1 sm:w-64">—</div>
+              <div className="text-xs text-text-secondary italic text-center flex-1 md:w-72">—</div>
             )}
 
             {/* Opens the extra markets (corners, cards, totals, ...) right here */}
             <button
               onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
-              className="p-2 sm:p-2.5 bg-tertiary/60 hover:bg-tertiary text-text-secondary hover:text-white rounded-lg text-[10px] sm:text-xs font-bold transition flex items-center gap-1 shrink-0"
+              className={`px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                expandedId === String(m.id)
+                  ? 'bg-accent-green text-primary shadow-glow-green'
+                  : 'bg-primary/80 hover:bg-tertiary text-text-secondary hover:text-white border border-tertiary/80'
+              }`}
               title={t('sections.view_markets')}
               aria-expanded={expandedId === String(m.id)}
             >
               <span>+{totalMarketsCount}</span>
               <ChevronRight
-                size={12}
-                className={`transition-transform ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
+                size={13}
+                className={`transition-transform duration-200 ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
               />
             </button>
           </div>
@@ -312,76 +323,82 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-6xl mx-auto">
-      {/* Search Bar */}
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search size={18} className="text-text-secondary" />
+    <div className="p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-5 max-w-6xl mx-auto">
+      {/* Control Panel: Search & Filters */}
+      <div className="bg-secondary/70 backdrop-blur-sm border border-tertiary/80 p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
+        {/* Search Bar */}
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search size={16} className="text-text-secondary" />
+          </div>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder={t('common.search_matches')}
+            className="w-full bg-primary/80 border border-tertiary/80 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-secondary hover:text-white transition"
+            >
+              ✕
+            </button>
+          )}
         </div>
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          placeholder={t('common.search_matches')}
-          className="w-full bg-secondary border border-tertiary rounded-xl pl-10 pr-4 py-3 text-white placeholder-text-secondary focus:outline-none focus:border-accent-green transition shadow-md"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-secondary hover:text-white"
-          >
-            ✕
-          </button>
-        )}
-      </div>
 
-      {/* Date Filter Tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 text-text-secondary mr-1">
-          <CalendarDays size={16} />
+        {/* Date Filter Tabs */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 text-text-secondary text-xs font-semibold mr-1.5">
+            <CalendarDays size={15} />
+            <span className="hidden sm:inline">Filter:</span>
+          </div>
+          <div className="bg-primary/70 p-1 rounded-xl border border-tertiary/60 flex items-center gap-1">
+            <button
+              onClick={() => setDateFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                dateFilter === 'all' 
+                  ? 'bg-accent-green text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
+              }`}
+            >
+              {t('dates.all')}
+            </button>
+            <button
+              onClick={() => setDateFilter('today')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                dateFilter === 'today' 
+                  ? 'bg-accent-green text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
+              }`}
+            >
+              {t('dates.today')}
+            </button>
+            <button
+              onClick={() => setDateFilter('tomorrow')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                dateFilter === 'tomorrow' 
+                  ? 'bg-accent-green text-primary shadow-sm' 
+                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
+              }`}
+            >
+              {t('dates.tomorrow')}
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setDateFilter('all')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-            dateFilter === 'all' 
-              ? 'bg-accent-green text-primary shadow-md' 
-              : 'bg-secondary text-text-secondary hover:bg-tertiary hover:text-white border border-tertiary'
-          }`}
-        >
-          {t('dates.all')}
-        </button>
-        <button
-          onClick={() => setDateFilter('today')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-            dateFilter === 'today' 
-              ? 'bg-accent-green text-primary shadow-md' 
-              : 'bg-secondary text-text-secondary hover:bg-tertiary hover:text-white border border-tertiary'
-          }`}
-        >
-          {t('dates.today')}
-        </button>
-        <button
-          onClick={() => setDateFilter('tomorrow')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-            dateFilter === 'tomorrow' 
-              ? 'bg-accent-green text-primary shadow-md' 
-              : 'bg-secondary text-text-secondary hover:bg-tertiary hover:text-white border border-tertiary'
-          }`}
-        >
-          {t('dates.tomorrow')}
-        </button>
       </div>
 
       {/* Search Results Count */}
       {searchTerm && (
-        <div className="text-xs text-text-secondary">
+        <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}
         </div>
       )}
 
       {/* No search results */}
       {searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="text-4xl">🔍</div>
           <div className="font-bold text-white text-base">{t('common.no_search_results')}</div>
           <p className="text-xs text-text-secondary">{t('common.try_different_search')}</p>
@@ -390,7 +407,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {/* No matches for selected date */}
       {!searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="text-4xl">📅</div>
           <div className="font-bold text-white text-base">{t('common.no_matches_date')}</div>
         </div>
@@ -398,7 +415,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {/* there are fixtures, but the feed has not priced any of them yet */}
       {filteredMatches.length > 0 && pricedMatches.length === 0 && (
-        <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto">
+        <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="font-bold text-white text-base">
             {t(refreshing ? 'common.feed_refreshing' : 'common.no_results')}
           </div>
@@ -409,13 +426,18 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       {/* Live Matches Section */}
       {liveMatches.length > 0 && !tournamentId && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-white font-bold text-sm tracking-wide">
-            <span className="w-2.5 h-2.5 rounded-full bg-accent-red animate-ping"></span>
-            <span className="text-accent-red font-black uppercase">{t('sections.live_now')}</span>
-            <span className="text-xs text-text-secondary font-medium">({liveMatches.length})</span>
+          <div className="flex items-center gap-2 px-1">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-red"></span>
+            </span>
+            <span className="text-accent-red font-black text-sm uppercase tracking-wider">{t('sections.live_now')}</span>
+            <span className="text-xs text-text-secondary font-bold bg-secondary px-2 py-0.5 rounded-full border border-tertiary">
+              {liveMatches.length}
+            </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {liveMatches.map(renderMatchCard)}
           </div>
         </div>
@@ -424,11 +446,17 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       {/* Prematch / Upcoming Section */}
       {prematchMatches.length > 0 && (
         <div className="space-y-3">
-          <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between">
-            <span>{isLiveOnly ? t('sections.live_now') : t('sections.upcoming_fixtures')} ({prematchMatches.length})</span>
+          <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-accent-green"></span>
+              <span>{isLiveOnly ? t('sections.live_now') : t('sections.upcoming_fixtures')}</span>
+              <span className="text-xs text-text-secondary font-bold bg-secondary px-2 py-0.5 rounded-full border border-tertiary">
+                {prematchMatches.length}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {prematchMatches.map(renderMatchCard)}
           </div>
         </div>

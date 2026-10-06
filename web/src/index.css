@@ -2,20 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Custom sleek dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+
+  body {
+    background-color: #090d16;
+    color: #f8fafc;
+    overflow-x: hidden;
+  }
+}
+
 @layer utilities {
   .animate-flash-green {
-    animation: flashGreen 1s ease-out;
+    animation: flashGreen 1s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .animate-flash-red {
-    animation: flashRed 1s ease-out;
+    animation: flashRed 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Subtle glassmorphism */
+  .glass-card {
+    background: rgba(19, 27, 46, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 }
 
 @keyframes flashGreen {
-  0% { background-color: #10b981; }
-  100% { background-color: transparent; }
+  0% { 
+    background-color: rgba(16, 185, 129, 0.35);
+    border-color: #10b981;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
 }
+
 @keyframes flashRed {
-  0% { background-color: #ef4444; }
-  100% { background-color: transparent; }
+  0% { 
+    background-color: rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
 }

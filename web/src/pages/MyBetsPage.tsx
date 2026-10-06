@@ -44,51 +44,60 @@ export default function MyBetsPage() {
 
   const renderTicket = (ticket: Ticket) => {
     const isPending = ticket.status === 'PENDING';
-    const statusClass = isPending ? 'text-accent-yellow' : ticket.status === 'WON' ? 'text-accent-green' : 'text-accent-red';
+    const isWon = ticket.status === 'WON';
+    const statusClass = isWon 
+      ? 'bg-emerald-500/15 border border-emerald-500/30 text-accent-green' 
+      : isPending 
+      ? 'bg-amber-500/15 border border-amber-500/30 text-accent-yellow' 
+      : 'bg-rose-500/15 border border-rose-500/30 text-accent-red';
     const totalStake = ticket.stake;
     const totalOdds = ticket.totalOdds;
 
     return (
-      <div key={ticket.id} className="bg-secondary rounded-xl border border-tertiary p-4 space-y-3">
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <div className="text-sm text-text-secondary">{t('tickets.ticket_id')}: <span className="font-mono text-white">{ticket.id.slice(0, 8).toUpperCase()}</span></div>
-            <div className="text-xs text-text-secondary">{t('tickets.placed_at')}: {formatDate(ticket.placedAt)}</div>
+      <div key={ticket.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 p-4 sm:p-5 space-y-3.5 shadow-sm hover:border-slate-600/70 transition">
+        <div className="flex justify-between items-start gap-2">
+          <div className="space-y-0.5">
+            <div className="text-xs text-text-secondary">
+              {t('tickets.ticket_id')}: <span className="font-mono text-white font-bold bg-primary/70 px-2 py-0.5 rounded border border-tertiary/60">{ticket.id.slice(0, 8).toUpperCase()}</span>
+            </div>
+            <div className="text-[11px] text-text-muted">{t('tickets.placed_at')}: {formatDate(ticket.placedAt)}</div>
           </div>
-          <span className={`font-semibold text-sm ${statusClass}`}>{t(`tickets.${ticket.status.toLowerCase()}`)}</span>
+          <span className={`font-black text-xs px-2.5 py-0.5 rounded-full uppercase tracking-wider ${statusClass}`}>
+            {t(`tickets.${ticket.status.toLowerCase()}`)}
+          </span>
         </div>
 
-        <div className="space-y-2 border-t border-tertiary pt-3">
+        <div className="space-y-2.5 border-t border-tertiary/50 pt-3">
           {ticket.lines?.map((line, idx) => (
-            <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
+            <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs bg-primary/40 p-2.5 rounded-xl border border-tertiary/40">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-white truncate">{line.matchName}</div>
-                <div className="text-text-secondary text-xs">{line.marketName} - {line.outcomeName}</div>
+                <div className="font-bold text-white truncate text-xs sm:text-sm">{line.matchName}</div>
+                <div className="text-text-secondary text-[11px] mt-0.5">{line.marketName} - <span className="text-accent-green font-semibold">{line.outcomeName}</span></div>
               </div>
-              <div className="text-right">
-                <div className="text-accent-green font-bold">@{line.oddsAtPlacement.toFixed(2)}</div>
-                <div className="text-xs text-text-secondary">{line.status}</div>
+              <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
+                <div className="text-white font-mono font-black text-xs sm:text-sm">@{line.oddsAtPlacement.toFixed(2)}</div>
+                <div className="text-[10px] text-text-muted font-bold uppercase">{line.status}</div>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="flex justify-between items-center border-t border-tertiary pt-3">
-          <div className="text-sm">
+        <div className="flex justify-between items-center border-t border-tertiary/50 pt-3 text-xs">
+          <div>
             <span className="text-text-secondary">{t('tickets.stake')}: </span>
-            <span className="font-bold text-white">{totalStake.toFixed(2)} Lëk</span>
+            <span className="font-mono font-bold text-white">{totalStake.toFixed(2)} Lëk</span>
           </div>
           <div className="text-right">
-            <div className="text-sm">
+            <div>
               <span className="text-text-secondary">{t('tickets.payout')}: </span>
-              <span className="font-bold text-accent-yellow">{ticket.potentialPayout.toFixed(2)} Lëk</span>
+              <span className="font-mono font-black text-accent-yellow text-sm">{ticket.potentialPayout.toFixed(2)} Lëk</span>
             </div>
-            <div className="text-xs text-text-secondary">{t('tickets.total_odds')}: {totalOdds.toFixed(2)}</div>
+            <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{totalOdds.toFixed(2)}</div>
           </div>
         </div>
 
         {ticket.status === 'PENDING' && ticket.settledAt && (
-          <div className="text-xs text-text-secondary">
+          <div className="text-[11px] text-text-muted">
             {t('tickets.settled_at')}: {formatDate(ticket.settledAt)}
           </div>
         )}
@@ -99,50 +108,60 @@ export default function MyBetsPage() {
   return (
     <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
-      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full flex-1">
+      <div className="p-3 sm:p-6 max-w-4xl mx-auto w-full flex-1">
         {!isAuthenticated ? (
-          <div className="bg-secondary p-8 text-center text-text-secondary rounded border border-tertiary">
+          <div className="bg-secondary/90 p-8 text-center text-text-secondary rounded-2xl border border-tertiary shadow-sm">
             <h2 className="text-xl font-bold text-white mb-2">{t('auth.login_title')}</h2>
             <p>{t('tickets.no_tickets_logged_out')}</p>
           </div>
         ) : (
           <>
-            <div className="flex gap-4 mb-6 border-b border-tertiary">
+            <div className="flex gap-2 mb-5 p-1 bg-secondary/80 rounded-2xl border border-tertiary/80 w-fit">
               <button 
                 onClick={() => { setActiveTab('active'); fetchTickets(); }}
-                className={`py-2 px-4 font-semibold rounded-t-lg border-b-2 transition ${activeTab === 'active' ? 'border-accent-green text-white' : 'border-transparent text-text-secondary hover:text-white'}`}
+                className={`py-2 px-4 rounded-xl font-bold text-xs transition-all ${
+                  activeTab === 'active' 
+                    ? 'bg-accent-green text-primary shadow-sm' 
+                    : 'text-text-secondary hover:text-white'
+                }`}
               >
                 {t('tickets.active_tickets')} {activeTickets.length > 0 && `(${activeTickets.length})`}
               </button>
               <button 
                 onClick={() => { setActiveTab('history'); fetchTickets(); }}
-                className={`py-2 px-4 font-semibold rounded-t-lg border-b-2 transition ${activeTab === 'history' ? 'border-accent-green text-white' : 'border-transparent text-text-secondary hover:text-white'}`}
+                className={`py-2 px-4 rounded-xl font-bold text-xs transition-all ${
+                  activeTab === 'history' 
+                    ? 'bg-accent-green text-primary shadow-sm' 
+                    : 'text-text-secondary hover:text-white'
+                }`}
               >
                 {t('tickets.ticket_history')} {historyTickets.length > 0 && `(${historyTickets.length})`}
               </button>
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-accent-green border-t-transparent rounded-full animate-spin"></div>
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-3 border-accent-green border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : activeTab === 'active' ? (
               activeTickets.length === 0 ? (
-                <div className="bg-secondary p-8 text-center text-text-secondary rounded border border-tertiary">
-                  {t('tickets.no_active_tickets')}
+                <div className="bg-secondary/60 p-10 text-center text-text-secondary rounded-2xl border border-tertiary space-y-2">
+                  <div className="text-3xl">🎫</div>
+                  <div className="font-bold text-white">{t('tickets.no_active_tickets')}</div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3.5">
                   {activeTickets.map(renderTicket)}
                 </div>
               )
             ) : (
               historyTickets.length === 0 ? (
-                <div className="bg-secondary p-8 text-center text-text-secondary rounded border border-tertiary">
-                  {t('tickets.no_history_tickets')}
+                <div className="bg-secondary/60 p-10 text-center text-text-secondary rounded-2xl border border-tertiary space-y-2">
+                  <div className="text-3xl">📜</div>
+                  <div className="font-bold text-white">{t('tickets.no_history_tickets')}</div>
                 </div>
               ) : (
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-3.5 max-h-[70vh] overflow-y-auto pr-1">
                   {historyTickets.map(renderTicket)}
                 </div>
               )
