@@ -89,6 +89,13 @@ export function buildMarkets(oddsRows) {
       if (!rows.some((m) => !isSyntheticLine(m.line))) continue;
       for (const m of rows) if (isSyntheticLine(m.line)) m.hidden = true;
     }
+    // Hide entire families that ONLY have synthetic line numbers
+    // (#1, #2, #3) — no real counterpart at all
+    for (const rows of families.values()) {
+      if (rows.every((m) => /^#\d+$/.test(String(m.line)))) {
+        for (const m of rows) m.hidden = true;
+      }
+    }
   }
 
   let visible = hideSyntheticLines ? list.filter((m) => !m.hidden) : list;
