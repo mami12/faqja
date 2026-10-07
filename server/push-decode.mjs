@@ -343,9 +343,12 @@ export function decodePushMessage(message) {
 
         const tuple = extractOddsTuple(item.id);
         const period = tuple?.period ?? 0;
-        // provider-10 ids carry no line in the bracket, but the price object does
-        // ("vars":{"v1":"1.5"}); fall back to it before inventing a synthetic line
-        const varsLine = item.vars
+        // Provider-10 ids carry no line in the bracket, but some price objects do (e.g. Total has {"v1":"1.5"}).
+        // If an item has multiple vars (e.g. Correct score {"v1":"2","v2":"1"}), that is a score/selection, NOT a market line!
+        const varValues = item.vars ? Object.values(item.vars) : [];
+        const isMultiVar = varValues.length > 1;
+        const isScoreOrPlayer = /score|rezultat|player|scorer|halftime\/fulltime/i.test(String(groupName ?? ''));
+        const varsLine = !isMultiVar && !isScoreOrPlayer && item.vars
           ? Object.values(item.vars).find((v) => /^-?\d+(\.\d+)?$/.test(String(v)))
           : null;
         const rawLine = tuple && tuple.line !== null && tuple.line !== undefined
@@ -360,13 +363,16 @@ export function decodePushMessage(message) {
           ? String(rawLine)
           : remembered?.line ?? '';
 
-        // Derive outcome key without '#1, #2'
+        // Derive outcome key: if item has a real name, that name can serve as a unique outcome key
         let outcomeKey =
           item.outcome !== null && item.outcome !== undefined
             ? String(item.outcome)
             : remembered?.outcomeKey ?? null;
 
-        if (!outcomeKey && outcomes.length) {
+        if (!outcomeKey && item.name && String(item.name).trim()) {
+          // If the item provides an explicit name (e.g. "1:0", "Lionel Messi", "Draw / IF Gnistan"), use it as outcome key!
+          outcomeKey = String(item.name).trim();
+        } else if (!outcomeKey && outcomes.length) {
           outcomeKey = outcomes[i % outcomes.length];
         }
 

@@ -32,20 +32,35 @@ const MARKET_TYPE_BY_COLUMN = {
   other: 'OTHER',
 };
 
-/** the app looks for outcomes literally named 1 / X / 2 in the 1X2 market */
-function outcomeName(key, fallback) {
-  const k = String(key ?? '').toLowerCase();
-  if (k === '1' || k === 'home' || k === 'h' || k === 'w1') return '1';
-  if (k === 'x' || k === 'draw' || k === 'tie') return 'X';
-  if (k === '2' || k === 'away' || k === 'a' || k === 'w2') return '2';
+/** Maps outcome code to display name, strictly preserving descriptive names (scores, players, descriptions) */
+function outcomeName(key, fallback, marketType) {
+  const fb = String(fallback ?? '').trim();
+  const k = String(key ?? '').trim().toLowerCase();
+
+  // If fallback is already a descriptive score or complex label (e.g. "1:0", "2:1", "Draw / Draw", player name), keep it!
+  if (fb && !/^(home|away|draw|tie|w1|w2|wx|1|x|2|over|under|o|u)$/i.test(fb)) {
+    return fb;
+  }
+
+  // Only map 1 / X / 2 if the market is actually a 1X2 / Result market
+  if (marketType === '1X2') {
+    if (k === '1' || k === 'home' || k === 'h' || k === 'w1') return '1';
+    if (k === 'x' || k === 'draw' || k === 'tie' || k === 'wx') return 'X';
+    if (k === '2' || k === 'away' || k === 'a' || k === 'w2') return '2';
+    const fbLower = fb.toLowerCase();
+    if (fbLower === 'home' || fbLower === 'w1') return '1';
+    if (fbLower === 'draw' || fbLower === 'tie') return 'X';
+    if (fbLower === 'away' || fbLower === 'w2') return '2';
+  }
+
   if (k === 'over' || k === 'o') return 'Over';
   if (k === 'under' || k === 'u') return 'Under';
-  // also handle "Home"/"Draw"/"Away" as fallback names
-  const fb = String(fallback ?? '').toLowerCase();
-  if (fb === 'home' || fb === 'w1') return '1';
-  if (fb === 'draw' || fb === 'tie') return 'X';
-  if (fb === 'away' || fb === 'w2') return '2';
-  return fallback ?? String(key ?? '');
+  if (k === 'yes') return 'Yes';
+  if (k === 'no') return 'No';
+  if (k === 'odd') return 'Odd';
+  if (k === 'even') return 'Even';
+
+  return fb || String(key ?? '');
 }
 
 const CLIENT_STATUS = (m) => (m.live ? 'LIVE' : m.status === 'ended' ? 'ENDED' : 'PREMATCH');
@@ -62,6 +77,7 @@ export function toClientMatch(m) {
 
   for (const mk of m.markets ?? []) {
     const line = mk.line ?? '';
+    const mType = MARKET_TYPE_BY_COLUMN[mk.column] ?? 'OTHER';
     const marketOverride = overrides.marketOverride(matchId, mk.key, line);
     const outcomes = (mk.outcomes ?? [])
       .map((o) => {
@@ -73,7 +89,7 @@ export function toClientMatch(m) {
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),
-          name: outcomeName(o.key, o.name),
+          name: outcomeName(o.key, o.name, mType),
           code: String(o.key),
           odds: price,
           status:
