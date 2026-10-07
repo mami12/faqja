@@ -8,12 +8,40 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 
+/** Clean up any synthetic names from the feed */
+const cleanMarketName = (name?: string) => {
+  if (!name) return '';
+  const s = String(name).trim();
+  if (/^cols-?\d+$/i.test(s)) return 'Match Market';
+  if (/^total-2$/i.test(s)) return 'Total Goals';
+  if (/^fora-2$/i.test(s)) return 'Handicap';
+  return s;
+};
+
 /** feed market names are already readable; translate the ones we know, keep the rest */
 const marketLabel = (t: (key: string) => string, name?: string) => {
   if (!name) return '';
-  const key = `markets.${name}`;
+  const clean = cleanMarketName(name);
+  const key = `markets.${clean}`;
   const translated = t(key);
-  return translated === key ? name : translated;
+  return translated === key ? clean : translated;
+};
+
+/** Don't display synthetic #1, #2 lines */
+const formatLine = (line?: string) => (line && !/^#\d+$/.test(String(line).trim()) ? ` (${line})` : '');
+
+/** Deduplicate outcomes within a single market */
+const dedupeOutcomes = (outcomes: any[] = []) => {
+  const seen = new Set<string>();
+  const res: any[] = [];
+  for (const o of outcomes) {
+    const k = String(o.name || o.key || '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
+    if (!seen.has(k)) {
+      seen.add(k);
+      res.push(o);
+    }
+  }
+  return res;
 };
 
 export default function MatchDetail() {
@@ -112,29 +140,33 @@ export default function MatchDetail() {
       {live.status === 'LIVE' && <PitchTracker matchId={live.id} />}
 
       <div className="space-y-3.5">
-        {markets.map(market => (
-          <div key={market.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 overflow-hidden shadow-sm">
-            <div className="bg-primary/50 px-4 py-2.5 font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-tertiary/60">
-              <span className="truncate" title={marketLabel(t, market.name) || t('markets.market')}>
-                {marketLabel(t, market.name) || t('markets.market')}
-                {market.line ? ` (${market.line})` : ''}
-              </span>
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${market.status === 'SUSPENDED' ? 'bg-rose-500/10 text-accent-red border border-rose-500/20' : 'bg-emerald-500/10 text-accent-green border border-emerald-500/20'}`}>
-                {market.status === 'SUSPENDED' ? '🔒 Locked' : 'Active'}
-              </span>
+        {markets.map(market => {
+          const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
+          const title = marketLabel(t, market.name) || t('markets.market');
+          return (
+            <div key={market.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 overflow-hidden shadow-sm">
+              <div className="bg-primary/50 px-4 py-2.5 font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-tertiary/60">
+                <span className="truncate" title={title}>
+                  {title}
+                  {formatLine(market.line)}
+                </span>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${market.status === 'SUSPENDED' ? 'bg-rose-500/10 text-accent-red border border-rose-500/20' : 'bg-emerald-500/10 text-accent-green border border-emerald-500/20'}`}>
+                  {market.status === 'SUSPENDED' ? '🔒 Locked' : 'Active'}
+                </span>
+              </div>
+              <div className="p-3 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+                {cleanOutcomes.map((outcome: any) => (
+                  <OddsButton 
+                    key={outcome.id} 
+                    match={match} 
+                    market={market} 
+                    outcome={outcome} 
+                  />
+                ))}
+              </div>
             </div>
-            <div className="p-3 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-              {(market as any).outcomes?.map((outcome: any) => (
-                <OddsButton 
-                  key={outcome.id} 
-                  match={match} 
-                  market={market} 
-                  outcome={outcome} 
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

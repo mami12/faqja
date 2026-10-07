@@ -50,12 +50,22 @@ export function buildMarkets(oddsRows) {
       });
     }
     const outcomes = markets.get(key).outcomes;
-    // prevent duplicate outcome keys inside the same market group
-    const existing = outcomes.find((eo) => eo.key === o.outcome_key);
+    const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
+    const oNormName = norm(o.outcome_name);
+    const oNormKey = norm(o.outcome_key);
+
+    // prevent duplicate outcome keys or outcome names inside the same market group
+    const existing = outcomes.find(
+      (eo) => (eo.key && oNormKey && norm(eo.key) === oNormKey) ||
+              (eo.name && oNormName && norm(eo.name) === oNormName)
+    );
+
     if (existing) {
       // Same outcome in the same market from a different provider: update the price.
-      // This prevents duplicates like 2:1 appearing 5 times with different odds.
-      if (o.price !== null && o.price !== undefined) existing.price = Number(o.price);
+      // This prevents duplicates like 1:2 or Home appearing multiple times.
+      if (o.price !== null && o.price !== undefined && (existing.price === null || o.price > 0)) {
+        existing.price = Number(o.price);
+      }
       if (o.suspended === true) existing.suspended = true;
     } else {
       outcomes.push({
@@ -69,6 +79,24 @@ export function buildMarkets(oddsRows) {
 
   const list = [...markets.values()];
   for (const m of list) {
+    // Secondary pass to guarantee zero duplicates inside the market outcomes
+    const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
+    const seen = new Set();
+    const cleanOutcomes = [];
+    for (const oc of m.outcomes) {
+      const ocKey = norm(oc.name || oc.key);
+      if (!seen.has(ocKey)) {
+        seen.add(ocKey);
+        cleanOutcomes.push(oc);
+      } else {
+        const found = cleanOutcomes.find((x) => norm(x.name || x.key) === ocKey);
+        if (found && oc.price !== null && (found.price === null || oc.price > 0)) {
+          found.price = Number(oc.price);
+        }
+        if (found && oc.suspended) found.suspended = true;
+      }
+    }
+    m.outcomes = cleanOutcomes;
     m.suspended = m.outcomes.length > 0 && m.outcomes.every((o) => o.suspended);
   }
 
@@ -94,6 +122,14 @@ export function buildMarkets(oddsRows) {
     for (const rows of families.values()) {
       if (rows.every((m) => /^#\d+$/.test(String(m.line)))) {
         for (const m of rows) m.hidden = true;
+      }
+    }
+    // Also hide markets whose OUTCOME names are all synthetic (#1, #2, #3)
+    // regardless of the line value — these are positional placeholders with no real name
+    for (const m of list) {
+      if (m.hidden) continue;
+      if (m.outcomes.length > 0 && m.outcomes.every((o) => /^#\d+$/.test(String(o.name || '')))) {
+        m.hidden = true;
       }
     }
   }
@@ -138,7 +174,11 @@ export function buildMarkets(oddsRows) {
       let best = i;
       for (let j = i + 1; j < visible.length; j++) {
         const b = visible[j];
-        // Same name, or one name is synthetic and the other real → treat as same market
+        // Different non-empty lines must NEVER be merged (e.g. Total 1.5 vs Total 2.5)
+        const aLine = String(a.line ?? '').trim();
+        const bLine = String(b.line ?? '').trim();
+        if (aLine && bLine && aLine !== bLine) continue;
+
         const sameMarket =
           a.name === b.name ||
           (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
@@ -156,6 +196,10 @@ export function buildMarkets(oddsRows) {
       for (let j = i; j < visible.length; j++) {
         if (j === best || merged.has(j)) continue;
         const b = visible[j];
+        const aLine = String(a.line ?? '').trim();
+        const bLine = String(b.line ?? '').trim();
+        if (aLine && bLine && aLine !== bLine) continue;
+
         const sameMarket =
           a.name === b.name ||
           (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
@@ -313,6 +357,11 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     status: clock.status,
     phase: clock.phase,
     minute: clock.minute,
+    currentMinute: clock.minute,
+    currentSecond:
+      hasFeedClock && clockAt
+        ? Math.floor(((Number(row.match_time_ms) + Math.max(0, now - clockAt)) % 60000) / 1000)
+        : 0,
     minuteSource,
     clockAt: row.clock_at ? new Date(row.clock_at).toISOString() : null,
     scoreAt: row.score_at ? new Date(row.score_at).toISOString() : null,

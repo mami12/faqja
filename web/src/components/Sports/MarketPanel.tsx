@@ -38,12 +38,40 @@ export function columnOf(market: Market): Column {
   return 'other';
 }
 
+/** Clean up any synthetic names from the feed */
+const cleanMarketName = (name?: string) => {
+  if (!name) return '';
+  const s = String(name).trim();
+  if (/^cols-?\d+$/i.test(s)) return 'Match Market';
+  if (/^total-2$/i.test(s)) return 'Total Goals';
+  if (/^fora-2$/i.test(s)) return 'Handicap';
+  return s;
+};
+
 /** feed market names are already readable; translate the ones we know and keep the rest */
 const marketLabel = (t: (key: string) => string, name?: string) => {
   if (!name) return '';
-  const key = `markets.${name}`;
+  const clean = cleanMarketName(name);
+  const key = `markets.${clean}`;
   const translated = t(key);
-  return translated === key ? name : translated;
+  return translated === key ? clean : translated;
+};
+
+/** Don't display synthetic #1, #2 lines */
+const formatLine = (line?: string) => (line && !/^#\d+$/.test(String(line).trim()) ? ` (${line})` : '');
+
+/** Deduplicate outcomes within a single market so identical selections like 1:2 never appear twice */
+const dedupeOutcomes = (outcomes: any[] = []) => {
+  const seen = new Set<string>();
+  const res: any[] = [];
+  for (const o of outcomes) {
+    const k = String(o.name || o.key || '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
+    if (!seen.has(k)) {
+      seen.add(k);
+      res.push(o);
+    }
+  }
+  return res;
 };
 
 export default function MarketPanel({ match }: { match: Match }) {
@@ -119,22 +147,26 @@ export default function MarketPanel({ match }: { match: Match }) {
             </div>
           </div>
           <div className="grid gap-2.5 grid-cols-1 md:grid-cols-2">
-            {(grouped.get(column) ?? []).map(market => (
-              <div key={market.id} className="bg-secondary/90 rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
-                <div className="px-3 py-2 text-[11px] font-bold text-text-secondary bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
-                  <span className="truncate text-slate-200" title={marketLabel(t, market.name) || t('markets.market')}>
-                    {marketLabel(t, market.name) || t('markets.market')}
-                    {market.line ? ` (${market.line})` : ''}
-                  </span>
-                  {market.status === 'SUSPENDED' && <span className="text-accent-red text-xs">🔒 Locked</span>}
+            {(grouped.get(column) ?? []).map(market => {
+              const cleanOutcomes = dedupeOutcomes(market.outcomes ?? []);
+              const title = marketLabel(t, market.name) || t('markets.market');
+              return (
+                <div key={market.id} className="bg-secondary/90 rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
+                  <div className="px-3 py-2 text-[11px] font-bold text-text-secondary bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
+                    <span className="truncate text-slate-200" title={title}>
+                      {title}
+                      {formatLine(market.line)}
+                    </span>
+                    {market.status === 'SUSPENDED' && <span className="text-accent-red text-xs">🔒 Locked</span>}
+                  </div>
+                  <div className={`p-2.5 grid gap-1.5 ${cleanOutcomes.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {cleanOutcomes.map(outcome => (
+                      <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
+                    ))}
+                  </div>
                 </div>
-                <div className={`p-2.5 grid gap-1.5 ${(market.outcomes?.length ?? 0) > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  {(market.outcomes ?? []).map(outcome => (
-                    <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}

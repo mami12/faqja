@@ -183,18 +183,18 @@ function describeMarket({ name, typeId, groupId, line, renderType, outcomes, sub
 
   const subColumn = columnFromSubgames(subgames);
 
-  if (name) {
+  if (name && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim())) {
     // the feed's own market name is the most reliable signal; subgames only fill gaps
     const byName = columnFromName(name);
-    return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name };
+    return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: name.trim() };
   }
 
   // Check the group name cache (snapshot frames carry names, incremental frames don't)
   if (groupId) {
     const cached = GROUP_NAME_CACHE.get(String(groupId));
-    if (cached) {
+    if (cached && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(cached).trim())) {
       const byName = columnFromName(cached);
-      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: cached };
+      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: cached.trim() };
     }
   }
 
@@ -323,7 +323,11 @@ export function decodePushMessage(message) {
       // The ids of some provider groups carry no line at all while the group repeats one
       // outcome pattern per line, so the synthetic `#n` line comes from the position. Derive
       // that position from a stable ordering (see stableChunks) so a partial or reordered
-      // frame cannot re-key a selection the board already shows.
+      // Cache the group name when the feed provides one
+      if (groupName && group.id && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(groupName)) {
+        GROUP_NAME_CACHE.set(String(group.id), groupName);
+      }
+
       const groupHasLine = oddsList.some((it) => {
         const t = extractOddsTuple(it.id);
         if (t && t.line !== null && t.line !== undefined) return true;
@@ -350,30 +354,64 @@ export function decodePushMessage(message) {
             ? Number(varsLine)
             : null;
         const missingLine = rawLine === null || rawLine === undefined || rawLine === '';
-        // A frame that does not carry whole outcome chunks cannot say which line its prices
-        // belong to (the ids have no line and they repeat the same outcomes). Reuse what a
-        // complete frame already told us for these exact odds ids instead of inventing an
-        // empty line, which used to land the price on a phantom market of its own.
         const remembered = missingLine && !repeats ? rememberedSlot(matchId, group.id, item.id) : null;
+        // Never output synthetic '#1' as a line label to the user
         const line = !missingLine
           ? String(rawLine)
-          : repeats
-            ? `#${Math.floor(i / outcomes.length) + 1}`
-            : remembered?.line ?? '';
+          : remembered?.line ?? '';
 
-        // the feed usually tells us the outcome itself ("outcome":"1x", "name":"Iraq Or Draw")
-        const positionalOutcome = outcomes.length ? outcomes[i % outcomes.length] : `#${i + 1}`;
-        const outcomeKey =
+        // Derive outcome key without '#1, #2'
+        let outcomeKey =
           item.outcome !== null && item.outcome !== undefined
             ? String(item.outcome)
-            : remembered?.outcomeKey ?? positionalOutcome;
+            : remembered?.outcomeKey ?? null;
 
-        // only a frame carrying whole outcome chunks can be trusted to say which line a price
-        // belongs to, so that is the only thing we remember for later partial frames
+        if (!outcomeKey && outcomes.length) {
+          outcomeKey = outcomes[i % outcomes.length];
+        }
+
+        if (!outcomeKey) {
+          if (tuple?.outcomeIdx !== null && tuple?.outcomeIdx !== undefined) {
+            const idxMap = { 0: '1', 1: 'x', 2: '2', 3: '2', 4: 'under', 5: 'over', 6: '1x', 7: '12', 8: 'x2', 9: 'yes', 10: 'no' };
+            outcomeKey = idxMap[tuple.outcomeIdx] ?? String(tuple.outcomeIdx);
+          } else if (renderType === 'cols-3') {
+            const threeWay = ['1', 'x', '2'];
+            outcomeKey = threeWay[i % 3];
+          } else if (renderType === 'cols-2') {
+            const twoWay = ['1', '2'];
+            outcomeKey = twoWay[i % 2];
+          } else if (renderType === 'total-2') {
+            const totalWay = ['under', 'over'];
+            outcomeKey = totalWay[i % 2];
+          } else {
+            outcomeKey = String(i + 1);
+          }
+        }
+
         if (missingLine && repeats && outcomes.length > 0 && oddsList.length % outcomes.length === 0) {
           rememberSlot(matchId, group.id, item.id, { line, outcomeKey });
         }
-        const outcomeName = item.name !== null && item.name !== undefined ? String(item.name) : outcomeLabel(outcomeKey);
+
+        let outcomeName =
+          item.name !== null && item.name !== undefined && String(item.name).trim()
+            ? String(item.name).trim()
+            : outcomeLabel(outcomeKey);
+
+        // Eliminate any synthetic "#1", "#2", "#3" labels from outcome names
+        if (/^#\d+$/.test(outcomeName)) {
+          if (renderType === 'cols-3') {
+            const threeWay = ['1', 'X', '2'];
+            outcomeName = threeWay[i % 3];
+          } else if (renderType === 'cols-2') {
+            const twoWay = ['1', '2'];
+            outcomeName = twoWay[i % 2];
+          } else if (renderType === 'total-2') {
+            const totalWay = ['Under', 'Over'];
+            outcomeName = totalWay[i % 2];
+          } else {
+            outcomeName = outcomeKey;
+          }
+        }
 
         const { column, name } = describeMarket({
           name: groupName,

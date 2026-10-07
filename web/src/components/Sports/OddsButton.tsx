@@ -67,7 +67,7 @@ export default function OddsButton({ match, market, outcome }: Props) {
       <span className={`text-[11px] sm:text-xs font-semibold truncate transition-colors ${
         isSelected ? 'text-accent-green font-bold' : 'text-text-secondary group-hover:text-slate-200'
       }`} title={outcome.name}>
-        {outcome.name}
+        {outcome.name?.replace(/^#(\d+)$/, '$1') || outcome.name}
       </span>
       <span className={`font-mono font-black text-xs sm:text-sm ml-1.5 tabular-nums shrink-0 ${
         isSuspended ? 'text-text-secondary' : isSelected ? 'text-white' : 'text-accent-yellow sm:text-text-primary group-hover:text-accent-yellow'

@@ -21,6 +21,7 @@ import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
+import { liveClock } from './minute.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 
 const app = express();
@@ -311,9 +312,20 @@ async function broadcastOdds(changed) {
     // would only confuse the frontend.
     const row = await getMatchById(Number(matchId));
     if (row && row.has_open_odds === false) continue;
+    // Include live minute so the frontend can advance the clock even when
+    // match-info-snapshot frames are rare
+    const now = Date.now();
+    const clock = row.service === 'LIVE' ? liveClock(row.start_at, now) : { minute: null, phase: 'pre' };
+    const feedMinute = Number.isFinite(row.match_time_ms)
+      ? Math.floor(Number(row.match_time_ms) / 60000) +
+        (row.clock_at ? Math.max(0, Math.floor((now - new Date(row.clock_at).getTime()) / 60000)) : 0)
+      : null;
+    const minute = feedMinute ?? clock.minute;
     io.emit('odds:update', {
       matchId,
       at: new Date().toISOString(),
+      minute: Number.isFinite(minute) ? minute : undefined,
+      phase: row.phase ?? clock.phase ?? null,
       markets: buildMarkets(toDbOddsShape(list)),
     });
   }

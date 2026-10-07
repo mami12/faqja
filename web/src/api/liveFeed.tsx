@@ -151,6 +151,21 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
       if (Object.keys(outcomeLocks).length) setLockedOutcomes(prev => ({ ...prev, ...outcomeLocks }));
       if (Object.keys(marketLocks).length) setLockedMarkets(prev => ({ ...prev, ...marketLocks }));
+
+      // also update the live clock when odds arrive (minute + phase travel with odds:update now)
+      const minute = (payload as any).minute;
+      const phase = (payload as any).phase;
+      if (Number.isFinite(minute) || phase) {
+        setLivePatches(prev => ({
+          ...prev,
+          [String(payload.matchId)]: compact({
+            ...prev[String(payload.matchId)],
+            currentMinute: Number.isFinite(minute) ? minute : undefined,
+            period: phase ?? undefined,
+            updatedAt: new Date().toISOString(),
+          }) as LivePatch,
+        }));
+      }
     });
 
     // the whole live board, once per collector cycle
@@ -165,6 +180,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         patches[String(m.id)] = compact({
           status: m.status === 'live' ? 'LIVE' : m.status === 'ended' ? 'ENDED' : undefined,
           currentMinute: Number.isFinite(minute) ? minute : undefined,
+          currentSecond: Number.isFinite(Number(m.currentSecond)) ? Number(m.currentSecond) : 0,
           marketCount: Number.isFinite(Number(m.marketCount)) ? Number(m.marketCount) : undefined,
           period: m.phase ?? null,
           homeScore: Number.isFinite(home) ? home : undefined,
@@ -189,7 +205,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       const id = info?.match_id ?? info?.matchId;
       if (id === undefined || id === null) return;
 
-      const clock = Number(info.match_time_ms);
+      const clock = Number(info.match_time_ms ?? info.matchTimeMs);
       const minute = Number.isFinite(clock) ? Math.floor(clock / 60000) : undefined;
       const second = Number.isFinite(clock) ? Math.floor((clock % 60000) / 1000) : undefined;
       const patch = compact({
@@ -221,9 +237,33 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       ]);
     });
 
+    // Live clock ticker: every second, advance active live matches so clock never freezes
+    const clockTicker = setInterval(() => {
+      setLivePatches(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [id, patch] of Object.entries(next)) {
+          if (patch.status === 'LIVE' && patch.currentMinute !== undefined) {
+            // Don't tick during halftime break
+            if (patch.period === 'HT' || patch.period === 'Break Time') continue;
+            let sec = (patch.currentSecond ?? 0) + 1;
+            let min = patch.currentMinute;
+            if (sec >= 60) {
+              sec = 0;
+              min += 1;
+            }
+            next[id] = { ...patch, currentMinute: min, currentSecond: sec };
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+
     socket.on('connect_error', (e: Error) => console.warn('[socket] connect_error:', e.message));
 
     return () => {
+      clearInterval(clockTicker);
       socket.close();
     };
   }, []);
