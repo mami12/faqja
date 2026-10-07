@@ -83,6 +83,24 @@ export function toClientMatch(m) {
         };
       });
 
+    // Sort outcomes in canonical sportsbook order: 1 always first, X second, 2 third
+    const OUTCOME_RANK = (code, name) => {
+      const c = String(code ?? '').trim().toLowerCase();
+      const n = String(name ?? '').trim().toLowerCase();
+      if (c === '1' || n === '1' || n === 'home' || n === 'w1') return 1;
+      if (c === 'x' || n === 'x' || n === 'draw' || n === 'tie') return 2;
+      if (c === '2' || n === '2' || n === 'away' || n === 'w2') return 3;
+      if (c === '1x' || n === '1x') return 4;
+      if (c === '12' || n === '12') return 5;
+      if (c === 'x2' || n === 'x2') return 6;
+      if (c === 'over' || n === 'over') return 7;
+      if (c === 'under' || n === 'under') return 8;
+      if (c === 'yes' || n === 'yes') return 9;
+      if (c === 'no' || n === 'no') return 10;
+      return 99;
+    };
+    outcomes.sort((a, b) => OUTCOME_RANK(a.code, a.name) - OUTCOME_RANK(b.code, b.name));
+
     if (!outcomes.length) continue;
     markets.push({
       id: marketIdOf(matchId, mk.key, line),

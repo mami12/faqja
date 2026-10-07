@@ -96,6 +96,22 @@ export function buildMarkets(oddsRows) {
         if (found && oc.suspended) found.suspended = true;
       }
     }
+    const OUTCOME_RANK = (k, n) => {
+      const c = String(k ?? '').trim().toLowerCase();
+      const nm = String(n ?? '').trim().toLowerCase();
+      if (c === '1' || nm === '1' || nm === 'home') return 1;
+      if (c === 'x' || nm === 'x' || nm === 'draw') return 2;
+      if (c === '2' || nm === '2' || nm === 'away') return 3;
+      if (c === '1x' || nm === '1x') return 4;
+      if (c === '12' || nm === '12') return 5;
+      if (c === 'x2' || nm === 'x2') return 6;
+      if (c === 'over' || nm === 'over') return 7;
+      if (c === 'under' || nm === 'under') return 8;
+      if (c === 'yes' || nm === 'yes') return 9;
+      if (c === 'no' || nm === 'no') return 10;
+      return 99;
+    };
+    cleanOutcomes.sort((a, b) => OUTCOME_RANK(a.key, a.name) - OUTCOME_RANK(b.key, b.name));
     m.outcomes = cleanOutcomes;
     m.suspended = m.outcomes.length > 0 && m.outcomes.every((o) => o.suspended);
   }
@@ -162,9 +178,8 @@ export function buildMarkets(oddsRows) {
     visible = visible.filter((m) => !m.hidden);
   }
 
-  // Deduplicate markets with the same name, column and overlapping outcomes.
-  // When two providers (different group IDs) send the same market, only keep one.
-  // The base market wins; otherwise the market with the most outcomes wins.
+  // Deduplicate markets with the exact same name, line and period from different providers.
+  // The market with the most priced outcomes is kept. We NEVER merge different markets.
   if (visible.length > 1) {
     const deduped = [];
     const merged = new Set();
@@ -174,16 +189,8 @@ export function buildMarkets(oddsRows) {
       let best = i;
       for (let j = i + 1; j < visible.length; j++) {
         const b = visible[j];
-        // Different non-empty lines must NEVER be merged (e.g. Total 1.5 vs Total 2.5)
-        const aLine = String(a.line ?? '').trim();
-        const bLine = String(b.line ?? '').trim();
-        if (aLine && bLine && aLine !== bLine) continue;
-
-        const sameMarket =
-          a.name === b.name ||
-          (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
-        if (!sameMarket) continue;
-        // same conceptual market — keep the one with more (or priced) outcomes
+        // Only markets with the exact same name, line, and period are duplicates
+        if (a.name !== b.name || a.line !== b.line || a.period !== b.period) continue;
         merged.add(j);
         const aPriced = a.outcomes.filter((o) => o.price !== null).length;
         const bPriced = b.outcomes.filter((o) => o.price !== null).length;
@@ -191,36 +198,7 @@ export function buildMarkets(oddsRows) {
           best = j;
         }
       }
-      // merge outcomes from the discarded market into the best one
-      const bestM = visible[best];
-      for (let j = i; j < visible.length; j++) {
-        if (j === best || merged.has(j)) continue;
-        const b = visible[j];
-        const aLine = String(a.line ?? '').trim();
-        const bLine = String(b.line ?? '').trim();
-        if (aLine && bLine && aLine !== bLine) continue;
-
-        const sameMarket =
-          a.name === b.name ||
-          (a.column === b.column && (isSyntheticName(a.name) || isSyntheticName(b.name)));
-        if (!sameMarket) continue;
-        for (const bo of b.outcomes) {
-          // First try matching by key (fast path for same-provider duplicates)
-          let existing = bestM.outcomes.find((o) => o.key === bo.key);
-          // When keys differ (cross-provider), match by name
-          if (!existing && bo.name) {
-            existing = bestM.outcomes.find((o) => o.name && o.name === bo.name);
-          }
-          if (!existing) {
-            bestM.outcomes.push(bo);
-          } else if (existing.price === null && bo.price !== null) {
-            // take the priced one
-            existing.price = bo.price;
-            existing.suspended = bo.suspended;
-          }
-        }
-      }
-      if (!merged.has(i)) deduped.push(best === i ? a : visible[best]);
+      deduped.push(visible[best]);
     }
     visible = deduped;
   }
