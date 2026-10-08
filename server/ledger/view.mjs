@@ -33,33 +33,44 @@ const MARKET_TYPE_BY_COLUMN = {
 };
 
 /** Maps outcome code to display name, strictly preserving descriptive names (scores, players, descriptions) */
-function outcomeName(key, fallback, marketType) {
+function outcomeName(key, fallback, marketType, marketName) {
   const fb = String(fallback ?? '').trim();
   const k = String(key ?? '').trim().toLowerCase();
+  const mName = String(marketName ?? '').toLowerCase();
 
-  // If fallback is already a descriptive score or complex label (e.g. "1:0", "2:1", "Draw / Draw", player name), keep it!
-  if (fb && !/^(home|away|draw|tie|w1|w2|wx|1|x|2|over|under|o|u)$/i.test(fb)) {
-    return fb;
+  // 1) Double Chance (1X, 12, X2)
+  if (/double chance/i.test(mName) || k === '1x' || k === '12' || k === 'x2') {
+    if (k === '1x' || /^1x$/i.test(fb)) return '1X';
+    if (k === '12' || /^12$/i.test(fb)) return '12';
+    if (k === 'x2' || /^x2$/i.test(fb)) return 'X2';
   }
 
-  // Only map 1 / X / 2 if the market is actually a 1X2 / Result market
-  if (marketType === '1X2') {
-    if (k === '1' || k === 'home' || k === 'h' || k === 'w1') return '1';
-    if (k === 'x' || k === 'draw' || k === 'tie' || k === 'wx') return 'X';
-    if (k === '2' || k === 'away' || k === 'a' || k === 'w2') return '2';
-    const fbLower = fb.toLowerCase();
-    if (fbLower === 'home' || fbLower === 'w1') return '1';
-    if (fbLower === 'draw' || fbLower === 'tie') return 'X';
-    if (fbLower === 'away' || fbLower === 'w2') return '2';
+  // 2) 1X2 / Result markets: strictly 1, X, 2 (regardless of whether feed passed team names)
+  const is1X2 = marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName);
+  if (is1X2 && !/score|rezultat/i.test(mName)) {
+    if (k === '1' || k === 'home' || k === 'h' || k === 'w1' || /^(home|w1)$/i.test(fb)) return '1';
+    if (k === 'x' || k === 'draw' || k === 'tie' || k === 'wx' || /^(draw|tie|wx)$/i.test(fb)) return 'X';
+    if (k === '2' || k === 'away' || k === 'a' || k === 'w2' || /^(away|w2)$/i.test(fb)) return '2';
   }
 
-  if (k === 'over' || k === 'o') return 'Over';
-  if (k === 'under' || k === 'u') return 'Under';
-  if (k === 'yes') return 'Yes';
-  if (k === 'no') return 'No';
-  if (k === 'odd') return 'Odd';
-  if (k === 'even') return 'Even';
+  // 3) Over / Under
+  if (k === 'over' || k === 'o' || /^over$/i.test(fb)) return 'Over';
+  if (k === 'under' || k === 'u' || /^under$/i.test(fb)) return 'Under';
 
+  // 4) Both Teams to Score / Yes / No
+  if (k === 'yes' || k === 'gg' || /^yes$/i.test(fb)) return 'Yes';
+  if (k === 'no' || k === 'ng' || /^no$/i.test(fb)) return 'No';
+
+  // 5) Odd / Even
+  if (k === 'odd' || /^odd$/i.test(fb)) return 'Odd';
+  if (k === 'even' || /^even$/i.test(fb)) return 'Even';
+
+  // Clean synthetic "#1", "#2" lines or keys
+  if (/^#\d+$/.test(fb)) {
+    return String(key ?? '');
+  }
+
+  // Preserve descriptive scores ("1:0", "2:1"), Halftime/Fulltime ("Draw / Draw"), Goalscorers, etc.
   return fb || String(key ?? '');
 }
 
@@ -77,7 +88,8 @@ export function toClientMatch(m) {
 
   for (const mk of m.markets ?? []) {
     const line = mk.line ?? '';
-    const mType = MARKET_TYPE_BY_COLUMN[mk.column] ?? 'OTHER';
+    const isResultMarket = mk.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mk.name ?? '');
+    const mType = isResultMarket ? '1X2' : (MARKET_TYPE_BY_COLUMN[mk.column] ?? 'OTHER');
     const marketOverride = overrides.marketOverride(matchId, mk.key, line);
     const outcomes = (mk.outcomes ?? [])
       .map((o) => {
@@ -89,7 +101,7 @@ export function toClientMatch(m) {
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),
-          name: outcomeName(o.key, o.name, mType),
+          name: outcomeName(o.key, o.name, mType, mk.name),
           code: String(o.key),
           odds: price,
           status:

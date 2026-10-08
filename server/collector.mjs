@@ -81,15 +81,23 @@ export function buildMarkets(oddsRows) {
   for (const m of list) {
     // Secondary pass to guarantee zero duplicates inside the market outcomes
     const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
+    const canon = (oc) => {
+      const k = String(oc.key ?? '').trim().toLowerCase();
+      const n = norm(oc.name);
+      if (k === '1' || n === '1' || n === 'home' || n === 'w1') return '1';
+      if (k === 'x' || n === 'x' || n === 'draw' || n === 'tie') return 'x';
+      if (k === '2' || n === '2' || n === 'away' || n === 'w2') return '2';
+      return k || n;
+    };
     const seen = new Set();
     const cleanOutcomes = [];
     for (const oc of m.outcomes) {
-      const ocKey = norm(oc.name || oc.key);
+      const ocKey = canon(oc);
       if (!seen.has(ocKey)) {
         seen.add(ocKey);
         cleanOutcomes.push(oc);
       } else {
-        const found = cleanOutcomes.find((x) => norm(x.name || x.key) === ocKey);
+        const found = cleanOutcomes.find((x) => canon(x) === ocKey);
         if (found && oc.price !== null && (found.price === null || oc.price > 0)) {
           found.price = Number(oc.price);
         }
@@ -99,9 +107,9 @@ export function buildMarkets(oddsRows) {
     const OUTCOME_RANK = (k, n) => {
       const c = String(k ?? '').trim().toLowerCase();
       const nm = String(n ?? '').trim().toLowerCase();
-      if (c === '1' || nm === '1' || nm === 'home') return 1;
-      if (c === 'x' || nm === 'x' || nm === 'draw') return 2;
-      if (c === '2' || nm === '2' || nm === 'away') return 3;
+      if (c === '1' || nm === '1' || nm === 'home' || nm === 'w1') return 1;
+      if (c === 'x' || nm === 'x' || nm === 'draw' || nm === 'tie') return 2;
+      if (c === '2' || nm === '2' || nm === 'away' || nm === 'w2') return 3;
       if (c === '1x' || nm === '1x') return 4;
       if (c === '12' || nm === '12') return 5;
       if (c === 'x2' || nm === 'x2') return 6;
