@@ -81,6 +81,56 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   return res;
 };
 
+/** A total market (goals / corners / cards) whose line the current count has already
+ *  passed is dead: that outcome can no longer change, so its button must not invite a
+ *  bet that gets rejected. Over 0.5 at 1-0, Over 9.5 corners at 10-2, Under 3.5 cards
+ *  at 4-0, etc. */
+const isTotalMarket = (market: any) => {
+  const type = String(market?.marketType ?? '').toUpperCase();
+  if (type === 'OVER_UNDER' || type === 'TOTALS' || type === 'CORNERS' || type === 'CARDS') return true;
+  const n = String(market?.name ?? '').toLowerCase();
+  return /total|over\/?under|under\/?over|goal line/i.test(n) &&
+    !/handicap|half time|ht\/?ft|correct score|1x2|winner|first|next|last|both teams/i.test(n);
+};
+
+const parseLineNum = (line?: string) => {
+  if (!line) return null;
+  const m = String(line).match(/-?\d+(?:\.\d+)?/);
+  return m ? Number(m[1]) : null;
+};
+
+const isOverOutcome = (o: any) =>
+  /^(over|o)$/i.test(String(o.name ?? '').trim()) || String(o.key ?? '').toLowerCase() === 'over';
+const isUnderOutcome = (o: any) =>
+  /^(under|u)$/i.test(String(o.name ?? '').trim()) || String(o.key ?? '').toLowerCase() === 'under';
+
+/** Which live counter a total market tracks: goals, corners, or cards */
+const counterFor = (market: any, match: any) => {
+  const n = String(market?.name ?? '').toLowerCase();
+  if (/corner/.test(n)) return (match.corners?.home ?? 0) + (match.corners?.away ?? 0);
+  if (/card|booking|yellow|red/.test(n)) return (match.cards?.home ?? 0) + (match.cards?.away ?? 0);
+  return (match.homeScore ?? 0) + (match.awayScore ?? 0);
+};
+
+/**
+ * Drop outcomes the current count has already decided. Over dies once count > line,
+ * under dies once count < line; at exactly an integer line it is a push and both stay.
+ * Handicaps, correct scores, BTTS and 1X2 are not decided this way - they are left
+ * alone (the book suspends them itself when the moment is right).
+ */
+export function filterDecidedOutcomes(outcomes: any[] = [], market: any = {}, match: any = {}) {
+  if (!outcomes.length) return outcomes;
+  if (!isTotalMarket(market)) return outcomes;
+  const lineNum = parseLineNum(market?.line);
+  if (lineNum == null) return outcomes;
+  const total = counterFor(market, match);
+  return outcomes.filter((o) => {
+    if (isOverOutcome(o)) return total <= lineNum;
+    if (isUnderOutcome(o)) return total >= lineNum;
+    return true;
+  });
+}
+
 export default function MarketPanel({ match }: { match: Match }) {
   const { t } = useLanguage();
 
@@ -156,6 +206,10 @@ export default function MarketPanel({ match }: { match: Match }) {
           <div className="grid gap-2.5 grid-cols-1 md:grid-cols-2">
             {(grouped.get(column) ?? []).map(market => {
               const cleanOutcomes = dedupeOutcomes(market.outcomes ?? [], market.name);
+              const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
+              // every outcome already decided by the live count -> the card is dead, hide it
+              // entirely so the client never clicks a bet that will be rejected
+              if (!liveOutcomes.length) return null;
               const title = marketLabel(t, market.name) || t('markets.market');
               return (
                 <div key={market.id} className="bg-secondary/90 rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
@@ -166,8 +220,8 @@ export default function MarketPanel({ match }: { match: Match }) {
                     </span>
                     {market.status === 'SUSPENDED' && <span className="text-accent-red text-xs">🔒 Locked</span>}
                   </div>
-                  <div className={`p-2.5 grid gap-1.5 ${cleanOutcomes.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    {cleanOutcomes.map(outcome => (
+                  <div className={`p-2.5 grid gap-1.5 ${liveOutcomes.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {liveOutcomes.map(outcome => (
                       <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
                     ))}
                   </div>
