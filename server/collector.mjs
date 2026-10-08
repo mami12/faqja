@@ -119,8 +119,54 @@ export function buildMarkets(oddsRows) {
       if (c === 'no' || nm === 'no') return 10;
       return 99;
     };
-    cleanOutcomes.sort((a, b) => OUTCOME_RANK(a.key, a.name) - OUTCOME_RANK(b.key, b.name));
-    m.outcomes = cleanOutcomes;
+
+    const mName = String(m.name ?? '').toLowerCase();
+    const is1X2 = (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
+                  !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
+    const isBTTS = /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result/i.test(mName);
+    const isOU = m.column === 'total' && /total|over\/?under/i.test(mName) && !/corner|card|half|team/i.test(mName);
+    const isOddEven = /odd\/even/i.test(mName);
+    const isDoubleChance = /double chance/i.test(mName);
+
+    let filteredOutcomes = cleanOutcomes;
+    if (is1X2) {
+      // 1X2 MUST strictly only contain 1, X, 2 (or Home, Draw, Away) — drop phantom 3, 4, 5 etc.
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase();
+        const n = String(o.name ?? '').trim().toLowerCase();
+        return ['1', 'x', '2', 'home', 'draw', 'away', 'w1', 'w2', 'tie'].includes(k) ||
+               ['1', 'x', '2', 'home', 'draw', 'away', 'w1', 'w2', 'tie'].includes(n);
+      });
+    } else if (isBTTS) {
+      // Both Teams to Score MUST strictly only contain Yes, No (drop phantom Home/Away/numbers)
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase();
+        const n = String(o.name ?? '').trim().toLowerCase();
+        return /^(yes|no|gg|ng)$/i.test(k) || /^(yes|no|gg|ng)$/i.test(n);
+      });
+    } else if (isOU) {
+      // Over/Under MUST strictly only contain Over, Under
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase();
+        const n = String(o.name ?? '').trim().toLowerCase();
+        return /^(over|under|o|u)$/i.test(k) || /^(over|under|o|u)$/i.test(n);
+      });
+    } else if (isOddEven) {
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase();
+        const n = String(o.name ?? '').trim().toLowerCase();
+        return /^(odd|even)$/i.test(k) || /^(odd|even)$/i.test(n);
+      });
+    } else if (isDoubleChance) {
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase();
+        const n = String(o.name ?? '').trim().toLowerCase();
+        return /^(1x|12|x2)$/i.test(k) || /^(1x|12|x2)$/i.test(n);
+      });
+    }
+
+    filteredOutcomes.sort((a, b) => OUTCOME_RANK(a.key, a.name) - OUTCOME_RANK(b.key, b.name));
+    m.outcomes = filteredOutcomes;
     m.suspended = m.outcomes.length > 0 && m.outcomes.every((o) => o.suspended);
   }
 

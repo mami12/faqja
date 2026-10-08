@@ -30,12 +30,19 @@ const marketLabel = (t: (key: string) => string, name?: string) => {
 /** Don't display synthetic #1, #2 lines */
 const formatLine = (line?: string) => (line && !/^#\d+$/.test(String(line).trim()) ? ` (${line})` : '');
 
-/** Deduplicate outcomes within a single market */
-const dedupeOutcomes = (outcomes: any[] = []) => {
+/** Deduplicate outcomes within a single market and filter phantom outcomes */
+const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
+  const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
+  const mName = norm(marketName);
+  const is1X2 = /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
+  const isBTTS = /both teams? to score|both score/i.test(mName) && !/half|halves|result/i.test(mName);
+
   const seen = new Set<string>();
   const res: any[] = [];
   for (const o of outcomes) {
-    const k = String(o.name || o.key || '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
+    const k = norm(o.name || o.key || '');
+    if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
+    if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
     if (!seen.has(k)) {
       seen.add(k);
       res.push(o);
@@ -141,7 +148,7 @@ export default function MatchDetail() {
 
       <div className="space-y-3.5">
         {markets.map(market => {
-          const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
+          const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? [], market.name);
           const title = marketLabel(t, market.name) || t('markets.market');
           return (
             <div key={market.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 overflow-hidden shadow-sm">

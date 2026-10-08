@@ -122,16 +122,21 @@ function stableChunks(oddsList, size) {
  * line and showed up as a market of its own, with a price that looked absurd next to the real
  * lines. Bounded, and dropped wholesale if it ever grows too large.
  */
-const SLOT_CACHE = new Map(); // `${matchId}|${groupId}|${oddsId}` -> { line, outcomeKey }
-const SLOT_CACHE_MAX = 20000;
+const ITEM_META_CACHE = new Map(); // `${matchId}|${oddsId}` -> { line, outcomeKey, outcomeName, marketName, column, period, renderType }
+const GROUP_META_CACHE = new Map(); // `${matchId}|${groupId}` -> { name, renderType, outcomes, subgames, period }
+const ITEM_META_CACHE_MAX = 50000;
+const GROUP_META_CACHE_MAX = 5000;
 
 function rememberedSlot(matchId, groupId, oddsId) {
-  return SLOT_CACHE.get(`${matchId}|${groupId}|${oddsId}`) ?? null;
+  const item = ITEM_META_CACHE.get(`${matchId}|${oddsId}`);
+  if (item) return { line: item.line, outcomeKey: item.outcomeKey };
+  return null;
 }
 
 function rememberSlot(matchId, groupId, oddsId, slot) {
-  if (SLOT_CACHE.size >= SLOT_CACHE_MAX) SLOT_CACHE.clear();
-  SLOT_CACHE.set(`${matchId}|${groupId}|${oddsId}`, slot);
+  if (ITEM_META_CACHE.size >= ITEM_META_CACHE_MAX) ITEM_META_CACHE.clear();
+  const existing = ITEM_META_CACHE.get(`${matchId}|${oddsId}`) ?? {};
+  ITEM_META_CACHE.set(`${matchId}|${oddsId}`, { ...existing, ...slot });
 }
 
 const isTotalPair = (outcomes) =>
@@ -171,6 +176,34 @@ function columnFromName(name) {
   if (/handicap|fora|asian/.test(s)) return 'other';
   if (/total|over\/?under|\bgoals?\b|odd\/even/.test(s)) return 'total';
   return 'other';
+}
+
+/**
+ * The outcome set each market type carries, when a delta frame gives us neither an explicit
+ * outcome nor a cached snapshot. The old code used one hardcoded idxMap written for 1X2, so
+ * index 0 always meant "1" (Home) - which is wrong for every other market and is exactly what
+ * put a Home price inside Both Teams to Score.
+ *
+ * Unknown types fall back to [] so the caller's renderType heuristics still apply.
+ */
+function defaultOutcomesForType(typeId, renderType) {
+  switch (String(typeId ?? '')) {
+    case '1': return ['1', 'x', '2']; // Full Time Result
+    case '302': return ['1x', '12', 'x2']; // Double Chance
+    case '303': return ['yes', 'no']; // Both Teams to Score
+    case '264': // Total Goals (Over/Under)
+    case '320': return ['over', 'under']; // Total Corners
+    case '323': return ['over', 'under']; // Total Cards
+    case '311': return ['over', 'under']; // Yellow Cards
+    case '312': return ['over', 'under']; // Red Cards
+    case '301': return ['1', '2']; // Asian Handicap (home/away handicap)
+    case '304': return ['1', 'x', '2']; // Half Time Result
+    case '306': return ['1', 'x', '2']; // Correct Score (positional, refined below)
+    default:
+      if (renderType === 'cols-3') return ['1', 'x', '2'];
+      if (renderType === 'total-2' || renderType === 'fora-2') return ['over', 'under'];
+      return [];
+  }
 }
 
 /**
@@ -315,18 +348,34 @@ export function decodePushMessage(message) {
       if (!oddsList.length) continue;
       groups++;
 
-      const outcomes = (Array.isArray(group.outcomes) ? group.outcomes : []).map(String);
-      const renderType = group.renderType ?? 'cols-2';
-      const groupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
-      const subgames = Array.isArray(group.subgameIds) ? group.subgameIds.join(',') : '';
-
-      // The ids of some provider groups carry no line at all while the group repeats one
-      // outcome pattern per line, so the synthetic `#n` line comes from the position. Derive
-      // that position from a stable ordering (see stableChunks) so a partial or reordered
-      // Cache the group name when the feed provides one
-      if (groupName && group.id && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(groupName)) {
-        GROUP_NAME_CACHE.set(String(group.id), groupName);
+      // Manage group metadata cache so deltas (which omit names/renderType) retain true group properties
+      const gKey = `${matchId}|${group.id}`;
+      let cachedGroup = GROUP_META_CACHE.get(gKey);
+      if (!cachedGroup) {
+        cachedGroup = { name: null, renderType: 'cols-2', outcomes: [], subgames: '' };
+        if (GROUP_META_CACHE.size >= GROUP_META_CACHE_MAX) GROUP_META_CACHE.clear();
+        GROUP_META_CACHE.set(gKey, cachedGroup);
       }
+
+      const rawGroupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
+      if (rawGroupName && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(rawGroupName)) {
+        cachedGroup.name = rawGroupName;
+        GROUP_NAME_CACHE.set(String(group.id), rawGroupName);
+      }
+      if (group.renderType) {
+        cachedGroup.renderType = group.renderType;
+      }
+      if (Array.isArray(group.outcomes) && group.outcomes.length > 0) {
+        cachedGroup.outcomes = group.outcomes.map(String);
+      }
+      if (Array.isArray(group.subgameIds) && group.subgameIds.length > 0) {
+        cachedGroup.subgames = group.subgameIds.join(',');
+      }
+
+      const groupName = cachedGroup.name;
+      const renderType = cachedGroup.renderType;
+      const outcomes = cachedGroup.outcomes;
+      const subgames = cachedGroup.subgames;
 
       const groupHasLine = oddsList.some((it) => {
         const t = extractOddsTuple(it.id);
@@ -343,6 +392,9 @@ export function decodePushMessage(message) {
 
         const tuple = extractOddsTuple(item.id);
         const period = tuple?.period ?? 0;
+        const itemKey = `${matchId}|${item.id}`;
+        const cachedItem = ITEM_META_CACHE.get(itemKey);
+
         // Provider-10 ids carry no line in the bracket, but some price objects do (e.g. Total has {"v1":"1.5"}).
         // If an item has multiple vars (e.g. Correct score {"v1":"2","v2":"1"}), that is a score/selection, NOT a market line!
         const varValues = item.vars ? Object.values(item.vars) : [];
@@ -355,29 +407,34 @@ export function decodePushMessage(message) {
           ? tuple.line
           : varsLine !== undefined && varsLine !== null
             ? Number(varsLine)
-            : null;
-        const missingLine = rawLine === null || rawLine === undefined || rawLine === '';
-        const remembered = missingLine && !repeats ? rememberedSlot(matchId, group.id, item.id) : null;
-        // Never output synthetic '#1' as a line label to the user
-        const line = !missingLine
-          ? String(rawLine)
-          : remembered?.line ?? '';
+            : cachedItem?.line !== undefined
+              ? (cachedItem.line === '' ? null : cachedItem.line)
+              : null;
+        const line = rawLine !== null && rawLine !== undefined ? String(rawLine) : (cachedItem?.line ?? '');
 
-        // Derive outcome key: if item has a real name, that name can serve as a unique outcome key
-        let outcomeKey =
-          item.outcome !== null && item.outcome !== undefined
-            ? String(item.outcome)
-            : remembered?.outcomeKey ?? null;
-
-        if (!outcomeKey && item.name && String(item.name).trim()) {
-          // If the item provides an explicit name (e.g. "1:0", "Lionel Messi", "Draw / IF Gnistan"), use it as outcome key!
+        // Derive outcome key: priority to explicit feed fields, then cached item metadata from snapshot,
+        // then the group's own outcomes array (positional), then the odds id's outcome index.
+        //
+        // The positional fallback is what stops a price landing on the wrong selection. A group that
+        // carries its outcomes ["yes","no"] (BTTS) must never get "1" (Home) just because the odds id
+        // happens to carry outcomeIdx 0 - that put a 21.2 Home price inside a BTTS market. When the
+        // group carries no outcomes array at all (a delta frame after no snapshot was cached), fall
+        // back to the market TYPE's known outcome set instead of the generic idxMap, which was
+        // written for 1X2 and returns "1" for index 0 - wrong for every other market.
+        let outcomeKey = null;
+        if (item.outcome !== null && item.outcome !== undefined) {
+          outcomeKey = String(item.outcome);
+        } else if (item.name && String(item.name).trim()) {
           outcomeKey = String(item.name).trim();
-        } else if (!outcomeKey && outcomes.length) {
+        } else if (cachedItem?.outcomeKey) {
+          outcomeKey = cachedItem.outcomeKey;
+        } else if (outcomes.length > 0) {
           outcomeKey = outcomes[i % outcomes.length];
-        }
-
-        if (!outcomeKey) {
-          if (tuple?.outcomeIdx !== null && tuple?.outcomeIdx !== undefined) {
+        } else {
+          const def = defaultOutcomesForType(tuple?.typeId, renderType);
+          if (def.length) {
+            outcomeKey = def[i % def.length];
+          } else if (tuple?.outcomeIdx !== null && tuple?.outcomeIdx !== undefined) {
             const idxMap = { 0: '1', 1: 'x', 2: '2', 3: '2', 4: 'under', 5: 'over', 6: '1x', 7: '12', 8: 'x2', 9: 'yes', 10: 'no' };
             outcomeKey = idxMap[tuple.outcomeIdx] ?? String(tuple.outcomeIdx);
           } else if (renderType === 'cols-3') {
@@ -390,18 +447,16 @@ export function decodePushMessage(message) {
             const totalWay = ['under', 'over'];
             outcomeKey = totalWay[i % 2];
           } else {
-            outcomeKey = String(i + 1);
+            outcomeKey = '1';
           }
-        }
-
-        if (missingLine && repeats && outcomes.length > 0 && oddsList.length % outcomes.length === 0) {
-          rememberSlot(matchId, group.id, item.id, { line, outcomeKey });
         }
 
         let outcomeName =
           item.name !== null && item.name !== undefined && String(item.name).trim()
             ? String(item.name).trim()
-            : outcomeLabel(outcomeKey);
+            : cachedItem?.outcomeName
+              ? cachedItem.outcomeName
+              : outcomeLabel(outcomeKey);
 
         // Eliminate any synthetic "#1", "#2", "#3" labels from outcome names
         if (/^#\d+$/.test(outcomeName)) {
@@ -420,20 +475,27 @@ export function decodePushMessage(message) {
         }
 
         const { column, name } = describeMarket({
-          name: groupName,
+          name: groupName ?? cachedItem?.marketName,
           subgames,
           typeId: tuple?.typeId ?? null,
           groupId: group.id,
-          line: missingLine ? '' : rawLine,
+          line,
           renderType,
           outcomes,
           period,
         });
 
-        // Cache the group name when the feed provides one (snapshot frames carry names)
-        if (groupName && group.id) {
-          GROUP_NAME_CACHE.set(String(group.id), groupName);
-        }
+        // Cache item metadata so subsequent delta frames (which omit names/outcomes) never invent keys or scramble slots
+        if (ITEM_META_CACHE.size >= ITEM_META_CACHE_MAX) ITEM_META_CACHE.clear();
+        ITEM_META_CACHE.set(itemKey, {
+          line,
+          outcomeKey,
+          outcomeName,
+          marketName: name,
+          column,
+          period,
+          renderType,
+        });
 
         rows.push({
           matchId,

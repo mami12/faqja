@@ -129,6 +129,13 @@ export function toClientMatch(m) {
     };
     outcomes.sort((a, b) => OUTCOME_RANK(a.code, a.name) - OUTCOME_RANK(b.code, b.name));
 
+    if (isResultMarket && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mk.name ?? '')) {
+      const valid1X2 = outcomes.filter((o) => ['1', 'X', '2'].includes(o.name));
+      if (valid1X2.length >= 2) {
+        outcomes.splice(0, outcomes.length, ...valid1X2);
+      }
+    }
+
     if (!outcomes.length) continue;
     markets.push({
       id: marketIdOf(matchId, mk.key, line),
