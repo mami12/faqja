@@ -154,23 +154,35 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
     /** Returns the best market to show on the card. The first market type that exists wins
      *  (1X2 > GG/NG > O/U), even if it has only partial outcomes — missing positions show
-     *  a "-" instead of borrowing odds from another market. */
+     *  a "-" instead of borrowing odds from another market.
+     *
+     *  NOTE: A suspended outcome must NEVER be filled by a neighbouring outcome. Previously
+     *  this used `?? m.outcomes?.[i]` as a positional fallback, which — once the suspended
+     *  outcome was dropped or shifted — resolved to a duplicate (e.g. 1 X X). The fallback
+     *  is gone: a slot is only filled by an outcome whose own label/code matches it AND
+     *  which is currently priced. Otherwise the slot is null and the UI renders "—". */
     const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
+      // An outcome counts as available only if it has a real price and is not suspended.
+      const isPricedOutcome = (o: any) =>
+        !!o && typeof o.odds === 'number' && o.odds > 0 && o.suspended !== true;
+
       const findOutcome = (mk: any, targets: string[]) => {
         const norm = targets.map((t) => t.toLowerCase());
-        return (mk.outcomes ?? []).find((o: any) => {
+        const hit = (mk.outcomes ?? []).find((o: any) => {
           const n = String(o.name ?? '').trim().toLowerCase();
           const c = String(o.code ?? o.key ?? '').trim().toLowerCase();
           return norm.includes(n) || norm.includes(c);
         });
+        return isPricedOutcome(hit) ? hit : null;
       };
+
       // 1) 1X2 — always 3 slots: 1, X, 2
       const m1 = (m.markets ?? []).find(is1X2);
       if (m1) {
         const slots = [
-          findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]) ?? m1.outcomes?.[0],
-          findOutcome(m1, ['x', 'draw', 'tie', 'wx', 'd']) ?? m1.outcomes?.[1],
-          findOutcome(m1, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]) ?? m1.outcomes?.[2],
+          findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
+          findOutcome(m1, ['x', 'draw', 'tie', 'wx', 'd']),
+          findOutcome(m1, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
         ];
         return { market: m1, slots, mode: '1x2' };
       }
@@ -178,17 +190,17 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       const m2 = (m.markets ?? []).find(isBothScore);
       if (m2) {
         const slots = [
-          findOutcome(m2, ['yes', 'gg']) ?? m2.outcomes?.[0],
-          findOutcome(m2, ['no', 'ng']) ?? m2.outcomes?.[1],
+          findOutcome(m2, ['yes', 'gg']),
+          findOutcome(m2, ['no', 'ng']),
         ];
         return { market: m2, slots, mode: 'btts' };
       }
-      // 3) Over/Under — always 2 slots: Over, Under (or the first 2 priced outcomes)
+      // 3) Over/Under — always 2 slots: Over, Under
       const m3 = (m.markets ?? []).find(isOverUnder);
       if (m3) {
         const slots = [
-          findOutcome(m3, ['over', 'o']) ?? m3.outcomes?.[0],
-          findOutcome(m3, ['under', 'u']) ?? m3.outcomes?.[1],
+          findOutcome(m3, ['over', 'o']),
+          findOutcome(m3, ['under', 'u']),
         ];
         return { market: m3, slots, mode: 'ou' };
       }
