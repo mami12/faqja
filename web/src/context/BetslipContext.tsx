@@ -30,9 +30,27 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   const addSelection = (s: BetSelection) => {
     setSelections(prev => {
-      // Prevent duplicates by matchId unless SYSTEM? For simple combo, filter out same match
-      const filtered = prev.filter(p => p.matchId !== s.matchId);
-      return [...filtered, s];
+      // 1) Nëse outcome-i ekziston tashmë → toggle (hiqe)
+      const exists = prev.some(p => p.outcomeId === s.outcomeId);
+      if (exists) {
+        return prev.filter(p => p.outcomeId !== s.outcomeId);
+      }
+
+      // 2) Konflikt: market i njëjti nga e njëjta ndeshje → zëvendëso vetëm atë
+      //    (p.sh. "1" dhe "X" nga i njëjti 1X2, ose "Over 2.5" dhe "Under 2.5")
+      const conflict = prev.find(p =>
+        p.matchId === s.matchId && p.marketId === s.marketId
+      );
+      if (conflict) {
+        return [
+          ...prev.filter(p => !(p.matchId === s.matchId && p.marketId === s.marketId)),
+          s,
+        ];
+      }
+
+      // 3) Përndryshe → shto normalisht
+      //    Lejon market-e të ndryshme nga e njëjta ndeshje (GG + Over 2.5 + 1X2)
+      return [...prev, s];
     });
   };
 
