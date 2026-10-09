@@ -7,6 +7,7 @@ import MarketPanel from './MarketPanel';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays } from 'lucide-react';
+import { isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
 
 interface Props {
   tournamentId?: string;
@@ -22,14 +23,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  // which match has its extra markets (corners, cards, totals) open in the list
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
-  // minute / score / corners / cards arrive over the socket, so the list is live between polls
-  const { livePatches, lockedMatches, feedMode } = useLiveFeed();
-  // idle mode: while the server is filling the board again there is nothing to show yet, and
-  // "no matches" would be a lie - the fixtures are coming back in a few seconds
+  const { livePatches, lockedMatches, lockedMarkets, feedMode } = useLiveFeed();
   const refreshing = feedMode !== 'live';
 
   const fetchMatches = async () => {
@@ -52,11 +49,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   useEffect(() => {
     fetchMatches();
-    const interval = setInterval(fetchMatches, 15000); // refresh every 15s
+    const interval = setInterval(fetchMatches, 15000);
     return () => clearInterval(interval);
   }, [tournamentId, categoryId, sportId, isLiveOnly]);
 
-  // Filter matches by search term
   const searchFiltered = searchTerm.trim()
     ? matches.filter(m => {
         const search = searchTerm.toLowerCase();
@@ -70,7 +66,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       })
     : matches;
 
-  // Filter matches by date (Today / Tomorrow)
   const filteredMatches = searchFiltered.filter(m => {
     if (dateFilter === 'all') return true;
     const matchDate = new Date(m.startTime);
@@ -90,9 +85,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return true;
   });
 
-  // A match the feed has not priced is not bettable: its card used to sit on the board as
-  // "Loading..." forever. It is dropped instead, and comes back on its own as soon as prices
-  // exist for it - the live board carries marketCount, so this does not wait for the 15s poll.
   const pricedMatches = filteredMatches.filter(m => {
     const patch = livePatches[String(m.id)];
     if (patch?.marketCount && patch.marketCount > 0) return true;
@@ -130,18 +122,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   }
 
   const renderMatchCard = (raw: any) => {
-    // merge what the socket pushed for this match (live minute, score, corners, cards)
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
 
-    const isPriced = (o: any) => typeof o.odds === 'number' && o.odds > 0;
-    const pricedOutcomes = (mk: any) => (mk.outcomes ?? []).filter(isPriced);
-    const pricedMarkets = (m.markets ?? []).filter((mk: any) => pricedOutcomes(mk).length > 0);
-
-    // Convenience detectors for the fallback chain: each market type is detected by its
-    // real name / type first, so one market can never be mistaken for another.
     const is1X2 = (mk: any) => {
       const name = String(mk.name ?? '').toLowerCase();
-      // Exclude halves, corners, cards, handicaps, double chance
       if (/half|1st|2nd|pjes|corner|card|handicap|double chance|chance/i.test(name)) return false;
       if (mk.period && mk.period !== 0) return false;
       return mk.marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(name);
@@ -152,32 +136,18 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       mk.marketType === 'OVER_UNDER' ||
       /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
 
-    /** Returns the best market to show on the card. The first market type that exists wins
-     *  (1X2 > GG/NG > O/U), even if it has only partial outcomes — missing positions show
-     *  a "-" instead of borrowing odds from another market.
-     *
-     *  NOTE: A suspended outcome must NEVER be filled by a neighbouring outcome. Previously
-     *  this used `?? m.outcomes?.[i]` as a positional fallback, which — once the suspended
-     *  outcome was dropped or shifted — resolved to a duplicate (e.g. 1 X X). The fallback
-     *  is gone: a slot is only filled by an outcome whose own label/code matches it AND
-     *  which is currently priced. Otherwise the slot is null and the UI renders "—". */
     const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
-      // An outcome counts as available only if it has a real price and is not suspended.
-      const isPricedOutcome = (o: any) =>
-        !!o && typeof o.odds === 'number' && o.odds > 0 && o.suspended !== true;
-
       const findOutcome = (mk: any, targets: string[]) => {
-        const norm = targets.map((t) => t.toLowerCase());
+        const normT = targets.map((t) => t.toLowerCase());
         const hit = (mk.outcomes ?? []).find((o: any) => {
           const n = String(o.name ?? '').trim().toLowerCase();
           const c = String(o.code ?? o.key ?? '').trim().toLowerCase();
-          return norm.includes(n) || norm.includes(c);
+          return normT.includes(n) || normT.includes(c);
         });
-        return isPricedOutcome(hit) ? hit : null;
+        return isOutcomeAvailable(hit) ? hit : null;
       };
 
-      // 1) 1X2 — always 3 slots: 1, X, 2
-      const m1 = (m.markets ?? []).find(is1X2);
+      const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m1) {
         const slots = [
           findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
@@ -186,8 +156,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         ];
         return { market: m1, slots, mode: '1x2' };
       }
-      // 2) BTTS — always 2 slots: Yes, No
-      const m2 = (m.markets ?? []).find(isBothScore);
+
+      const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m2) {
         const slots = [
           findOutcome(m2, ['yes', 'gg']),
@@ -195,8 +165,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         ];
         return { market: m2, slots, mode: 'btts' };
       }
-      // 3) Over/Under — always 2 slots: Over, Under
-      const m3 = (m.markets ?? []).find(isOverUnder);
+
+      const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m3) {
         const slots = [
           findOutcome(m3, ['over', 'o']),
@@ -210,9 +180,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const quick = pickQuickMarket();
     const quickMarket = quick?.market ?? null;
     const quickSlots: (any | null)[] = quick?.slots ?? [];
-    // a short label on the "+" row so the user always knows which market the card shows
     const quickLabel = quick?.mode === '1x2' ? '1X2' : quick?.mode === 'btts' ? 'GG/NG' : quick?.mode === 'ou' ? 'O/U' : '';
-    const quickCols = quick?.mode === '1x2' ? 3 : 2; // 1X2=3cols, BTTS/O-U=2cols
+    const quickCols = quick?.mode === '1x2' ? 3 : 2;
     const isLocked = lockedMatches[String(m.id)] === true;
 
     const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
@@ -222,7 +191,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         key={m.id} 
         className="bg-card-bg/90 hover:bg-card-hover/90 rounded-2xl border border-tertiary/80 hover:border-slate-600/70 shadow-md transition-all duration-200 overflow-hidden group"
       >
-        {/* Card Header: Tournament & Time/Status */}
         <div className="bg-primary/60 px-3.5 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 text-text-secondary truncate">
             <span className="font-semibold text-text-primary text-[11px] sm:text-xs truncate tracking-wide">
@@ -256,9 +224,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
         </div>
 
-        {/* Card Body: Teams, Score & Odds */}
         <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-          {/* Teams & Score (Clickable to detail) */}
           <div 
             className="flex-1 cursor-pointer space-y-1.5 min-w-0"
             onClick={() => navigate(`/match/${m.id}`)}
@@ -292,7 +258,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             </div>
           </div>
 
-          {/* Main Odds Buttons Column */}
           <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
             {quickMarket && quickSlots.length >= 2 ? (
               <div className="flex-1 md:w-72">
@@ -320,7 +285,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               <div className="text-xs text-text-secondary italic text-center flex-1 md:w-72">—</div>
             )}
 
-            {/* Opens the extra markets (corners, cards, totals, ...) right here */}
             <button
               onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
               className={`px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
@@ -347,9 +311,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-5 max-w-6xl mx-auto">
-      {/* Control Panel: Search & Filters */}
       <div className="bg-secondary/70 backdrop-blur-sm border border-tertiary/80 p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
-        {/* Search Bar */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search size={16} className="text-text-secondary" />
@@ -371,7 +333,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           )}
         </div>
 
-        {/* Date Filter Tabs */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="flex items-center gap-1.5 text-text-secondary text-xs font-semibold mr-1.5">
             <CalendarDays size={15} />
@@ -412,14 +373,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       </div>
 
-      {/* Search Results Count */}
       {searchTerm && (
         <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}
         </div>
       )}
 
-      {/* No search results */}
       {searchTerm && filteredMatches.length === 0 && (
         <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="text-4xl">🔍</div>
@@ -428,7 +387,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {/* No matches for selected date */}
       {!searchTerm && filteredMatches.length === 0 && (
         <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="text-4xl">📅</div>
@@ -436,7 +394,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {/* there are fixtures, but the feed has not priced any of them yet */}
       {filteredMatches.length > 0 && pricedMatches.length === 0 && (
         <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
           <div className="font-bold text-white text-base">
@@ -446,7 +403,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {/* Live Matches Section */}
       {liveMatches.length > 0 && !tournamentId && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
@@ -466,7 +422,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {/* Prematch / Upcoming Section */}
       {prematchMatches.length > 0 && (
         <div className="space-y-3">
           <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between px-1">
