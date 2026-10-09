@@ -180,7 +180,17 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const quick = pickQuickMarket();
     const quickMarket = quick?.market ?? null;
     const quickSlots: (any | null)[] = quick?.slots ?? [];
-    const quickLabel = quick?.mode === '1x2' ? '1X2' : quick?.mode === 'btts' ? 'GG/NG' : quick?.mode === 'ou' ? 'O/U' : '';
+
+    // Linja e market-it (2.5, 3.5, ...) — vjen nga `line` ose `specifier`
+    const quickLine = String(quickMarket?.line ?? quickMarket?.specifier ?? '').trim();
+
+    // Label-i: për O/U përfshin linjën, për të tjerat mbetet i njëjti
+    const quickLabel =
+      quick?.mode === '1x2' ? '1X2'
+      : quick?.mode === 'btts' ? 'GG/NG'
+      : quick?.mode === 'ou' ? 'O/U'
+      : '';
+
     const quickCols = quick?.mode === '1x2' ? 3 : 2;
     const isLocked = lockedMatches[String(m.id)] === true;
 
@@ -261,9 +271,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
             {quickMarket && quickSlots.length >= 2 ? (
               <div className="flex-1 md:w-72">
+                {/* Label-i i market-it — për O/U shfaqet linja bashkë */}
                 {quickLabel && quickLabel !== '1X2' && (
-                  <div className="text-[9px] font-black uppercase tracking-wider text-accent-green/90 mb-1 pl-1">
-                    {quickLabel}
+                  <div className="text-[9px] font-black uppercase tracking-wider mb-1 pl-1 flex items-baseline gap-1">
+                    <span className="text-accent-green/90">{quickLabel}</span>
+                    {quick?.mode === 'ou' && quickLine && (
+                      <span className="text-white">{quickLine}</span>
+                    )}
                   </div>
                 )}
                 <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
