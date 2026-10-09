@@ -36,8 +36,8 @@ export const config = {
   lang: process.env.LANG_CODE ?? 'en-001',
 
   // collector
-  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 10000),
-  matchPageLimit: Number(process.env.MATCH_PAGE_LIMIT ?? 3000),
+  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 30000),
+  matchPageLimit: Number(process.env.MATCH_PAGE_LIMIT ?? 1000),
 
   // browser clients
   allowedOrigins: list(process.env.ALLOWED_ORIGINS, '*'),
