@@ -132,9 +132,9 @@ export default function Betslip() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-secondary select-none">
+    <div className="flex flex-col h-full min-h-0 bg-secondary select-none">
       {/* Ticket Type Segmented Control */}
-      <div className="p-2.5 bg-secondary border-b border-tertiary/70">
+      <div className="shrink-0 p-2.5 bg-secondary border-b border-tertiary/70">
         <div className="flex bg-primary/80 p-1 rounded-xl border border-tertiary/60">
           {['SINGLE', 'COMBO', 'SYSTEM'].map(type => (
             <button 
@@ -153,7 +153,7 @@ export default function Betslip() {
       </div>
 
       {/* Ticket Search Section */}
-      <div className="p-3 border-b border-tertiary/70 bg-primary/40">
+      <div className="shrink-0 p-3 border-b border-tertiary/70 bg-primary/40">
         <div className="text-[10px] font-black text-text-secondary uppercase tracking-widest mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <TicketIcon size={13} className="text-accent-green" />
@@ -210,7 +210,7 @@ export default function Betslip() {
       </div>
 
       {selections.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-text-secondary p-6 text-center space-y-2">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-text-secondary p-6 text-center space-y-2">
           <div className="w-12 h-12 rounded-2xl bg-primary/60 border border-tertiary/60 flex items-center justify-center text-text-muted">
             <TicketIcon size={24} />
           </div>
@@ -221,7 +221,8 @@ export default function Betslip() {
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+          {/* Lista e seleksioneve — scroll-on vetëm kjo pjesë */}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2.5 space-y-2">
             {selections.map(s => (
               <div 
                 key={s.outcomeId} 
@@ -249,7 +250,7 @@ export default function Betslip() {
           </div>
 
           {oddsChangedError && (
-            <div className="bg-accent-yellow/15 border-y border-accent-yellow/40 text-amber-200 p-3 text-xs flex items-center justify-between gap-2">
+            <div className="shrink-0 bg-accent-yellow/15 border-y border-accent-yellow/40 text-amber-200 p-3 text-xs flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 font-medium">
                 <AlertTriangle size={15} className="text-accent-yellow shrink-0" />
                 <span>{t('betslip.odds_changed')}</span>
@@ -263,8 +264,8 @@ export default function Betslip() {
             </div>
           )}
 
-          {/* Stake & Calculations Footer */}
-          <div className="p-3.5 bg-secondary/95 border-t border-tertiary/80 space-y-3 shadow-2xl">
+          {/* Stake & Calculations Footer — gjithmonë i dukshëm */}
+          <div className="shrink-0 p-3.5 bg-secondary/95 border-t border-tertiary/80 space-y-3 shadow-2xl">
             {ticketType === 'SYSTEM' && (
               <div>
                 <label className="text-[10px] uppercase font-bold text-text-secondary block mb-1">System Type</label>
