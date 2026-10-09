@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Lock, TrendingUp, ShieldAlert } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
@@ -8,7 +8,6 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 
-/** Clean up any synthetic names from the feed */
 const cleanMarketName = (name?: string) => {
   if (!name) return '';
   const s = String(name).trim();
@@ -18,7 +17,6 @@ const cleanMarketName = (name?: string) => {
   return s;
 };
 
-/** feed market names are already readable; translate the ones we know, keep the rest */
 const marketLabel = (t: (key: string) => string, name?: string) => {
   if (!name) return '';
   const clean = cleanMarketName(name);
@@ -27,10 +25,8 @@ const marketLabel = (t: (key: string) => string, name?: string) => {
   return translated === key ? clean : translated;
 };
 
-/** Don't display synthetic #1, #2 lines */
 const formatLine = (line?: string) => (line && !/^#\d+$/.test(String(line).trim()) ? ` (${line})` : '');
 
-/** Deduplicate outcomes within a single market and filter phantom outcomes */
 const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
@@ -57,7 +53,7 @@ export default function MatchDetail() {
   const { t } = useLanguage();
   const [match, setMatch] = useState<Match | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
-  // minute / score / corners / cards pushed over the single shared socket
+  const [activeTab, setActiveTab] = useState<string>('all');
   const patch = useLivePatch(id);
 
   useEffect(() => {
@@ -71,97 +67,126 @@ export default function MatchDetail() {
     }
   }, [id]);
 
-  if (!match) return <div className="p-8 text-center text-text-secondary">{t('common.loading')}</div>;
+  if (!match) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh] text-text-secondary text-sm font-medium">
+        {t('common.loading')}
+      </div>
+    );
+  }
 
   const live = { ...match, ...(patch ?? {}) };
 
+  // Kategoria e tregjeve për tab-et lart (për të shmangur rrëmujën)
+  const categories = ['all', 'Popular', 'Goals', 'Halves'];
+
   return (
-    <div className="p-3 sm:p-5 md:p-6 max-w-4xl mx-auto space-y-5">
-      <button 
-        onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/80 hover:bg-tertiary text-text-secondary hover:text-white border border-tertiary/60 transition text-xs font-bold"
-      >
-        <ArrowLeft size={14} /> Back to matches
-      </button>
+    <div className="max-w-3xl mx-auto px-3 py-4 sm:p-6 space-y-4">
+      {/* Navbar i thjeshtë me Back */}
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#182232] hover:bg-[#202d42] text-text-secondary hover:text-white transition text-xs font-semibold border border-white/5 shadow-sm"
+        >
+          <ArrowLeft size={14} /> Kthehu
+        </button>
+        <span className="text-[11px] font-medium text-text-secondary uppercase tracking-wider">
+          {live.competitionName || 'Ndeshje Sportive'}
+        </span>
+      </div>
 
-      {/* Stadium Billboard Header */}
-      <div className="bg-gradient-to-b from-secondary/95 via-secondary/80 to-primary p-4 sm:p-7 rounded-2xl text-center shadow-lg border border-tertiary/80 relative overflow-hidden">
-        {/* Subtle accent glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-500 via-accent-green to-teal-400"></div>
-
+      {/* Seksioni i Rezultatit (Scoreboard - Stil Kazino/Bastore Moderne) */}
+      <div className="relative bg-gradient-to-br from-[#131b2b] to-[#0d131f] rounded-2xl p-5 border border-white/10 shadow-xl overflow-hidden">
+        {/* Vija e gjelbër/e kuqe në sfond për statusin LIVE */}
         {live.status === 'LIVE' && (
-          <span className="inline-flex items-center gap-1.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-black px-3 py-1 rounded-full mb-4">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-red"></span>
-            </span>
-            LIVE {live.currentMinute || 0}:{String(live.currentSecond ?? 0).padStart(2, '0')}'{live.period ? ` · ${live.period}` : ''}
-          </span>
+          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
         )}
 
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-6 px-2 sm:px-6">
-          <div className="flex-1 sm:text-right w-full sm:w-auto">
-            <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">{live.homeTeam}</h2>
-          </div>
-
-          <div className="bg-primary/90 border border-tertiary/90 px-4 sm:px-6 py-2 rounded-xl shadow-inner shrink-0">
-            <div className="font-mono text-2xl sm:text-4xl font-black text-accent-yellow tabular-nums">
-              {live.status === 'LIVE' ? `${live.homeScore ?? 0} : ${live.awayScore ?? 0}` : 'VS'}
+        <div className="flex items-center justify-between mb-4">
+          {live.status === 'LIVE' ? (
+            <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full text-emerald-400 text-xs font-bold">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              LIVE {live.currentMinute || 0}' {live.period ? `(${live.period})` : ''}
             </div>
-          </div>
+          ) : (
+            <div className="text-xs text-text-secondary font-medium">
+              {new Date(live.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} • {new Date(live.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
 
-          <div className="flex-1 sm:text-left w-full sm:w-auto">
-            <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">{live.awayTeam}</h2>
-          </div>
+          {/* Statistika e shpejtë e korneve / kartonëve nëse ka */}
+          {(live.corners || live.cards) && (
+            <div className="flex items-center gap-3 text-[11px] text-text-secondary font-mono">
+              {live.corners && <span>C: {live.corners.home}-{live.corners.away}</span>}
+              {live.cards && <span>Y/R: {live.cards.home}-{live.cards.away}</span>}
+            </div>
+          )}
         </div>
 
-        <div className="text-text-secondary text-xs mt-4 flex items-center justify-center gap-2">
-          <span>{new Date(live.startTime).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-          <span>&bull;</span>
-          <span>{new Date(live.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-
-        {/* the feed's own live counters */}
-        {(live.corners || live.cards) && (
-          <div className="mt-4 pt-3 border-t border-tertiary/40 flex items-center justify-center gap-4 sm:gap-8 text-xs text-text-secondary">
-            {live.corners && (
-              <span className="bg-primary/50 px-3 py-1 rounded-lg border border-tertiary/50">
-                {t('markets.corners')}:{' '}
-                <span className="font-bold text-white tabular-nums">
-                  {live.corners.home} - {live.corners.away}
-                </span>
-              </span>
-            )}
-            {live.cards && (
-              <span className="bg-primary/50 px-3 py-1 rounded-lg border border-tertiary/50">
-                {t('markets.cards')}:{' '}
-                <span className="font-bold text-white tabular-nums">
-                  {live.cards.home} - {live.cards.away}
-                </span>
-              </span>
-            )}
+        {/* Ekipet dhe Rezultati */}
+        <div className="flex items-center justify-between gap-3 text-center my-2">
+          <div className="flex-1 text-right">
+            <h1 className="text-sm sm:text-lg font-bold text-white tracking-tight leading-snug">{live.homeTeam}</h1>
           </div>
-        )}
+
+          <div className="bg-[#090e17] border border-white/5 px-4 py-2 rounded-xl shadow-inner shrink-0 min-w-[80px]">
+            <span className="font-mono text-xl sm:text-2xl font-black text-emerald-400 tracking-wider">
+              {live.status === 'LIVE' ? `${live.homeScore ?? 0} - ${live.awayScore ?? 0}` : 'VS'}
+            </span>
+          </div>
+
+          <div className="flex-1 text-left">
+            <h1 className="text-sm sm:text-lg font-bold text-white tracking-tight leading-snug">{live.awayTeam}</h1>
+          </div>
+        </div>
       </div>
 
       {live.status === 'LIVE' && <PitchTracker matchId={live.id} />}
 
-      <div className="space-y-3.5">
+      {/* Tab-et e Kategorizimit të Tregjeve (Clean Filter) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setActiveTab(cat)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === cat 
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20' 
+                : 'bg-[#182232] text-text-secondary hover:text-white border border-white/5'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista e Tregjeve (Markets) - Dizajn i pastër me kartela */}
+      <div className="space-y-3">
         {markets.map(market => {
           const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? [], market.name);
           const title = marketLabel(t, market.name) || t('markets.market');
+          
           return (
-            <div key={market.id} className="bg-secondary/90 rounded-2xl border border-tertiary/80 overflow-hidden shadow-sm">
-              <div className="bg-primary/50 px-4 py-2.5 font-bold text-xs sm:text-sm text-white flex items-center justify-between border-b border-tertiary/60">
-                <span className="truncate" title={title}>
-                  {title}
-                  {formatLine(market.line)}
+            <div key={market.id} className="bg-[#131b2b]/80 rounded-2xl border border-white/5 overflow-hidden shadow-sm">
+              {/* Header i Tregut */}
+              <div className="bg-[#182232]/50 px-4 py-2.5 text-xs font-semibold text-white flex items-center justify-between border-b border-white/5">
+                <span className="truncate flex items-center gap-1.5">
+                  <TrendingUp size={13} className="text-emerald-400" />
+                  {title} {formatLine(market.line)}
                 </span>
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${market.status === 'SUSPENDED' ? 'bg-rose-500/10 text-accent-red border border-rose-500/20' : 'bg-emerald-500/10 text-accent-green border border-emerald-500/20'}`}>
-                  {market.status === 'SUSPENDED' ? '🔒 Locked' : 'Active'}
-                </span>
+                
+                {market.status === 'SUSPENDED' && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20 font-medium">
+                    <Lock size={10} /> Locked
+                  </span>
+                )}
               </div>
-              <div className="p-3 sm:p-4 grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+
+              {/* Grid-i i Koeficientëve - Përshtatur për celular dhe desktop */}
+              <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {cleanOutcomes.map((outcome: any) => (
                   <OddsButton 
                     key={outcome.id} 
