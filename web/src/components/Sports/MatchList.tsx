@@ -23,6 +23,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [viewMode, setViewMode] = useState<'all' | 'live' | 'prematch'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -95,6 +96,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   const liveMatches = pricedMatches.filter(m => m.status === 'LIVE');
   const prematchMatches = pricedMatches.filter(m => m.status !== 'LIVE');
+  const visibleMatches = viewMode === 'live' ? liveMatches : viewMode === 'prematch' ? prematchMatches : pricedMatches;
 
   if (loading && matches.length === 0) {
     return (
@@ -120,6 +122,32 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       </div>
     );
   }
+
+  const renderFilterBar = () => (
+    <div className="sticky top-0 z-10 border-b border-white/5 bg-[#0e1727]/85 backdrop-blur-xl">
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-[#121a2a]/80 p-2">
+          {[
+            { id: 'all', label: t('sports.all') },
+            { id: 'live', label: t('sports.live') },
+            { id: 'prematch', label: t('sports.prematch') },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setViewMode(tab.id as 'all' | 'live' | 'prematch')}
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
+                viewMode === tab.id
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'border border-white/5 bg-[#182232] text-text-secondary hover:border-white/10 hover:text-white'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   const renderMatchCard = (raw: any) => {
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
@@ -417,7 +445,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {liveMatches.length > 0 && !tournamentId && (
+      {renderFilterBar()}
+
+      {((viewMode === 'all' || viewMode === 'live') && liveMatches.length > 0 && !tournamentId) && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <span className="relative flex h-2.5 w-2.5">
@@ -436,7 +466,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       )}
 
-      {prematchMatches.length > 0 && (
+      {((viewMode === 'all' || viewMode === 'prematch') && prematchMatches.length > 0) && (
         <div className="space-y-3">
           <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between px-1">
             <div className="flex items-center gap-2">

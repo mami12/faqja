@@ -11,6 +11,12 @@ export default {
   sports: {
     all: 'Të Gjitha Ndeshjet',
     live: 'Ndeshjet Live',
+    prematch: 'Para-Ndeshje',
+    popular: 'Popullore',
+    goals: 'Golat',
+    corners: 'Këndet',
+    home: 'Vendas',
+    away: 'Udhëtues',
     Football: 'Futboll',
     Basketball: 'Basketboll',
     Tennis: 'Tenis',
@@ -265,6 +271,10 @@ export default {
     no_search_results: 'Nuk u gjet asnjë ndeshje për kërkimin tënd',
     try_different_search: 'Provo një kërkim tjetër ose kontrollo drejtshkrimin.',
     no_matches_date: 'Nuk ka ndeshje për këtë datë.',
+    back: 'Kthehu',
+    vs: 'VS',
+    live: 'LIVE',
+    match: 'Ndeshje',
     // idle mode: the server paused the feed with nobody on the board and is filling it again
     feed_refreshing: 'Kuotat po rifreskohen...',
     feed_refreshing_hint: 'Po marrim kuotat e freskëta nga feed-i. Ndeshjet shfaqen brenda disa sekondash.'
