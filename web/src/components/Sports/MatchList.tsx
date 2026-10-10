@@ -227,11 +227,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return (
       <div 
         key={m.id} 
-        className="bg-card-bg/90 hover:bg-card-hover/90 rounded-2xl border border-tertiary/80 hover:border-slate-600/70 shadow-md transition-all duration-200 overflow-hidden group"
+        className="group overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-b from-[#111b2a] to-[#0d1522] shadow-xl shadow-slate-950/20 transition-all duration-200 hover:border-emerald-500/30 hover:shadow-emerald-500/10"
       >
-        <div className="bg-primary/60 px-3.5 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 text-text-secondary truncate">
-            <span className="font-semibold text-text-primary text-[11px] sm:text-xs truncate tracking-wide">
+        <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-[#131d2d]/90 px-3.5 py-2.5 text-xs sm:px-4">
+          <div className="flex items-center gap-2 truncate text-text-secondary">
+            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="truncate text-[11px] font-semibold tracking-[0.12em] uppercase text-text-secondary">
               {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || 'League'}
             </span>
           </div>
@@ -239,30 +240,30 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-2 shrink-0">
             {isLocked && (
               <span
-                className="inline-flex items-center gap-1 bg-accent-red/20 border border-accent-red/40 text-accent-red text-[10px] font-black px-2 py-0.5 rounded-full"
+                className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-black text-rose-300"
                 title={t('sections.odds_locked')}
               >
                 🔒 {t('sections.odds_locked')}
               </span>
             )}
             {m.status === 'LIVE' ? (
-              <span className="inline-flex items-center gap-1.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-black text-rose-300">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-red"></span>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
                 </span>
                 LIVE {m.currentMinute || 0}:{String(m.currentSecond ?? 0).padStart(2, '0')}'
               </span>
             ) : (
-              <span className="text-text-secondary flex items-center gap-1.5 text-[11px] font-medium bg-primary/40 px-2 py-0.5 rounded-md border border-tertiary/40">
-                <Clock size={12} className="text-text-muted" />
+              <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-[#0f1826] px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                <Clock size={12} className="text-text-secondary" />
                 {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} &bull; {new Date(m.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}
               </span>
             )}
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex flex-col justify-between gap-3 p-3 sm:p-4 md:flex-row md:items-center">
           <div 
             className="flex-1 cursor-pointer space-y-1.5 min-w-0"
             onClick={() => navigate(`/match/${m.id}`)}
@@ -299,10 +300,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
             {quickMarket && quickSlots.length >= 2 ? (
               <div className="flex-1 md:w-72">
-                {/* Label-i i market-it — për O/U shfaqet linja bashkë */}
                 {quickLabel && quickLabel !== '1X2' && (
-                  <div className="text-[9px] font-black uppercase tracking-wider mb-1 pl-1 flex items-baseline gap-1">
-                    <span className="text-accent-green/90">{quickLabel}</span>
+                  <div className="mb-1.5 flex items-baseline gap-1 pl-1 text-[9px] font-black uppercase tracking-[0.14em] text-text-secondary">
+                    <span className="text-emerald-300">{quickLabel}</span>
                     {quick?.mode === 'ou' && quickLine && (
                       <span className="text-white">{quickLine}</span>
                     )}
@@ -315,7 +315,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
                     ) : (
                       <div
                         key={`empty-${i}`}
-                        className="px-2.5 py-2 rounded-lg border border-tertiary/50 bg-primary/40 text-text-secondary text-center text-xs font-bold opacity-40 cursor-not-allowed"
+                        className="cursor-not-allowed rounded-lg border border-white/5 bg-[#0f1727] px-2.5 py-2 text-center text-xs font-bold text-text-secondary opacity-40"
                       >
                         —
                       </div>
@@ -324,15 +324,15 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
                 </div>
               </div>
             ) : (
-              <div className="text-xs text-text-secondary italic text-center flex-1 md:w-72">—</div>
+              <div className="flex-1 text-center text-xs italic text-text-secondary md:w-72">—</div>
             )}
 
             <button
               onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
-              className={`px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+              className={`flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold transition-all ${
                 expandedId === String(m.id)
-                  ? 'bg-accent-green text-primary shadow-glow-green'
-                  : 'bg-primary/80 hover:bg-tertiary text-text-secondary hover:text-white border border-tertiary/80'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'border border-white/10 bg-[#0f1826] text-text-secondary hover:border-white/20 hover:text-white'
               }`}
               title={t('sections.view_markets')}
               aria-expanded={expandedId === String(m.id)}
@@ -352,65 +352,77 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-5 max-w-6xl mx-auto">
-      <div className="bg-secondary/70 backdrop-blur-sm border border-tertiary/80 p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search size={16} className="text-text-secondary" />
+    <div className="mx-auto max-w-6xl space-y-4 p-3 sm:p-5 md:p-6">
+      <div className="overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#101a2a] via-[#0d1422] to-[#0b1220] p-4 shadow-2xl shadow-slate-950/30 sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
+            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Live betting board</h2>
           </div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder={t('common.search_matches')}
-            className="w-full bg-primary/80 border border-tertiary/80 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-secondary hover:text-white transition"
-            >
-              ✕
-            </button>
-          )}
+          <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300">
+            {filteredMatches.length} matches
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-1.5 text-text-secondary text-xs font-semibold mr-1.5">
-            <CalendarDays size={15} />
-            <span className="hidden sm:inline">Filter:</span>
+        <div className="space-y-3">
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Search size={16} className="text-text-secondary" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder={t('common.search_matches')}
+              className="w-full rounded-2xl border border-white/10 bg-[#111b2a]/90 py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-text-secondary transition hover:text-white"
+              >
+                ✕
+              </button>
+            )}
           </div>
-          <div className="bg-primary/70 p-1 rounded-xl border border-tertiary/60 flex items-center gap-1">
-            <button
-              onClick={() => setDateFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                dateFilter === 'all' 
-                  ? 'bg-accent-green text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
-              }`}
-            >
-              {t('dates.all')}
-            </button>
-            <button
-              onClick={() => setDateFilter('today')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                dateFilter === 'today' 
-                  ? 'bg-accent-green text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
-              }`}
-            >
-              {t('dates.today')}
-            </button>
-            <button
-              onClick={() => setDateFilter('tomorrow')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                dateFilter === 'tomorrow' 
-                  ? 'bg-accent-green text-primary shadow-sm' 
-                  : 'text-text-secondary hover:text-white hover:bg-tertiary/50'
-              }`}
-            >
-              {t('dates.tomorrow')}
-            </button>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="mr-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+              <CalendarDays size={15} />
+              <span className="hidden sm:inline">Filter:</span>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#121b2a] p-1">
+              <button
+                onClick={() => setDateFilter('all')}
+                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                  dateFilter === 'all'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                    : 'text-text-secondary hover:text-white'
+                }`}
+              >
+                {t('dates.all')}
+              </button>
+              <button
+                onClick={() => setDateFilter('today')}
+                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                  dateFilter === 'today'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                    : 'text-text-secondary hover:text-white'
+                }`}
+              >
+                {t('dates.today')}
+              </button>
+              <button
+                onClick={() => setDateFilter('tomorrow')}
+                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                  dateFilter === 'tomorrow'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                    : 'text-text-secondary hover:text-white'
+                }`}
+              >
+                {t('dates.tomorrow')}
+              </button>
+            </div>
           </div>
         </div>
       </div>

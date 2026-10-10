@@ -142,7 +142,7 @@ export default function MatchDetail() {
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#111c2d] via-[#0f1728] to-[#0b1220] p-4 shadow-2xl shadow-slate-950/30 sm:p-5">
+      <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#111c2d] via-[#0f1728] to-[#0b1220] p-4 shadow-2xl shadow-slate-950/30 sm:p-5">
         {isLive && (
           <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
         )}
@@ -189,20 +189,22 @@ export default function MatchDetail() {
 
       {isLive && <PitchTracker matchId={live.id} />}
 
-      <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            className={`rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
-              activeTab === cat.id
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                : 'border border-white/5 bg-[#182232] text-text-secondary hover:border-white/10 hover:text-white'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
+      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0f1727]/80 p-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveTab(cat.id)}
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                activeTab === cat.id
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'border border-transparent bg-transparent text-text-secondary hover:border-white/10 hover:text-white'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-4 space-y-3">
@@ -212,8 +214,8 @@ export default function MatchDetail() {
           </div>
         ) : (
           groupedMarkets.map((group, idx) => (
-            <div key={`${group.baseName}-${idx}`} className="overflow-hidden rounded-2xl border border-white/10 bg-[#131b2b]/80 shadow-sm">
-              <div className="flex items-center justify-between border-b border-white/5 bg-[#182232]/55 px-4 py-2.5">
+            <div key={`${group.baseName}-${idx}`} className="overflow-hidden rounded-[24px] border border-white/10 bg-gradient-to-b from-[#131d2d] to-[#0f1725] shadow-lg shadow-slate-950/20">
+              <div className="flex items-center justify-between border-b border-white/5 bg-[#182232]/70 px-4 py-2.5">
                 <div className="flex items-center gap-2 truncate text-xs font-semibold text-white">
                   <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
                     <TrendingUp size={12} />
@@ -230,7 +232,7 @@ export default function MatchDetail() {
                   const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? [], market.name);
 
                   return (
-                    <div key={market.id} className="rounded-xl border border-white/5 bg-[#182232]/35 p-2.5">
+                    <div key={market.id} className="rounded-2xl border border-white/5 bg-[#162131]/80 p-2.5">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
                           {marketLabel(t, market.name) || t('markets.market')}
