@@ -153,6 +153,8 @@ export default function MarketPanel({ match }: { match: Match }) {
     const groups = new Map<Column, Market[]>();
     for (const market of match.markets ?? []) {
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
+      const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
+      if (!filterDecidedOutcomes(available, market, match).length) continue;
       const column = columnOf(market);
       const list = groups.get(column) ?? [];
       list.push(market);
@@ -169,12 +171,12 @@ export default function MarketPanel({ match }: { match: Match }) {
     return groups;
   }, [match, lockedMarkets]);
 
-  const totalMarkets = match.markets?.length ?? 0;
+  const totalMarkets = Array.from(grouped.values()).reduce((count, markets) => count + markets.length, 0);
 
   if (!grouped.size) {
     return (
       <div className="border-t border-tertiary/60 px-4 py-3 text-xs text-text-secondary">
-        {t('common.loading')}
+        {t('common.no_results')}
       </div>
     );
   }

@@ -17,11 +17,11 @@ const norm = (s: any) => String(s ?? '').toLowerCase().trim();
 
 /** A i përket ky market pjesës së parë? */
 export const isFirstHalfMarket = (name: string): boolean =>
-  /1st half|first half|\b1h\b/i.test(name);
+  /1st half|first half|half\s*1|\b1h\b|pjes(?:a|ë)\s*e\s*par[eë]/i.test(name);
 
 /** A i përket ky market pjesës së dytë? */
 export const isSecondHalfMarket = (name: string): boolean =>
-  /2nd half|second half|\b2h\b/i.test(name);
+  /2nd half|second half|half\s*2|\b2h\b|pjes(?:a|ë)\s*e\s*dyte/i.test(name);
 
 /** A është "Halftime/Fulltime" ose "HT/FT"? */
 export const isHTFTMarket = (name: string): boolean =>
@@ -53,7 +53,7 @@ const isMatchFinished = (m: any): boolean => {
 const isSecondHalfOrLater = (m: any): boolean => {
   const phase = String(m?.period ?? '').toUpperCase();
   const minute = Number(m?.currentMinute ?? 0);
-  return phase === '2H' || phase === 'HT' || phase === 'FT' || minute > 45;
+  return /^(2H|HT|FT|2ND HALF|SECOND HALF|ENDED|FINISHED)\b/.test(phase) || minute > 45;
 };
 
 /**
@@ -67,8 +67,11 @@ export function isMarketExpired(m: any, market: any): boolean {
   // 0) Ndeshja mbaroi → çdo market skadon
   if (isMatchFinished(m)) return true;
 
-  // 1) Market-et e pjesës së parë → skadojnë kur kaluam 45' ose jemi në 2H/HT
-  if (isFirstHalfMarket(name)) {
+  const firstHalfMarket = isFirstHalfMarket(name) || Number(market.period) === 1;
+  const secondHalfMarket = isSecondHalfMarket(name) || Number(market.period) === 2;
+
+  // A first-half market must not remain visible once the match has moved on.
+  if (firstHalfMarket) {
     if (isSecondHalfOrLater(m)) return true;
   }
 
@@ -94,7 +97,7 @@ export function isMarketExpired(m: any, market: any): boolean {
   }
 
   // 5) Market-et e pjesës së dytë → skadojnë vetëm kur ndeshja mbaroi
-  if (isSecondHalfMarket(name)) {
+  if (secondHalfMarket) {
     if (isMatchFinished(m)) return true;
   }
 
@@ -157,33 +160,24 @@ const parseLineNum = (line?: string) => {
   return m ? Number(m[0]) : null;
 };
 
-const isOverOutcome = (o: any) =>
-  /^(over|o)$/i.test(String(o.name ?? '').trim()) || String(o.key ?? '').toLowerCase() === 'over';
-const isUnderOutcome = (o: any) =>
-  /^(under|u)$/i.test(String(o.name ?? '').trim()) || String(o.key ?? '').toLowerCase() === 'under';
-
 const counterFor = (market: any, match: any) => {
   const n = String(market?.name ?? '').toLowerCase();
-  if (/corner/.test(n)) return (match.corners?.home ?? 0) + (match.corners?.away ?? 0);
-  if (/card|booking|yellow|red/.test(n)) return (match.cards?.home ?? 0) + (match.cards?.away ?? 0);
-  return (match.homeScore ?? 0) + (match.awayScore ?? 0);
+  const type = String(market?.marketType ?? '').toUpperCase();
+  if (type === 'CORNERS' || /corner|korner/.test(n)) return Number(match.corners?.home ?? 0) + Number(match.corners?.away ?? 0);
+  if (type === 'CARDS' || /card|booking|yellow|red|karton/.test(n)) return Number(match.cards?.home ?? 0) + Number(match.cards?.away ?? 0);
+  return Number(match.homeScore ?? 0) + Number(match.awayScore ?? 0);
 };
 
 /**
- * Heq outcomes që tashmë janë vendosur nga rezultati live.
- * Over vdes kur count > line, Under vdes kur count < line.
- * Në linjë të plotë (integer) është push dhe të dyja mbeten.
+ * Hide a live total once the current count has already passed its line.
  * Handicap, correct score, BTTS, 1X2 nuk preken.
  */
 export function filterDecidedOutcomes(outcomes: any[] = [], market: any = {}, match: any = {}) {
   if (!outcomes.length) return outcomes;
   if (!isTotalMarket(market)) return outcomes;
-  const lineNum = parseLineNum(market?.line);
+  const lineNum = parseLineNum(market?.line || market?.specifier);
   if (lineNum == null) return outcomes;
   const total = counterFor(market, match);
-  return outcomes.filter((o) => {
-    if (isOverOutcome(o)) return total <= lineNum;
-    if (isUnderOutcome(o)) return total >= lineNum;
-    return true;
-  });
+  if (total > lineNum) return [];
+  return outcomes;
 }

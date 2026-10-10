@@ -7,7 +7,7 @@ import MarketPanel from './MarketPanel';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays } from 'lucide-react';
-import { isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
+import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
 
 interface Props {
   tournamentId?: string;
@@ -165,6 +165,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
 
     const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
+      const isQuickMarketVisible = (mk: any) =>
+        isMarketVisible(m, mk, lockedMarkets) &&
+        filterDecidedOutcomes(
+          (mk.outcomes ?? []).filter(isOutcomeAvailable),
+          mk,
+          m,
+        ).length > 0;
       const findOutcome = (mk: any, targets: string[]) => {
         const normT = targets.map((t) => t.toLowerCase());
         const hit = (mk.outcomes ?? []).find((o: any) => {
@@ -188,7 +195,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         });
       };
 
-      const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isMarketVisible(m, mk, lockedMarkets));
+      const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isQuickMarketVisible(mk));
       if (m1) {
         const slots = completeSlots(m1, [
           findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
@@ -198,7 +205,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         return { market: m1, slots, mode: '1x2' };
       }
 
-      const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isMarketVisible(m, mk, lockedMarkets));
+      const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isQuickMarketVisible(mk));
       if (m2) {
         const slots = completeSlots(m2, [
           findOutcome(m2, ['yes', 'gg']),
@@ -207,7 +214,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         return { market: m2, slots, mode: 'btts' };
       }
 
-      const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isMarketVisible(m, mk, lockedMarkets));
+      const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isQuickMarketVisible(mk));
       if (m3) {
         const slots = completeSlots(m3, [
           findOutcome(m3, ['over', 'o']),
