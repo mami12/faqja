@@ -11,13 +11,18 @@ const getOutcomeLabel = (name: string, t: (key: string) => string) => {
   const raw = String(name ?? '').trim();
   const key = raw.toLowerCase();
 
-  if (['1', 'home', 'home team', 'home win', 'homewin'].includes(key)) return t('outcomes.home');
-  if (['x', 'draw', 'tie', 'draw no bet'].includes(key)) return t('outcomes.draw');
-  if (['2', 'away', 'away team', 'away win', 'awaywin'].includes(key)) return t('outcomes.away');
-  if (['over', 'o', 'over 0.5', 'over 1.5', 'over 2.5', 'over 3.5'].includes(key)) return t('outcomes.over');
-  if (['under', 'u', 'under 0.5', 'under 1.5', 'under 2.5', 'under 3.5'].includes(key)) return t('outcomes.under');
-  if (['yes', 'gg', 'both teams to score', 'both teams score'].includes(key)) return t('outcomes.yes');
-  if (['no', 'ng', 'no goal from both', 'no both teams to score'].includes(key)) return t('outcomes.no');
+  if (['1', 'home', 'home team', 'home win', 'homewin', 'vendas', '1 (vendas)'].includes(key)) return t('outcomes.home');
+  if (['x', 'draw', 'tie', 'draw no bet', 'barazim', 'x (barazim)'].includes(key)) return t('outcomes.draw');
+  if (['2', 'away', 'away team', 'away win', 'awaywin', 'udhëtues', 'udhetues', '2 (udhëtues)'].includes(key)) return t('outcomes.away');
+
+  if (/(^|\s)(over|mbi|lart)(\s|$)/.test(key) || /^o$/.test(key) || /over\s*\d/.test(key) || /lart\s*\d/.test(key)) return t('outcomes.over');
+  if (/(^|\s)(under|nen|nën|posht|poshtë)(\s|$)/.test(key) || /^u$/.test(key) || /under\s*\d/.test(key) || /posht\s*\d/.test(key) || /nën\s*\d/.test(key)) return t('outcomes.under');
+
+  if (/(both teams? to score|shenojne|shënojnë|gg|gj|g\/ng|g\s*\/\s*ng|shënojnë të dyja ekipet|të dyja ekipet shënojnë)/i.test(raw) || /^yes$/i.test(key)) return t('outcomes.yes');
+  if (/(no goal|no both teams to score|nuk shenojne|nuk shënojnë|ng|jo gol|jo-gol)/i.test(raw) || /^no$/i.test(key)) return t('outcomes.no');
+
+  if (/\bgoal\b/i.test(raw) && !/no\s*goal|jo\s*gol|nuk\s*shenojne|nuk\s*shënojnë/i.test(raw)) return t('outcomes.yes');
+  if (/(no\s*goal|jo\s*gol|nuk\s*shenojne|nuk\s*shënojnë)/i.test(raw)) return t('outcomes.no');
 
   return raw;
 };

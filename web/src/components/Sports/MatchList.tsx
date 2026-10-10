@@ -215,8 +215,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     // Label-i: për O/U përfshin linjën, për të tjerat mbetet i njëjti
     const quickLabel =
       quick?.mode === '1x2' ? '1X2'
-      : quick?.mode === 'btts' ? 'GG/NG'
-      : quick?.mode === 'ou' ? 'O/U'
+      : quick?.mode === 'btts' ? `${t('outcomes.yes')}/${t('outcomes.no')}`
+      : quick?.mode === 'ou' ? `${t('outcomes.over')}/${t('outcomes.under')}`
       : '';
 
     const quickCols = quick?.mode === '1x2' ? 3 : 2;
@@ -233,7 +233,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-2 truncate text-text-secondary">
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             <span className="truncate text-[11px] font-semibold tracking-[0.12em] uppercase text-text-secondary">
-              {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || 'League'}
+              {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || 'Liga'}
             </span>
           </div>
 
@@ -357,10 +357,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
-            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">Live betting board</h2>
+            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">{t('common.live_betting_board')}</h2>
           </div>
           <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300">
-            {filteredMatches.length} matches
+            {filteredMatches.length} ndeshje
           </div>
         </div>
 
@@ -389,7 +389,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-1.5 flex-wrap">
             <div className="mr-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
               <CalendarDays size={15} />
-              <span className="hidden sm:inline">Filter:</span>
+              <span className="hidden sm:inline">{t('common.filter')}:</span>
             </div>
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-[#121b2a] p-1">
               <button

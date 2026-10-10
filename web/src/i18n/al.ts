@@ -57,7 +57,7 @@ export default {
     other: 'Tregje të tjera',
     market: 'Tregu',
     match_result: 'Rezultati i Ndeshjes (1X2)',
-    over_under: 'Mbi / Nën Gola',
+    over_under: 'Lart / Poshtë Gola',
     both_teams_score: 'Të Dyja Ekipet Shënojnë',
     double_chance: 'Shans i Dyfishtë',
     handicap: 'Handikap',
@@ -101,10 +101,10 @@ export default {
     home: '1 (Vendas)',
     draw: 'X (Barazim)',
     away: '2 (Udhëtues)',
-    over: 'Mbi',
-    under: 'Nën',
-    yes: 'Po',
-    no: 'Jo'
+    over: 'Lart',
+    under: 'Poshtë',
+    yes: 'GOL',
+    no: 'JO GOL'
   },
   betslip: {
     betslip: 'Skedina Ime',
@@ -266,7 +266,7 @@ export default {
     filter: 'Filtro',
     no_results: 'Nuk ka ndeshje për momentin',
     balance: 'Bilanci Juaj',
-    search_matches: 'Kerko ndeshje...',
+    search_matches: 'Kërko ndeshje...',
     results_found: 'rezultate të gjetura',
     no_search_results: 'Nuk u gjet asnjë ndeshje për kërkimin tënd',
     try_different_search: 'Provo një kërkim tjetër ose kontrollo drejtshkrimin.',
@@ -275,6 +275,7 @@ export default {
     vs: 'VS',
     live: 'LIVE',
     match: 'Ndeshje',
+    live_betting_board: 'Tabela Live',
     // idle mode: the server paused the feed with nobody on the board and is filling it again
     feed_refreshing: 'Kuotat po rifreskohen...',
     feed_refreshing_hint: 'Po marrim kuotat e freskëta nga feed-i. Ndeshjet shfaqen brenda disa sekondash.'

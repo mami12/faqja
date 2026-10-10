@@ -73,46 +73,43 @@ export default function Header({ onToggleNav }: Props) {
   );
 
   return (
-    <header className="shrink-0 bg-secondary/95 backdrop-blur-md border-b border-tertiary text-text-primary z-20">
-      <div className="h-14 sm:h-16 flex items-center justify-between gap-2 px-3 sm:px-6">
-        {/* Brand & Drawer toggle */}
-        <div className="flex items-center gap-2 min-w-0">
+    <header className="shrink-0 z-20 border-b border-white/10 bg-[#091321]/90 backdrop-blur-xl">
+      <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-16 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2">
           {onToggleNav && (
             <button
               onClick={onToggleNav}
-              className="lg:hidden p-2 -ml-1 rounded-lg text-text-secondary hover:text-white hover:bg-tertiary/80 transition"
+              className="rounded-xl border border-white/10 bg-[#101b2a] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
               aria-label={t('nav.sports')}
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
           )}
           <div
-            className="flex items-center gap-2 cursor-pointer group select-none py-1"
+            className="group flex cursor-pointer items-center gap-2 py-1 select-none"
             onClick={() => navigate('/')}
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-accent-green flex items-center justify-center text-primary shadow-glow-green group-hover:scale-105 transition-transform">
-              <Zap size={18} className="fill-primary text-primary" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform group-hover:scale-105">
+              <Zap size={17} className="fill-current" />
             </div>
             <div className="flex items-baseline gap-1 truncate">
-              <span className="text-base sm:text-lg font-black tracking-tight text-white group-hover:text-slate-100 transition">
+              <span className="text-base font-black tracking-tight text-white transition sm:text-lg">
                 NETFLY
               </span>
-              <span className="text-base sm:text-lg font-black tracking-wider text-accent-green">
+              <span className="text-base font-black tracking-wider text-emerald-400 sm:text-lg">
                 SPORT
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right side controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Language Switcher Pill */}
-          <div className="relative flex items-center bg-primary/70 border border-tertiary/80 hover:border-tertiary rounded-lg px-2 py-1 text-xs transition">
-            <Globe size={13} className="text-text-secondary mr-1.5 shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className="relative flex items-center rounded-xl border border-white/10 bg-[#101b2a] px-2 py-1 text-xs transition hover:border-emerald-500/30">
+            <Globe size={13} className="mr-1.5 shrink-0 text-text-secondary" />
             <select
               value={lang}
               onChange={(e) => setLanguage(e.target.value as any)}
-              className="bg-transparent text-[11px] sm:text-xs font-semibold text-text-primary focus:outline-none cursor-pointer pr-1"
+              className="cursor-pointer bg-transparent pr-1 text-[11px] font-semibold text-text-primary focus:outline-none sm:text-xs"
             >
               <option value="al" className="bg-secondary text-white">Shqip</option>
               <option value="en" className="bg-secondary text-white">English</option>
@@ -128,20 +125,18 @@ export default function Header({ onToggleNav }: Props) {
                 {links}
               </div>
 
-              {/* Wallet / Balance Pill (both desktop & mobile) */}
-              <div className="flex items-center gap-1.5 bg-primary/90 border border-tertiary px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-inner-glow">
-                <Wallet size={14} className="text-accent-yellow shrink-0" />
+              <div className="flex items-center gap-1.5 rounded-xl border border-amber-400/20 bg-gradient-to-r from-amber-500/10 to-emerald-500/10 px-2.5 py-1.5 shadow-inner shadow-amber-500/10 sm:px-3">
+                <Wallet size={14} className="shrink-0 text-amber-300" />
                 <div className="flex flex-col text-left">
-                  <span className="text-[9px] uppercase font-bold text-text-secondary leading-none hidden sm:inline">
+                  <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-text-secondary/80 sm:inline">
                     {user.username || t('admin.balance')}
                   </span>
-                  <span className="font-extrabold text-accent-yellow text-xs sm:text-sm tabular-nums whitespace-nowrap leading-tight">
-                    {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-300/80">Lëk</span>
+                  <span className="text-xs font-extrabold tabular-nums text-amber-300 sm:text-sm">
+                    {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-200/80">Lëk</span>
                   </span>
                 </div>
               </div>
 
-              {/* Desktop logout */}
               <button
                 onClick={() => {
                   logout();
