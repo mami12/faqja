@@ -301,6 +301,8 @@ export default {
     possession: 'Zotërimi i Topit',
     shots_total: 'Gjuajtje Gjithsej',
     shots_on_target: 'Gjuajtje në Portë',
+    cards: 'Kartonë',
+    timeline: 'Ngjarjet e fundit',
     yellow_cards: 'Kartonë të Verdhë',
     red_cards: 'Kartonë të Kuq',
     attacks: 'Sulme',

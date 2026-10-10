@@ -233,8 +233,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                 // Grup me një market të vetëm → kartë normale
                 if (group.markets.length === 1) {
                   const market = group.markets[0];
-                  const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
-                  const cleanOutcomes = dedupeOutcomes(available, market.name);
+                  const cleanOutcomes = dedupeOutcomes(market.outcomes ?? [], market.name);
                   const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
                   if (!liveOutcomes.length) return null;
 
@@ -280,8 +279,7 @@ export default function MarketPanel({ match }: { match: Match }) {
 
                     <div className="divide-y divide-tertiary/40">
                       {group.markets.map(market => {
-                        const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
-                        const cleanOutcomes = dedupeOutcomes(available, market.name);
+                        const cleanOutcomes = dedupeOutcomes(market.outcomes ?? [], market.name);
                         const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
                         if (!liveOutcomes.length) return null;
 

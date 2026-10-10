@@ -187,7 +187,7 @@ export default function MatchDetail() {
         </div>
       </div>
 
-      {isLive && <PitchTracker matchId={live.id} />}
+      {isLive && <PitchTracker matchId={live.id} homeTeam={live.homeTeam} awayTeam={live.awayTeam} />}
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0f1727]/80 p-1.5">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
