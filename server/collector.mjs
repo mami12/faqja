@@ -117,19 +117,49 @@ export function buildMarkets(oddsRows) {
       if (c === 'under' || nm === 'under') return 8;
       if (c === 'yes' || nm === 'yes') return 9;
       if (c === 'no' || nm === 'no') return 10;
+      // HT/FT outcomes (HH, HD, HA, DH, DD, DA, AH, AD, AA)
+      if (/^(hh|1\/1)$/i.test(c) || /^(hh|1\/1)$/i.test(nm)) return 20;
+      if (/^(hd|1\/x)$/i.test(c) || /^(hd|1\/x)$/i.test(nm)) return 21;
+      if (/^(ha|1\/2)$/i.test(c) || /^(ha|1\/2)$/i.test(nm)) return 22;
+      if (/^(dh|x\/1)$/i.test(c) || /^(dh|x\/1)$/i.test(nm)) return 23;
+      if (/^(dd|x\/x)$/i.test(c) || /^(dd|x\/x)$/i.test(nm)) return 24;
+      if (/^(da|x\/2)$/i.test(c) || /^(da|x\/2)$/i.test(nm)) return 25;
+      if (/^(ah|2\/1)$/i.test(c) || /^(ah|2\/1)$/i.test(nm)) return 26;
+      if (/^(ad|2\/x)$/i.test(c) || /^(ad|2\/x)$/i.test(nm)) return 27;
+      if (/^(aa|2\/2)$/i.test(c) || /^(aa|2\/2)$/i.test(nm)) return 28;
       return 99;
     };
 
     const mName = String(m.name ?? '').toLowerCase();
-    const is1X2 = (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
+
+    // --- HT/FT detection (must come BEFORE is1X2 because is1X2 excludes "half") ---
+    // Matches: "Halftime/Fulltime", "Half Time / Full Time", "HT/FT", "HTFT"
+    const isHTFT = /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half\s*time\s*\/\s*full\s*time|htft/i.test(mName);
+
+    const is1X2 = !isHTFT &&
+                  (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
                   !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-    const isBTTS = /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result/i.test(mName);
-    const isOU = m.column === 'total' && /total|over\/?under/i.test(mName) && !/corner|card|half|team/i.test(mName);
-    const isOddEven = /odd\/even/i.test(mName);
-    const isDoubleChance = /double chance/i.test(mName);
+    const isBTTS = !isHTFT && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result/i.test(mName);
+    const isOU = !isHTFT && m.column === 'total' && /total|over\/?under/i.test(mName) && !/corner|card|half|team/i.test(mName);
+    const isOddEven = !isHTFT && /odd\/even/i.test(mName);
+    const isDoubleChance = !isHTFT && /double chance/i.test(mName);
 
     let filteredOutcomes = cleanOutcomes;
-    if (is1X2) {
+
+    if (isHTFT) {
+      // HT/FT: 9 outcomes. Accept both short codes (HH, HD, HA, DH, DD, DA, AH, AD, AA)
+      // and slash form (1/1, 1/X, 1/2, X/1, X/X, X/2, 2/1, 2/X, 2/2).
+      filteredOutcomes = cleanOutcomes.filter((o) => {
+        const k = String(o.key ?? '').trim().toLowerCase().replace(/\s+/g, '');
+        const n = String(o.name ?? '').trim().toLowerCase().replace(/\s+/g, '');
+        const validShort = /^(hh|hd|ha|dh|dd|da|ah|ad|aa)$/;
+        const validSlash = /^(1\/1|1\/x|1\/2|x\/1|x\/x|x\/2|2\/1|2\/x|2\/2)$/;
+        return validShort.test(k) || validShort.test(n) || validSlash.test(k) || validSlash.test(n);
+      });
+      // If the filter above dropped everything (feed uses an unexpected code format),
+      // fall back to keeping the raw outcomes so the market is not silently emptied.
+      if (filteredOutcomes.length === 0) filteredOutcomes = cleanOutcomes;
+    } else if (is1X2) {
       // 1X2 MUST strictly only contain 1, X, 2 (or Home, Draw, Away) — drop phantom 3, 4, 5 etc.
       filteredOutcomes = cleanOutcomes.filter((o) => {
         const k = String(o.key ?? '').trim().toLowerCase();
