@@ -94,7 +94,7 @@ export default function Header({ onToggleNav }: Props) {
             </div>
             <div className="flex items-baseline gap-1 truncate">
               <span className="text-base font-black tracking-tight text-white transition sm:text-lg">
-                NETFLY
+                FAQJA
               </span>
               <span className="text-base font-black tracking-wider text-emerald-400 sm:text-lg">
                 SPORT

@@ -185,11 +185,16 @@ export default function SportsbookPage() {
         {/* betslip sheet */}
         {betslipOpen && (
           <div className="xl:hidden fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setBetslipOpen(false)}>
-            <div className="w-full max-h-[85dvh] bg-secondary rounded-t-3xl border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-h-[92dvh] bg-secondary rounded-t-3xl border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
               {/* Sheet handle bar */}
-              <div className="w-full py-2 flex justify-center bg-secondary cursor-pointer" onClick={() => setBetslipOpen(false)}>
-                <div className="w-12 h-1.5 rounded-full bg-tertiary hover:bg-slate-500 transition"></div>
-              </div>
+              <button
+                type="button"
+                className="flex w-full justify-center bg-secondary py-2"
+                onClick={() => setBetslipOpen(false)}
+                aria-label={t('common.cancel')}
+              >
+                <span className="h-1.5 w-12 rounded-full bg-tertiary transition hover:bg-slate-500" />
+              </button>
               <BetslipSidebar className="w-full flex-1 overflow-hidden" />
             </div>
           </div>

@@ -175,31 +175,44 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         return isOutcomeAvailable(hit) ? hit : null;
       };
 
+      const completeSlots = (mk: any, slots: (any | null)[]) => {
+        const outcomes = mk?.outcomes ?? [];
+        const used = new Set(slots.filter(Boolean));
+        return slots.map((slot) => {
+          if (slot) return slot;
+          const fallback = outcomes.find((outcome: any) =>
+            !used.has(outcome) && isOutcomeAvailable(outcome),
+          );
+          if (fallback) used.add(fallback);
+          return fallback ?? null;
+        });
+      };
+
       const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m1) {
-        const slots = [
+        const slots = completeSlots(m1, [
           findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
           findOutcome(m1, ['x', 'draw', 'tie', 'wx', 'd']),
           findOutcome(m1, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
-        ];
+        ]);
         return { market: m1, slots, mode: '1x2' };
       }
 
       const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m2) {
-        const slots = [
+        const slots = completeSlots(m2, [
           findOutcome(m2, ['yes', 'gg']),
           findOutcome(m2, ['no', 'ng']),
-        ];
+        ]);
         return { market: m2, slots, mode: 'btts' };
       }
 
       const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isMarketVisible(m, mk, lockedMarkets));
       if (m3) {
-        const slots = [
+        const slots = completeSlots(m3, [
           findOutcome(m3, ['over', 'o']),
           findOutcome(m3, ['under', 'u']),
-        ];
+        ]);
         return { market: m3, slots, mode: 'ou' };
       }
       return null;

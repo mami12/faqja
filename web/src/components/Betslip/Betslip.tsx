@@ -133,9 +133,30 @@ export default function Betslip() {
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-secondary select-none">
-      {/* Ticket Type Segmented Control */}
-      <div className="shrink-0 p-2.5 bg-secondary border-b border-tertiary/70">
-        <div className="flex bg-primary/80 p-1 rounded-xl border border-tertiary/60">
+      {/* Bet slip header and ticket type */}
+      <div className="shrink-0 border-b border-tertiary/70 bg-secondary p-3">
+        <div className="mb-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TicketIcon size={15} className="text-accent-green" />
+            <span className="text-xs font-black uppercase tracking-[0.12em] text-white">
+              {t('betslip.betslip')}
+            </span>
+            <span className="rounded-full border border-accent-green/25 bg-accent-green/10 px-2 py-0.5 text-[10px] font-black tabular-nums text-accent-green">
+              {selections.length}
+            </span>
+          </div>
+          {selections.length > 0 && (
+            <button
+              onClick={clearAll}
+              aria-label={t('common.clear_all')}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-text-secondary transition hover:bg-accent-red/10 hover:text-accent-red"
+            >
+              <Trash2 size={11} />
+              {t('common.clear_all')}
+            </button>
+          )}
+        </div>
+        <div className="flex rounded-xl border border-tertiary/60 bg-primary/80 p-1">
           {['SINGLE', 'COMBO', 'SYSTEM'].map(type => (
             <button 
               key={type}
@@ -159,14 +180,6 @@ export default function Betslip() {
             <TicketIcon size={13} className="text-accent-green" />
             <span>{t('betslip.search_ticket')}</span>
           </div>
-          {selections.length > 0 && (
-            <button
-              onClick={clearAll}
-              className="text-text-secondary hover:text-accent-red flex items-center gap-1 text-[10px] font-bold transition"
-            >
-              <Trash2 size={11} /> {t('common.clear_all')}
-            </button>
-          )}
         </div>
         <div className="flex gap-1.5">
           <div className="relative flex-1">
@@ -226,7 +239,7 @@ export default function Betslip() {
             {selections.map(s => (
               <div 
                 key={s.outcomeId} 
-                className="bg-primary/80 p-3 rounded-xl border border-tertiary/80 hover:border-slate-600/60 relative group transition shadow-sm space-y-1.5"
+                className="relative space-y-2 rounded-xl border border-tertiary/80 bg-gradient-to-br from-primary to-primary/70 p-3 shadow-sm transition hover:border-accent-green/30"
               >
                 <button 
                   onClick={() => removeSelection(s.outcomeId)} 
@@ -235,13 +248,22 @@ export default function Betslip() {
                 >
                   <Trash2 size={14} />
                 </button>
-                <div className="text-[11px] text-text-secondary font-medium pr-6 truncate">{s.matchName}</div>
-                <div className="text-xs font-bold text-white">{s.marketName}</div>
+                <div className="truncate pr-6 text-[11px] font-semibold text-text-secondary" title={s.matchName}>
+                  {s.matchName}
+                </div>
+                <div className="text-xs font-bold text-white" title={`${s.marketName}${s.marketLine ? ` · ${s.marketLine}` : ''}`}>
+                  {s.marketName}
+                  {s.marketLine && (
+                    <span className="ml-1.5 rounded bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">
+                      {s.marketLine}
+                    </span>
+                  )}
+                </div>
                 <div className="flex justify-between items-center pt-1 border-t border-tertiary/40">
-                  <span className="text-xs font-bold text-accent-green bg-accent-green/10 px-2 py-0.5 rounded-md border border-accent-green/20">
-                    {s.outcomeName}
+                  <span className="rounded-md border border-accent-green/20 bg-accent-green/10 px-2 py-0.5 text-xs font-bold text-accent-green">
+                    {s.outcomeName}{s.marketLine ? ` ${s.marketLine}` : ''}
                   </span>
-                  <span className="font-mono font-black text-sm text-white tabular-nums">
+                  <span className="font-mono text-sm font-black tabular-nums text-white">
                     @{s.odds.toFixed(2)}
                   </span>
                 </div>
@@ -265,7 +287,22 @@ export default function Betslip() {
           )}
 
           {/* Stake & Calculations Footer — gjithmonë i dukshëm */}
-          <div className="shrink-0 p-3.5 bg-secondary/95 border-t border-tertiary/80 space-y-3 shadow-2xl">
+          <div className="shrink-0 border-t border-tertiary/80 bg-gradient-to-b from-secondary to-primary/90 p-3.5 shadow-2xl">
+            <div className="mb-3 rounded-xl border border-accent-green/15 bg-accent-green/[0.06] p-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-text-secondary">{t('betslip.total_odds')}:</span>
+                <span className="font-mono text-sm font-black tabular-nums text-white">
+                  {ticketType === 'COMBO' ? totalOdds.toFixed(2) : selections.length === 1 ? selections[0].odds.toFixed(2) : '-'}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-white/5 pt-2">
+                <span className="text-xs font-medium text-text-secondary">{t('betslip.potential_payout')}:</span>
+                <span className="font-mono text-base font-black tabular-nums text-accent-yellow">
+                  {potentialPayout.toFixed(2)} <span className="text-xs font-bold text-amber-300">Lëk</span>
+                </span>
+              </div>
+            </div>
+            <div className="space-y-3">
             {ticketType === 'SYSTEM' && (
               <div>
                 <label className="text-[10px] uppercase font-bold text-text-secondary block mb-1">System Type</label>
@@ -281,13 +318,6 @@ export default function Betslip() {
                 </select>
               </div>
             )}
-
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary font-medium">{t('betslip.total_odds')}:</span>
-              <span className="font-mono font-black text-sm text-white tabular-nums">
-                {ticketType === 'COMBO' ? totalOdds.toFixed(2) : selections.length === 1 ? selections[0].odds.toFixed(2) : '-'}
-              </span>
-            </div>
 
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -327,13 +357,6 @@ export default function Betslip() {
               ))}
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-tertiary/50">
-              <span className="text-xs text-text-secondary font-medium">{t('betslip.potential_payout')}:</span>
-              <span className="font-mono font-black text-accent-yellow text-base tabular-nums">
-                {potentialPayout.toFixed(2)} <span className="text-xs font-bold text-amber-300">Lëk</span>
-              </span>
-            </div>
-
             <div className="flex gap-2 pt-1">
               {user ? (
                 <button 
@@ -353,6 +376,7 @@ export default function Betslip() {
               >
                 {t('betslip.book_ticket')}
               </button>
+            </div>
             </div>
           </div>
         </>

@@ -67,6 +67,7 @@ export default function OddsButton({ match, market, outcome }: Props) {
         marketId: market.id,
         outcomeName: outcome.name,
         marketName: market.name,
+        marketLine: market.line || market.specifier,
         matchName: `${match.homeTeam} vs ${match.awayTeam}`,
         odds: currentOdds
       });

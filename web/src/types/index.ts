@@ -93,6 +93,7 @@ export interface BetSelection {
   marketId: string;
   outcomeName: string;
   marketName: string;
+  marketLine?: string;
   matchName: string;
   odds: number;
 }
