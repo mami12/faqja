@@ -4,7 +4,9 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { Trash2, AlertTriangle, Search, Ticket as TicketIcon, X } from 'lucide-react';
 import BookingModal from './BookingModal';
+import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
+import { Ticket } from '../../types';
 
 export default function Betslip() {
   const { 
@@ -17,6 +19,7 @@ export default function Betslip() {
   const [oddsChangedError, setOddsChangedError] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [placedTicket, setPlacedTicket] = useState<Ticket | null>(null);
   const [stakeError, setStakeError] = useState('');
 
   // Ticket search state
@@ -34,9 +37,9 @@ export default function Betslip() {
     setStakeError('');
     
     try {
-      await placeBet(() => refreshUser());
+      const ticket = await placeBet(() => refreshUser());
+      setPlacedTicket(ticket);
       clearAll();
-      alert(t('common.success'));
     } catch (e: any) {
       if (e.response?.data?.message === 'Odds have changed') {
         setOddsChangedError(true);
@@ -383,6 +386,7 @@ export default function Betslip() {
       )}
 
       {showBookingModal && <BookingModal code={bookingCode} onClose={() => setShowBookingModal(false)} />}
+      {placedTicket && <TicketReceipt ticket={placedTicket} onClose={() => setPlacedTicket(null)} />}
     </div>
   );
 }

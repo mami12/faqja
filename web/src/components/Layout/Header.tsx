@@ -92,14 +92,6 @@ export default function Header({ onToggleNav }: Props) {
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform group-hover:scale-105">
               <Zap size={17} className="fill-current" />
             </div>
-            <div className="flex items-baseline gap-1 truncate">
-              <span className="text-base font-black tracking-tight text-white transition sm:text-lg">
-                FAQJA
-              </span>
-              <span className="text-base font-black tracking-wider text-emerald-400 sm:text-lg">
-                SPORT
-              </span>
-            </div>
           </div>
         </div>
 

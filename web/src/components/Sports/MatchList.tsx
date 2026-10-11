@@ -379,9 +379,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
             <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">{t('common.live_betting_board')}</h2>
           </div>
-          <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-300">
-            {filteredMatches.length} ndeshje
-          </div>
         </div>
 
         <div className="space-y-3">

@@ -28,18 +28,10 @@ export default function LoginPage() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-accent-green/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="bg-secondary/95 backdrop-blur-xl p-6 sm:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-tertiary/80 relative z-10 space-y-6">
-        {/* Brand Header */}
         <div className="flex flex-col items-center text-center">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-accent-green flex items-center justify-center text-primary shadow-glow-green mb-3">
             <Zap size={26} className="fill-primary text-primary" />
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <h1 className="text-2xl font-black text-white tracking-tight">NETFLY</h1>
-            <span className="text-2xl font-black text-accent-green tracking-wider">SPORT</span>
-          </div>
-          <p className="text-xs text-text-secondary mt-1 font-semibold uppercase tracking-wider">
-            {t('auth.login_subtitle')}
-          </p>
         </div>
         
         {error && (
@@ -95,10 +87,6 @@ export default function LoginPage() {
             <ArrowRight size={16} />
           </button>
         </form>
-
-        <p className="text-center text-xs text-text-secondary/70 border-t border-tertiary/50 pt-4">
-          {t('auth.admin_only_note')}
-        </p>
       </div>
     </div>
   );

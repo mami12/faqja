@@ -11,11 +11,9 @@ export default {
   },
   auth: {
     login_title: 'SYSTEM-ANMELDUNG',
-    login_subtitle: 'Offizielle Sportwetten-Plattform',
     username: 'Benutzername',
     password: 'Passwort',
     login_btn: 'Anmelden',
-    admin_only_note: 'Hinweis: Neue Konten können nur von einem Administrator erstellt werden.'
   },
   sections: {
     live_now: 'LIVE-SPIELE',

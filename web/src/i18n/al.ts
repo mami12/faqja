@@ -25,12 +25,10 @@ export default {
   },
   auth: {
     login_title: 'HYRJE NË SISTEM',
-    login_subtitle: 'Shërbimi Zyrtar i Basteve Sportive',
     username: 'Përdoruesi',
     password: 'Fjalëkalimi',
     login_btn: 'Identifikohu',
     login_failed: 'Identifikimi dështoi',
-    admin_only_note: 'Kujdes: Llogaritë e reja krijohen ekskluzivisht nga Administratori.'
   },
   sections: {
     live_now: 'NDESHJET LIVE NË LOJË',

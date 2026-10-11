@@ -17,11 +17,9 @@ export default {
   },
   auth: {
     login_title: 'SYSTEM LOGIN',
-    login_subtitle: 'Official Sportsbook Platform',
     username: 'Username',
     password: 'Password',
     login_btn: 'Sign In',
-    admin_only_note: 'Notice: New accounts can only be created by an Administrator.'
   },
   sections: {
     live_now: 'LIVE IN-PLAY MATCHES',

@@ -11,11 +11,9 @@ export default {
   },
   auth: {
     login_title: 'CONNEXION AU SYSTÈME',
-    login_subtitle: 'Plateforme officielle de paris sportifs',
     username: 'Nom d\'utilisateur',
     password: 'Mot de passe',
     login_btn: 'Se connecter',
-    admin_only_note: 'Remarque : Les nouveaux comptes ne peuvent être créés que par un administrateur.'
   },
   sections: {
     live_now: 'MATCHS EN DIRECT',
