@@ -7,6 +7,7 @@ import BookingModal from './BookingModal';
 import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
 import { Ticket } from '../../types';
+import { translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
 
 export default function Betslip() {
   const { 
@@ -96,7 +97,7 @@ export default function Betslip() {
           <div>
             <div className="text-xs text-text-secondary">{t('tickets.ticket_id')}: <span className="font-mono text-white">{ticket.id.slice(0, 8).toUpperCase()}</span></div>
             {ticket.bookingCode && (
-              <div className="text-xs text-accent-blue font-mono font-bold mt-0.5">Code: {ticket.bookingCode}</div>
+              <div className="text-xs text-accent-blue font-mono font-bold mt-0.5">{t('admin.code')}: {ticket.bookingCode}</div>
             )}
             {ticket.user?.username && (
               <div className="text-xs text-text-secondary mt-0.5">{t('admin.user')}: {ticket.user.username}</div>
@@ -110,11 +111,11 @@ export default function Betslip() {
             <div key={idx} className="flex justify-between items-center text-xs">
               <div className="min-w-0">
                 <div className="font-semibold text-white truncate">{line.matchName}</div>
-                <div className="text-text-secondary">{line.marketName} - {line.outcomeName}</div>
+                <div className="text-text-secondary">{translateMarketName(line.marketName, t)} - {translateOutcomeName(line.outcomeName, t, line.marketName)}</div>
               </div>
               <div className="text-right shrink-0 ml-2">
                 <span className="text-accent-green font-bold">@{line.oddsAtPlacement?.toFixed(2)}</span>
-                <div className="text-[10px] text-text-secondary">{line.status}</div>
+                <div className="text-[10px] text-text-secondary">{t(`tickets.${line.status.toLowerCase()}`)}</div>
               </div>
             </div>
           ))}
@@ -232,7 +233,7 @@ export default function Betslip() {
           </div>
           <div className="font-bold text-white text-sm">{t('betslip.no_selections')}</div>
           <p className="text-xs text-text-secondary/80 max-w-[200px]">
-            Click on any odds to add selections to your betslip.
+            {t('betslip.select_odds_help')}
           </p>
         </div>
       ) : (
@@ -247,7 +248,7 @@ export default function Betslip() {
                 <button 
                   onClick={() => removeSelection(s.outcomeId)} 
                   className="absolute top-2.5 right-2.5 p-1 rounded-md text-text-muted hover:text-accent-red hover:bg-accent-red/10 transition"
-                  title="Remove selection"
+                  title={t('betslip.remove_selection')}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -255,7 +256,7 @@ export default function Betslip() {
                   {s.matchName}
                 </div>
                 <div className="text-xs font-bold text-white" title={`${s.marketName}${s.marketLine ? ` · ${s.marketLine}` : ''}`}>
-                  {s.marketName}
+                  {translateMarketName(s.marketName, t)}
                   {s.marketLine && (
                     <span className="ml-1.5 rounded bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">
                       {s.marketLine}
@@ -264,7 +265,7 @@ export default function Betslip() {
                 </div>
                 <div className="flex justify-between items-center pt-1 border-t border-tertiary/40">
                   <span className="rounded-md border border-accent-green/20 bg-accent-green/10 px-2 py-0.5 text-xs font-bold text-accent-green">
-                    {s.outcomeName}{s.marketLine ? ` ${s.marketLine}` : ''}
+                    {translateOutcomeName(s.outcomeName, t, s.marketName)}{s.marketLine ? ` ${s.marketLine}` : ''}
                   </span>
                   <span className="font-mono text-sm font-black tabular-nums text-white">
                     @{s.odds.toFixed(2)}
@@ -308,13 +309,13 @@ export default function Betslip() {
             <div className="space-y-3">
             {ticketType === 'SYSTEM' && (
               <div>
-                <label className="text-[10px] uppercase font-bold text-text-secondary block mb-1">System Type</label>
+                <label className="text-[10px] uppercase font-bold text-text-secondary block mb-1">{t('betslip.system_type')}</label>
                 <select 
                   className="w-full bg-primary/90 border border-tertiary rounded-lg p-2 text-xs text-white focus:outline-none focus:border-accent-green" 
                   value={systemType} 
                   onChange={e => setSystemType(e.target.value)}
                 >
-                   <option value="">Select System</option>
+                   <option value="">{t('betslip.select_system')}</option>
                    {Array.from({length: selections.length - 1}).map((_, i) => (
                      <option key={i} value={`${i+2}/${selections.length}`}>{i+2}/{selections.length}</option>
                    ))}
@@ -325,7 +326,7 @@ export default function Betslip() {
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[10px] uppercase font-bold text-text-secondary">{t('betslip.stake')}</label>
-                <span className="text-[10px] text-text-secondary font-mono">Min 1 Lëk</span>
+                <span className="text-[10px] text-text-secondary font-mono">{t('betslip.min_stake')}</span>
               </div>
               <div className="relative">
                 <input 

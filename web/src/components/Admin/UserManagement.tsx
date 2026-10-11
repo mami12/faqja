@@ -150,6 +150,16 @@ export default function UserManagement() {
       default: return 'bg-blue-500/20 text-blue-400';
     }
   };
+  const roleLabel = (role: string) => ({
+    ADMIN: 'Administrator',
+    MANAGER: 'Menaxher',
+    PLAYER: 'Lojtar',
+  }[role] || role);
+  const statusLabel = (status: string) => ({
+    ACTIVE: 'Aktiv',
+    FROZEN: 'Ngrirë',
+    BANNED: 'Bllokuar',
+  }[status] || status);
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -214,7 +224,7 @@ export default function UserManagement() {
                   </td>
                   <td className="p-4">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getRoleBadge(u.role)}`}>
-                      {u.role}
+                      {roleLabel(u.role)}
                     </span>
                   </td>
                   <td className="p-4">
@@ -225,14 +235,14 @@ export default function UserManagement() {
                       {u.status === 'ACTIVE' && <CheckCircle size={12} />}
                       {u.status === 'FROZEN' && <ShieldAlert size={12} />}
                       {u.status === 'BANNED' && <Ban size={12} />}
-                      {u.status}
+                      {statusLabel(u.status)}
                     </span>
                   </td>
                   <td className="p-4 text-base font-bold text-white">
                     {u.balance.toFixed(2)} {u.currency || 'Lëk'}
                   </td>
                   <td className="p-4 text-xs text-text-secondary">
-                    {u.manager?.username || (u.role === 'MANAGER' ? `${u._count?.managedUsers || 0} users` : '-')}
+                    {u.manager?.username || (u.role === 'MANAGER' ? `${u._count?.managedUsers || 0} përdorues` : '-')}
                   </td>
                   <td className="p-4 text-right">
                     <div className="inline-flex items-center gap-1.5">
@@ -336,9 +346,9 @@ export default function UserManagement() {
                   onChange={e => setRole(e.target.value)}
                   className="w-full bg-primary border border-tertiary rounded-lg p-3 text-white focus:outline-none focus:border-accent-green"
                 >
-                  <option value="PLAYER">PLAYER</option>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
+                  <option value="PLAYER">Lojtar</option>
+                  <option value="MANAGER">Menaxher</option>
+                  <option value="ADMIN">Administrator</option>
                 </select>
               </div>
               {role === 'PLAYER' && managers.length > 0 && (
@@ -422,9 +432,9 @@ export default function UserManagement() {
                   onChange={e => setEditRole(e.target.value)}
                   className="w-full bg-primary border border-tertiary rounded-lg p-3 text-white focus:outline-none focus:border-accent-green"
                 >
-                  <option value="PLAYER">PLAYER</option>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
+                  <option value="PLAYER">Lojtar</option>
+                  <option value="MANAGER">Menaxher</option>
+                  <option value="ADMIN">Administrator</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-4">

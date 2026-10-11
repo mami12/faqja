@@ -17,7 +17,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false
       <div className="min-h-screen bg-primary flex items-center justify-center">
         <div className="flex items-center gap-3 text-text-secondary">
           <span className="w-4 h-4 rounded-full bg-accent-green animate-ping"></span>
-          <span>Loading...</span>
+          <span>Duke u ngarkuar...</span>
         </div>
       </div>
     );

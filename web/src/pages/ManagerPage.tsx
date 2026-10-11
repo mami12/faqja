@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { translateMarketName, translateOutcomeName, translateTicketStatus } from '../utils/sportsbookLabels';
 
 interface PlayerFinancial {
   id: string;
@@ -426,25 +427,25 @@ export default function ManagerPage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white text-base">Ticket #{ticket.id.substring(0, 8)}</span>
+                              <span className="font-bold text-white text-base">Skedina #{ticket.id.substring(0, 8)}</span>
                               {ticket.bookingCode && (
-                                <span className="text-xs bg-accent-blue/20 text-accent-blue font-mono px-2 py-0.5 rounded font-bold">Code: {ticket.bookingCode}</span>
+                                <span className="text-xs bg-accent-blue/20 text-accent-blue font-mono px-2 py-0.5 rounded font-bold">{t('admin.code')}: {ticket.bookingCode}</span>
                               )}
                               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                                 ticket.status === 'WON' ? 'bg-emerald-500/20 text-emerald-400' :
                                 ticket.status === 'LOST' ? 'bg-rose-500/20 text-rose-400' :
                                 ticket.status === 'REVERTED' ? 'bg-purple-500/20 text-purple-400' : 'bg-amber-500/20 text-amber-400'
-                              }`}>{ticket.status}</span>
+                              }`}>{translateTicketStatus(ticket.status, t)}</span>
                             </div>
                             <div className="text-xs text-text-secondary mt-1">
-                              <span>User: <strong className="text-white">{ticket.user?.username || 'Guest'}</strong></span>
+                              <span>Përdoruesi: <strong className="text-white">{ticket.user?.username || 'Vizitor'}</strong></span>
                               <span> &bull; {new Date(ticket.placedAt).toLocaleString()}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <div className="text-xs text-text-secondary">Stake / Payout</div>
+                            <div className="text-xs text-text-secondary">Shuma / Fitimi</div>
                             <div className="text-sm font-bold text-white">
                               {ticket.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green">{ticket.potentialPayout.toFixed(2)} Lëk</span>
                             </div>
@@ -471,10 +472,10 @@ export default function ManagerPage() {
                           {ticket.lines.map((line) => (
                             <div key={line.id} className="rounded-lg border border-tertiary bg-primary p-3 text-xs">
                               <div className="text-text-secondary">{line.matchName}</div>
-                              <div className="mt-1 font-semibold text-white">{line.marketName}: <span className="text-accent-green">{line.outcomeName}</span></div>
+                              <div className="mt-1 font-semibold text-white">{translateMarketName(line.marketName, t)}: <span className="text-accent-green">{translateOutcomeName(line.outcomeName, t, line.marketName)}</span></div>
                               <div className="mt-1 flex justify-between text-text-secondary">
                                 <span>Kuota <b className="text-white">{line.oddsAtPlacement.toFixed(2)}</b></span>
-                                <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{line.status}</span>
+                                <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{translateTicketStatus(line.status, t)}</span>
                               </div>
                             </div>
                           ))}

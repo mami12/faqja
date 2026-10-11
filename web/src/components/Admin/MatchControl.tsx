@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp, Edit3, Lock, Unlock, PlayCircle } from 'lucide-react';
+import { translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function MatchControl() {
+  const { t } = useLanguage();
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
@@ -39,7 +42,7 @@ export default function MatchControl() {
       });
       fetchMatches();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to update match status');
+      alert(e.response?.data?.error || 'Përditësimi i statusit të ndeshjes dështoi.');
     }
   };
 
@@ -51,7 +54,7 @@ export default function MatchControl() {
       });
       fetchMatches();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to update market status');
+      alert(e.response?.data?.error || 'Përditësimi i statusit të tregut dështoi.');
     }
   };
 
@@ -62,7 +65,7 @@ export default function MatchControl() {
       });
       fetchMatches();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to update outcome status');
+      alert(e.response?.data?.error || 'Përditësimi i statusit të zgjedhjes dështoi.');
     }
   };
 
@@ -76,7 +79,7 @@ export default function MatchControl() {
     const results = await Promise.allSettled(updates);
     await fetchMatches();
     const failed = results.filter((result) => result.status === 'rejected').length;
-    if (failed) alert(`${failed} of ${updates.length} odds adjustments failed. Successful changes were saved.`);
+    if (failed)     alert(`${failed} nga ${updates.length} ndryshime të kuotave dështuan. Ndryshimet e tjera u ruajtën.`);
   };
 
   const percentButtons = (outcomes: any[], compact = false) => (
@@ -120,7 +123,7 @@ export default function MatchControl() {
       setNewOdds('');
       fetchMatches();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to update odds');
+      alert(e.response?.data?.error || 'Përditësimi i kuotës dështoi.');
     }
   };
 
@@ -136,9 +139,9 @@ export default function MatchControl() {
       setHomeScore('0');
       setAwayScore('0');
       fetchMatches();
-      alert('Match settled and winning tickets paid out successfully!');
+      alert('Ndeshja u mbyll dhe fitimet e skedinave fituese u paguan.');
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Settlement failed');
+      alert(e.response?.data?.error || 'Mbyllja e ndeshjes dështoi.');
     }
   };
 
@@ -146,20 +149,20 @@ export default function MatchControl() {
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Match &amp; Odds Management</h2>
-          <p className="text-text-secondary text-sm">Control live odds, suspend betting on specific fixtures, or settle final scores</p>
+          <h2 className="text-2xl font-bold text-white">Menaxhimi i ndeshjeve dhe kuotave</h2>
+          <p className="text-text-secondary text-sm">Kontrolloni kuotat, pezulloni bastet ose vendosni rezultatin përfundimtar.</p>
         </div>
         <button 
           onClick={fetchMatches}
           className="px-4 py-2 bg-tertiary hover:bg-tertiary/80 text-white rounded-lg text-sm font-semibold transition"
         >
-          Refresh Fixtures
+          Rifresko ndeshjet
         </button>
       </div>
 
       {loading ? (
         <div className="p-12 text-center text-text-secondary bg-secondary rounded-xl border border-tertiary">
-          Loading matches...
+          Duke ngarkuar ndeshjet...
         </div>
       ) : (
         <div className="space-y-4">
@@ -174,10 +177,10 @@ export default function MatchControl() {
                         m.status === 'LIVE' ? 'bg-accent-red text-white animate-pulse' :
                         m.status === 'ENDED' ? 'bg-tertiary text-text-secondary' : 'bg-accent-blue/20 text-accent-blue'
                       }`}>
-                        {m.status} {m.status === 'LIVE' ? `${m.currentMinute || 0}'` : ''}
+                        {m.status === 'LIVE' ? 'DREJTPËRDREJT' : m.status === 'ENDED' ? 'PËRFUNDUAR' : 'PARA NDESHJES'} {m.status === 'LIVE' ? `${m.currentMinute || 0}'` : ''}
                       </span>
                       <span className="text-xs text-text-secondary font-medium">
-                        {m.tournament?.name || 'League'} &bull; {new Date(m.startTime).toLocaleString()}
+                        {m.tournament?.name || 'Kampionati'} &bull; {new Date(m.startTime).toLocaleString('sq-AL')}
                       </span>
                       {m.isSuspended && (
                         <span className="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded font-semibold flex items-center gap-1">
@@ -204,7 +207,7 @@ export default function MatchControl() {
                       }`}
                     >
                       {m.isSuspended ? <Unlock size={14} /> : <Lock size={14} />}
-                      {m.isSuspended ? 'Unlock Match Odds' : 'Suspend Match Odds'}
+                      {m.isSuspended ? 'Hap kuotat e ndeshjes' : 'Pezullo kuotat e ndeshjes'}
                     </button>
 
                     {m.status !== 'ENDED' && (
@@ -212,14 +215,14 @@ export default function MatchControl() {
                         onClick={() => { setSettleMatch(m); setHomeScore(String(m.homeScore || 0)); setAwayScore(String(m.awayScore || 0)); }}
                         className="px-3.5 py-2 bg-accent-green hover:bg-emerald-600 text-primary font-bold rounded-lg text-xs flex items-center gap-1.5 transition"
                       >
-                        <CheckCircle2 size={14} /> Settle Score
+                        <CheckCircle2 size={14} /> Vendos rezultatin
                       </button>
                     )}
 
                     <button 
                       onClick={() => setExpandedMatchId(isExpanded ? null : m.id)}
                       className="p-2 bg-tertiary hover:bg-tertiary/80 text-text-secondary hover:text-white rounded-lg transition"
-                      title="View & Edit Markets"
+                      title="Shiko dhe ndrysho tregjet"
                     >
                       {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
@@ -231,7 +234,7 @@ export default function MatchControl() {
                   <div className="p-5 bg-primary/50 border-t border-tertiary/60 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-                      Markets & Odds Control ({m.markets?.length || 0} markets)
+                      Kontrolli i tregjeve dhe kuotave ({m.markets?.length || 0} tregje)
                     </h4>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-text-secondary">Ndrysho të gjitha kuotat e ndeshjes</span>
@@ -243,10 +246,10 @@ export default function MatchControl() {
                         <div key={mk.id} className="bg-secondary p-3.5 rounded-lg border border-tertiary/80">
                           <div className="flex flex-wrap justify-between items-center gap-2 mb-2.5">
                             <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                              {mk.name}
+                              {translateMarketName(mk.name, t)}
                               {mk.status === 'SUSPENDED' && (
                                 <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold">
-                                  Suspended
+                                  Pezulluar
                                 </span>
                               )}
                             </span>
@@ -256,7 +259,7 @@ export default function MatchControl() {
                                 onClick={() => handleToggleMarketSuspend(mk.id, mk.status)}
                                 className="text-xs text-text-secondary hover:text-white font-semibold underline"
                               >
-                                {mk.status === 'ACTIVE' ? 'Suspend Market' : 'Activate Market'}
+                                {mk.status === 'ACTIVE' ? 'Pezullo tregun' : 'Aktivizo tregun'}
                               </button>
                             </div>
                           </div>
@@ -268,7 +271,7 @@ export default function MatchControl() {
                                     onClick={() => { setEditOutcome(oc); setNewOdds(String(oc.odds)); }}
                                     className="min-w-0 flex-1 text-left group"
                                   >
-                                    <span className="block truncate text-xs text-text-secondary group-hover:text-white">{oc.name}</span>
+                                    <span className="block truncate text-xs text-text-secondary group-hover:text-white">{translateOutcomeName(oc.name, t, mk.name)}</span>
                                     <span className="text-sm font-bold text-accent-green flex items-center gap-1">
                                       {Number(oc.odds).toFixed(2)} <Edit3 size={11} className="text-text-secondary" />
                                     </span>
@@ -300,9 +303,9 @@ export default function MatchControl() {
       {settleMatch && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-secondary border border-tertiary rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-1">Settle Match & Pay Tickets</h3>
+            <h3 className="text-xl font-bold text-white mb-1">Mbyll ndeshjen dhe paguaj skedinat</h3>
             <p className="text-xs text-text-secondary mb-6">
-              Enter final score for <strong className="text-white">{settleMatch.homeTeam} vs {settleMatch.awayTeam}</strong>. All winning bets will be credited immediately.
+              Vendosni rezultatin përfundimtar për <strong className="text-white">{settleMatch.homeTeam} - {settleMatch.awayTeam}</strong>. Fitimet do të kreditohen menjëherë.
             </p>
             <form onSubmit={handleSettleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -335,13 +338,13 @@ export default function MatchControl() {
                   onClick={() => setSettleMatch(null)}
                   className="flex-1 py-3 bg-tertiary hover:bg-tertiary/80 text-white rounded-lg font-semibold text-sm transition"
                 >
-                  Cancel
+                  Anulo
                 </button>
                 <button 
                   type="submit"
                   className="flex-1 py-3 bg-accent-green hover:bg-emerald-600 text-primary font-bold rounded-lg text-sm transition shadow-lg shadow-accent-green/20"
                 >
-                  Confirm Settlement
+                  Konfirmo rezultatin
                 </button>
               </div>
             </form>
@@ -353,13 +356,13 @@ export default function MatchControl() {
       {editOutcome && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-secondary border border-tertiary rounded-2xl max-w-xs w-full p-5 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-1">Edit Odds Value</h3>
+            <h3 className="text-lg font-bold text-white mb-1">Ndrysho vlerën e kuotës</h3>
             <p className="text-xs text-text-secondary mb-4">
-              Selection: <strong className="text-white">{editOutcome.name}</strong>
+              Zgjedhja: <strong className="text-white">{translateOutcomeName(editOutcome.name, t)}</strong>
             </p>
             <form onSubmit={handleSaveOdds} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">Odds (Decimal)</label>
+                <label className="text-xs font-semibold text-text-secondary block mb-1">Kuota (dhjetore)</label>
                 <input 
                   type="number" 
                   value={newOdds} 
@@ -377,13 +380,13 @@ export default function MatchControl() {
                   onClick={() => setEditOutcome(null)}
                   className="flex-1 py-2 bg-tertiary hover:bg-tertiary/80 text-white rounded-lg font-semibold text-xs"
                 >
-                  Cancel
+                  Anulo
                 </button>
                 <button 
                   type="submit"
                   className="flex-1 py-2 bg-accent-green hover:bg-emerald-600 text-primary font-bold rounded-lg text-xs"
                 >
-                  Save Odds
+                  Ruaj kuotën
                 </button>
               </div>
             </form>

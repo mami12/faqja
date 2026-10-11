@@ -93,7 +93,13 @@ export default {
     'Correct Score': 'Rezultati i Saktë',
     'Handicap': 'Handikap',
     'Asian Handicap': 'Handikap Aziatik',
-    'Match Market': 'Tregu i Ndeshjes'
+    'Match Market': 'Tregu i Ndeshjes',
+    correct_score: 'Rezultati i Saktë',
+    odd_even: 'Tek / Çift',
+    next_goal: 'Goli i Radhës',
+    halftime_fulltime: 'Pjesa e Parë / Ndeshja',
+    first_half_result: 'Rezultati i Pjesës së Parë',
+    second_half_result: 'Rezultati i Pjesës së Dytë'
   },
   outcomes: {
     home: '1 (Vendas)',
@@ -101,8 +107,20 @@ export default {
     away: '2 (Udhëtues)',
     over: 'Lart',
     under: 'Poshtë',
-    yes: 'GOL',
-    no: 'JO GOL'
+    yes: 'Po',
+    no: 'Jo',
+    btts_yes: 'GG — Shënojnë të dyja',
+    btts_no: 'NG — Nuk shënojnë të dyja',
+    goal: 'Shënohet gol',
+    no_goal: 'Nuk shënohet gol',
+    btts_yes_short: 'GG',
+    btts_no_short: 'NG',
+    odd: 'Tek',
+    even: 'Çift',
+    home_or_draw: '1X — Vendas ose barazim',
+    home_or_away: '12 — Vendas ose udhëtues',
+    draw_or_away: 'X2 — Barazim ose udhëtues',
+    draw_no_bet: 'Barazim pa bast'
   },
   betslip: {
     betslip: 'Skedina Ime',
@@ -121,6 +139,7 @@ export default {
     accept_changes: 'Prano Ndryshimet',
     total_odds: 'Koeficienti Total',
     min_stake: 'Shuma minimale: 1 Lëk',
+    select_odds_help: 'Kliko një kuotë për të shtuar zgjedhjen në skedinë.',
     system_type: 'Lloji i Sistemit',
     select_system: 'Zgjidh Sistemin',
     login_to_bet: 'Identifikohu për të bastuar',
@@ -131,7 +150,8 @@ export default {
     search_ticket: 'Kerko Bileten',
     enter_ticket_code: 'Vendos kodin ose ID-në e biletës...',
     search: 'Kerko',
-    ticket_not_found: 'Bileta nuk u gjet. Kontrollo kodin ose ID-në.'
+    ticket_not_found: 'Bileta nuk u gjet. Kontrollo kodin ose ID-në.',
+    remove_selection: 'Hiq zgjedhjen'
   },
   tickets: {
     active_tickets: 'Skedinat Aktive',
@@ -147,11 +167,27 @@ export default {
     lost: 'Humbur',
     cancelled: 'Anuluar',
     void: 'E pavlefshme',
-    reverted: 'Rivendosur',
+    reverted: 'Anuluar',
     no_active_tickets: 'Nuk keni skedina aktive.',
     no_history_tickets: 'Nuk ka histori baste.',
     total_odds: 'Koeficienti Total',
-    no_tickets_logged_out: 'Ju duhet të hyni në llogari për të parë skedinat.'
+    no_tickets_logged_out: 'Ju duhet të hyni në llogari për të parë skedinat.',
+    guest_booked: 'Vizitor (e rezervuar)',
+    placed: 'Vendosur',
+    type: 'Lloji',
+    selections: 'Zgjedhjet',
+    stake_payout: 'Shuma / Fitimi i mundshëm',
+    confirm_revert: 'Të anulohet kjo skedinë dhe t’i kthehet shuma përdoruesit?',
+    revert_failed: 'Anulimi i skedinës dështoi',
+    audit_title: 'Kontrolli i skedinave dhe basteve',
+    audit_description: 'Regjistri i të gjitha skedinave të vendosura në platformë.',
+    refresh_tickets: 'Rifresko skedinat',
+    loading_records: 'Duke ngarkuar të dhënat...',
+    no_tickets: 'Nuk është vendosur ende asnjë skedinë.',
+    revert_ticket: 'Anulo skedinën dhe kthe shumën',
+    view_selections: 'Shiko zgjedhjet',
+    ticket_reverted: 'Skedina u anulua. Shuma {amount} Lëk iu kthye përdoruesit.',
+    lines: 'linja'
   },
   admin: {
     dashboard: 'Paneli Kryesor',
@@ -255,6 +291,7 @@ export default {
   },
   common: {
     loading: 'Duke u ngarkuar...',
+    loading_short: 'Duke u ngarkuar...',
     error: 'Ndodhi një gabim',
     success: 'Veprimi u krye me sukses!',
     confirm: 'Konfirmo',

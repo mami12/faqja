@@ -54,7 +54,7 @@ export default function PitchTracker({ matchId, homeTeam, awayTeam }: Props) {
         ) : (
           <div className="mx-1 flex shrink-0 items-center gap-3 sm:mx-3">
             <span className="font-mono text-2xl font-black tabular-nums text-white sm:text-3xl">{homeScore}</span>
-            <span className="text-xs font-bold uppercase text-slate-500">FT</span>
+            <span className="text-xs font-bold uppercase text-slate-500">PF</span>
             <span className="font-mono text-2xl font-black tabular-nums text-white sm:text-3xl">{awayScore}</span>
           </div>
         )}

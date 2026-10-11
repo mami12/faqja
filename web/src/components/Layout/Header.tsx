@@ -145,7 +145,7 @@ export default function Header({ onToggleNav }: Props) {
               <button
                 className="md:hidden p-2 rounded-lg text-text-secondary hover:text-white hover:bg-tertiary transition"
                 onClick={() => setMenuOpen((v) => !v)}
-                aria-label="account menu"
+                aria-label="menuja e llogarisë"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>

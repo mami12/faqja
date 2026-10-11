@@ -1,5 +1,7 @@
 import { Printer, X } from 'lucide-react';
 import { Ticket } from '../../types';
+import { useLanguage } from '../../context/LanguageContext';
+import { translateMarketName, translateOutcomeName, translateTicketType } from '../../utils/sportsbookLabels';
 
 const CODE39: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -51,6 +53,7 @@ interface Props {
 }
 
 export default function TicketReceipt({ ticket, onClose }: Props) {
+  const { t } = useLanguage();
   const barcodeValue = ticket.id.replace(/-/g, '').slice(0, 10).toUpperCase();
 
   return (
@@ -78,7 +81,7 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
           {ticket.lines.map((line, index) => (
             <article key={line.id || `${line.matchId}-${index}`} className="border-b border-dashed border-black/30 pb-2 text-xs">
               <div className="font-bold">{line.matchName}</div>
-              <div className="mt-0.5">{line.marketName}: <strong>{line.outcomeName}</strong></div>
+              <div className="mt-0.5">{translateMarketName(line.marketName, t)}: <strong>{translateOutcomeName(line.outcomeName, t, line.marketName)}</strong></div>
               <div className="mt-0.5 flex justify-between">
                 <span>Kuota</span><strong>{line.oddsAtPlacement.toFixed(2)}</strong>
               </div>
@@ -87,7 +90,7 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
         </div>
 
         <div className="space-y-1 border-y-2 border-dashed border-black/40 py-3 text-sm">
-          <div className="flex justify-between"><span>Lloji i biletës</span><strong>{ticket.ticketType}</strong></div>
+          <div className="flex justify-between"><span>Lloji i biletës</span><strong>{translateTicketType(ticket.ticketType, t)}</strong></div>
           <div className="flex justify-between"><span>Shuma e luajtur</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
           <div className="flex justify-between"><span>Koeficienti total</span><strong>{ticket.totalOdds.toFixed(2)}</strong></div>
           <div className="flex justify-between text-base"><span>Fitimi i mundshëm</span><strong>{ticket.potentialPayout.toFixed(2)} Lëk</strong></div>

@@ -8,6 +8,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
+import { translateMarketName } from '../../utils/sportsbookLabels';
 
 const cleanMarketName = (name?: string) => {
   if (!name) return '';
@@ -16,14 +17,6 @@ const cleanMarketName = (name?: string) => {
   if (/^total-2$/i.test(s)) return 'Total Goals';
   if (/^fora-2$/i.test(s)) return 'Handicap';
   return s;
-};
-
-const marketLabel = (t: (key: string) => string, name?: string) => {
-  if (!name) return '';
-  const clean = cleanMarketName(name);
-  const key = `markets.${clean}`;
-  const translated = t(key);
-  return translated === key ? clean : translated;
 };
 
 const getGroupCategory = (name?: string) => {
@@ -79,7 +72,7 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
     result.push({
       baseName: baseKey,
-      title: marketLabel(t, marketList[0].name),
+      title: translateMarketName(marketList[0].name, t),
       category: getGroupCategory(baseKey),
       markets: marketList
     });
@@ -236,7 +229,7 @@ export default function MatchDetail() {
                     <div key={market.id} className="rounded-2xl border border-white/5 bg-[#162131]/80 p-2.5">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
-                          {marketLabel(t, market.name) || t('markets.market')}
+                          {translateMarketName(market.name, t) || t('markets.market')}
                         </span>
                         {market.line && (
                           <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-emerald-300">

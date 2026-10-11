@@ -9,6 +9,7 @@ import {
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
+import { translateMarketName } from '../../utils/sportsbookLabels';
 
 const COLUMN_ORDER = ['result', 'total', 'corners', 'cards', 'other'] as const;
 type Column = (typeof COLUMN_ORDER)[number];
@@ -52,14 +53,6 @@ const cleanMarketName = (name?: string) => {
   if (/^total-2$/i.test(s)) return 'Total Goals';
   if (/^fora-2$/i.test(s)) return 'Handicap';
   return s;
-};
-
-const marketLabel = (t: (key: string) => string, name?: string) => {
-  if (!name) return '';
-  const clean = cleanMarketName(name);
-  const key = `markets.${clean}`;
-  const translated = t(key);
-  return translated === key ? clean : translated;
 };
 
 /** Formaton linjën: "(2.5)" ose bosh */
@@ -239,7 +232,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
                   if (!liveOutcomes.length) return null;
 
-                  const title = marketLabel(t, market.name) || t('markets.market');
+                  const title = translateMarketName(market.name, t) || t('markets.market');
                   const line = formatLine(market.line);
 
                   return (
@@ -263,7 +256,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                 }
 
                 // Grup me disa market-e → një kuti e vetme, linjat njëra poshtë tjetrës
-                const baseTitle = marketLabel(t, group.base) || group.base;
+                const baseTitle = translateMarketName(group.base, t) || group.base;
 
                 return (
                   <div
@@ -275,7 +268,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                         {baseTitle}
                       </span>
                       <span className="text-[10px] font-bold text-text-secondary/70">
-                        {group.markets.length} {t('markets.lines') || 'lines'}
+                        {group.markets.length} {t('markets.lines')}
                       </span>
                     </div>
 

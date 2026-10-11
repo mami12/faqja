@@ -4,28 +4,9 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { translateOutcomeName } from '../../utils/sportsbookLabels';
 
 interface Props { match: Match; market: Market; outcome: Outcome; }
-
-const getOutcomeLabel = (name: string, t: (key: string) => string) => {
-  const raw = String(name ?? '').trim();
-  const key = raw.toLowerCase();
-
-  if (['1', 'home', 'home team', 'home win', 'homewin', 'vendas', '1 (vendas)'].includes(key)) return t('outcomes.home');
-  if (['x', 'draw', 'tie', 'draw no bet', 'barazim', 'x (barazim)'].includes(key)) return t('outcomes.draw');
-  if (['2', 'away', 'away team', 'away win', 'awaywin', 'udhëtues', 'udhetues', '2 (udhëtues)'].includes(key)) return t('outcomes.away');
-
-  if (/(^|\s)(over|mbi|lart)(\s|$)/.test(key) || /^o$/.test(key) || /over\s*\d/.test(key) || /lart\s*\d/.test(key)) return t('outcomes.over');
-  if (/(^|\s)(under|nen|nën|posht|poshtë)(\s|$)/.test(key) || /^u$/.test(key) || /under\s*\d/.test(key) || /posht\s*\d/.test(key) || /nën\s*\d/.test(key)) return t('outcomes.under');
-
-  if (/(both teams? to score|shenojne|shënojnë|gg|gj|g\/ng|g\s*\/\s*ng|shënojnë të dyja ekipet|të dyja ekipet shënojnë)/i.test(raw) || /^yes$/i.test(key)) return t('outcomes.yes');
-  if (/(no goal|no both teams to score|nuk shenojne|nuk shënojnë|ng|jo gol|jo-gol)/i.test(raw) || /^no$/i.test(key)) return t('outcomes.no');
-
-  if (/\bgoal\b/i.test(raw) && !/no\s*goal|jo\s*gol|nuk\s*shenojne|nuk\s*shënojnë/i.test(raw)) return t('outcomes.yes');
-  if (/(no\s*goal|jo\s*gol|nuk\s*shenojne|nuk\s*shënojnë)/i.test(raw)) return t('outcomes.no');
-
-  return raw;
-};
 
 export default function OddsButton({ match, market, outcome }: Props) {
   const { selections, addSelection, removeSelection } = useBetslip();
@@ -44,7 +25,7 @@ export default function OddsButton({ match, market, outcome }: Props) {
     lockedMatches[String(match.id)] === true ||
     currentOdds === null || currentOdds === undefined;
 
-  const label = getOutcomeLabel(outcome.name, t);
+  const label = translateOutcomeName(outcome.name, t, market.name);
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
