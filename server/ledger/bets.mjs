@@ -19,6 +19,7 @@ import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
 import { managerCommission, managerCommissionPercent } from './manager-finance.mjs';
+import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -93,13 +94,6 @@ async function resolveSelection(selection) {
   };
 }
 
-/** COMBO multiplies the prices; anything else takes the last selection's price (as before) */
-function totalOddsFor(ticketType, lines) {
-  if (!lines.length) return 0;
-  if (ticketType === 'COMBO') return lines.reduce((acc, l) => acc * l.price, 1);
-  return lines[lines.length - 1].price;
-}
-
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
 
 const TICKET_COLUMNS = `t.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout,
@@ -165,12 +159,12 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   }
   if (!selections.length) throw badRequest('Bileta është bosh: zgjidh të paktën një kuotë.');
 
-  const type = ticketType || (selections.length > 1 ? 'COMBO' : 'SINGLE');
+  const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
   for (const selection of selections) lines.push(await resolveSelection(selection));
 
-  const totalOdds = totalOddsFor(type, lines);
-  const potentialPayout = round(amount * totalOdds);
+  const totalOdds = totalOddsForSelections(lines);
+  const payout = calculatePotentialPayout(amount, totalOdds);
 
   const client = await pool.connect();
   try {
@@ -189,7 +183,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
       `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, system_type, status)
        values ($1, $2, $3, $4, $5, $6, 'PENDING')
        returning id`,
-      [user.id, amount, totalOdds, potentialPayout, type, systemType],
+      [user.id, amount, totalOdds, payout, type, systemType],
     );
     const ticketId = inserted.rows[0].id;
 
@@ -228,17 +222,17 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
   if (amount < MIN_STAKE) throw badRequest(`Shuma minimale për të prenotuar një skedinë është ${MIN_STAKE} Lek`);
   if (!selections.length) throw badRequest('Bileta është bosh: zgjidh të paktën një kuotë.');
 
-  const type = ticketType || (selections.length > 1 ? 'COMBO' : 'SINGLE');
+  const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
   for (const selection of selections) lines.push(await resolveSelection(selection));
 
-  const totalOdds = totalOddsFor(type, lines);
+  const totalOdds = totalOddsForSelections(lines);
   const code = bookingCode();
 
   const inserted = await query(
     `insert into app_ticket (booking_code, stake, total_odds, potential_payout, ticket_type, system_type, status)
      values ($1, $2, $3, $4, $5, $6, 'PENDING') returning id`,
-    [code, amount, totalOdds, round(amount * totalOdds), type, systemType],
+    [code, amount, totalOdds, calculatePotentialPayout(amount, totalOdds), type, systemType],
   );
   const ticketId = inserted.rows[0].id;
 

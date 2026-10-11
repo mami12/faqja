@@ -27,40 +27,39 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const [stake, setStake] = useState('0');
   const [ticketType, setTicketType] = useState<'SINGLE' | 'COMBO' | 'SYSTEM'>('SINGLE');
   const [systemType, setSystemType] = useState('');
+  const effectiveTicketType = selections.length > 1 ? 'COMBO' : ticketType;
+  const chooseTicketType = (type: 'SINGLE' | 'COMBO' | 'SYSTEM') => {
+    setTicketType(selections.length > 1 ? 'COMBO' : type);
+  };
 
   const addSelection = (s: BetSelection) => {
-    setSelections(prev => {
-      // 1) Nëse outcome-i ekziston tashmë → toggle (hiqe)
-      const exists = prev.some(p => p.outcomeId === s.outcomeId);
-      if (exists) {
-        return prev.filter(p => p.outcomeId !== s.outcomeId);
-      }
-
-      // 2) Konflikt: market i njëjti nga e njëjta ndeshje → zëvendëso vetëm atë
-      //    (p.sh. "1" dhe "X" nga i njëjti 1X2, ose "Over 2.5" dhe "Under 2.5")
-      const conflict = prev.find(p =>
-        p.matchId === s.matchId && p.marketId === s.marketId
-      );
-      if (conflict) {
-        return [
-          ...prev.filter(p => !(p.matchId === s.matchId && p.marketId === s.marketId)),
-          s,
-        ];
-      }
-
-      // 3) Përndryshe → shto normalisht
-      //    Lejon market-e të ndryshme nga e njëjta ndeshje (GG + Over 2.5 + 1X2)
-      return [...prev, s];
-    });
+    const exists = selections.some(p => p.outcomeId === s.outcomeId);
+    let next: BetSelection[];
+    if (exists) {
+      next = selections.filter(p => p.outcomeId !== s.outcomeId);
+    } else {
+      const conflict = selections.some(p => p.matchId === s.matchId && p.marketId === s.marketId);
+      next = conflict
+        ? [...selections.filter(p => !(p.matchId === s.matchId && p.marketId === s.marketId)), s]
+        : [...selections, s];
+    }
+    setSelections(next);
+    setTicketType(next.length > 1 ? 'COMBO' : 'SINGLE');
+    setSystemType('');
   };
 
   const removeSelection = (outcomeId: string) => {
-    setSelections(prev => prev.filter(p => p.outcomeId !== outcomeId));
+    const next = selections.filter(p => p.outcomeId !== outcomeId);
+    setSelections(next);
+    setTicketType(next.length > 1 ? 'COMBO' : 'SINGLE');
+    setSystemType('');
   };
 
   const clearAll = () => {
     setSelections([]);
     setStake('0');
+    setTicketType('SINGLE');
+    setSystemType('');
   };
 
   const updateOdds = (outcomeId: string, newOdds: number) => {
@@ -77,8 +76,8 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     }
     
     const res = await apiClient.post('/bets/place', {
-      ticketType,
-      type: ticketType,
+      ticketType: effectiveTicketType,
+      type: effectiveTicketType,
       systemType,
       stake: stakeNum,
       selections: selections.map(s => ({
@@ -99,8 +98,8 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     }
     
     const res = await apiClient.post('/bets/book', {
-      ticketType,
-      type: ticketType,
+      ticketType: effectiveTicketType,
+      type: effectiveTicketType,
       systemType,
       stake: stakeNum,
       selections: selections.map(s => ({
@@ -114,7 +113,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <BetslipContext.Provider value={{
-      selections, stake, setStake, ticketType, setTicketType, systemType, setSystemType,
+      selections, stake, setStake, ticketType: effectiveTicketType, setTicketType: chooseTicketType, systemType, setSystemType,
       addSelection, removeSelection, clearAll, updateOdds,
       totalOdds, potentialPayout, placeBet, bookTicket
     }}>

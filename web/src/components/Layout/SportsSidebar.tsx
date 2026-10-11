@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { Globe, Radio, ChevronRight, ChevronDown, Trophy } from 'lucide-react';
+import { isMainFootballCompetition } from '../../utils/sportsbookFilters';
 
 interface Props {
   selectedTournamentId?: string;
@@ -145,7 +146,11 @@ export default function SportsSidebar({
               {/* Categories & Tournaments */}
               {isExpanded && s.categories && (
                 <div className="ml-3.5 pl-2.5 border-l border-tertiary/60 my-1 space-y-1">
-                  {s.categories.map((c: any) => {
+                  {s.categories.filter((category: any) =>
+                    (category.tournaments ?? []).some((tournament: any) =>
+                      isMainFootballCompetition(tournament.name, category.name),
+                    ),
+                  ).map((c: any) => {
                     const isCatExpanded = !!expandedCategories[c.id];
                     return (
                       <div key={c.id}>
@@ -165,7 +170,9 @@ export default function SportsSidebar({
 
                         {isCatExpanded && c.tournaments && (
                           <div className="ml-2 pl-2 border-l border-tertiary/40 space-y-0.5 my-0.5">
-                            {c.tournaments.map((tour: any) => {
+                            {c.tournaments.filter((tour: any) =>
+                              isMainFootballCompetition(tour.name, c.name),
+                            ).map((tour: any) => {
                               const isTourSelected = selectedTournamentId === String(tour.id);
                               return (
                                 <button

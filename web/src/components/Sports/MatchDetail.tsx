@@ -7,6 +7,7 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
+import { isHandicapMarket } from '../../utils/sportsbookFilters';
 
 const cleanMarketName = (name?: string) => {
   if (!name) return '';
@@ -62,7 +63,7 @@ interface GroupedMarket {
 const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
   const map = new Map<string, Market[]>();
 
-  for (const m of markets) {
+  for (const m of markets.filter((market) => !isHandicapMarket(market))) {
     const rawClean = cleanMarketName(m.name);
     const baseKey = rawClean.replace(/[\d\.]+/g, '').trim();
 

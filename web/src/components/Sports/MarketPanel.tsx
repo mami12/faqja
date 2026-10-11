@@ -8,6 +8,7 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
+import { isHandicapMarket } from '../../utils/sportsbookFilters';
 
 const COLUMN_ORDER = ['result', 'total', 'corners', 'cards', 'other'] as const;
 type Column = (typeof COLUMN_ORDER)[number];
@@ -152,6 +153,7 @@ export default function MarketPanel({ match }: { match: Match }) {
   const grouped = useMemo(() => {
     const groups = new Map<Column, Market[]>();
     for (const market of match.markets ?? []) {
+      if (isHandicapMarket(market)) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
       const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
       if (!filterDecidedOutcomes(available, market, match).length) continue;

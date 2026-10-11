@@ -8,6 +8,7 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
+import { isHandicapMarket, isMainFootballMatch } from '../../utils/sportsbookFilters';
 
 interface Props {
   tournamentId?: string;
@@ -54,8 +55,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return () => clearInterval(interval);
   }, [tournamentId, categoryId, sportId, isLiveOnly]);
 
+  const mainLeagueMatches = matches.filter(isMainFootballMatch);
   const searchFiltered = searchTerm.trim()
-    ? matches.filter(m => {
+    ? mainLeagueMatches.filter(m => {
         const search = searchTerm.toLowerCase();
         return (
           m.homeTeam?.toLowerCase().includes(search) ||
@@ -65,7 +67,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           m.tournament?.category?.sport?.name?.toLowerCase().includes(search)
         );
       })
-    : matches;
+    : mainLeagueMatches;
 
   const filteredMatches = searchFiltered.filter(m => {
     if (dateFilter === 'all') return true;
@@ -166,6 +168,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
     const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
       const isQuickMarketVisible = (mk: any) =>
+        !isHandicapMarket(mk) &&
         isMarketVisible(m, mk, lockedMarkets) &&
         filterDecidedOutcomes(
           (mk.outcomes ?? []).filter(isOutcomeAvailable),
@@ -242,7 +245,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const quickCols = quick?.mode === '1x2' ? 3 : 2;
     const isLocked = lockedMatches[String(m.id)] === true;
 
-    const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
+    const totalMarketsCount = m.markets?.length
+      ? m.markets.filter((market: any) => !isHandicapMarket(market)).length
+      : Number(m.marketCount) || 0;
 
     return (
       <div 
