@@ -54,7 +54,9 @@ const badRequest = (message) => Object.assign(new Error(message), { status: 400 
 const asAmount = (v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) throw badRequest('amount must be a positive number');
-  return Number(n.toFixed(2));
+  const amount = Number(n.toFixed(2));
+  if (amount <= 0) throw badRequest('amount must be at least 0.01');
+  return amount;
 };
 
 /** a manager may only touch the players they own */
@@ -83,14 +85,18 @@ adminRouter.get(
        from app_ticket`,
     );
     const row = money.rows[0] ?? {};
+    const managers = await ledger.managerFinancials();
+    const commissionTotal = managers.reduce((sum, item) => sum + item.commission, 0);
     res.json({
       users: base.users,
       activeBets: base.pendingTickets,
       totalStake: Number(row.open_stake ?? 0),
-      revenue: Number(Number(row.lost_stake ?? 0) - Number(row.paid_out ?? 0)),
+      revenue: Number(Number(row.lost_stake ?? 0) - Number(row.paid_out ?? 0) + commissionTotal),
+      commission: commissionTotal,
       blocked: base.blocked,
       tickets: base.tickets,
       totalBalance: base.totalBalance,
+      managers,
     });
   }),
 );
@@ -101,14 +107,16 @@ adminRouter.get(
   ...manager,
   guard(async (req, res) => {
     const base = await ledger.ledgerStats(req.user.id);
+    const financials = await ledger.managerFinancials(req.user.id);
     res.json({
       users: base.users,
       activeBets: base.pendingTickets,
       totalStake: base.pendingStake,
-      revenue: 0,
-      balance: req.user.balance,
+      revenue: financials.manager?.netDifference ?? 0,
+      balance: financials.manager?.balance ?? req.user.balance,
       tickets: base.tickets,
       blocked: base.blocked,
+      financials,
     });
   }),
 );
@@ -146,10 +154,23 @@ const createUser = (resolveRole) =>
     const role = resolveRole(req);
     const owner = role !== 'PLAYER' ? null : req.user.role === 'MANAGER' ? req.user.id : managerId || null;
 
-    const user = await ledger.createUser({ username: name, passwordHash: hashPassword(password), role, managerId: owner });
+    const openingValue = Number(initialBalance);
+    const opening = Number(openingValue.toFixed(2));
+    if (!Number.isFinite(openingValue) || opening < 0 || (openingValue > 0 && opening === 0)) {
+      throw badRequest('initial balance must be zero or at least 0.01');
+    }
+    const managedPlayer = role === 'PLAYER' && Boolean(owner);
+    const user =
+      req.user.role === 'MANAGER' || managedPlayer
+        ? await ledger.createManagedPlayer({
+            username: name,
+            passwordHash: hashPassword(password),
+            managerId: req.user.role === 'MANAGER' ? req.user.id : owner,
+            initialBalance: opening,
+          })
+        : await ledger.createUser({ username: name, passwordHash: hashPassword(password), role, managerId: owner });
 
-    const opening = Number(initialBalance) || 0;
-    if (opening > 0) {
+    if (req.user.role !== 'MANAGER' && !managedPlayer && opening > 0) {
       await ledger.moveMoney(user.id, opening, {
         type: 'DEPOSIT',
         description: 'Bilanci fillestar',
@@ -249,6 +270,10 @@ const moveBalance = (sign, type, checkOwnership) =>
     if (checkOwnership) await assertOwned(req, id);
 
     const amount = asAmount(req.body?.amount);
+    if (req.user.role === 'MANAGER') {
+      const transfer = await ledger.moveManagerFunds(req.user.id, id, amount, sign > 0 ? 'deposit' : 'withdraw');
+      return res.json({ ...transfer.user, manager: transfer.manager, transaction: transfer.playerTransaction });
+    }
     const { user, transaction } = await ledger.moveMoney(id, sign * amount, {
       type,
       description: type === 'DEPOSIT' ? 'Depozitim nga paneli' : 'Tërheqje nga paneli',

@@ -55,6 +55,60 @@ export default function MatchControl() {
     }
   };
 
+  const handleToggleOutcomeSuspend = async (outcomeId: string, currentStatus: string) => {
+    try {
+      await apiClient.patch(`/admin/outcomes/${outcomeId}/suspend`, {
+        status: currentStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
+      });
+      fetchMatches();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Failed to update outcome status');
+    }
+  };
+
+  const adjustOutcomes = async (outcomes: any[], percentage: number) => {
+    const eligible = outcomes.filter((outcome) => Number(outcome.odds) > 1);
+    const updates = eligible.map((outcome) => {
+      const odds = Number((Number(outcome.odds) * (1 + percentage / 100)).toFixed(3));
+      if (odds <= 1) return Promise.reject(new Error(`Adjustment would make ${outcome.name} odds invalid`));
+      return apiClient.patch(`/admin/outcomes/${outcome.id}/odds`, { odds });
+    });
+    const results = await Promise.allSettled(updates);
+    await fetchMatches();
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed) alert(`${failed} of ${updates.length} odds adjustments failed. Successful changes were saved.`);
+  };
+
+  const percentButtons = (outcomes: any[], compact = false) => (
+    <div className={`flex flex-wrap gap-1 ${compact ? 'mt-1' : ''}`}>
+      {[-10, -5, 5, 10].map((percent) => (
+        <button
+          key={percent}
+          onClick={() => adjustOutcomes(outcomes, percent)}
+          className="px-1.5 py-1 rounded bg-tertiary hover:bg-accent-blue/20 text-text-secondary hover:text-white text-[10px] font-bold"
+          title={`Ndrysho kuotat me ${percent}%`}
+        >
+          {percent > 0 ? '+' : ''}{percent}%
+        </button>
+      ))}
+      <button
+        onClick={() => {
+          const value = window.prompt('Vendos përqindjen e ndryshimit (p.sh. 12 ose -8):');
+          if (value === null) return;
+          const percent = Number(value);
+          if (!Number.isFinite(percent) || percent <= -100 || percent === 0) {
+            alert('Përqindja duhet të jetë numër më i madh se -100 dhe jo zero.');
+            return;
+          }
+          adjustOutcomes(outcomes, percent);
+        }}
+        className="px-1.5 py-1 rounded bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue text-[10px] font-bold"
+      >
+        Rregullo %
+      </button>
+    </div>
+  );
+
   const handleSaveOdds = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editOutcome || !newOdds) return;
@@ -175,13 +229,19 @@ export default function MatchControl() {
                 {/* EXPANDED MARKETS VIEW */}
                 {isExpanded && (
                   <div className="p-5 bg-primary/50 border-t border-tertiary/60 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
                       Markets & Odds Control ({m.markets?.length || 0} markets)
                     </h4>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-text-secondary">Ndrysho të gjitha kuotat e ndeshjes</span>
+                        {percentButtons(m.markets?.flatMap((market: any) => market.outcomes ?? []) ?? [])}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {m.markets?.map((mk: any) => (
                         <div key={mk.id} className="bg-secondary p-3.5 rounded-lg border border-tertiary/80">
-                          <div className="flex justify-between items-center mb-2.5">
+                          <div className="flex flex-wrap justify-between items-center gap-2 mb-2.5">
                             <span className="text-sm font-bold text-white flex items-center gap-1.5">
                               {mk.name}
                               {mk.status === 'SUSPENDED' && (
@@ -190,26 +250,39 @@ export default function MatchControl() {
                                 </span>
                               )}
                             </span>
-                            <button 
-                              onClick={() => handleToggleMarketSuspend(mk.id, mk.status)}
-                              className="text-xs text-text-secondary hover:text-white font-semibold underline"
-                            >
-                              {mk.status === 'ACTIVE' ? 'Suspend Market' : 'Activate Market'}
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {mk.outcomes?.map((oc: any) => (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {percentButtons(mk.outcomes ?? [])}
                               <button
-                                key={oc.id}
-                                onClick={() => { setEditOutcome(oc); setNewOdds(String(oc.odds)); }}
-                                className="bg-primary/80 hover:bg-primary border border-tertiary/60 p-2 rounded flex flex-col items-center justify-center group transition"
+                                onClick={() => handleToggleMarketSuspend(mk.id, mk.status)}
+                                className="text-xs text-text-secondary hover:text-white font-semibold underline"
                               >
-                                <span className="text-xs text-text-secondary group-hover:text-white">{oc.name}</span>
-                                <span className="text-sm font-bold text-accent-green flex items-center gap-1">
-                                  {oc.odds.toFixed(2)}
-                                  <Edit3 size={11} className="opacity-0 group-hover:opacity-100 text-text-secondary" />
-                                </span>
+                                {mk.status === 'ACTIVE' ? 'Suspend Market' : 'Activate Market'}
                               </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {mk.outcomes?.map((oc: any) => (
+                              <div key={oc.id} className="bg-primary/80 border border-tertiary/60 p-2 rounded">
+                                <div className="flex items-center justify-between gap-2">
+                                  <button
+                                    onClick={() => { setEditOutcome(oc); setNewOdds(String(oc.odds)); }}
+                                    className="min-w-0 flex-1 text-left group"
+                                  >
+                                    <span className="block truncate text-xs text-text-secondary group-hover:text-white">{oc.name}</span>
+                                    <span className="text-sm font-bold text-accent-green flex items-center gap-1">
+                                      {Number(oc.odds).toFixed(2)} <Edit3 size={11} className="text-text-secondary" />
+                                    </span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleOutcomeSuspend(oc.id, oc.status)}
+                                    className={`p-1.5 rounded ${oc.status === 'SUSPENDED' ? 'bg-amber-500/20 text-amber-400' : 'bg-tertiary text-text-secondary hover:text-white'}`}
+                                    title={oc.status === 'SUSPENDED' ? 'Hap kuotën' : 'Pezullo vetëm këtë kuotë'}
+                                  >
+                                    {oc.status === 'SUSPENDED' ? <Unlock size={14} /> : <Lock size={14} />}
+                                  </button>
+                                </div>
+                                {percentButtons([oc], true)}
+                              </div>
                             ))}
                           </div>
                         </div>

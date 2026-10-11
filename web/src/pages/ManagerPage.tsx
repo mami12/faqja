@@ -3,13 +3,41 @@ import Header from '../components/Layout/Header';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
-import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon } from 'lucide-react';
+import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp } from 'lucide-react';
+
+interface PlayerFinancial {
+  id: string;
+  totalStake: number;
+  wonPayouts: number;
+  lostStake: number;
+  commission: number;
+  commissionByTier: { single: number; double: number; multi: number };
+  commissionRates: { single: number; double: number; multi: number };
+  netDifference: number;
+}
+
+interface ManagerFinancial {
+  balance: number;
+  playerBalance: number;
+  totalStake: number;
+  wonPayouts: number;
+  lostStake: number;
+  commission: number;
+  netDifference: number;
+}
+
+interface FinancialState {
+  manager: ManagerFinancial;
+  players: PlayerFinancial[];
+}
 
 export default function ManagerPage() {
   const { t } = useLanguage();
   const [tab, setTab] = useState<'users' | 'tickets'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [financials, setFinancials] = useState<FinancialState | null>(null);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState<'deposit' | 'withdraw' | null>(null);
@@ -29,8 +57,12 @@ export default function ManagerPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/manager/users');
-      setUsers(res.data);
+      const [usersRes, statsRes] = await Promise.all([
+        apiClient.get('/manager/users'),
+        apiClient.get('/manager/stats'),
+      ]);
+      setUsers(usersRes.data);
+      setFinancials(statsRes.data.financials);
     } catch (e) {
       console.error(e);
     } finally {
@@ -184,6 +216,37 @@ export default function ManagerPage() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'users' ? (
           <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+            {financials?.manager && (
+              <div className="mb-6 space-y-4">
+                <div className={`rounded-xl border p-5 ${financials.manager.netDifference >= 0 ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`}>
+                  <div className="text-sm text-text-secondary">Pozicioni financiar</div>
+                  <div className={`mt-1 text-2xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} Lëk {financials.manager.netDifference >= 0 ? 'në PLUS' : 'në MINUS'}
+                  </div>
+                  <div className="mt-1 text-xs text-text-secondary">Diferenca = fonde të luajtura − pagesat fituese</div>
+                </div>
+                <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                  {([
+                    ['Fonde të luajtura', financials.manager.totalStake],
+                    ['Fitime të paguara', financials.manager.wonPayouts],
+                    ['Humbje të lojtarëve', financials.manager.lostStake],
+                    ['Bilanci i lojtarëve', financials.manager.playerBalance],
+                    ['Komision i zbritur', financials.manager.commission],
+                  ] as const).map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-tertiary bg-secondary p-4">
+                      <div className="text-xs text-text-secondary">{label}</div>
+                      <div className="mt-1 text-lg font-bold text-white">{Number(value).toFixed(2)} Lëk</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-tertiary bg-secondary px-4 py-3 text-xs text-text-secondary">
+                  <span className="font-semibold text-white">Komision për biletë:</span>
+                  <span>1 zgjedhje <b className="text-accent-yellow">3%</b></span>
+                  <span>2 zgjedhje <b className="text-accent-yellow">5%</b></span>
+                  <span>3+ zgjedhje <b className="text-accent-yellow">7%</b></span>
+                </div>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{t('manager.my_users')}</h2>
@@ -203,12 +266,15 @@ export default function ManagerPage() {
               ) : users.length === 0 ? (
                 <div className="p-12 text-center text-text-secondary">{t('manager.no_users')}</div>
               ) : (
-                <table className="w-full min-w-[560px] text-left text-text-primary text-sm">
+                <table className="w-full min-w-[1050px] text-left text-text-primary text-sm">
                   <thead className="bg-tertiary/60 uppercase text-xs text-text-secondary">
                     <tr>
                       <th className="p-4">{t('admin.username')}</th>
                       <th className="p-4">{t('admin.status')}</th>
                       <th className="p-4">{t('admin.balance')}</th>
+                      <th className="p-4 text-right">Fonde të luajtura</th>
+                      <th className="p-4 text-right">Fitime / humbje</th>
+                      <th className="p-4 text-right">Komision / diferencë</th>
                       <th className="p-4 text-right">{t('admin.actions')}</th>
                     </tr>
                   </thead>
@@ -235,6 +301,29 @@ export default function ManagerPage() {
                         <td className="p-4 text-base font-bold text-white">
                           {u.balance.toFixed(2)} {u.currency || 'Lëk'}
                         </td>
+                        {(() => {
+                          const finance = financials?.players.find((player) => player.id === u.id);
+                          return (
+                            <>
+                              <td className="p-4 text-right text-white">{(finance?.totalStake ?? 0).toFixed(2)} Lëk</td>
+                              <td className="p-4 text-right text-white">
+                                <div>{(finance?.wonPayouts ?? 0).toFixed(2)} Lëk fitime</div>
+                                <div className="text-xs text-text-secondary">{(finance?.lostStake ?? 0).toFixed(2)} Lëk humbje</div>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="font-semibold text-white">{(finance?.commission ?? 0).toFixed(2)} Lëk total</div>
+                                <div className="mt-1 space-y-0.5 text-[11px] text-text-secondary">
+                                  <div>{finance?.commissionRates.single ?? 3}% teke: {(finance?.commissionByTier.single ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.double ?? 5}% dyshe: {(finance?.commissionByTier.double ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.multi ?? 7}% 3+: {(finance?.commissionByTier.multi ?? 0).toFixed(2)} Lëk</div>
+                                </div>
+                                <div className={`text-xs font-semibold ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {(finance?.netDifference ?? 0) >= 0 ? '+' : ''}{(finance?.netDifference ?? 0).toFixed(2)} Lëk
+                                </div>
+                              </td>
+                            </>
+                          );
+                        })()}
                         <td className="p-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
                             <button 
@@ -319,7 +408,9 @@ export default function ManagerPage() {
                 <div className="p-12 text-center text-text-secondary">{t('admin.no_tickets')}</div>
               ) : (
                 <div className="divide-y divide-tertiary">
-                  {tickets.map(ticket => (
+                  {tickets.map(ticket => {
+                    const expanded = expandedTicketId === ticket.id;
+                    return (
                     <div key={ticket.id} className="p-4 hover:bg-primary/30 transition">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
@@ -366,10 +457,31 @@ export default function ManagerPage() {
                               <RotateCcw size={14} /> {t('manager.revert')}
                             </button>
                           )}
+                          <button
+                            onClick={() => setExpandedTicketId(expanded ? null : ticket.id)}
+                            className="p-2 bg-tertiary hover:bg-tertiary/80 text-text-secondary hover:text-white rounded-lg transition"
+                            title="Shfaq ndeshjet dhe zgjedhjet"
+                          >
+                            {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </button>
                         </div>
                       </div>
+                      {expanded && (
+                        <div className="mt-4 pt-4 border-t border-tertiary/60 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {ticket.lines.map((line) => (
+                            <div key={line.id} className="rounded-lg border border-tertiary bg-primary p-3 text-xs">
+                              <div className="text-text-secondary">{line.matchName}</div>
+                              <div className="mt-1 font-semibold text-white">{line.marketName}: <span className="text-accent-green">{line.outcomeName}</span></div>
+                              <div className="mt-1 flex justify-between text-text-secondary">
+                                <span>Kuota <b className="text-white">{line.oddsAtPlacement.toFixed(2)}</b></span>
+                                <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{line.status}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );})}
                 </div>
               )}
             </div>

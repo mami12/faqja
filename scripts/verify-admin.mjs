@@ -226,6 +226,12 @@ const managerToken = await login(managerName, 'pass1234');
 check('the manager can log in', !!managerToken);
 const asManager = (p, i) => call(p, managerToken, i);
 
+const managerFunding = await asAdmin(`/admin/users/${manager.body.id}/deposit`, {
+  method: 'POST',
+  body: JSON.stringify({ amount: 400 }),
+});
+check('admin can fund the manager wallet', managerFunding.status === 200 && Number(managerFunding.body.balance) === 400);
+
 const mStats = await asManager('/manager/stats');
 check('GET /manager/stats works for a manager', mStats.status === 200, JSON.stringify(mStats.body));
 
@@ -237,10 +243,31 @@ const mPlayer = await asManager('/manager/users', {
 check('a manager creates their own player', mPlayer.status === 200 && Number(mPlayer.body.balance) === 300);
 check('the player is owned by the manager', mPlayer.body.managerId === manager.body.id);
 check('the manager cannot choose the role', mPlayer.body.role === 'PLAYER');
+const managerAfterCreate = await asManager('/auth/me');
+check('creating a player debits the manager wallet', Number(managerAfterCreate.body.balance) === 100, `${managerAfterCreate.body.balance}`);
 
 const mList = await asManager('/manager/users');
 check('the manager only sees their own players', mList.body.length === 1 && mList.body[0].username === mPlayerName, `${mList.body.length} users`);
 
+const mDeposit = await asManager(`/manager/users/${mPlayer.body.id}/deposit`, {
+  method: 'POST',
+  body: JSON.stringify({ amount: 100 }),
+});
+check('manager deposit credits the player and debits the manager', mDeposit.status === 200 && Number(mDeposit.body.balance) === 400);
+const managerAfterDeposit = await asManager('/auth/me');
+check('manager balance reflects the transfer', Number(managerAfterDeposit.body.balance) === 0);
+const overfund = await asManager(`/manager/users/${mPlayer.body.id}/deposit`, {
+  method: 'POST',
+  body: JSON.stringify({ amount: 1 }),
+});
+check('manager cannot fund a player beyond available funds', overfund.status === 400);
+const mStatsAfterFunding = await asManager('/manager/stats');
+check(
+  'manager stats include financial totals and player rows',
+  mStatsAfterFunding.status === 200 &&
+    Number(mStatsAfterFunding.body.financials?.manager?.playerBalance) === 400 &&
+    mStatsAfterFunding.body.financials?.players?.some((p) => p.id === mPlayer.body.id),
+);
 const crossRoute = await asManager(`/admin/users/${created.body.id}/deposit`, { method: 'POST', body: JSON.stringify({ amount: 20 }) });
 check('a manager cannot use the admin routes', crossRoute.status === 403, crossRoute.body?.message);
 

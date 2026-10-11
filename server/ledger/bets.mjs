@@ -18,6 +18,7 @@ import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
+import { managerCommission, managerCommissionPercent } from './manager-finance.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -140,9 +141,15 @@ async function linesOf(ticketId) {
 }
 
 export async function getTicketWithLines(ticketId) {
-  const res = await query(`select ${TICKET_COLUMNS} from app_ticket t where t.id = $1`, [ticketId]);
+  const res = await query(
+    `select ${TICKET_COLUMNS}, u.username
+       from app_ticket t
+       left join app_user u on u.id = t.user_id
+      where t.id = $1`,
+    [ticketId],
+  );
   if (!res.rows.length) return null;
-  return toClientTicket(res.rows[0], await linesOf(ticketId));
+  return toClientTicket(res.rows[0], await linesOf(ticketId), res.rows[0].username ?? null);
 }
 
 /**
@@ -320,6 +327,9 @@ export async function cashOut(ticketId, userId) {
     if (!ticket || ticket.status !== 'PENDING') throw badRequest('Bileta nuk është e vlefshme ose është mbyllur.');
 
     const reduced = round(Number(ticket.potential_payout) * 0.7);
+    const lineCount = Number(
+      (await client.query('select count(*)::int as count from app_ticket_line where ticket_id = $1', [ticket.id])).rows[0].count,
+    );
 
     await client.query(`update app_ticket set status = 'WON', potential_payout = $2, settled_at = now() where id = $1`, [
       ticket.id,
@@ -338,13 +348,26 @@ export async function cashOut(ticketId, userId) {
 
     const managerId = user.rows[0].manager_id;
     if (managerId) {
+      const commission = managerCommission(ticket.stake, lineCount);
       const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
-      const managerAfter = round(Number(manager.rows[0]?.balance ?? 0) - reduced);
+      const baseAfter = round(Number(manager.rows[0]?.balance ?? 0) - reduced);
+      const managerAfter = round(baseAfter - commission);
       await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [managerId, managerAfter]);
       await client.query(
         `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
          values ($1, $2, 'MANAGER_PAYOUT_DEDUCTION', $3, $4, $5)`,
-        [managerId, -reduced, ticket.id, managerAfter, `Pagesë për cash-out të lojtarit ${user.rows[0].username}`],
+        [managerId, -reduced, ticket.id, baseAfter, `Pagesë për cash-out të lojtarit ${user.rows[0].username}`],
+      );
+      await client.query(
+        `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
+         values ($1, $2, 'MANAGER_COMMISSION_DEBIT', $3, $4, $5)`,
+        [
+          managerId,
+          -commission,
+          ticket.id,
+          managerAfter,
+          `Komision ${managerCommissionPercent(lineCount)}% për cash-out të lojtarit ${user.rows[0].username}`,
+        ],
       );
     }
 
