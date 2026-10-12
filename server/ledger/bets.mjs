@@ -18,7 +18,7 @@ import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
-import { managerCommission, managerCommissionPercent } from './manager-finance.mjs';
+import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 
 const MIN_STAKE = 100; // LEK
@@ -171,7 +171,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     await client.query('begin');
 
     // lock the balance row: two simultaneous bets must not both pass the check
-    const locked = await client.query('select balance from app_user where id = $1 for update', [user.id]);
+    const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
     if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
     const balance = Number(locked.rows[0].balance);
     if (balance - amount < 0) {
@@ -202,6 +202,13 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
        values ($1, $2, 'BET_PLACED', $3, $4, $5)`,
       [user.id, -amount, ticketId, after, `Bast ${type} - ${lines.length} zgjedhje`],
     );
+    await chargeManagerCommission(client, {
+      managerId: locked.rows[0].manager_id,
+      ticketId,
+      username: locked.rows[0].username,
+      stake: amount,
+      selectionCount: lines.length,
+    });
 
     await client.query('commit');
     return getTicketWithLines(ticketId);
@@ -342,31 +349,76 @@ export async function cashOut(ticketId, userId) {
 
     const managerId = user.rows[0].manager_id;
     if (managerId) {
-      const commission = managerCommission(ticket.stake, lineCount);
+      await chargeManagerCommission(client, {
+        managerId,
+        ticketId: ticket.id,
+        username: user.rows[0].username,
+        stake: ticket.stake,
+        selectionCount: lineCount,
+      });
       const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
-      const baseAfter = round(Number(manager.rows[0]?.balance ?? 0) - reduced);
-      const managerAfter = round(baseAfter - commission);
+      if (!manager.rows.length) throw new Error(`Manager account ${managerId} not found during ticket cash-out`);
+      const managerAfter = round(Number(manager.rows[0].balance) - reduced);
       await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [managerId, managerAfter]);
       await client.query(
         `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
          values ($1, $2, 'MANAGER_PAYOUT_DEDUCTION', $3, $4, $5)`,
-        [managerId, -reduced, ticket.id, baseAfter, `Pagesë për cash-out të lojtarit ${user.rows[0].username}`],
-      );
-      await client.query(
-        `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-         values ($1, $2, 'MANAGER_COMMISSION_DEBIT', $3, $4, $5)`,
-        [
-          managerId,
-          -commission,
-          ticket.id,
-          managerAfter,
-          `Komision ${managerCommissionPercent(lineCount)}% për cash-out të lojtarit ${user.rows[0].username}`,
-        ],
+        [managerId, -reduced, ticket.id, managerAfter, `Pagesë për cash-out të lojtarit ${user.rows[0].username}`],
       );
     }
 
     await client.query('commit');
     return { success: true, amount: reduced };
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Refunds an open ticket and its placement-time manager commission atomically. */
+export async function revertTicket(ticketId, managerId = null) {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const found = await client.query(
+      `select t.*, u.manager_id, u.username as player_username
+         from app_ticket t
+         left join app_user u on u.id = t.user_id
+        where t.id = $1
+        for update of t`,
+      [ticketId],
+    );
+    const ticket = found.rows[0];
+    if (!ticket) throw Object.assign(new Error('ticket not found'), { status: 404 });
+    if (ticket.status !== 'PENDING') throw badRequest('only pending tickets can be reverted');
+    if (!ticket.user_id) throw badRequest('a booked (guest) ticket has no stake to refund');
+    if (managerId && ticket.manager_id !== managerId) {
+      throw Object.assign(new Error('this ticket belongs to another manager'), { status: 403 });
+    }
+
+    const player = await client.query('select balance from app_user where id = $1 for update', [ticket.user_id]);
+    if (!player.rows.length) throw Object.assign(new Error('player not found'), { status: 404 });
+    const stake = Number(ticket.stake);
+    const balanceAfter = round(Number(player.rows[0].balance) + stake);
+
+    await client.query(`update app_ticket set status = 'REVERTED', settled_at = now() where id = $1`, [ticketId]);
+    await client.query(`update app_ticket_line set status = 'VOID' where ticket_id = $1`, [ticketId]);
+    await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [ticket.user_id, balanceAfter]);
+    await client.query(
+      `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
+       values ($1, $2, 'TICKET_REVERT', $3, $4, $5)`,
+      [ticket.user_id, stake, ticketId, balanceAfter, 'Bileta u anulua nga paneli'],
+    );
+    await refundManagerCommission(client, {
+      managerId: ticket.manager_id,
+      ticketId,
+      username: ticket.player_username,
+    });
+
+    await client.query('commit');
+    return { success: true, refunded: stake };
   } catch (e) {
     await client.query('rollback').catch(() => {});
     throw e;

@@ -13,7 +13,7 @@
 import { pool, query } from '../db.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
-import { managerCommission, managerCommissionPercent } from './manager-finance.mjs';
+import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -199,10 +199,16 @@ export async function recalcTicket(ticketId) {
       const managerId = user.rows[0]?.manager_id;
       if (managerId && (status === 'WON' || status === 'LOST')) {
         const amount = status === 'WON' ? -payout : Number(ticket.stake);
-        const commission = managerCommission(ticket.stake, lines.length);
+        await chargeManagerCommission(client, {
+          managerId,
+          ticketId,
+          username: user.rows[0].username,
+          stake: ticket.stake,
+          selectionCount: lines.length,
+        });
         const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
-        const baseAfter = round(Number(manager.rows[0]?.balance ?? 0) + amount);
-        const managerAfter = round(baseAfter - commission);
+        if (!manager.rows.length) throw new Error(`Manager account ${managerId} not found during ticket settlement`);
+        const managerAfter = round(Number(manager.rows[0].balance) + amount);
         await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [managerId, managerAfter]);
         await client.query(
           `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
@@ -212,23 +218,18 @@ export async function recalcTicket(ticketId) {
             amount,
             status === 'WON' ? 'MANAGER_PAYOUT_DEDUCTION' : 'MANAGER_LOST_COLLECTED',
             ticketId,
-            baseAfter,
+            managerAfter,
             status === 'WON'
               ? `Pagesë për biletën fituese të lojtarit ${user.rows[0].username}`
               : `Fonde nga bileta humbëse e lojtarit ${user.rows[0].username}`,
           ],
         );
-        await client.query(
-          `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-           values ($1, $2, 'MANAGER_COMMISSION_DEBIT', $3, $4, $5)`,
-          [
-            managerId,
-            -commission,
-            ticketId,
-            managerAfter,
-            `Komision ${managerCommissionPercent(lines.length)}% për biletën e lojtarit ${user.rows[0].username}`,
-          ],
-        );
+      } else if (managerId && status === 'VOID') {
+        await refundManagerCommission(client, {
+          managerId,
+          ticketId,
+          username: user.rows[0].username,
+        });
       }
     }
 

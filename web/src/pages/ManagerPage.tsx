@@ -4,7 +4,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp } from 'lucide-react';
-import { translateMarketName, translateOutcomeName, translateTicketStatus } from '../utils/sportsbookLabels';
+import FinancialChart from '../components/Finance/FinancialChart';
+import { formatTicketSelection, translateMarketName, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
 
 interface PlayerFinancial {
   id: string;
@@ -55,9 +56,9 @@ export default function ManagerPage() {
   const [editUsername, setEditUsername] = useState('');
   const [editPassword, setEditPassword] = useState('');
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const [usersRes, statsRes] = await Promise.all([
         apiClient.get('/manager/users'),
         apiClient.get('/manager/stats'),
@@ -67,7 +68,7 @@ export default function ManagerPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -84,8 +85,12 @@ export default function ManagerPage() {
   };
 
   useEffect(() => {
-    if (tab === 'users') fetchUsers();
-    else fetchTickets();
+    if (tab === 'users') {
+      void fetchUsers();
+      const refreshTimer = window.setInterval(() => void fetchUsers(false), 30000);
+      return () => window.clearInterval(refreshTimer);
+    }
+    void fetchTickets();
   }, [tab]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -174,6 +179,7 @@ export default function ManagerPage() {
       const res = await apiClient.post(`/manager/tickets/${ticketId}/revert`);
       alert(`${t('manager.ticket_reverted')} ${res.data.refunded.toFixed(2)} Lëk`);
       fetchTickets();
+      fetchUsers(false);
     } catch (e: any) {
       alert(e.response?.data?.error || t('manager.revert_failed'));
     }
@@ -226,26 +232,40 @@ export default function ManagerPage() {
                   </div>
                   <div className="mt-1 text-xs text-text-secondary">Diferenca = fonde të luajtura − pagesat fituese</div>
                 </div>
-                <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
                   {([
+                    ['Fonde në dispozicion', financials.manager.balance],
                     ['Fonde të luajtura', financials.manager.totalStake],
                     ['Fitime të paguara', financials.manager.wonPayouts],
                     ['Humbje të lojtarëve', financials.manager.lostStake],
                     ['Bilanci i lojtarëve', financials.manager.playerBalance],
                     ['Komision i zbritur', financials.manager.commission],
                   ] as const).map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-tertiary bg-secondary p-4">
+                    <div key={label} className={`rounded-xl border bg-secondary p-4 ${label === 'Fonde në dispozicion' ? 'border-amber-500/30' : 'border-tertiary'}`}>
                       <div className="text-xs text-text-secondary">{label}</div>
-                      <div className="mt-1 text-lg font-bold text-white">{Number(value).toFixed(2)} Lëk</div>
+                      <div className={`mt-1 text-lg font-bold ${label === 'Fonde në dispozicion' ? 'text-amber-300' : 'text-white'}`}>{Number(value).toFixed(2)} Lëk</div>
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-tertiary bg-secondary px-4 py-3 text-xs text-text-secondary">
-                  <span className="font-semibold text-white">Komision për biletë:</span>
+                  <span className="font-semibold text-white">Komisioni zbritet nga bilanci yt kur vendoset basti:</span>
                   <span>1 zgjedhje <b className="text-accent-yellow">3%</b></span>
                   <span>2 zgjedhje <b className="text-accent-yellow">5%</b></span>
                   <span>3+ zgjedhje <b className="text-accent-yellow">7%</b></span>
                 </div>
+                <FinancialChart
+                  title="Grafiku financiar"
+                  description="Përmbledhje e aktivitetit dhe bilancit aktual të llogarive të tua."
+                  items={[
+                    { label: 'Fonde të luajtura', value: financials.manager.totalStake, color: 'bg-sky-400' },
+                    { label: 'Pagesa fituese', value: financials.manager.wonPayouts, color: 'bg-emerald-400' },
+                    { label: 'Humbje të lojtarëve', value: financials.manager.lostStake, color: 'bg-rose-400' },
+                    { label: 'Komision i zbritur', value: financials.manager.commission, color: 'bg-amber-400' },
+                    { label: 'Bilanci i lojtarëve', value: financials.manager.playerBalance, color: 'bg-violet-400' },
+                    { label: 'Fonde në dispozicion', value: financials.manager.balance, color: 'bg-cyan-400' },
+                    { label: 'Diferenca neto', value: financials.manager.netDifference, color: 'bg-fuchsia-400' },
+                  ]}
+                />
               </div>
             )}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
@@ -439,7 +459,8 @@ export default function ManagerPage() {
                             </div>
                             <div className="text-xs text-text-secondary mt-1">
                               <span>Përdoruesi: <strong className="text-white">{ticket.user?.username || 'Vizitor'}</strong></span>
-                              <span> &bull; {new Date(ticket.placedAt).toLocaleString()}</span>
+                              <span> &bull; {new Date(ticket.placedAt).toLocaleString('sq-AL')}</span>
+                              <span> &bull; {t('tickets.type')}: {translateTicketType(ticket.ticketType, t)}</span>
                             </div>
                           </div>
                         </div>
@@ -472,7 +493,7 @@ export default function ManagerPage() {
                           {ticket.lines.map((line) => (
                             <div key={line.id} className="rounded-lg border border-tertiary bg-primary p-3 text-xs">
                               <div className="text-text-secondary">{line.matchName}</div>
-                              <div className="mt-1 font-semibold text-white">{translateMarketName(line.marketName, t)}: <span className="text-accent-green">{translateOutcomeName(line.outcomeName, t, line.marketName)}</span></div>
+                              <div className="mt-1 font-semibold text-white">{translateMarketName(line.marketName, t)}: <span className="text-accent-green">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span></div>
                               <div className="mt-1 flex justify-between text-text-secondary">
                                 <span>Kuota <b className="text-white">{line.oddsAtPlacement.toFixed(2)}</b></span>
                                 <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{translateTicketStatus(line.status, t)}</span>

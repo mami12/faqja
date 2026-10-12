@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { Users, Activity, Euro, Target } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import FinancialChart from '../Finance/FinancialChart';
 
 interface Stats {
   users: number;
@@ -28,10 +29,20 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiClient.get('/admin/stats')
-      .then(res => setStats(res.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const refreshStats = async (showLoading = false) => {
+      if (showLoading) setLoading(true);
+      try {
+        const res = await apiClient.get('/admin/stats');
+        setStats(res.data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (showLoading) setLoading(false);
+      }
+    };
+    void refreshStats(true);
+    const refreshTimer = window.setInterval(() => void refreshStats(), 30000);
+    return () => window.clearInterval(refreshTimer);
   }, []);
 
   const cards = [
@@ -40,6 +51,16 @@ export default function AdminDashboard() {
     { title: t('admin.total_stake_today'), value: `${stats.totalStake.toFixed(2)} Lëk`, icon: Euro, color: 'text-accent-green' },
     { title: t('admin.total_revenue'), value: `${stats.revenue.toFixed(2)} Lëk`, icon: Target, color: 'text-accent-red' },
   ];
+  const managers = stats.managers ?? [];
+  const financialTotals = managers.reduce((totals, manager) => ({
+    totalStake: totals.totalStake + manager.totalStake,
+    wonPayouts: totals.wonPayouts + manager.wonPayouts,
+    lostStake: totals.lostStake + manager.lostStake,
+    commission: totals.commission + manager.commission,
+    playerBalance: totals.playerBalance + manager.playerBalance,
+    balance: totals.balance + manager.balance,
+    netDifference: totals.netDifference + manager.netDifference,
+  }), { totalStake: 0, wonPayouts: 0, lostStake: 0, commission: 0, playerBalance: 0, balance: 0, netDifference: 0 });
 
   if (loading) {
     return (
@@ -64,13 +85,26 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
+      <FinancialChart
+        title="Grafiku financiar i menaxherëve"
+        description="Totali aktual i fondeve të luajtura, pagesave dhe bilanceve të menaxherëve."
+        items={[
+          { label: 'Fonde të luajtura', value: financialTotals.totalStake, color: 'bg-sky-400' },
+          { label: 'Pagesa fituese', value: financialTotals.wonPayouts, color: 'bg-emerald-400' },
+          { label: 'Humbje të lojtarëve', value: financialTotals.lostStake, color: 'bg-rose-400' },
+          { label: 'Komision i zbritur', value: financialTotals.commission, color: 'bg-amber-400' },
+          { label: 'Bilanci i lojtarëve', value: financialTotals.playerBalance, color: 'bg-violet-400' },
+          { label: 'Bilanci i menaxherëve', value: financialTotals.balance, color: 'bg-cyan-400' },
+          { label: 'Diferenca neto', value: financialTotals.netDifference, color: 'bg-fuchsia-400' },
+        ]}
+      />
       <section className="bg-secondary rounded-xl border border-tertiary overflow-hidden">
         <div className="p-5 border-b border-tertiary">
           <h3 className="text-lg font-bold text-white">Pasqyra financiare e menaxherëve</h3>
           <p className="text-sm text-text-secondary">Bilanci, aktiviteti i lojtarëve dhe diferenca neto</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="bg-tertiary/60 uppercase text-[11px] text-text-secondary">
               <tr>
                 <th className="p-3">Menaxheri</th>
@@ -78,6 +112,7 @@ export default function AdminDashboard() {
                 <th className="p-3 text-right">Fonde të luajtura</th>
                 <th className="p-3 text-right">Pagesa fituese</th>
                 <th className="p-3 text-right">Humbje</th>
+                <th className="p-3 text-right">Komisioni (%)</th>
                 <th className="p-3 text-right">Komision</th>
                 <th className="p-3 text-right">Bilanci i lojtarëve</th>
                 <th className="p-3 text-right">Bilanci</th>
@@ -92,6 +127,7 @@ export default function AdminDashboard() {
                   <td className="p-3 text-right">{manager.totalStake.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.wonPayouts.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.lostStake.toFixed(2)} Lëk</td>
+                  <td className="p-3 text-right text-accent-yellow">3% / 5% / 7%</td>
                   <td className="p-3 text-right">{manager.commission.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.playerBalance.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.balance.toFixed(2)} Lëk</td>
@@ -101,14 +137,14 @@ export default function AdminDashboard() {
                 </tr>
               ))}
               {!stats.managers?.length && (
-                <tr><td colSpan={9} className="p-6 text-center text-text-secondary">Nuk ka menaxherë për t’u shfaqur.</td></tr>
+                <tr><td colSpan={10} className="p-6 text-center text-text-secondary">Nuk ka menaxherë për t’u shfaqur.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
       <div className="text-xs text-text-secondary px-1">
-        Komisioni për skedina të mbyllura: 3% për 1 zgjedhje, 5% për 2 dhe 7% për 3 ose më shumë.
+        Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin: 3% për teke, 5% për dyshe dhe 7% për 3 ose më shumë zgjedhje. Për skedinat e anuluara ose të pavlefshme, komisioni kthehet.
       </div>
     </div>
   );

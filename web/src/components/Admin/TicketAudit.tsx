@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import { ChevronDown, ChevronUp, Ticket as TicketIcon, CheckCircle2, XCircle, Clock, RotateCcw } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { translateMarketName, translateOutcomeName, translateTicketStatus, translateTicketType } from '../../utils/sportsbookLabels';
+import { formatTicketSelection, translateMarketName, translateTicketStatus, translateTicketType } from '../../utils/sportsbookLabels';
 
 export default function TicketAudit() {
   const { t: translate } = useLanguage();
@@ -147,7 +147,7 @@ export default function TicketAudit() {
                             <div className="space-y-0.5">
                               <div className="text-text-secondary">{line.matchName}</div>
                               <div className="font-semibold text-white">
-                                {translateMarketName(line.marketName, translate)}: <span className="text-accent-green font-bold">{translateOutcomeName(line.outcomeName, translate, line.marketName)}</span>
+                                {translateMarketName(line.marketName, translate)}: <span className="text-accent-green font-bold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, translate)}</span>
                               </div>
                             </div>
                             <div className="text-right">

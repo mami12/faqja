@@ -316,28 +316,8 @@ adminRouter.get('/manager/tickets', ...manager, listTickets(true));
 const revertTicket = (scoped) =>
   guard(async (req, res) => {
     const id = req.params.id;
-    const found = await query('select * from app_ticket where id = $1', [id]);
-    const ticket = found.rows[0];
-    if (!ticket) throw Object.assign(new Error('ticket not found'), { status: 404 });
-    if (ticket.status !== 'PENDING') throw badRequest('only pending tickets can be reverted');
-    if (!ticket.user_id) throw badRequest('a booked (guest) ticket has no stake to refund');
-
-    if (scoped) {
-      const owner = await query('select manager_id from app_user where id = $1', [ticket.user_id]);
-      if (owner.rows[0]?.manager_id !== req.user.id) throw Object.assign(new Error('this ticket belongs to another manager'), { status: 403 });
-    }
-
-    const stake = Number(ticket.stake);
-    await query(`update app_ticket set status = 'REVERTED', settled_at = now() where id = $1`, [id]);
-    await query(`update app_ticket_line set status = 'VOID' where ticket_id = $1`, [id]);
-    await ledger.moveMoney(ticket.user_id, stake, {
-      type: 'TICKET_REVERT',
-      referenceId: id,
-      description: 'Bileta u anulua nga paneli',
-      allowNegative: true,
-    });
-
-    res.json({ success: true, refunded: stake, ticket: await bets.getTicketWithLines(id) });
+    const result = await bets.revertTicket(id, scoped ? req.user.id : null);
+    res.json({ ...result, ticket: await bets.getTicketWithLines(id) });
   });
 
 adminRouter.post('/admin/tickets/:id/revert', ...admin, revertTicket(false));

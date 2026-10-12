@@ -234,11 +234,8 @@ export async function managerFinancials(managerId = null) {
        left join lateral (
          select coalesce(sum(-x.amount), 0) as commission
            from app_transaction x
-           join app_ticket ticket on ticket.id = x.reference_id
-           join app_user u on u.id = ticket.user_id
-          where u.manager_id = m.id
-            and x.user_id = m.id
-            and x.type = 'MANAGER_COMMISSION_DEBIT'
+          where x.user_id = m.id
+            and x.type in ('MANAGER_COMMISSION_DEBIT', 'MANAGER_COMMISSION_REFUND')
        ) c on true
       where m.role = 'MANAGER'
         and ($1::uuid is null or m.id = $1::uuid)
@@ -295,7 +292,7 @@ export async function managerFinancials(managerId = null) {
              ) line_count on true
             where ticket.user_id = u.id
               and x.user_id = $1
-              and x.type = 'MANAGER_COMMISSION_DEBIT'
+              and x.type in ('MANAGER_COMMISSION_DEBIT', 'MANAGER_COMMISSION_REFUND')
          ) c on true
         where u.manager_id = $1
         order by u.username`,

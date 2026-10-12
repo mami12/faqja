@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Ticket } from '../types';
-import { translateMarketName, translateOutcomeName } from '../utils/sportsbookLabels';
+import { formatTicketSelection, translateMarketName, translateTicketType } from '../utils/sportsbookLabels';
 
 export default function MyBetsPage() {
   const { t } = useLanguage();
@@ -37,8 +37,8 @@ export default function MyBetsPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString([], { 
-      year: 'numeric', month: 'short', day: 'numeric', 
+    return new Date(dateStr).toLocaleString('sq-AL', {
+      year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit' 
     });
   };
@@ -62,6 +62,7 @@ export default function MyBetsPage() {
               {t('tickets.ticket_id')}: <span className="font-mono text-white font-bold bg-primary/70 px-2 py-0.5 rounded border border-tertiary/60">{ticket.id.slice(0, 8).toUpperCase()}</span>
             </div>
             <div className="text-[11px] text-text-muted">{t('tickets.placed_at')}: {formatDate(ticket.placedAt)}</div>
+            <div className="text-[11px] text-text-muted">Lloji: <span className="font-semibold text-slate-300">{translateTicketType(ticket.ticketType, t)}</span></div>
           </div>
           <span className={`font-black text-xs px-2.5 py-0.5 rounded-full uppercase tracking-wider ${statusClass}`}>
             {t(`tickets.${ticket.status.toLowerCase()}`)}
@@ -73,7 +74,7 @@ export default function MyBetsPage() {
             <div key={idx} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs bg-primary/40 p-2.5 rounded-xl border border-tertiary/40">
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-white truncate text-xs sm:text-sm" title={line.matchName}>{line.matchName}</div>
-                <div className="text-text-secondary text-[11px] mt-0.5">{translateMarketName(line.marketName, t)} - <span className="text-accent-green font-semibold">{translateOutcomeName(line.outcomeName, t, line.marketName)}</span></div>
+                <div className="text-text-secondary text-[11px] mt-0.5">{translateMarketName(line.marketName, t)} - <span className="text-accent-green font-semibold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span></div>
               </div>
               <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
                 <div className="text-white font-mono font-black text-xs sm:text-sm">@{line.oddsAtPlacement.toFixed(2)}</div>
