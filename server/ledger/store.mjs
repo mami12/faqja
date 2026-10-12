@@ -7,6 +7,7 @@
  */
 import { query, pool } from '../db.mjs';
 import { LEDGER_SQL } from './schema.mjs';
+import { getManagerCommissionRates } from './manager-finance.mjs';
 
 export async function initLedgerSchema() {
   await query(LEDGER_SQL);
@@ -208,6 +209,7 @@ export async function moveManagerFunds(managerId, playerId, amount, direction) {
 }
 
 export async function managerFinancials(managerId = null) {
+  const commissionRates = await getManagerCommissionRates(query);
   const managers = await query(
     `select m.id, m.username, m.balance,
             coalesce(p.player_balance, 0) as player_balance,
@@ -254,6 +256,7 @@ export async function managerFinancials(managerId = null) {
       wonPayouts,
       lostStake: Number(row.lost_stake ?? 0),
       commission: Number(row.commission ?? 0),
+      commissionRates,
       ticketCount: Number(row.ticket_count ?? 0),
       playerCount: Number(row.player_count ?? 0),
       netDifference: Number((totalStake - wonPayouts).toFixed(2)),
@@ -317,7 +320,7 @@ export async function managerFinancials(managerId = null) {
             double: Number(row.double_commission ?? 0),
             multi: Number(row.multi_commission ?? 0),
           },
-          commissionRates: { single: 3, double: 5, multi: 7 },
+          commissionRates,
           netDifference: Number((totalStake - wonPayouts).toFixed(2)),
         };
       }),
@@ -389,13 +392,88 @@ export async function moveMoney(userId, delta, { type = 'ADJUSTMENT', descriptio
   }
 }
 
-export async function listTransactions(userId, limit = 100) {
+const transactionDate = (value, label) => {
+  if (!value) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? `${value}${label === 'to' ? 'T23:59:59.999' : 'T00:00:00.000'}Z`
+    : value;
+  const date = new Date(normalized);
+  if (!Number.isFinite(date.getTime())) {
+    throw Object.assign(new Error(`${label} must be a valid date`), { status: 400 });
+  }
+  return date.toISOString();
+};
+
+function transactionDateConditions(from, to) {
+  const start = transactionDate(from, 'from');
+  const end = transactionDate(to, 'to');
+  if (start && end && new Date(start) > new Date(end)) {
+    throw Object.assign(new Error('from must be earlier than or equal to to'), { status: 400 });
+  }
+  return { start, end };
+}
+
+export async function listTransactions({ role = 'PLAYER', userId = null, from = null, to = null, limit = 100 } = {}) {
+  const { start, end } = transactionDateConditions(from, to);
+  const params = [];
+  const conditions = [];
+  if (role === 'PLAYER') {
+    params.push(userId);
+    conditions.push(`tx.user_id = $${params.length}`);
+  } else if (role === 'MANAGER') {
+    params.push(userId);
+    conditions.push(`(tx.user_id = $${params.length} or u.manager_id = $${params.length})`);
+  }
+  if (start) {
+    params.push(start);
+    conditions.push(`tx.created_at >= $${params.length}::timestamptz`);
+  }
+  if (end) {
+    params.push(end);
+    conditions.push(`tx.created_at <= $${params.length}::timestamptz`);
+  }
+  params.push(Math.min(Math.max(Number(limit) || 100, 1), 500));
+  const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
   const res = await query(
-    `select id, amount, type, balance_after as "balanceAfter", description, created_at as "createdAt"
-       from app_transaction where user_id = $1 order by created_at desc limit $2`,
-    [userId, Math.min(Number(limit) || 100, 500)],
+    `select tx.id, tx.user_id as "userId", u.username, u.role as "userRole",
+            tx.amount, tx.type, tx.reference_id as "referenceId",
+            tx.balance_after as "balanceAfter", tx.description, tx.created_at as "createdAt"
+       from app_transaction tx
+       join app_user u on u.id = tx.user_id
+       ${where}
+      order by tx.created_at desc limit $${params.length}`,
+    params,
   );
-  return res.rows;
+  return res.rows.map((row) => ({ ...row, amount: Number(row.amount), balanceAfter: Number(row.balanceAfter) }));
+}
+
+export async function listAdminAudit({ from = null, to = null, actorId = null, limit = 200 } = {}) {
+  const { start, end } = transactionDateConditions(from, to);
+  const params = [];
+  const conditions = [];
+  if (start) {
+    params.push(start);
+    conditions.push(`created_at >= $${params.length}::timestamptz`);
+  }
+  if (end) {
+    params.push(end);
+    conditions.push(`created_at <= $${params.length}::timestamptz`);
+  }
+  if (actorId) {
+    params.push(actorId);
+    conditions.push(`actor_id = $${params.length}`);
+  }
+  params.push(Math.min(Math.max(Number(limit) || 200, 1), 500));
+  const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
+  const result = await query(
+    `select id, actor_id as "actorId", actor_name as "actorName", actor_role as "actorRole",
+            action, target_type as "targetType", target_id as "targetId", details,
+            created_at as "createdAt"
+       from app_admin_audit ${where}
+      order by created_at desc limit $${params.length}`,
+    params,
+  );
+  return result.rows;
 }
 
 /** headline numbers for the admin/manager dashboards */

@@ -19,6 +19,7 @@ import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
+import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 
 const MIN_STAKE = 100; // LEK
@@ -174,6 +175,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
     if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
     const balance = Number(locked.rows[0].balance);
+    await assertPlayerCanBet(client, user.id, amount);
     if (balance - amount < 0) {
       throw badRequest(`Bilanci juaj nuk mjafton për këtë bast. Ju keni ${balance.toLocaleString()} Lek në llogari.`);
     }

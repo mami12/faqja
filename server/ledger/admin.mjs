@@ -19,12 +19,65 @@ import { toClientMatches } from './view.mjs';
 
 export const adminRouter = express.Router();
 
-const guard = (fn) => (req, res, next) =>
-  Promise.resolve(fn(req, res, next)).catch((e) => {
+const guard = (fn) => (req, res, next) => {
+  const sendJson = res.json.bind(res);
+  return Promise.resolve().then(async () => {
+    let queued = false;
+    let body;
+    res.json = (value) => {
+      queued = true;
+      body = value;
+      return res;
+    };
+    await fn(req, res, next);
+    if (!queued) return;
+
+    const mutatingRequest = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method) ||
+      (req.method === 'GET' && req.path === '/admin/settlement');
+    if (res.statusCode < 400 && mutatingRequest &&
+        ['ADMIN', 'MANAGER'].includes(req.user?.role)) {
+      try {
+        const target = req.path.match(/\/(users|matches|markets|outcomes|tickets)\/([^/]+)/);
+        const safeKeys = ['username', 'role', 'managerId', 'initialBalance', 'amount', 'status', 'isSuspended', 'odds', 'price', 'homeScore', 'awayScore'];
+        const input = Object.fromEntries(
+          safeKeys.filter((key) => req.body?.[key] !== undefined).map((key) => [key, req.body[key]]),
+        );
+        const targetId = target?.[2] ?? body?.id ?? null;
+        const targetType = target
+          ? ({ users: 'user', matches: 'match', markets: 'market', outcomes: 'outcome', tickets: 'ticket' })[target[1]]
+          : req.path.includes('commission') ? 'settings' : 'system';
+        await query(
+          `insert into app_admin_audit
+             (actor_id, actor_name, actor_role, action, target_type, target_id, details)
+           values ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+          [
+            req.user.id,
+            req.user.username,
+            req.user.role,
+            `${req.method} ${req.path}`,
+            targetType,
+            targetId ? String(targetId) : null,
+            JSON.stringify({ input }),
+          ],
+        );
+      } catch (error) {
+        console.error('[admin audit] failed to persist action', req.method, req.path, '-', error?.message);
+        res.status(500);
+        return sendJson({
+          message: 'Veprimi u krye, por regjistri i auditimit nuk u ruajt. Kontakto administratorin.',
+          error: 'audit log write failed',
+        });
+      }
+    }
+    return sendJson(body);
+  }).catch((e) => {
     const status = Number(e?.status) >= 400 && Number(e?.status) < 600 ? Number(e.status) : 500;
     if (status >= 500) console.error('[app api]', req.method, req.originalUrl, '-', e?.message);
-    res.status(status).json({ message: e?.message ?? 'error', error: e?.message ?? 'error' });
+    res.json = sendJson;
+    res.status(status);
+    sendJson({ message: e?.message ?? 'error', error: e?.message ?? 'error' });
   });
+};
 
 const requireLedger = (req, res, next) =>
   ledger.isLedgerReady() ? next() : res.status(503).json({ message: 'ledger database unavailable' });
@@ -58,6 +111,82 @@ const asAmount = (v) => {
   if (amount <= 0) throw badRequest('amount must be at least 0.01');
   return amount;
 };
+
+const commissionRate = (value, label) => {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+    throw badRequest(`${label} must be between 0 and 100`);
+  }
+  return Number(rate.toFixed(2));
+};
+
+adminRouter.get(
+  '/admin/commission-rates',
+  ...admin,
+  guard(async (_req, res) => {
+    const result = await query(
+      'select single_pct as single, double_pct as double, multi_pct as multi from app_commission_config where id = 1',
+    );
+    const row = result.rows[0] ?? { single: 3, double: 5, multi: 7 };
+    res.json({ single: Number(row.single), double: Number(row.double), multi: Number(row.multi) });
+  }),
+);
+
+adminRouter.patch(
+  '/admin/commission-rates',
+  ...admin,
+  guard(async (req, res) => {
+    const { single, double, multi } = req.body ?? {};
+    const rates = {
+      single: commissionRate(single, 'single'),
+      double: commissionRate(double, 'double'),
+      multi: commissionRate(multi, 'multi'),
+    };
+    const result = await query(
+      `update app_commission_config
+          set single_pct = $1, double_pct = $2, multi_pct = $3,
+              updated_by = $4, updated_at = now()
+        where id = 1
+        returning single_pct as single, double_pct as double, multi_pct as multi`,
+      [rates.single, rates.double, rates.multi, req.user.id],
+    );
+    res.json(Object.fromEntries(Object.entries(result.rows[0]).map(([key, value]) => [key, Number(value)])));
+  }),
+);
+
+adminRouter.get(
+  '/admin/audit-log',
+  ...admin,
+  guard(async (req, res) => res.json(await ledger.listAdminAudit({
+    from: req.query.from,
+    to: req.query.to,
+    actorId: req.query.actorId,
+    limit: req.query.limit,
+  }))),
+);
+
+adminRouter.get(
+  '/admin/transactions',
+  ...admin,
+  guard(async (req, res) => res.json(await ledger.listTransactions({
+    role: 'ADMIN',
+    from: req.query.from,
+    to: req.query.to,
+    limit: req.query.limit,
+  }))),
+);
+
+adminRouter.get(
+  '/manager/transactions',
+  ...manager,
+  guard(async (req, res) => res.json(await ledger.listTransactions({
+    role: 'MANAGER',
+    userId: req.user.id,
+    from: req.query.from,
+    to: req.query.to,
+    limit: req.query.limit,
+  }))),
+);
 
 /** a manager may only touch the players they own */
 async function assertOwned(req, userId) {

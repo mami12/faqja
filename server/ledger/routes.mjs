@@ -11,6 +11,7 @@ import * as bets from './bets.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
+import { getPlayerControls, requestSelfExclusion, updatePlayerLimits } from './player-controls.mjs';
 
 export const ledgerRouter = express.Router();
 
@@ -57,7 +58,43 @@ ledgerRouter.get(
   '/me/transactions',
   requireLedger,
   requireAuth,
-  guard(async (req, res) => res.json(await ledger.listTransactions(req.user.id, asLimit(req.query.limit, 100, 500)))),
+  guard(async (req, res) => res.json(await ledger.listTransactions({
+    role: 'PLAYER',
+    userId: req.user.id,
+    from: req.query.from,
+    to: req.query.to,
+    limit: asLimit(req.query.limit, 100, 500),
+  }))),
+);
+
+ledgerRouter.get(
+  '/me/controls',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'PLAYER') return res.status(403).json({ message: 'player only' });
+    return res.json(await getPlayerControls(req.user.id));
+  }),
+);
+
+ledgerRouter.patch(
+  '/me/controls/limits',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'PLAYER') return res.status(403).json({ message: 'player only' });
+    return res.json(await updatePlayerLimits(req.user.id, req.body ?? {}));
+  }),
+);
+
+ledgerRouter.post(
+  '/me/controls/self-exclusion',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'PLAYER') return res.status(403).json({ message: 'player only' });
+    return res.json(await requestSelfExclusion(req.user.id, req.body?.days));
+  }),
 );
 
 /* ------------------------------------------------------- bets (stage 2) */

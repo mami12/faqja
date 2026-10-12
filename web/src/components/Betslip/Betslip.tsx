@@ -7,7 +7,7 @@ import BookingModal from './BookingModal';
 import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
 import { Ticket } from '../../types';
-import { translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
+import { formatTicketSelection, translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
 
 export default function Betslip() {
   const { 
@@ -111,7 +111,7 @@ export default function Betslip() {
             <div key={idx} className="flex justify-between items-center text-xs">
               <div className="min-w-0">
                 <div className="font-semibold text-white truncate">{line.matchName}</div>
-                <div className="text-text-secondary">{translateMarketName(line.marketName, t)} - {translateOutcomeName(line.outcomeName, t, line.marketName)}</div>
+                <div className="text-text-secondary">{translateMarketName(line.marketName, t)} - {formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</div>
               </div>
               <div className="text-right shrink-0 ml-2">
                 <span className="text-accent-green font-bold">@{line.oddsAtPlacement?.toFixed(2)}</span>

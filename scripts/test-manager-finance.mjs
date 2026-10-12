@@ -9,8 +9,12 @@ import {
 const managerId = 'manager-1';
 const transactions = [];
 let balance = 1000;
+let configuredRates = { single: 3, double: 5, multi: 7 };
 const client = {
   async query(sql, values = []) {
+    if (sql.includes('from app_commission_config')) {
+      return { rows: [configuredRates] };
+    }
     if (sql.includes("type = 'MANAGER_COMMISSION_DEBIT'")) {
       return {
         rows: transactions
@@ -44,6 +48,8 @@ assert.equal(managerCommissionPercent(2), 5);
 assert.equal(managerCommissionPercent(3), 7);
 assert.equal(managerCommissionPercent(8), 7);
 assert.equal(managerCommission(150, 1), 4.5);
+assert.equal(managerCommission(100, 1, { single: 4, double: 6, multi: 8 }), 4);
+assert.equal(managerCommissionPercent(2, { single: 4, double: 6, multi: 8 }), 6);
 
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'single', username: 'p', stake: 100, selectionCount: 1 }), 3);
 assert.equal(balance, 997);
@@ -58,5 +64,9 @@ assert.equal(await refundManagerCommission(client, { managerId, ticketId: 'singl
 assert.equal(balance, 988);
 assert.equal(await refundManagerCommission(client, { managerId, ticketId: 'single', username: 'p' }), 0);
 assert.equal(balance, 988, 'the same ticket commission is refunded only once');
+
+configuredRates = { single: 4, double: 6, multi: 8 };
+assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'config-change', username: 'p', stake: 100, selectionCount: 1 }), 4);
+assert.equal(balance, 984, 'the configured manager rate is used for newly placed tickets');
 
 console.log('Manager finance checks passed');

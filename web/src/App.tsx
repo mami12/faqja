@@ -7,8 +7,10 @@ import SportsbookPage from './pages/SportsbookPage';
 import AdminPage from './pages/AdminPage';
 import ManagerPage from './pages/ManagerPage';
 import MyBetsPage from './pages/MyBetsPage';
+import TransactionHistoryPage from './pages/TransactionHistoryPage';
+import ResponsiblePlayPage from './pages/ResponsiblePlayPage';
 
-const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false }: { children: JSX.Element, requireAdmin?: boolean, requireManager?: boolean }) => {
+const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false, allowAnyRole = false }: { children: JSX.Element, requireAdmin?: boolean, requireManager?: boolean, allowAnyRole?: boolean }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
   
   // Wait for auth check to complete before deciding where to redirect
@@ -29,7 +31,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false
   if (requireManager && user?.role !== 'MANAGER') return <Navigate to="/" replace />;
   
   // Route players to sportsbook, admins to admin, managers to manager
-  if (!requireAdmin && !requireManager) {
+  if (!requireAdmin && !requireManager && !allowAnyRole) {
     if (user?.role === 'ADMIN') return <Navigate to="/admin" replace />;
     if (user?.role === 'MANAGER') return <Navigate to="/manager" replace />;
   }
@@ -44,6 +46,8 @@ const AppRoutes = () => {
       <Route path="/" element={<ProtectedRoute><SportsbookPage /></ProtectedRoute>} />
       <Route path="/match/:id" element={<ProtectedRoute><SportsbookPage /></ProtectedRoute>} />
       <Route path="/my-bets" element={<ProtectedRoute><MyBetsPage /></ProtectedRoute>} />
+      <Route path="/transactions" element={<ProtectedRoute allowAnyRole><TransactionHistoryPage /></ProtectedRoute>} />
+      <Route path="/responsible-play" element={<ProtectedRoute><ResponsiblePlayPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminPage /></ProtectedRoute>} />
       <Route path="/manager" element={<ProtectedRoute requireManager><ManagerPage /></ProtectedRoute>} />
       {/* Unknown URLs must never render an empty page */}

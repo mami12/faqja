@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Globe, Wallet, LogOut, Shield, Users, Ticket, Zap } from 'lucide-react';
+import { Menu, X, Globe, Wallet, LogOut, Shield, Users, Ticket, Zap, Receipt, HeartHandshake } from 'lucide-react';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -56,6 +56,19 @@ export default function Header({ onToggleNav }: Props) {
           <span>{t('manager.my_users')}</span>
         </button>
       )}
+      {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+        <button
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            isActive('/transactions')
+              ? 'bg-accent-green/15 text-accent-green border border-accent-green/30'
+              : 'text-text-secondary hover:text-white hover:bg-tertiary/60'
+          }`}
+          onClick={() => go('/transactions')}
+        >
+          <Receipt size={14} />
+          <span>Transaksionet</span>
+        </button>
+      )}
       {user?.role === 'PLAYER' && (
         <button
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -68,6 +81,32 @@ export default function Header({ onToggleNav }: Props) {
           <Ticket size={14} />
           <span>{t('nav.myBets')}</span>
         </button>
+      )}
+      {user?.role === 'PLAYER' && (
+        <>
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              isActive('/transactions')
+                ? 'bg-accent-green/15 text-accent-green border border-accent-green/30'
+                : 'text-text-secondary hover:text-white hover:bg-tertiary/60'
+            }`}
+            onClick={() => go('/transactions')}
+          >
+            <Receipt size={14} />
+            <span>Transaksionet</span>
+          </button>
+          <button
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              isActive('/responsible-play')
+                ? 'bg-accent-green/15 text-accent-green border border-accent-green/30'
+                : 'text-text-secondary hover:text-white hover:bg-tertiary/60'
+            }`}
+            onClick={() => go('/responsible-play')}
+          >
+            <HeartHandshake size={14} />
+            <span>Lojë e përgjegjshme</span>
+          </button>
+        </>
       )}
     </>
   );

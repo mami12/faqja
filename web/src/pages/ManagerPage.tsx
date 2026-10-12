@@ -25,6 +25,7 @@ interface ManagerFinancial {
   wonPayouts: number;
   lostStake: number;
   commission: number;
+  commissionRates: { single: number; double: number; multi: number };
   netDifference: number;
 }
 
@@ -249,9 +250,9 @@ export default function ManagerPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-tertiary bg-secondary px-4 py-3 text-xs text-text-secondary">
                   <span className="font-semibold text-white">Komisioni zbritet nga bilanci yt kur vendoset basti:</span>
-                  <span>1 zgjedhje <b className="text-accent-yellow">3%</b></span>
-                  <span>2 zgjedhje <b className="text-accent-yellow">5%</b></span>
-                  <span>3+ zgjedhje <b className="text-accent-yellow">7%</b></span>
+                  <span>1 zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.single}%</b></span>
+                  <span>2 zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.double}%</b></span>
+                  <span>3+ zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.multi}%</b></span>
                 </div>
                 <FinancialChart
                   title="Grafiku financiar"
@@ -334,9 +335,9 @@ export default function ManagerPage() {
                               <td className="p-4 text-right">
                                 <div className="font-semibold text-white">{(finance?.commission ?? 0).toFixed(2)} Lëk total</div>
                                 <div className="mt-1 space-y-0.5 text-[11px] text-text-secondary">
-                                  <div>{finance?.commissionRates.single ?? 3}% teke: {(finance?.commissionByTier.single ?? 0).toFixed(2)} Lëk</div>
-                                  <div>{finance?.commissionRates.double ?? 5}% dyshe: {(finance?.commissionByTier.double ?? 0).toFixed(2)} Lëk</div>
-                                  <div>{finance?.commissionRates.multi ?? 7}% 3+: {(finance?.commissionByTier.multi ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.single ?? financials?.manager.commissionRates.single ?? 3}% teke: {(finance?.commissionByTier.single ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.double ?? financials?.manager.commissionRates.double ?? 5}% dyshe: {(finance?.commissionByTier.double ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.multi ?? financials?.manager.commissionRates.multi ?? 7}% 3+: {(finance?.commissionByTier.multi ?? 0).toFixed(2)} Lëk</div>
                                 </div>
                                 <div className={`text-xs font-semibold ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                   {(finance?.netDifference ?? 0) >= 0 ? '+' : ''}{(finance?.netDifference ?? 0).toFixed(2)} Lëk

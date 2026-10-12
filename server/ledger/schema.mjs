@@ -25,6 +25,42 @@ create table if not exists app_user (
 create index if not exists app_user_role_idx    on app_user (role);
 create index if not exists app_user_manager_idx on app_user (manager_id);
 
+create table if not exists app_commission_config (
+  id         smallint primary key check (id = 1),
+  single_pct numeric(5,2) not null default 3 check (single_pct >= 0 and single_pct <= 100),
+  double_pct numeric(5,2) not null default 5 check (double_pct >= 0 and double_pct <= 100),
+  multi_pct  numeric(5,2) not null default 7 check (multi_pct >= 0 and multi_pct <= 100),
+  updated_by uuid references app_user(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+insert into app_commission_config (id) values (1) on conflict (id) do nothing;
+
+create table if not exists app_player_controls (
+  user_id                uuid primary key references app_user(id) on delete cascade,
+  daily_limit            numeric(14,2),
+  weekly_limit           numeric(14,2),
+  monthly_limit          numeric(14,2),
+  pending_limits         jsonb,
+  limits_effective_at    timestamptz,
+  self_excluded_until    timestamptz,
+  updated_at             timestamptz not null default now()
+);
+create index if not exists app_player_controls_exclusion_idx on app_player_controls (self_excluded_until);
+
+create table if not exists app_admin_audit (
+  id            bigserial primary key,
+  actor_id      uuid references app_user(id) on delete set null,
+  actor_name    text not null,
+  actor_role    text not null,
+  action        text not null,
+  target_type   text not null,
+  target_id     text,
+  details       jsonb not null default '{}'::jsonb,
+  created_at    timestamptz not null default now()
+);
+create index if not exists app_admin_audit_created_idx on app_admin_audit (created_at desc);
+create index if not exists app_admin_audit_actor_idx on app_admin_audit (actor_id, created_at desc);
+
 -- every balance movement is recorded with the balance it produced (auditable wallet)
 create table if not exists app_transaction (
   id            uuid primary key default gen_random_uuid(),

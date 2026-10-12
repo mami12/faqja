@@ -3,6 +3,7 @@ import { apiClient } from '../../api/client';
 import { Users, Activity, Euro, Target } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import FinancialChart from '../Finance/FinancialChart';
+import CommissionRates from './CommissionRates';
 
 interface Stats {
   users: number;
@@ -19,6 +20,7 @@ interface Stats {
     wonPayouts: number;
     lostStake: number;
     commission: number;
+    commissionRates: { single: number; double: number; multi: number };
     netDifference: number;
   }>;
 }
@@ -98,6 +100,7 @@ export default function AdminDashboard() {
           { label: 'Diferenca neto', value: financialTotals.netDifference, color: 'bg-fuchsia-400' },
         ]}
       />
+      <CommissionRates />
       <section className="bg-secondary rounded-xl border border-tertiary overflow-hidden">
         <div className="p-5 border-b border-tertiary">
           <h3 className="text-lg font-bold text-white">Pasqyra financiare e menaxherëve</h3>
@@ -127,7 +130,7 @@ export default function AdminDashboard() {
                   <td className="p-3 text-right">{manager.totalStake.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.wonPayouts.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.lostStake.toFixed(2)} Lëk</td>
-                  <td className="p-3 text-right text-accent-yellow">3% / 5% / 7%</td>
+                  <td className="p-3 text-right text-accent-yellow">{manager.commissionRates.single}% / {manager.commissionRates.double}% / {manager.commissionRates.multi}%</td>
                   <td className="p-3 text-right">{manager.commission.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.playerBalance.toFixed(2)} Lëk</td>
                   <td className="p-3 text-right">{manager.balance.toFixed(2)} Lëk</td>
@@ -144,7 +147,7 @@ export default function AdminDashboard() {
         </div>
       </section>
       <div className="text-xs text-text-secondary px-1">
-        Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin: 3% për teke, 5% për dyshe dhe 7% për 3 ose më shumë zgjedhje. Për skedinat e anuluara ose të pavlefshme, komisioni kthehet.
+        Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin. Normat aktuale shfaqen në tabelë dhe mund të ndryshohen më sipër; për skedinat e anuluara ose të pavlefshme, komisioni kthehet.
       </div>
     </div>
   );

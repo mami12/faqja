@@ -1,15 +1,33 @@
-export function managerCommissionRate(selectionCount) {
-  if (selectionCount <= 1) return 0.03;
-  if (selectionCount === 2) return 0.05;
-  return 0.07;
+export const DEFAULT_COMMISSION_RATES = Object.freeze({ single: 3, double: 5, multi: 7 });
+
+export async function getManagerCommissionRates(executor) {
+  const runQuery = typeof executor === 'function' ? executor : executor.query.bind(executor);
+  const result = await runQuery(
+    `select single_pct as single, double_pct as double, multi_pct as multi
+       from app_commission_config where id = 1`,
+  );
+  const row = result.rows[0];
+  if (!row) return { ...DEFAULT_COMMISSION_RATES };
+  return {
+    single: Number(row.single),
+    double: Number(row.double),
+    multi: Number(row.multi),
+  };
 }
 
-export function managerCommission(stake, selectionCount) {
-  return Number((Number(stake) * managerCommissionRate(selectionCount)).toFixed(2));
+export function managerCommissionRate(selectionCount, rates = DEFAULT_COMMISSION_RATES) {
+  const tier = selectionCount <= 1 ? 'single' : selectionCount === 2 ? 'double' : 'multi';
+  return Number(rates[tier]) / 100;
 }
 
-export function managerCommissionPercent(selectionCount) {
-  return Math.round(managerCommissionRate(selectionCount) * 100);
+export function managerCommission(stake, selectionCount, rates = DEFAULT_COMMISSION_RATES) {
+  const tier = selectionCount <= 1 ? 'single' : selectionCount === 2 ? 'double' : 'multi';
+  return Number((Number(stake) * Number(rates[tier]) / 100).toFixed(2));
+}
+
+export function managerCommissionPercent(selectionCount, rates = DEFAULT_COMMISSION_RATES) {
+  const tier = selectionCount <= 1 ? 'single' : selectionCount === 2 ? 'double' : 'multi';
+  return Number(rates[tier]);
 }
 
 /** Charges each managed player's ticket once, at placement (or for legacy tickets at settlement). */
@@ -24,7 +42,8 @@ export async function chargeManagerCommission(client, { managerId, ticketId, use
   );
   if (existing.rows.length) return Number(-existing.rows[0].amount);
 
-  const commission = managerCommission(stake, selectionCount);
+  const rates = await getManagerCommissionRates(client);
+  const commission = managerCommission(stake, selectionCount, rates);
   if (!commission) return 0;
   const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
   if (!manager.rows.length) throw new Error(`Manager account ${managerId} not found while charging ticket commission`);
@@ -39,7 +58,7 @@ export async function chargeManagerCommission(client, { managerId, ticketId, use
       -commission,
       ticketId,
       balanceAfter,
-      `Komision ${managerCommissionPercent(selectionCount)}% për biletën e lojtarit ${username}`,
+      `Komision ${managerCommissionPercent(selectionCount, rates)}% për biletën e lojtarit ${username}`,
     ],
   );
   return commission;

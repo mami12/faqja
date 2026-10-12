@@ -8,12 +8,25 @@ const normalized = (value: unknown) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
+function translateExactGoalsLabel(value: string) {
+  const exactGoals = value.match(
+    /^(.*?)\bexact\s+(?:number|amount)\s+of\s+(?:the\s+)?(?:goals?|golat)\s+(?:scored|made)(?:\s+by\s+(.*))?$/i,
+  );
+  if (!exactGoals) return null;
+  const team = (exactGoals[1] || exactGoals[2] || '').replace(/[\s:,-]+$/, '').trim();
+  return team
+    ? `Numri i saktë i golave të shënuar nga ${team}`
+    : 'Numri i saktë i golave të shënuar';
+}
+
 export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
   const exactKey = `markets.${raw}`;
   const exactTranslation = t(exactKey);
   if (exactTranslation !== exactKey) return exactTranslation;
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
   const value = normalized(raw);
 
   const line = raw.match(/\d+(?:[.,]\d+)?/)?.[0];
@@ -134,6 +147,8 @@ export function translateMarketName(name: string | undefined, t: Translate) {
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
   const value = normalized(raw);
 
   if (/^(1|home|home team|home win|homewin|1 home|w1|h|vendas)$/.test(value)) return t('outcomes.home');

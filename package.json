@@ -28,6 +28,8 @@
     "test:providers": "node scripts/test-provider-pin.mjs",
     "test:ticket-pricing": "node scripts/test-ticket-pricing.mjs",
     "test:manager-finance": "node scripts/test-manager-finance.mjs",
+    "test:sportsbook-labels": "node scripts/test-sportsbook-labels.mjs",
+    "test:player-controls": "node scripts/test-player-control-policy.mjs",
     "odds:clean": "node scripts/clean-odds.mjs",
     "verify:app": "node scripts/verify-app.mjs",
     "verify:admin": "node scripts/verify-admin.mjs",
