@@ -7,7 +7,7 @@ import BookingModal from './BookingModal';
 import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
 import { Ticket } from '../../types';
-import { formatTicketSelection, formatMarketSelectionLabel, translateOutcomeName } from '../../utils/sportsbookLabels';
+import { formatTicketSelection, formatMarketSelectionLabel } from '../../utils/sportsbookLabels';
 
 export default function Betslip() {
   const { 
@@ -141,7 +141,7 @@ export default function Betslip() {
               <div className="min-w-0">
                 <div className="font-semibold text-white truncate">{line.matchName}</div>
                 <div className="text-text-secondary">
-                  {formatMarketSelectionLabel(line.marketName, line.marketLine ?? line.line, t)} - {formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode)}
+                  {formatMarketSelectionLabel(line.marketName, line.marketLine ?? line.line, t)} - {formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode, line.marketLine ?? line.line)}
                 </div>
               </div>
               <div className="text-right shrink-0 ml-2">
@@ -246,7 +246,7 @@ export default function Betslip() {
                     <p className="mt-1 break-words text-[11px] text-text-secondary">
                       {formatMarketSelectionLabel(s.marketName, s.marketLine, t)}
                       {' · '}
-                      <span className="font-semibold text-slate-200">{translateOutcomeName(s.outcomeName, t, s.marketName, s.matchName, s.outcomeCode)}</span>
+                      <span className="font-semibold text-slate-200">{formatTicketSelection(s.outcomeName, s.marketName, s.matchName, t, s.outcomeCode, s.marketLine)}</span>
                     </p>
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
@@ -367,7 +367,7 @@ export default function Betslip() {
                   <div className="min-w-0">
                     <div className="text-[10px] text-text-secondary font-bold uppercase">Tregu & Zgjedhja</div>
                     <div className="text-xs font-bold text-accent-yellow truncate">
-                      {formatMarketSelectionLabel(oddsChangeModal.marketName, oddsChangeModal.marketLine, t)} — {translateOutcomeName(oddsChangeModal.outcomeName, t, oddsChangeModal.marketName, oddsChangeModal.matchName, oddsChangeModal.outcomeCode)}
+                      {formatMarketSelectionLabel(oddsChangeModal.marketName, oddsChangeModal.marketLine, t)} — {formatTicketSelection(oddsChangeModal.outcomeName, oddsChangeModal.marketName, oddsChangeModal.matchName, t, oddsChangeModal.outcomeCode, oddsChangeModal.marketLine)}
                     </div>
                   </div>
                   {oddsChangeModal.newOdds >= oddsChangeModal.oldOdds ? (
