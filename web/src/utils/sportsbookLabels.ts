@@ -136,6 +136,13 @@ export function parseResultBttsOutcome(
 ): { result: '1' | 'X' | '2'; bothScore: boolean } | null {
   let raw = String(value ?? '').trim();
   if (!raw) return null;
+  // Some feeds write the complete condition instead of a compact "X/No".
+  // "Both Teams Not to Score and Draw" means X + BTTS No, which is 0-0.
+  raw = raw
+    .replace(/^(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))\s*(?:and\b|&|\+|\/)\s*/i,
+      (_match, clause: string) => (/not/i.test(clause) ? 'No/' : 'Yes/'))
+    .replace(/\s*(?:and\b|&|\+|\/)\s*(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))$/i,
+      (_match, clause: string) => '/' + (/not/i.test(clause) ? 'No' : 'Yes'));
   raw = raw.replace(/^\s*(?:match\s+)?result\s*[:=]?\s*/i, '')
     .replace(/\b(?:both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b\s*[:=]?\s*/gi, '')
     .replace(/^\(|\)$/g, '').trim();
@@ -165,6 +172,34 @@ export function parseResultBttsOutcome(
   return reverseResult !== null && reverseBtts !== null
     ? { result: reverseResult, bothScore: reverseBtts }
     : null;
+}
+
+/**
+ * Display the six valid Result + BTTS outcomes as whether each team scores
+ * (home/away), followed by the full-time 1X2 result.
+ * Examples: X + No => Jo/Jo&X (0-0), 1 + No => Po/Jo&1.
+ * This is presentation only: the feed's original outcome ID/price is unchanged.
+ */
+export function formatResultBttsOutcome(
+  outcomeName: string | undefined,
+  matchName?: string,
+  outcomeCode?: string,
+): string | null {
+  const teams = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i);
+  const home = teams.length === 2 ? teams[0] : '';
+  const away = teams.length === 2 ? teams[1] : '';
+  const fromName = parseResultBttsOutcome(outcomeName, home, away);
+  const fromCode = parseResultBttsOutcome(outcomeCode, home, away);
+  // Contradictory provider labels must not silently become a different bet.
+  if (fromName && fromCode &&
+      (fromName.result !== fromCode.result || fromName.bothScore !== fromCode.bothScore)) return null;
+  const combined = fromName ?? fromCode;
+  if (!combined) return null;
+
+  const homeScores = combined.bothScore || combined.result === '1';
+  const awayScores = combined.bothScore || combined.result === '2';
+  return (homeScores ? 'Po' : 'Jo') + '/' +
+    (awayScores ? 'Po' : 'Jo') + '&' + combined.result;
 }
 
 /** Decode HT/FT only with the corresponding market context. Outcome IDs remain untouched. */
@@ -457,15 +492,15 @@ export function translateMarketName(name: string | undefined, t: Translate) {
 
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
   const raw = String(name ?? '').trim();
-  if (!raw) return '';
+  if (!raw && !outcomeCode) return '';
   if (isHalfTimeFullTimeMarket(marketName)) {
     return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
   }
   if (isResultBttsMarket(marketName)) {
-    const combination = parseResultBttsOutcome(raw);
-    // Unknown feed codes stay visible, never silently shortened to a plain 1X2/BTTS bet.
-    return combination ? combination.result + ' + ' + (combination.bothScore ? 'Po' : 'Jo') : raw;
+    // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
+    return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
   }
+  if (!raw) return '';
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
   if (qualifiedScoring) return qualifiedScoring;
@@ -521,10 +556,11 @@ export function formatTicketSelection(
   marketName: string | undefined,
   matchName: string | undefined,
   t: Translate,
+  outcomeCode?: string,
 ) {
   const rawOutcome = String(outcomeName ?? '').trim();
   if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
-  if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName);
+  if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
   const market = normalized(marketName);
   const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
   if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName);

@@ -82,7 +82,7 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
             <article key={line.id || `${line.matchId}-${index}`} className="border-b border-dashed border-black/30 pb-2 text-xs">
               <div className="font-bold">{line.matchName}</div>
               <div className="mt-0.5">
-                {formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</strong>
+                {formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode)}</strong>
               </div>
               <div className="mt-0.5 flex justify-between">
                 <span>Kuota</span><strong>{line.oddsAtPlacement.toFixed(2)}</strong>
