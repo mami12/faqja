@@ -169,7 +169,7 @@ export default function Betslip() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-secondary text-white">
       {/* Compact slip heading and ticket type. */}
-      <div className="shrink-0 border-b border-tertiary bg-[#394758]">
+      <div className="shrink-0 border-b border-tertiary bg-[#424e60]">
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="flex items-center gap-2 text-xs font-bold tracking-wide">
             <TicketIcon size={15} className="text-accent-yellow"/>
@@ -182,12 +182,12 @@ export default function Betslip() {
             {t('betslip.search_ticket')}
           </button>
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#25303e] px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
           <select
             value={ticketType}
             onChange={e => setTicketType(e.target.value as 'SINGLE' | 'COMBO' | 'SYSTEM')}
             aria-label="Lloji i skedinës"
-            className="max-w-[155px] border border-tertiary bg-[#394758] px-2 py-1 text-xs font-semibold text-white focus:outline-none focus:border-accent-yellow"
+            className="max-w-[155px] border border-tertiary bg-[#424e60] px-2 py-1 text-xs font-semibold text-white focus:outline-none focus:border-accent-yellow"
           >
             {(['SINGLE','COMBO','SYSTEM'] as const).map(type => (
               <option key={type} value={type}>{t(`betslip.${type.toLowerCase()}`)}</option>
@@ -237,7 +237,7 @@ export default function Betslip() {
         <>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#1b2530]">
             {selections.map((s, index) => (
-              <div key={s.outcomeId} className="border-b border-[#111923] bg-[#25303e] px-3 py-2.5">
+              <div key={s.outcomeId} className="border-b border-[#0b1018] bg-[#252d3a] px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="break-words text-xs font-semibold leading-snug text-white">
@@ -267,7 +267,7 @@ export default function Betslip() {
             </div>
           )}
 
-          <div className="shrink-0 border-t border-tertiary bg-[#25303e]">
+          <div className="shrink-0 border-t border-tertiary bg-[#252d3a]">
             <div className="space-y-2 px-3 py-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300">{t('betslip.total_odds')}:</span>
@@ -301,7 +301,7 @@ export default function Betslip() {
               <div className="grid grid-cols-4 gap-1">
                 {[100, 500, 1000, 5000].map(amount => (
                   <button type="button" key={amount} onClick={() => setStake(String(amount))}
-                    className={`border border-tertiary py-1 text-[10px] font-semibold transition-colors ${Number(stake) === amount ? 'bg-[#465870] text-white' : 'bg-[#19232f] text-text-secondary hover:bg-[#394758] hover:text-white'}`}>
+                    className={`border border-tertiary py-1 text-[10px] font-semibold transition-colors ${Number(stake) === amount ? 'bg-[#465870] text-white' : 'bg-[#19232f] text-text-secondary hover:bg-[#424e60] hover:text-white'}`}>
                     {amount >= 1000 ? `${amount / 1000}k` : amount}
                   </button>
                 ))}
@@ -311,7 +311,7 @@ export default function Betslip() {
                 <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{potentialPayout.toFixed(2)} Lëk</strong>
               </div>
             </div>
-            <div className="grid gap-px bg-[#111923] p-px">
+            <div className="grid gap-px bg-[#0b1018] p-px">
               {user ? (
                 <button type="button" onClick={handlePlaceBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
@@ -321,7 +321,7 @@ export default function Betslip() {
                 <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
               )}
               <button type="button" onClick={handleBook}
-                className="bg-[#394758] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
+                className="bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
                 {t('betslip.book_ticket')}
               </button>
             </div>
@@ -337,7 +337,7 @@ export default function Betslip() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-secondary border border-tertiary rounded-sm w-full max-w-md overflow-hidden shadow-2xl space-y-0">
             {/* Header */}
-            <div className="bg-[#394758] border-b border-white/10 p-4 flex items-center gap-3">
+            <div className="bg-[#424e60] border-b border-white/10 p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-accent-yellow/20 border border-accent-yellow/40 flex items-center justify-center shrink-0">
                 <AlertTriangle size={22} className="text-accent-yellow" />
               </div>
