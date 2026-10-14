@@ -82,6 +82,8 @@ export interface Outcome {
   id: string;
   marketId: string;
   name: string;
+  /** Provider's original outcome key; needed for six-way Result + BTTS combinations. */
+  code?: string;
   odds: number;
   isWinner?: boolean;
   status: 'ACTIVE' | 'SUSPENDED' | 'SETTLED' | 'VOID';

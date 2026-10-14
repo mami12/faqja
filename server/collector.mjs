@@ -5,6 +5,7 @@ import { upsertMatches, expireStaleMatches, getCounts, getMatches, getMatchById 
 import { getOddsForMatches as getOddsFromDb } from './db.mjs';
 import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
+import { isResultBttsMarket } from './ledger/result-btts.mjs';
 
 /** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
@@ -53,11 +54,12 @@ export function buildMarkets(oddsRows) {
     const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
     const oNormName = norm(o.outcome_name);
     const oNormKey = norm(o.outcome_key);
+    const isMixed = isResultBttsMarket(o.market_name ?? markets.get(key).name);
 
     // prevent duplicate outcome keys or outcome names inside the same market group
     const existing = outcomes.find(
       (eo) => (eo.key && oNormKey && norm(eo.key) === oNormKey) ||
-              (eo.name && oNormName && norm(eo.name) === oNormName)
+              (!isMixed && eo.name && oNormName && norm(eo.name) === oNormName)
     );
 
     if (existing) {
@@ -84,6 +86,7 @@ export function buildMarkets(oddsRows) {
     const canon = (oc) => {
       const k = String(oc.key ?? '').trim().toLowerCase();
       const n = norm(oc.name);
+      if (isResultBttsMarket(m.name)) return k || n;
       if (k === '1' || n === '1' || n === 'home' || n === 'w1') return '1';
       if (k === 'x' || n === 'x' || n === 'draw' || n === 'tie') return 'x';
       if (k === '2' || n === '2' || n === 'away' || n === 'w2') return '2';
@@ -136,10 +139,10 @@ export function buildMarkets(oddsRows) {
     // Matches: "Halftime/Fulltime", "Half Time / Full Time", "HT/FT", "HTFT"
     const isHTFT = /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half\s*time\s*\/\s*full\s*time|htft/i.test(mName);
 
-    const is1X2 = !isHTFT &&
+    const is1X2 = !isHTFT && !isResultBttsMarket(m.name) &&
                   (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
                   !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-    const isBTTS = !isHTFT && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result/i.test(mName);
+    const isBTTS = !isHTFT && !isResultBttsMarket(m.name) && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result|1x2|winner/i.test(mName);
     const isOU = !isHTFT && m.column === 'total' && /total|over\/?under/i.test(mName) && !/corner|card|half|team/i.test(mName);
     const isOddEven = !isHTFT && /odd\/even/i.test(mName);
     const isDoubleChance = !isHTFT && /double chance/i.test(mName);

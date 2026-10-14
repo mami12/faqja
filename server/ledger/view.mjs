@@ -10,6 +10,7 @@
  */
 const FOOTBALL = { id: 18, name: 'Football', slug: 'football', iconName: 'Activity', sortOrder: 1, isActive: true };
 import * as overrides from './overrides.mjs';
+import { isResultBttsMarket } from './result-btts.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -46,7 +47,9 @@ function outcomeName(key, fallback, marketType, marketName) {
   }
 
   // 2) 1X2 / Result markets: strictly 1, X, 2 (regardless of whether feed passed team names)
-  const is1X2 = marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName);
+  // HT/FT is a nine-outcome contract. Do not collapse provider keys to ordinary 1X2.
+  const isHTFT = /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half\s*time\s*\/\s*full\s*time|htft/i.test(mName);
+  const is1X2 = !isHTFT && !isResultBttsMarket(marketName) && (marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName));
   if (is1X2 && !/score|rezultat/i.test(mName)) {
     if (k === '1' || k === 'home' || k === 'h' || k === 'w1' || /^(home|w1)$/i.test(fb)) return '1';
     if (k === 'x' || k === 'draw' || k === 'tie' || k === 'wx' || /^(draw|tie|wx)$/i.test(fb)) return 'X';
@@ -129,7 +132,7 @@ export function toClientMatch(m) {
     };
     outcomes.sort((a, b) => OUTCOME_RANK(a.code, a.name) - OUTCOME_RANK(b.code, b.name));
 
-    if (isResultMarket && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mk.name ?? '')) {
+    if (isResultMarket && !isResultBttsMarket(mk.name) && !/half|score|rezultat|both|btts|corner|card|handicap|chance/i.test(mk.name ?? '')) {
       const valid1X2 = outcomes.filter((o) => ['1', 'X', '2'].includes(o.name));
       if (valid1X2.length >= 2) {
         outcomes.splice(0, outcomes.length, ...valid1X2);

@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine, isResultBttsMarket } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
 const cleanMarketName = (name?: string) => {
@@ -26,6 +26,7 @@ const cleanMarketName = (name?: string) => {
 
 const getGroupCategory = (name?: string) => {
   const value = String(name ?? '').toLowerCase();
+  if (isResultBttsMarket(value)) return 'Mixed';
   if (/card|karton|booking|red card|yellow card/i.test(value)) return 'Cards';
   if (/corner|kendo|kënd|corners/i.test(value)) return 'Corners';
   if (/half|halves|pjesa|1st half|2nd half|1\. pjesë|2\. pjesë/i.test(value)) return 'Halves';
@@ -38,6 +39,7 @@ const getCategoryIcon = (catId: string) => {
   switch (catId) {
     case 'Popular': return <Trophy size={13} className="text-amber-400" />;
     case 'Goals': return <Flame size={13} className="text-orange-400" />;
+    case 'Mixed': return <Layers size={13} className="text-amber-300" />;
     case 'Halves': return <Clock size={13} className="text-purple-400" />;
     case 'Corners': return <Flag size={13} className="text-blue-400" />;
     case 'Cards': return <ShieldAlert size={13} className="text-rose-400" />;
@@ -48,6 +50,7 @@ const getCategoryIcon = (catId: string) => {
 
 const getMarketIcon = (category: string, title: string) => {
   const t = title.toLowerCase();
+  if (category === 'Mixed') return <Layers size={14} className="text-amber-300 shrink-0" />;
   if (category === 'Cards' || /card|karton/i.test(t)) return <ShieldAlert size={14} className="text-rose-400 shrink-0" />;
   if (category === 'Corners' || /corner|kënd/i.test(t)) return <Flag size={14} className="text-blue-400 shrink-0" />;
   if (category === 'Halves' || /half|pjes/i.test(t)) return <Clock size={14} className="text-purple-400 shrink-0" />;
@@ -59,13 +62,13 @@ const getMarketIcon = (category: string, title: string) => {
 const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
-  const is1X2 = /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = /both teams? to score|both score/i.test(mName) && !/half|halves|result/i.test(mName);
+  const is1X2 = !isResultBttsMarket(mName) && /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
+  const isBTTS = !isResultBttsMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
 
   const seen = new Set<string>();
   const res: any[] = [];
   for (const o of outcomes) {
-    const k = norm(o.name || o.key || '');
+    const k = norm(isResultBttsMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
     if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
     if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
     if (!seen.has(k)) {
@@ -88,7 +91,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
   for (const m of markets.filter((market) => !isHandicapMarket(market))) {
     const rawClean = cleanMarketName(m.name);
-    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()}`;
+    const explicitLine = String(m.line ?? '').trim();
+    // Never merge markets containing a minute in their name when the feed has no separate line.
+    const groupingName = explicitLine ? rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim() : rawClean;
+    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${groupingName}`;
 
     if (!map.has(baseKey)) {
       map.set(baseKey, []);
@@ -102,7 +108,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
     result.push({
       baseName: baseKey,
-      title: translateMarketName(marketList[0].name, t),
+      title: translateMarketName(
+        String(marketList[0].line ?? '').trim()
+          ? cleanMarketName(marketList[0].name).replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
+          : marketList[0].name, t),
       category: getGroupCategory(baseKey),
       markets: marketList
     });
@@ -195,6 +204,7 @@ export default function MatchDetail() {
     { id: 'all', label: 'Të Gjitha' },
     { id: 'Popular', label: 'Kryesore' },
     { id: 'Goals', label: 'Golat' },
+    { id: 'Mixed', label: 'MIKSE' },
     { id: 'Halves', label: 'Pjesët' },
     { id: 'Corners', label: 'Këndet' },
     { id: 'Cards', label: 'Kartona' },
@@ -404,7 +414,7 @@ export default function MatchDetail() {
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#232c38]">
                           {showLine && (
                             <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#344253] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
-                              {line || translateMarketName(market.name, t)}
+                              {formatMarketLine(market.name, line) || translateMarketName(market.name, t)}
                             </div>
                           )}
                           <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"

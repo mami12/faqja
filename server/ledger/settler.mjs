@@ -14,6 +14,7 @@ import { pool, query } from '../db.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
+import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from './result-btts.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -27,6 +28,7 @@ const norm = (s) =>
 
 /** which family a market belongs to, from the name we stored with the line */
 function classify(marketName = '') {
+  if (isResultBttsMarket(marketName)) return 'RESULT_BTTS';
   const s = String(marketName).toLowerCase();
   if (/corner/.test(s)) return 'CORNERS';
   if (/\bcards?\b|booking|yellow|red/.test(s)) return 'CARDS';
@@ -66,6 +68,12 @@ export function gradeLine(line, result) {
   const decide = (yes) => (yes ? 'WON' : 'LOST');
 
   switch (type) {
+    case 'RESULT_BTTS': {
+      const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
+        ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
+      if (!selection) return 'VOID'; // Never grade an unidentified combination as ordinary BTTS.
+      return gradeResultBtts(selection, home, away);
+    }
     case '1X2': {
       if (key === '1' || key === 'home' || /^home/.test(name)) return decide(homeWin);
       if (key === 'x' || key === 'draw' || /^draw|^tie/.test(name)) return decide(draw);

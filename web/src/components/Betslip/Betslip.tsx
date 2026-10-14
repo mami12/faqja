@@ -7,7 +7,7 @@ import BookingModal from './BookingModal';
 import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
 import { Ticket } from '../../types';
-import { formatTicketSelection, translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
+import { formatTicketSelection, formatMarketSelectionLabel, translateOutcomeName } from '../../utils/sportsbookLabels';
 
 export default function Betslip() {
   const { 
@@ -24,6 +24,7 @@ export default function Betslip() {
     newOdds: number;
     outcomeName: string;
     marketName: string;
+    marketLine?: string;
     matchName: string;
   } | null>(null);
   const [bookingCode, setBookingCode] = useState('');
@@ -60,6 +61,7 @@ export default function Betslip() {
           newOdds: Number(errData?.newOdds) || foundSel?.odds || 1.0,
           outcomeName: errData?.outcomeName || foundSel?.outcomeName || '',
           marketName: errData?.marketName || foundSel?.marketName || '',
+          marketLine: foundSel?.marketLine,
           matchName: errData?.matchName || foundSel?.matchName || '',
         });
       } else {
@@ -137,8 +139,7 @@ export default function Betslip() {
               <div className="min-w-0">
                 <div className="font-semibold text-white truncate">{line.matchName}</div>
                 <div className="text-text-secondary">
-                  {translateMarketName(line.marketName, t)}
-                  {line.line && !translateMarketName(line.marketName, t).includes(String(line.line)) ? ` (${line.line})` : ''} - {formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}
+                  {formatMarketSelectionLabel(line.marketName, line.marketLine ?? line.line, t)} - {formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}
                 </div>
               </div>
               <div className="text-right shrink-0 ml-2">
@@ -241,12 +242,9 @@ export default function Betslip() {
                       <span className="mr-1 text-[10px] text-text-muted">{index + 1}.</span>{s.matchName}
                     </p>
                     <p className="mt-1 break-words text-[11px] text-text-secondary">
-                      {translateMarketName(s.marketName, t)}
-                      {s.marketLine && !translateMarketName(s.marketName, t).includes(String(s.marketLine))
-                        ? ` (${String(s.marketLine).match(/^\d+$/) ? `Min ${s.marketLine}'` : s.marketLine})`
-                        : ''}
+                      {formatMarketSelectionLabel(s.marketName, s.marketLine, t)}
                       {' · '}
-                      <span className="font-semibold text-slate-200">{translateOutcomeName(s.outcomeName, t, s.marketName)}</span>
+                      <span className="font-semibold text-slate-200">{translateOutcomeName(s.outcomeName, t, s.marketName, s.matchName)}</span>
                     </p>
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
@@ -367,7 +365,7 @@ export default function Betslip() {
                   <div className="min-w-0">
                     <div className="text-[10px] text-text-secondary font-bold uppercase">Tregu & Zgjedhja</div>
                     <div className="text-xs font-bold text-accent-yellow truncate">
-                      {translateMarketName(oddsChangeModal.marketName, t)} — {translateOutcomeName(oddsChangeModal.outcomeName, t, oddsChangeModal.marketName)}
+                      {formatMarketSelectionLabel(oddsChangeModal.marketName, oddsChangeModal.marketLine, t)} — {translateOutcomeName(oddsChangeModal.outcomeName, t, oddsChangeModal.marketName, oddsChangeModal.matchName)}
                     </div>
                   </div>
                   {oddsChangeModal.newOdds >= oddsChangeModal.oldOdds ? (
