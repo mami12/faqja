@@ -133,7 +133,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const renderFilterBar = () => (
     <div className="hidden md:block sticky top-0 z-10 border-y border-tertiary bg-secondary/95 backdrop-blur-sm">
       <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111a20] p-1.5">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111823] p-1.5">
           {[
             { id: 'all', label: t('sports.all'), count: pricedMatches.length },
             { id: 'live', label: t('sports.live'), count: liveMatches.length },
@@ -146,7 +146,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 active:scale-95 ${
                 viewMode === tab.id
                   ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary font-black shadow-md shadow-accent-green/20'
-                  : 'border border-white/5 bg-[#202e37] text-text-secondary hover:border-white/10 hover:text-white'
+                  : 'border border-white/5 bg-[#26313e] text-text-secondary hover:border-white/10 hover:text-white'
               }`}
             >
               <span>{tab.label}</span>
@@ -192,18 +192,18 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const marketCount = Math.max(markets.length, Number(m.marketCount) || 0);
     const locked = lockedMatches[String(m.id)] === true;
     const oddsGroup = (mk: any, outcomes: (any | null)[], labels: string[]) => (
-      <div className={`grid gap-px bg-[#101720] ${labels.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      <div className={`grid gap-px bg-[#10151e] ${labels.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {labels.map((label, i) => mk && outcomes[i] ? (
-          <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[38px] [&_button]:rounded-none [&_button]:bg-[#263140] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-0.5 [&_button]:py-1 [&_button_span:last-child]:text-[14px] [&_button_span]:max-w-full [&_button_span]:text-center">
+          <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[38px] [&_button]:rounded-none [&_button]:bg-[#28313f] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-0.5 [&_button]:py-1 [&_button_span:last-child]:text-[14px] [&_button_span]:max-w-full [&_button_span]:text-center">
             <OddsButton match={m} market={mk} outcome={outcomes[i]} />
           </div>
         ) : (
-          <div key={label} title={label} className="min-h-[38px] bg-[#202a35] flex items-center justify-center text-text-muted text-xs">—</div>
+          <div key={label} title={label} className="min-h-[38px] bg-[#242d3a] flex items-center justify-center text-text-muted text-xs">—</div>
         ))}
       </div>
     );
     return (
-      <div key={m.id} className="border-b border-[#101720] last:border-b-0 bg-[#252e3b] hover:bg-[#303b49] transition-colors">
+      <div key={m.id} className="border-b border-[#10151e] last:border-b-0 bg-[#262e3b] hover:bg-[#343f50] transition-colors">
         <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="w-9 sm:w-11 shrink-0 text-center text-[9px] font-semibold text-text-secondary tabular-nums">
@@ -245,7 +245,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             </div>
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
               title={t('sections.view_markets')}
-              className="shrink-0 min-h-[38px] w-7 sm:w-9 rounded-none bg-[#344253] hover:bg-[#435368] text-accent-green text-[10px] font-bold flex items-center justify-center gap-0">
+              className="shrink-0 min-h-[38px] w-7 sm:w-9 rounded-none bg-[#414d60] hover:bg-[#536278] text-accent-green text-[10px] font-bold flex items-center justify-center gap-0">
               +{marketCount}<ChevronRight size={13} className="hidden sm:block" />
             </button>
           </div>
@@ -262,8 +262,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       groups.get(key)!.push(m);
     });
     return Array.from(groups.entries()).map(([league, fixtures]) => (
-      <section key={league} className="overflow-hidden rounded-sm border border-[#101720] bg-secondary">
-        <div className="flex items-center justify-between px-2 py-1 bg-[#424d5e] border-b border-[#101720]">
+      <section key={league} className="overflow-hidden rounded-sm border border-[#10151e] bg-secondary">
+        <div className="flex items-center justify-between px-2 py-1 bg-[#445062] border-b border-[#10151e]">
           <h3 className="text-xs font-bold text-white truncate">{league}</h3>
           <span className="text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
         </div>
@@ -273,7 +273,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="w-[128px] text-center">Over / Under</span>
           <span className="w-9 text-center">+</span>
         </div>
-        <div className="flex lg:hidden items-center bg-[#394758] px-2 py-1 text-[10px] font-semibold text-slate-200">
+        <div className="flex lg:hidden items-center bg-[#424e60] px-2 py-1 text-[10px] font-semibold text-slate-200">
           <span className="flex-1 min-w-0">Ndeshja</span>
           <span className="w-[126px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
           <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
@@ -303,7 +303,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder={t('common.search_matches')}
-              className="w-full rounded-md border border-white/10 bg-[#111a20] py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
+              className="w-full rounded-md border border-white/10 bg-[#111823] py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
             />
             {searchTerm && (
               <button
@@ -320,7 +320,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               <CalendarDays size={15} />
               <span className="hidden sm:inline">{t('common.filter')}:</span>
             </div>
-            <div className="flex items-center gap-1 rounded-md border border-white/10 bg-[#111a20] p-1">
+            <div className="flex items-center gap-1 rounded-md border border-white/10 bg-[#111823] p-1">
               <button
                 onClick={() => setDateFilter('all')}
                 className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
@@ -374,7 +374,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             aria-label="Filtro sipas datës"
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value as DateFilter)}
-            className="h-8 max-w-[105px] shrink-0 border border-tertiary bg-[#394758] px-1.5 text-[11px] font-semibold text-white focus:border-accent-yellow focus:outline-none"
+            className="h-8 max-w-[105px] shrink-0 border border-tertiary bg-[#424e60] px-1.5 text-[11px] font-semibold text-white focus:border-accent-yellow focus:outline-none"
           >
             <option value="all">{t('dates.all')}</option>
             <option value="today">{t('dates.today')}</option>
@@ -392,7 +392,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               type="button"
               key={tab.id}
               onClick={() => setViewMode(tab.id as 'all' | 'live' | 'prematch' | 'favorites')}
-              className={`flex min-w-0 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] font-semibold transition-colors ${viewMode === tab.id ? 'bg-[#394758] text-accent-yellow' : 'bg-secondary text-slate-300 hover:text-white'}`}
+              className={`flex min-w-0 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] font-semibold transition-colors ${viewMode === tab.id ? 'bg-[#424e60] text-accent-yellow' : 'bg-secondary text-slate-300 hover:text-white'}`}
             >
               {tab.label}
               <span className="font-mono text-[10px] text-text-secondary">{tab.count}</span>
