@@ -116,6 +116,8 @@ const toClientLine = (l) => ({
   outcomeId: outcomeIdOf(String(l.match_id), l.market_key, l.line, l.outcome_key),
   outcomeName: l.outcome_name,
   marketName: l.market_name,
+  // This parameter is essential for goal-by-minute and other line-specific tickets.
+  marketLine: String(l.line ?? ''),
   matchName: l.match_name,
   oddsAtPlacement: Number(l.odds_at_placement),
   status: l.status,
