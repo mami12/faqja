@@ -663,10 +663,10 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
   if (/^(over|o|lart|mbi)$/.test(value)) return t('outcomes.over');
   if (/^(under|u|poshte|nen)$/.test(value)) return t('outcomes.under');
   if (/^(yes|gg|g|goal|both teams to score|gg ng|g ng)$/.test(value)) {
-    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
+    return /\bboth\s+teams\b|\bbtts\b|\bgg\b|\bng\b/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
   }
   if (/^(no|ng|n g|no goal|no both teams to score|jo gol|nuk shenojne)$/.test(value)) {
-    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
+    return /\bboth\s+teams\b|\bbtts\b|\bgg\b|\bng\b/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
   }
   if (/^(odd|tek|odd number)$/.test(value)) return t('outcomes.odd');
   if (/^(even|cift|even number)$/.test(value)) return t('outcomes.even');
