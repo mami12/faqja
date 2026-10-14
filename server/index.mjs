@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
-import { initSchema, dbHealth, getOddsHistory, recentRawFrames, closePool, logRawFrame } from './db.mjs';
+import { initSchema, dbHealth, getOddsHistory, getOddsForMatches as getDbOddsForMatches, recentRawFrames, closePool, logRawFrame } from './db.mjs';
 import { initLedgerSchema } from './ledger/store.mjs';
 import * as overrides from './ledger/overrides.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
@@ -22,6 +22,7 @@ import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
 import { liveClock } from './minute.mjs';
+import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 
 const app = express();
@@ -301,6 +302,44 @@ app.get('/api/odds/:matchId/history', async (req, res, next) => {
   }
 });
 
+/* The provider's locks and our reversible risk locks travel separately.
+ * Recompute against server prices whenever a score/clock or odds frame changes. */
+const publishedRiskLocks = new Map();
+
+async function broadcastLiveRiskLocks(matchId, matchRow) {
+  if (!io || !matchRow) return;
+  const id = String(matchId);
+  const previous = publishedRiskLocks.get(id) ?? new Set();
+  const next = new Set();
+  const minute = riskMinute(matchRow);
+  if (config.liveRiskEnabled && String(matchRow.service).toUpperCase() === 'LIVE' &&
+      minute !== null && minute >= Math.min(config.liveRiskLeadMinute, config.liveRiskLateMinute)) {
+    const odds = config.oddsStore === 'db'
+      ? await getDbOddsForMatches([Number(matchId)])
+      : oddsStore.getOddsForMatches([Number(matchId)]);
+    for (const item of odds) {
+      const forced = overrides.outcomeOverride(matchId, item.market_key, item.line, item.outcome_key);
+      const price = forced?.price ?? item.price;
+      if (liveRiskReason(matchRow, {
+        marketName: item.market_name,
+        marketKey: item.market_key,
+        outcomeName: item.outcome_name,
+        outcomeKey: item.outcome_key,
+        price,
+      })) {
+        next.add(id + '|' + item.market_key + '|' + (item.line ?? '') + '|' + item.outcome_key);
+      }
+    }
+  }
+
+  const locks = {};
+  for (const key of previous) if (!next.has(key)) locks[key] = false;
+  for (const key of next) if (!previous.has(key)) locks[key] = true;
+  if (next.size) publishedRiskLocks.set(id, next);
+  else publishedRiskLocks.delete(id);
+  if (Object.keys(locks).length) io.emit('risk:locks', { matchId: id, locks });
+}
+
 /* ------------------------------------------------------------ odds ingestion */
 
 async function broadcastOdds(changed) {
@@ -328,6 +367,7 @@ async function broadcastOdds(changed) {
       phase: row.phase ?? clock.phase ?? null,
       markets: buildMarkets(toDbOddsShape(list)),
     });
+    await broadcastLiveRiskLocks(matchId, row);
   }
 }
 
@@ -357,7 +397,10 @@ async function applyInfoFromFeed(info) {
   }
 
   const updated = await applyMatchInfo(enriched);
-  if (updated) io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
+  if (updated) {
+    io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
+    await broadcastLiveRiskLocks(info.matchId, updated);
+  }
   return updated;
 }
 
