@@ -99,13 +99,13 @@ export default function Header({ onToggleNav }: Props) {
   );
 
   return (
-    <header className="shrink-0 z-20 border-b border-white/10 bg-[#192229] shadow-[0_4px_18px_rgba(0,0,0,0.18)]">
+    <header className="shrink-0 z-20 border-b border-white/10 bg-[#25303e] ">
       <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-[68px] sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
           {onToggleNav && (
             <button
               onClick={onToggleNav}
-              className="rounded-lg border border-white/10 bg-[#111a20] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
+              className="rounded-lg border border-white/10 bg-[#111923] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
               aria-label={t('nav.sports')}
             >
               <Menu size={18} />
@@ -115,7 +115,7 @@ export default function Header({ onToggleNav }: Props) {
             className="group flex cursor-pointer items-center gap-2.5 py-1 select-none"
             onClick={() => navigate('/')}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-300/20 bg-gradient-to-br from-emerald-400 to-emerald-600 text-[#102019] shadow-lg shadow-emerald-950/30 transition-transform group-hover:scale-105">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-300/20 bg-accent-green text-[#102019]  transition-transform group-hover:scale-105">
               <Zap size={18} className="fill-current" />
             </div>
             <div className="hidden min-[380px]:block">
@@ -126,7 +126,7 @@ export default function Header({ onToggleNav }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
-          <div className="relative flex items-center rounded-lg border border-white/10 bg-[#111a20] px-2 py-1.5 text-xs transition hover:border-emerald-500/30">
+          <div className="relative flex items-center rounded-lg border border-white/10 bg-[#111923] px-2 py-1.5 text-xs transition hover:border-emerald-500/30">
             <Globe size={13} className="mr-1.5 shrink-0 text-text-secondary" />
             <select
               value={lang}
@@ -147,7 +147,7 @@ export default function Header({ onToggleNav }: Props) {
                 {links}
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-[#111a20] px-2.5 py-1.5 sm:px-3">
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-[#111923] px-2.5 py-1.5 sm:px-3">
                 <Wallet size={14} className="shrink-0 text-amber-300" />
                 <div className="flex flex-col text-left">
                   <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-text-secondary/80 sm:inline">
