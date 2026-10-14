@@ -399,8 +399,8 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
   if (/^(over|lart|mbi)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.over')} ${line}`;
   if (/^(under|poshte|nën|nen)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.under')} ${line}`;
   if (/both teams? to score|both score|btts|gg\s*\/?\s*ng/i.test(raw)) return t('markets.both_teams_score');
-  if (/no\s*goal|jo[\s-]*gol|nuk\s*sh[eë]nojne/i.test(raw)) return t('outcomes.no_goal');
-  if (/\bgoal\b/i.test(raw)) return t('outcomes.goal');
+  if (/^(?:no\s*goal|jo[\s-]*gol|nuk\s*sh[eë]nojne)$/i.test(raw)) return t('outcomes.no_goal');
+  if (/^(?:a\s+)?goal$/i.test(raw)) return t('outcomes.goal');
 
   // 2. Nëse shkurtimi ndryshoi diçka, kthe shkurtimin
   if (short !== raw) return short;
