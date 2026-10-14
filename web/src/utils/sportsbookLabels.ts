@@ -528,8 +528,7 @@ export function compactOutcomeTeams(label: string, matchName?: string): string {
   const fixture = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i);
   const home = fixture.length === 2 ? fixture[0].trim() : '';
   const away = fixture.length === 2 ? fixture[1].trim() : '';
-  const escapeRegex = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '\\/* ------------------------------------------------------------------ */
-/* Përkthimi i outcomes');
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
     .sort((a, b) => b[0].length - a[0].length);
   for (const [team, number] of teams) {
