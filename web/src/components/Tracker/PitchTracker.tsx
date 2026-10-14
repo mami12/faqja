@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Clock3, Flag, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Flag, ShieldAlert } from 'lucide-react';
 import { useLiveFeed, useLivePatch } from '../../api/liveFeed';
 import { MatchEvent } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
@@ -60,7 +60,7 @@ export default function PitchTracker({ matchId, homeTeam, awayTeam }: Props) {
             aria-expanded={showEvents}
             className="ml-auto flex items-center gap-1.5 py-0.5 font-semibold text-text-secondary hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-yellow"
           >
-            <Clock3 size={13}/>
+            <Clock size={13}/>
             {t('tracker.timeline')}
             {showEvents ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
           </button>
