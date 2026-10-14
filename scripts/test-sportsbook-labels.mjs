@@ -47,4 +47,40 @@ assert.equal(
   'Lart / Poshtë 2.5',
 );
 
+
+const htftMarket = 'Half Time / Full Time';
+const fixture = 'Arsenal vs Chelsea';
+const htftExamples = [
+  ['Arsenal / Arsenal', '1/1'],
+  ['Arsenal/Draw', '1/X'],
+  ['Arsenal / Chelsea', '1/2'],
+  ['Draw / Arsenal', 'X/1'],
+  ['Draw / Draw', 'X/X'],
+  ['Draw / Chelsea', 'X/2'],
+  ['Chelsea / Arsenal', '2/1'],
+  ['Chelsea / Draw', '2/X'],
+  ['Chelsea / Chelsea', '2/2'],
+  ['Home/Draw', '1/X'],
+  ['Away / Home', '2/1'],
+  ['HH', '1/1'],
+  ['HD', '1/X'],
+  ['DA', 'X/2'],
+  ['2/X', '2/X'],
+];
+for (const [input, expected] of htftExamples) {
+  assert.equal(
+    module.exports.translateOutcomeName(input, translate, htftMarket, fixture),
+    expected,
+    'HT/FT outcome: ' + input,
+  );
+  assert.equal(
+    module.exports.formatTicketSelection(input, htftMarket, fixture, translate),
+    expected,
+    'HT/FT ticket: ' + input,
+  );
+}
+assert.equal(module.exports.translateOutcomeName('Arsenal/Draw', translate, 'Full Time Result', fixture), 'Arsenal/Draw');
+assert.equal(module.exports.parseHalfTimeFullTimeOutcome('Arsenal/Draw', fixture, '2/2'), null, 'conflicting provider code not misrepresented');
+assert.equal(module.exports.translateOutcomeName('Arsenal/Draw', translate, htftMarket, fixture, '2/2'), 'Arsenal/Draw');
+
 console.log('Sportsbook label translation checks passed');
