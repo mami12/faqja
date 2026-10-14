@@ -276,6 +276,11 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="w-[128px] text-center">Over / Under</span>
           <span className="w-9 text-center">+</span>
         </div>
+        <div className="flex lg:hidden items-center bg-[#286c3e] px-2 py-1 text-[10px] font-semibold text-white">
+          <span className="flex-1 min-w-0">Ndeshja</span>
+          <span className="w-[111px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
+          <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
+        </div>
         {fixtures.map(renderMatchCard)}
       </section>
     ));
