@@ -1,7 +1,7 @@
 import { Printer, X } from 'lucide-react';
 import { Ticket } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
-import { formatTicketSelection, translateMarketName, translateTicketType } from '../../utils/sportsbookLabels';
+import { formatTicketSelection, formatMarketSelectionLabel, translateTicketType } from '../../utils/sportsbookLabels';
 
 const CODE39: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -82,8 +82,7 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
             <article key={line.id || `${line.matchId}-${index}`} className="border-b border-dashed border-black/30 pb-2 text-xs">
               <div className="font-bold">{line.matchName}</div>
               <div className="mt-0.5">
-                {translateMarketName(line.marketName, t)}
-                {line.marketLine && !translateMarketName(line.marketName, t).includes(String(line.marketLine)) ? ` (${line.marketLine})` : ''}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</strong>
+                {formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</strong>
               </div>
               <div className="mt-0.5 flex justify-between">
                 <span>Kuota</span><strong>{line.oddsAtPlacement.toFixed(2)}</strong>
