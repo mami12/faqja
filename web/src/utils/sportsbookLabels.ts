@@ -267,6 +267,841 @@ export function formatMarketLine(marketName: string | undefined, marketLine: str
   return /^\d{1,3}$/.test(value) ? value + "'" : value;
 }
 
+/** An ordinal goal/corner number belongs to the market, not the 1/X/2 choice. */
+export function ordinalMarketNumber(marketName?: string, marketLine?: string): string | null {
+  const name = String(marketName ?? '').trim();
+  if (!/\b(?:next|first|last|nth|numbered|[0-9]+(?:st|nd|rd|th)?)\b.*\b(?:goal|corner)\b|\b(?:goal|corner)\b.*\b(?:next|first|last|number|[0-9]+(?:st|nd|rd|th)?)\b/i.test(name)) return null;
+  const line = String(marketLine ?? '').trim();
+  if (/^\d{1,2}$/.test(line)) return line;
+  const fromName = name.match(/\b(?:goal|corner)s?\s*(?:number|no\.?|#)?\s*(\d{1,2})(?:st|nd|rd|th)?\b/i)
+    ?? name.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:goal|corner)\b/i);
+  return fromName?.[1] ?? null;
+}
+
+export function formatOrdinalOutcomeLabel(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  matchName?: string,
+): string | null {
+  const ordinal = ordinalMarketNumber(marketName, marketLine);
+  if (!ordinal) return null;
+  const raw = compactOutcomeTeams(String(outcomeName ?? ''), matchName);
+  // Remove only the ordinal attached to a 1/X/2 result.
+  const patterns = [
+    new RegExp('^([1X2])\\s*[/,:;|\\-]?\\s*' + ordinal + '(?:st|nd|rd|th)?
+ * Display the provider's exact minute on each odds button without changing the bet.
+ */
+export function formatOddsButtonLabel(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  t: Translate,
+  matchName?: string,
+  outcomeCode?: string,
+): string {
+  const outcome = formatOrdinalOutcomeLabel(outcomeName, marketName, marketLine, matchName)
+    ?? translateOutcomeName(outcomeName, t, marketName, matchName, outcomeCode);
+  const rawMarket = String(marketName ?? '').trim();
+  const rawLine = String(marketLine ?? '').trim();
+  const timeScoring = /\btime\s+of\s+scoring\b|\btime\s+of\s+(?:the\s+)?(?:first|last|next)\s+goal\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(rawMarket);
+  if (!timeScoring) return outcome;
+  const translatedMarket = translateMarketName(rawMarket, t);
+  const formattedLine = formatMarketLine(rawMarket, rawLine);
+  const numericLine = rawLine.match(/^\d{1,3}$/)?.[0];
+  // Only interpret a line as a minute for a scoring-time market.
+  const minute = numericLine ? numericLine + "'" : formattedLine;
+  const description = minute && (!numericLine || !new RegExp('(?:^|\\D)' + numericLine + '(?:\\D|$)').test(translatedMarket))
+    ? translatedMarket + ' · ' + (/\bminute\b|\bminut/i.test(rawMarket) ? minute : 'min. ' + minute)
+    : translatedMarket;
+  if (!description) return outcome;
+  if (!outcome || outcome === description) return description;
+  return description + ' · ' + outcome;
+}
+
+/** One canonical display title for match details, betslip and stored tickets. */
+export function formatMarketSelectionLabel(
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  t: Translate,
+): string {
+  const label = translateMarketName(marketName, t);
+  const rawLine = String(marketLine ?? '').trim();
+  const formattedLine = formatMarketLine(marketName, rawLine);
+  if (!formattedLine) return label;
+  const shownNumbers = label.match(/\d+(?:[.,]\d+)?/g) ?? [];
+  if (shownNumbers.includes(rawLine)) return label;
+  return hasMinuteContext(marketName) ? label + ' ' + formattedLine : label + ' (' + formattedLine + ')';
+}
+
+/** Keep any unfamiliar qualifier verbatim rather than changing the bet's meaning. */
+function translateScoringQualifier(qualifier: string): string {
+  const value = qualifier.trim().replace(/^[\s:;,.–-]+/, '').trim();
+  if (!value) return '';
+  if (/^in\s+(?:the\s+)?(?:1st|first)\s+half$/i.test(value)) return 'në pjesën e parë';
+  if (/^in\s+(?:the\s+)?(?:2nd|second)\s+half$/i.test(value)) return 'në pjesën e dytë';
+  if (/^in\s+(?:the\s+)?(?:both|each)\s+halves$/i.test(value)) return 'në të dyja pjesët';
+  const first = value.match(/^in\s+(?:the\s+)?first\s+(\d{1,3})\s+minutes?$/i);
+  if (first) return 'në ' + first[1] + ' minutat e para';
+  const inMinute = value.match(/^in\s+(?:the\s+)?(?:(\d{1,3})(?:st|nd|rd|th)?\s+)?minute(?:\s+(\d{1,3}))?$/i);
+  if (inMinute) return 'në minutën' + (inMinute[1] || inMinute[2] ? ' ' + (inMinute[1] || inMinute[2]) : '');
+  const inMinutes = value.match(/^in\s+minutes?\s+(\d{1,3})\s*[-–]\s*(\d{1,3})$/i);
+  if (inMinutes) return 'nga minuta ' + inMinutes[1] + ' deri në ' + inMinutes[2];
+  const between = value.match(/^between\s+minutes?\s+(\d{1,3})\s+(?:and|to)\s+(\d{1,3})$/i);
+  if (between) return 'ndërmjet minutave ' + between[1] + ' dhe ' + between[2];
+  const before = value.match(/^before\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (before) return 'para minutës ' + before[1];
+  if (/^before\s+(?:the\s+)?minute$/i.test(value)) return 'para minutës';
+  const until = value.match(/^(?:until|by|up\s+to)\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (until) return 'deri në minutën ' + until[1];
+  if (/^(?:until|by|up\s+to)\s+(?:the\s+)?minute$/i.test(value)) return 'deri në minutën';
+  const within = value.match(/^within\s+(?:the\s+)?(?:first\s+)?(\d{1,3})\s+minutes?$/i);
+  if (within) return 'brenda ' + within[1] + ' minutave';
+  return value;
+}
+
+function translateQualifiedScoringMarket(raw: string, t: Translate): string | null {
+  const btts = raw.match(/^(both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b(.*)$/i);
+  if (btts) {
+    const extra = translateScoringQualifier(btts[2]);
+    return t('markets.both_teams_score') + (extra ? ' ' + extra : '');
+  }
+  const goal = raw.match(/^(?:(?:a|the)\s+)?(next\s+goal|goals?)\s+(in|during|before|until|by|up\s+to|within|between)\b(.*)$/i);
+  if (goal) {
+    const subject = goal[1].toLowerCase().startsWith('next') ? 'Goli i radhës' : 'Gol';
+    return subject + ' ' + translateScoringQualifier(goal[2] + goal[3]);
+  }
+  const team = raw.match(/^(.+?)\s+(not\s+to\s+score|to\s+score|will\s+score|scores?)(?:\s+(?:a\s+)?goal)?(?:\s+(in|before|until|by|up\s+to|within|between)\b(.*))?$/i);
+  if (team && !/^(?:both\s+teams?|home\s+team|away\s+team)$/i.test(team[1].trim())) {
+    const extra = team[3] ? translateScoringQualifier(team[3] + (team[4] ?? '')) : '';
+    return team[1].trim() + (/^not/i.test(team[2]) ? ' nuk shënon gol' : ' shënon gol') + (extra ? ' ' + extra : '');
+  }
+  return null;
+}
+
+function translateExactGoalsLabel(value: string) {
+  const exactGoals = value.match(
+    /^(.*?)\bexact\s+(?:number|amount)\s+of\s+(?:the\s+)?(?:goals?|golat)\s+(?:scored|made)(?:\s+by\s+(.*))?$/i,
+  );
+  if (!exactGoals) return null;
+  const team = (exactGoals[1] || exactGoals[2] || '').replace(/[\s:,-]+$/, '').trim();
+  return team
+    ? `Numri i saktë i golave të shënuar nga ${team}`
+    : 'Numri i saktë i golave të shënuar';
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i market-eve                                             */
+/* ------------------------------------------------------------------ */
+
+export function translateMarketName(name: string | undefined, t: Translate) {
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+  if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
+  if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
+  if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
+  if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
+  if (/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol pas minutës $1');
+  if (/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol para minutës $1');
+
+  const exactKey = `markets.${raw}`;
+  const exactTranslation = t(exactKey);
+  if (exactTranslation !== exactKey) return exactTranslation;
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const scoringLabel = translateQualifiedScoringMarket(raw, t);
+  if (scoringLabel) return scoringLabel;
+  const value = normalized(raw);
+
+  const line = raw.match(/\d+(?:[.,]\d+)?/)?.[0];
+  const withLine = (label: string) => line ? `${label} ${line}` : label;
+  const groupedMarket = value.match(/^(?:(yellow|red) )?(corners?|cards?|goals?) (result|total|double chance|over under)$/);
+  if (groupedMarket) {
+    const [, color, kind, subtype] = groupedMarket;
+    const subject = color === 'yellow' ? 'kartonëve të verdhë'
+      : color === 'red' ? 'kartonëve të kuq'
+      : kind.startsWith('corner') ? 'këndeve'
+      : kind.startsWith('card') ? 'kartonëve'
+      : 'golave';
+    const object = kind.startsWith('corner') ? 'këndet'
+      : kind.startsWith('card') ? color === 'yellow' ? 'kartonët e verdhë' : color === 'red' ? 'kartonët e kuq' : 'kartonët'
+      : 'golat';
+    if (subtype === 'result') return `Rezultati i ${subject}`;
+    if (subtype === 'total') return withLine(`Totali i ${subject}`);
+    if (subtype === 'double chance') return `Shans i dyfishtë për ${object}`;
+    return withLine(`Lart / Poshtë ${subject}`);
+  }
+
+  if (/^(match winner|full time result|fulltime result|match result|1x2)( |$)/.test(value)) return t('markets.match_result');
+  if (/^(both teams to score|both teams score|both score|btts|gg ng|gg\/ng)$/.test(value)) return t('markets.both_teams_score');
+  if (/^(?:anytime|first|last) goalscorers?$/.test(value) || /^(?:first|last) goal scorer$/.test(value)) return 'Shënuesi i golit';
+  if (/^(?:home|away) team to win$/.test(value)) return value.startsWith('home') ? 'Fiton ekipi vendas' : 'Fiton ekipi udhëtues';
+  if (/^(double chance|1st half double chance)/.test(value)) return t('markets.double_chance');
+  if (/^(over under|under over|total goals over under|total over under|goals over under)/.test(value)) return withLine(t('markets.over_under'));
+  if (/^(over|under|lart|poshte) \d/.test(value)) {
+    return `${/^(over|lart)/.test(value) ? t('outcomes.over') : t('outcomes.under')} ${line}`;
+  }
+  if (/^(total goals|total goal|goals total|goal total|goals?)( |$)/.test(value)) return withLine(t('markets.totals'));
+  if (/^(total corners|corners total|corner total|corners?)( |$)/.test(value)) return withLine(t('markets.corners'));
+  if (/^(total cards|cards total|card total|yellow cards|red cards|cards?)( |$)/.test(value)) {
+    const cardType = value.startsWith('yellow') ? 'Të verdha' : value.startsWith('red') ? 'Të kuqe' : t('markets.cards');
+    return withLine(cardType);
+  }
+  if (/^(correct score)( |$)/.test(value)) return t('markets.correct_score');
+  if (/^(odd even|odd even goals)( |$)/.test(value)) return t('markets.odd_even');
+  if (/^(next goal|last goal|first goal)( |$)/.test(value)) {
+    return line ? `${t('markets.next_goal')} ${line}'` : t('markets.next_goal');
+  }
+  if (/^(halftime fulltime|half time full time|half time fulltime)/.test(value)) return t('markets.halftime_fulltime');
+  if (/^(1st half result|first half result)/.test(value)) return t('markets.first_half_result');
+  if (/^(2nd half result|second half result)/.test(value)) return t('markets.second_half_result');
+  if (/^(handicap|asian handicap|fora)( |$)/.test(value)) return t('markets.handicap');
+  if (/^cols? ?-?\d+$/.test(value)) return t('markets.match_result');
+
+  const phrases: Array<[RegExp, string]> = [
+    [/\b(?:1st|first)\s+half\b/gi, 'Pjesa e parë'],
+    [/\b(?:2nd|second)\s+half\b/gi, 'Pjesa e dytë'],
+    [/\bhalf[\s/-]*time\b/gi, 'Pjesa e parë'],
+    [/\bfull[\s/-]*time\b/gi, 'Koha e rregullt'],
+    [/\bmatch\s+winner\b/gi, t('markets.match_result')],
+    [/\b(?:match\s+)?result\b/gi, 'Rezultati'],
+    [/\bwinner\b/gi, 'Fituesi'],
+    [/\bcorrect\s+score\b/gi, t('markets.correct_score')],
+    [/\bdouble\s+chance\b/gi, t('markets.double_chance')],
+    [/\bdraw\s+no\s+bet\b/gi, t('outcomes.draw_no_bet')],
+    [/\bboth\s+teams?\s+(?:to\s+)?score\b/gi, t('markets.both_teams_score')],
+    [/\bgoal\s+in\s+minute\s*(\d+)\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+in\s+(\d+)(?:th|st|nd|rd)?\s+minute\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+before\s+(\d+)(?::00)?(?:'|\s*min)?\b/gi, 'Gol para minutës $1'],
+    [/\bnext\s+goal\s+in\s+minute\s*(\d+)\b/gi, 'Goli i radhës në minutën $1'],
+    [/\bgoal\s+in\s+minutes\b/gi, 'Shënon gol në minutat'],
+    [/\bgoal\s+in\s+minute\b/gi, 'Shënon gol në minutën'],
+    [/\bminute\b/gi, 'minutën'],
+    [/\bminutes\b/gi, 'minutat'],
+    [/\b(?:anytime|first|last)\s+goal\s+scorers?\b/gi, 'Shënuesi i golit'],
+    [/\b(?:anytime|first|last)\s+goalscorers?\b/gi, 'Shënuesi i golit'],
+    [/\bhome\s+team\s+to\s+win\b/gi, 'Fiton ekipi vendas'],
+    [/\baway\s+team\s+to\s+win\b/gi, 'Fiton ekipi udhëtues'],
+    [/\bhome\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit vendas'],
+    [/\baway\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit udhëtues'],
+    [/\bhome\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit vendas: Lart / Poshtë'],
+    [/\baway\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit udhëtues: Lart / Poshtë'],
+    [/\basian\s+corners?\b/gi, 'Këndet aziatike'],
+    [/\basian\s+handicap\b/gi, 'Handikap aziatik'],
+    [/\bcorners?\s+handicap\b/gi, 'Handikap i këndeve'],
+    [/\bcards?\s+handicap\b/gi, 'Handikap i kartonëve'],
+    [/\bplayers?\s+to\s+score\b/gi, 'Lojtari që shënon'],
+    [/\bteams?\s+to\s+score\b/gi, 'Ekipi që shënon'],
+    [/\bboth\s+halves\b/gi, 'Të dyja pjesët'],
+    [/\btotal\s+goals?\b|\bgoals?\s+total\b/gi, t('markets.totals')],
+    [/\btotal\s+corners?\b|\bcorners?\s+total\b/gi, t('markets.corners')],
+    [/\btotal\s+cards?\b|\bcards?\s+total\b/gi, t('markets.cards')],
+    [/\byellow\s+cards?\b/gi, 'Kartonat e verdhë'],
+    [/\bred\s+cards?\b/gi, 'Kartonat e kuq'],
+    [/\bcorners?\b/gi, 'Këndet'],
+    [/\bcards?\b/gi, 'Kartonat'],
+    [/\bgoals?\b/gi, 'Golat'],
+    [/\bgoal\b/gi, 'Goli'],
+    [/\bover\s*\/\s*under\b|\bover\s+under\b|\bunder\s+over\b/gi, t('markets.over_under')],
+    [/\bover\b/gi, t('outcomes.over')],
+    [/\bunder\b/gi, t('outcomes.under')],
+    [/\bodd\s*\/\s*even\b|\bodd\s+even\b/gi, t('markets.odd_even')],
+    [/\bodd\b/gi, t('outcomes.odd')],
+    [/\beven\b/gi, t('outcomes.even')],
+    [/\bhome\s+team\b/gi, 'Ekipi vendas'],
+    [/\baway\s+team\b/gi, 'Ekipi udhëtues'],
+    [/\bhome\b/gi, 'Vendas'],
+    [/\baway\b/gi, 'Udhëtues'],
+    [/\bteam\b/gi, 'Ekipi'],
+    [/\basian\b/gi, 'Aziatik'],
+    [/\bhandicap\b/gi, 'Handikap'],
+    [/\bfirst\b/gi, 'I pari'],
+    [/\blast\b/gi, 'I fundit'],
+    [/\bnext\b/gi, 'i radhës'],
+    [/\bscore\b/gi, 'Shënimi'],
+    [/\bwinning\b/gi, 'Fitues'],
+    [/\bmargin\b/gi, 'Diferenca'],
+    [/\bclean\s+sheet\b/gi, 'Pa pësuar gol'],
+    [/\bto\s+nil\b/gi, 'pa pësuar gol'],
+    [/\bpenalty\b/gi, 'Penallti'],
+    [/\bpenalties\b/gi, 'Penalltitë'],
+    [/\bpoints?\b/gi, 'Pikë'],
+    [/\bplayers?\b/gi, 'Lojtari'],
+    [/\bscorers?\b/gi, 'Shënuesit'],
+    [/\bwin\b/gi, 'Fitore'],
+    [/\bmatch\b/gi, 'Ndeshja'],
+    [/\bto\b/gi, 'për të'],
+  ];
+
+  let result = phrases.reduce((label, [pattern, replacement]) => label.replace(pattern, replacement), raw)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (line && /(?:minut[eë]n?|minute)\s*$/i.test(result)) {
+    result += ` ${line}`;
+  }
+
+  return result;
+}
+
+/** Shorten fixture teams and result words in displayed selections only. */
+export function compactOutcomeTeams(label: string, matchName?: string): string {
+  let result = String(label ?? '').trim();
+  if (!result) return result;
+  const fixture = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i);
+  const home = fixture.length === 2 ? fixture[0].trim() : '';
+  const away = fixture.length === 2 ? fixture[1].trim() : '';
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [team, number] of teams) {
+    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?=$|[^\\p{L}\\p{N}])', 'giu'),
+      (_whole, prefix: string) => prefix + number);
+  }
+  return result
+    .replace(/\b(?:home\s+team|home|vendas(?:i)?|vend[aë]s(?:i)?)\b/gi, '1')
+    .replace(/\b(?:away\s+team|away|udhetues(?:i)?|udh[eë]tues(?:i)?|vizitor(?:i)?)\b/gi, '2')
+    .replace(/\b(?:draw|tie|barazim(?:i)?)\b/gi, 'X')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i outcomes                                               */
+/* ------------------------------------------------------------------ */
+
+export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
+  const raw = String(name ?? '').trim();
+  if (!raw && !outcomeCode) return '';
+  if (isHalfTimeFullTimeMarket(marketName)) {
+    return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
+  if (isResultBttsMarket(marketName)) {
+    // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
+    return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
+  if (!raw) return '';
+
+  // Fixture teams and 1X2 words are shortened in every displayed outcome.
+  const compact = compactOutcomeTeams(raw, matchName);
+  if (compact !== raw) {
+    const firstGoal = compact.match(/^(?:first goal|first team to score|first goalscorer)\s*[:\-]?\s*([12X])$/i);
+    if (firstGoal) return 'Goli i parë: ' + firstGoal[1];
+    const lastGoal = compact.match(/^(?:last goal|last team to score)\s*[:\-]?\s*([12X])$/i);
+    if (lastGoal) return 'Goli i fundit: ' + lastGoal[1];
+    const teamScores = compact.match(/^(?:team to score|team scores?|scoring team)\s*[:\-]?\s*([12X])$/i);
+    if (teamScores) return 'Ekipi që shënon: ' + teamScores[1];
+    const scoring = compact.match(/^([12])\\s+(?:to score|will score|scores?)(?:\\s+(?:a\\s+)?goal)?$/i);
+    if (scoring) return scoring[1] + ' shënon gol';
+    const noScoring = compact.match(/^([12])\\s+(?:not to score|will not score|does not score)$/i);
+    if (noScoring) return noScoring[1] + ' nuk shënon gol';
+    const scoresFirst = compact.match(/^([12])\\s+(?:to score first|scores first)$/i);
+    if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
+    return compact;
+  }
+
+  const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
+  if (qualifiedScoring) return qualifiedScoring;
+  const beforeMinute = raw.match(/^(?:before|prior to)\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (beforeMinute) return 'Para minutës ' + beforeMinute[1];
+  const afterMinute = raw.match(/^after\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (afterMinute) return 'Pas minutës ' + afterMinute[1];
+  const exactMinute = raw.match(/^(?:minute|min\.?|at\s+minute)\s*(\d{1,3})$/i);
+  if (exactMinute) return 'Minuta ' + exactMinute[1];
+
+  // 0. SHKURTO emrin para përkthimit
+  const short = shortOutcomeName(raw);
+  const shortLower = short.toLowerCase();
+
+  // Nëse shkurtimi e ktheu në diçka si "1", "X", "2", "1X", "12", "X2", "3+", ktheje direkt
+  if (/^(1|x|2)$/i.test(short)) return short.toUpperCase();
+  if (/^(1x|12|x2)$/i.test(short)) return short.toUpperCase();
+  if (/^\d+\+$/.test(short)) return short; // "3+" → "3+"
+  if (/^\d+-$/.test(short)) return short; // "3-" → "3-"
+
+  // 1. Kontrollo për exact goals
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const value = normalized(raw);
+
+  if (/^(1|home|home team|home win|homewin|1 home|w1|h|vendas)$/i.test(value)) return '1';
+  if (/^(x|draw|tie|x draw|barazim|wx|d)$/i.test(value)) return 'X';
+  if (/^(2|away|away team|away win|awaywin|2 away|w2|a|udhetues)$/i.test(value)) return '2';
+  if (/^(1x|home or draw|home draw)$/i.test(value)) return '1X';
+  if (/^(12|home or away|home away)$/i.test(value)) return '12';
+  if (/^(x2|draw or away|draw away)$/i.test(value)) return 'X2';
+  if (/^(over|o|lart|mbi)$/.test(value)) return t('outcomes.over');
+  if (/^(under|u|poshte|nen)$/.test(value)) return t('outcomes.under');
+  if (/^(yes|gg|g|goal|both teams to score|gg ng|g ng)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
+  }
+  if (/^(no|ng|n g|no goal|no both teams to score|jo gol|nuk shenojne)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
+  }
+  if (/^(odd|tek|odd number)$/.test(value)) return t('outcomes.odd');
+  if (/^(even|cift|even number)$/.test(value)) return t('outcomes.even');
+  if (/^draw no bet$/.test(value)) return t('outcomes.draw_no_bet');
+
+  const line = raw.match(/(\d+(?:[.,]\d+)?)/)?.[1];
+  if (/^(over|lart|mbi)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.over')} ${line}`;
+  if (/^(under|poshte|nën|nen)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.under')} ${line}`;
+  if (/both teams? to score|both score|btts|gg\s*\/?\s*ng/i.test(raw)) return t('markets.both_teams_score');
+  if (/^(?:no\s*goal|jo[\s-]*gol|nuk\s*sh[eë]nojne)$/i.test(raw)) return t('outcomes.no_goal');
+  if (/^(?:a\s+)?goal$/i.test(raw)) return t('outcomes.goal');
+
+  // 2. Nëse shkurtimi ndryshoi diçka, kthe shkurtimin
+  if (short !== raw) return short;
+
+  return raw;
+}
+
+export function formatTicketSelection(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  matchName: string | undefined,
+  t: Translate,
+  outcomeCode?: string,
+) {
+  const rawOutcome = String(outcomeName ?? '').trim();
+  if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
+  if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
+  const market = normalized(marketName);
+  const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
+  if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
+
+  const outcome = normalized(rawOutcome);
+  const teams = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i).map(normalized);
+  const [home, away] = teams;
+  if (/^(?:x|draw|tie|barazim)$/.test(outcome)) return 'X';
+  if (/^(?:1|home|home team|home win|homewin|w1|vendas)$/.test(outcome) || (home && outcome === home)) return '1';
+  if (/^(?:2|away|away team|away win|awaywin|w2|udhetues)$/.test(outcome) || (away && outcome === away)) return '2';
+  return translateOutcomeName(rawOutcome, t, marketName);
+}
+
+export function translateTicketType(type: string | undefined, t: Translate) {
+  if (type === 'SINGLE') return t('betslip.single');
+  if (type === 'COMBO') return t('betslip.combo');
+  if (type === 'SYSTEM') return t('betslip.system');
+  return type ?? '';
+}
+
+export function translateTicketStatus(status: string | undefined, t: Translate) {
+  if (!status) return '';
+  const key = `tickets.${status.toLowerCase()}`;
+  const translated = t(key);
+  return translated === key ? status : translated;
+}
+, 'i'),
+    new RegExp('^' + ordinal + '(?:st|nd|rd|th)?\\s*[/,:;|\\-]?\\s*([1X2])
+ * Display the provider's exact minute on each odds button without changing the bet.
+ */
+export function formatOddsButtonLabel(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  t: Translate,
+  matchName?: string,
+  outcomeCode?: string,
+): string {
+  const outcome = translateOutcomeName(outcomeName, t, marketName, matchName, outcomeCode);
+  const rawMarket = String(marketName ?? '').trim();
+  const rawLine = String(marketLine ?? '').trim();
+  const timeScoring = /\btime\s+of\s+scoring\b|\btime\s+of\s+(?:the\s+)?(?:first|last|next)\s+goal\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(rawMarket);
+  if (!timeScoring) return outcome;
+  const translatedMarket = translateMarketName(rawMarket, t);
+  const formattedLine = formatMarketLine(rawMarket, rawLine);
+  const numericLine = rawLine.match(/^\d{1,3}$/)?.[0];
+  // Only interpret a line as a minute for a scoring-time market.
+  const minute = numericLine ? numericLine + "'" : formattedLine;
+  const description = minute && (!numericLine || !new RegExp('(?:^|\\D)' + numericLine + '(?:\\D|$)').test(translatedMarket))
+    ? translatedMarket + ' · ' + (/\bminute\b|\bminut/i.test(rawMarket) ? minute : 'min. ' + minute)
+    : translatedMarket;
+  if (!description) return outcome;
+  if (!outcome || outcome === description) return description;
+  return description + ' · ' + outcome;
+}
+
+/** One canonical display title for match details, betslip and stored tickets. */
+export function formatMarketSelectionLabel(
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  t: Translate,
+): string {
+  const label = translateMarketName(marketName, t);
+  const rawLine = String(marketLine ?? '').trim();
+  const formattedLine = formatMarketLine(marketName, rawLine);
+  if (!formattedLine) return label;
+  const shownNumbers = label.match(/\d+(?:[.,]\d+)?/g) ?? [];
+  if (shownNumbers.includes(rawLine)) return label;
+  return hasMinuteContext(marketName) ? label + ' ' + formattedLine : label + ' (' + formattedLine + ')';
+}
+
+/** Keep any unfamiliar qualifier verbatim rather than changing the bet's meaning. */
+function translateScoringQualifier(qualifier: string): string {
+  const value = qualifier.trim().replace(/^[\s:;,.–-]+/, '').trim();
+  if (!value) return '';
+  if (/^in\s+(?:the\s+)?(?:1st|first)\s+half$/i.test(value)) return 'në pjesën e parë';
+  if (/^in\s+(?:the\s+)?(?:2nd|second)\s+half$/i.test(value)) return 'në pjesën e dytë';
+  if (/^in\s+(?:the\s+)?(?:both|each)\s+halves$/i.test(value)) return 'në të dyja pjesët';
+  const first = value.match(/^in\s+(?:the\s+)?first\s+(\d{1,3})\s+minutes?$/i);
+  if (first) return 'në ' + first[1] + ' minutat e para';
+  const inMinute = value.match(/^in\s+(?:the\s+)?(?:(\d{1,3})(?:st|nd|rd|th)?\s+)?minute(?:\s+(\d{1,3}))?$/i);
+  if (inMinute) return 'në minutën' + (inMinute[1] || inMinute[2] ? ' ' + (inMinute[1] || inMinute[2]) : '');
+  const inMinutes = value.match(/^in\s+minutes?\s+(\d{1,3})\s*[-–]\s*(\d{1,3})$/i);
+  if (inMinutes) return 'nga minuta ' + inMinutes[1] + ' deri në ' + inMinutes[2];
+  const between = value.match(/^between\s+minutes?\s+(\d{1,3})\s+(?:and|to)\s+(\d{1,3})$/i);
+  if (between) return 'ndërmjet minutave ' + between[1] + ' dhe ' + between[2];
+  const before = value.match(/^before\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (before) return 'para minutës ' + before[1];
+  if (/^before\s+(?:the\s+)?minute$/i.test(value)) return 'para minutës';
+  const until = value.match(/^(?:until|by|up\s+to)\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (until) return 'deri në minutën ' + until[1];
+  if (/^(?:until|by|up\s+to)\s+(?:the\s+)?minute$/i.test(value)) return 'deri në minutën';
+  const within = value.match(/^within\s+(?:the\s+)?(?:first\s+)?(\d{1,3})\s+minutes?$/i);
+  if (within) return 'brenda ' + within[1] + ' minutave';
+  return value;
+}
+
+function translateQualifiedScoringMarket(raw: string, t: Translate): string | null {
+  const btts = raw.match(/^(both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b(.*)$/i);
+  if (btts) {
+    const extra = translateScoringQualifier(btts[2]);
+    return t('markets.both_teams_score') + (extra ? ' ' + extra : '');
+  }
+  const goal = raw.match(/^(?:(?:a|the)\s+)?(next\s+goal|goals?)\s+(in|during|before|until|by|up\s+to|within|between)\b(.*)$/i);
+  if (goal) {
+    const subject = goal[1].toLowerCase().startsWith('next') ? 'Goli i radhës' : 'Gol';
+    return subject + ' ' + translateScoringQualifier(goal[2] + goal[3]);
+  }
+  const team = raw.match(/^(.+?)\s+(not\s+to\s+score|to\s+score|will\s+score|scores?)(?:\s+(?:a\s+)?goal)?(?:\s+(in|before|until|by|up\s+to|within|between)\b(.*))?$/i);
+  if (team && !/^(?:both\s+teams?|home\s+team|away\s+team)$/i.test(team[1].trim())) {
+    const extra = team[3] ? translateScoringQualifier(team[3] + (team[4] ?? '')) : '';
+    return team[1].trim() + (/^not/i.test(team[2]) ? ' nuk shënon gol' : ' shënon gol') + (extra ? ' ' + extra : '');
+  }
+  return null;
+}
+
+function translateExactGoalsLabel(value: string) {
+  const exactGoals = value.match(
+    /^(.*?)\bexact\s+(?:number|amount)\s+of\s+(?:the\s+)?(?:goals?|golat)\s+(?:scored|made)(?:\s+by\s+(.*))?$/i,
+  );
+  if (!exactGoals) return null;
+  const team = (exactGoals[1] || exactGoals[2] || '').replace(/[\s:,-]+$/, '').trim();
+  return team
+    ? `Numri i saktë i golave të shënuar nga ${team}`
+    : 'Numri i saktë i golave të shënuar';
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i market-eve                                             */
+/* ------------------------------------------------------------------ */
+
+export function translateMarketName(name: string | undefined, t: Translate) {
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+  if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
+  if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
+  if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
+  if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
+  if (/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol pas minutës $1');
+  if (/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol para minutës $1');
+
+  const exactKey = `markets.${raw}`;
+  const exactTranslation = t(exactKey);
+  if (exactTranslation !== exactKey) return exactTranslation;
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const scoringLabel = translateQualifiedScoringMarket(raw, t);
+  if (scoringLabel) return scoringLabel;
+  const value = normalized(raw);
+
+  const line = raw.match(/\d+(?:[.,]\d+)?/)?.[0];
+  const withLine = (label: string) => line ? `${label} ${line}` : label;
+  const groupedMarket = value.match(/^(?:(yellow|red) )?(corners?|cards?|goals?) (result|total|double chance|over under)$/);
+  if (groupedMarket) {
+    const [, color, kind, subtype] = groupedMarket;
+    const subject = color === 'yellow' ? 'kartonëve të verdhë'
+      : color === 'red' ? 'kartonëve të kuq'
+      : kind.startsWith('corner') ? 'këndeve'
+      : kind.startsWith('card') ? 'kartonëve'
+      : 'golave';
+    const object = kind.startsWith('corner') ? 'këndet'
+      : kind.startsWith('card') ? color === 'yellow' ? 'kartonët e verdhë' : color === 'red' ? 'kartonët e kuq' : 'kartonët'
+      : 'golat';
+    if (subtype === 'result') return `Rezultati i ${subject}`;
+    if (subtype === 'total') return withLine(`Totali i ${subject}`);
+    if (subtype === 'double chance') return `Shans i dyfishtë për ${object}`;
+    return withLine(`Lart / Poshtë ${subject}`);
+  }
+
+  if (/^(match winner|full time result|fulltime result|match result|1x2)( |$)/.test(value)) return t('markets.match_result');
+  if (/^(both teams to score|both teams score|both score|btts|gg ng|gg\/ng)$/.test(value)) return t('markets.both_teams_score');
+  if (/^(?:anytime|first|last) goalscorers?$/.test(value) || /^(?:first|last) goal scorer$/.test(value)) return 'Shënuesi i golit';
+  if (/^(?:home|away) team to win$/.test(value)) return value.startsWith('home') ? 'Fiton ekipi vendas' : 'Fiton ekipi udhëtues';
+  if (/^(double chance|1st half double chance)/.test(value)) return t('markets.double_chance');
+  if (/^(over under|under over|total goals over under|total over under|goals over under)/.test(value)) return withLine(t('markets.over_under'));
+  if (/^(over|under|lart|poshte) \d/.test(value)) {
+    return `${/^(over|lart)/.test(value) ? t('outcomes.over') : t('outcomes.under')} ${line}`;
+  }
+  if (/^(total goals|total goal|goals total|goal total|goals?)( |$)/.test(value)) return withLine(t('markets.totals'));
+  if (/^(total corners|corners total|corner total|corners?)( |$)/.test(value)) return withLine(t('markets.corners'));
+  if (/^(total cards|cards total|card total|yellow cards|red cards|cards?)( |$)/.test(value)) {
+    const cardType = value.startsWith('yellow') ? 'Të verdha' : value.startsWith('red') ? 'Të kuqe' : t('markets.cards');
+    return withLine(cardType);
+  }
+  if (/^(correct score)( |$)/.test(value)) return t('markets.correct_score');
+  if (/^(odd even|odd even goals)( |$)/.test(value)) return t('markets.odd_even');
+  if (/^(next goal|last goal|first goal)( |$)/.test(value)) {
+    return line ? `${t('markets.next_goal')} ${line}'` : t('markets.next_goal');
+  }
+  if (/^(halftime fulltime|half time full time|half time fulltime)/.test(value)) return t('markets.halftime_fulltime');
+  if (/^(1st half result|first half result)/.test(value)) return t('markets.first_half_result');
+  if (/^(2nd half result|second half result)/.test(value)) return t('markets.second_half_result');
+  if (/^(handicap|asian handicap|fora)( |$)/.test(value)) return t('markets.handicap');
+  if (/^cols? ?-?\d+$/.test(value)) return t('markets.match_result');
+
+  const phrases: Array<[RegExp, string]> = [
+    [/\b(?:1st|first)\s+half\b/gi, 'Pjesa e parë'],
+    [/\b(?:2nd|second)\s+half\b/gi, 'Pjesa e dytë'],
+    [/\bhalf[\s/-]*time\b/gi, 'Pjesa e parë'],
+    [/\bfull[\s/-]*time\b/gi, 'Koha e rregullt'],
+    [/\bmatch\s+winner\b/gi, t('markets.match_result')],
+    [/\b(?:match\s+)?result\b/gi, 'Rezultati'],
+    [/\bwinner\b/gi, 'Fituesi'],
+    [/\bcorrect\s+score\b/gi, t('markets.correct_score')],
+    [/\bdouble\s+chance\b/gi, t('markets.double_chance')],
+    [/\bdraw\s+no\s+bet\b/gi, t('outcomes.draw_no_bet')],
+    [/\bboth\s+teams?\s+(?:to\s+)?score\b/gi, t('markets.both_teams_score')],
+    [/\bgoal\s+in\s+minute\s*(\d+)\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+in\s+(\d+)(?:th|st|nd|rd)?\s+minute\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+before\s+(\d+)(?::00)?(?:'|\s*min)?\b/gi, 'Gol para minutës $1'],
+    [/\bnext\s+goal\s+in\s+minute\s*(\d+)\b/gi, 'Goli i radhës në minutën $1'],
+    [/\bgoal\s+in\s+minutes\b/gi, 'Shënon gol në minutat'],
+    [/\bgoal\s+in\s+minute\b/gi, 'Shënon gol në minutën'],
+    [/\bminute\b/gi, 'minutën'],
+    [/\bminutes\b/gi, 'minutat'],
+    [/\b(?:anytime|first|last)\s+goal\s+scorers?\b/gi, 'Shënuesi i golit'],
+    [/\b(?:anytime|first|last)\s+goalscorers?\b/gi, 'Shënuesi i golit'],
+    [/\bhome\s+team\s+to\s+win\b/gi, 'Fiton ekipi vendas'],
+    [/\baway\s+team\s+to\s+win\b/gi, 'Fiton ekipi udhëtues'],
+    [/\bhome\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit vendas'],
+    [/\baway\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit udhëtues'],
+    [/\bhome\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit vendas: Lart / Poshtë'],
+    [/\baway\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit udhëtues: Lart / Poshtë'],
+    [/\basian\s+corners?\b/gi, 'Këndet aziatike'],
+    [/\basian\s+handicap\b/gi, 'Handikap aziatik'],
+    [/\bcorners?\s+handicap\b/gi, 'Handikap i këndeve'],
+    [/\bcards?\s+handicap\b/gi, 'Handikap i kartonëve'],
+    [/\bplayers?\s+to\s+score\b/gi, 'Lojtari që shënon'],
+    [/\bteams?\s+to\s+score\b/gi, 'Ekipi që shënon'],
+    [/\bboth\s+halves\b/gi, 'Të dyja pjesët'],
+    [/\btotal\s+goals?\b|\bgoals?\s+total\b/gi, t('markets.totals')],
+    [/\btotal\s+corners?\b|\bcorners?\s+total\b/gi, t('markets.corners')],
+    [/\btotal\s+cards?\b|\bcards?\s+total\b/gi, t('markets.cards')],
+    [/\byellow\s+cards?\b/gi, 'Kartonat e verdhë'],
+    [/\bred\s+cards?\b/gi, 'Kartonat e kuq'],
+    [/\bcorners?\b/gi, 'Këndet'],
+    [/\bcards?\b/gi, 'Kartonat'],
+    [/\bgoals?\b/gi, 'Golat'],
+    [/\bgoal\b/gi, 'Goli'],
+    [/\bover\s*\/\s*under\b|\bover\s+under\b|\bunder\s+over\b/gi, t('markets.over_under')],
+    [/\bover\b/gi, t('outcomes.over')],
+    [/\bunder\b/gi, t('outcomes.under')],
+    [/\bodd\s*\/\s*even\b|\bodd\s+even\b/gi, t('markets.odd_even')],
+    [/\bodd\b/gi, t('outcomes.odd')],
+    [/\beven\b/gi, t('outcomes.even')],
+    [/\bhome\s+team\b/gi, 'Ekipi vendas'],
+    [/\baway\s+team\b/gi, 'Ekipi udhëtues'],
+    [/\bhome\b/gi, 'Vendas'],
+    [/\baway\b/gi, 'Udhëtues'],
+    [/\bteam\b/gi, 'Ekipi'],
+    [/\basian\b/gi, 'Aziatik'],
+    [/\bhandicap\b/gi, 'Handikap'],
+    [/\bfirst\b/gi, 'I pari'],
+    [/\blast\b/gi, 'I fundit'],
+    [/\bnext\b/gi, 'i radhës'],
+    [/\bscore\b/gi, 'Shënimi'],
+    [/\bwinning\b/gi, 'Fitues'],
+    [/\bmargin\b/gi, 'Diferenca'],
+    [/\bclean\s+sheet\b/gi, 'Pa pësuar gol'],
+    [/\bto\s+nil\b/gi, 'pa pësuar gol'],
+    [/\bpenalty\b/gi, 'Penallti'],
+    [/\bpenalties\b/gi, 'Penalltitë'],
+    [/\bpoints?\b/gi, 'Pikë'],
+    [/\bplayers?\b/gi, 'Lojtari'],
+    [/\bscorers?\b/gi, 'Shënuesit'],
+    [/\bwin\b/gi, 'Fitore'],
+    [/\bmatch\b/gi, 'Ndeshja'],
+    [/\bto\b/gi, 'për të'],
+  ];
+
+  let result = phrases.reduce((label, [pattern, replacement]) => label.replace(pattern, replacement), raw)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (line && /(?:minut[eë]n?|minute)\s*$/i.test(result)) {
+    result += ` ${line}`;
+  }
+
+  return result;
+}
+
+/** Shorten fixture teams and result words in displayed selections only. */
+export function compactOutcomeTeams(label: string, matchName?: string): string {
+  let result = String(label ?? '').trim();
+  if (!result) return result;
+  const fixture = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i);
+  const home = fixture.length === 2 ? fixture[0].trim() : '';
+  const away = fixture.length === 2 ? fixture[1].trim() : '';
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [team, number] of teams) {
+    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?=$|[^\\p{L}\\p{N}])', 'giu'),
+      (_whole, prefix: string) => prefix + number);
+  }
+  return result
+    .replace(/\b(?:home\s+team|home|vendas(?:i)?|vend[aë]s(?:i)?)\b/gi, '1')
+    .replace(/\b(?:away\s+team|away|udhetues(?:i)?|udh[eë]tues(?:i)?|vizitor(?:i)?)\b/gi, '2')
+    .replace(/\b(?:draw|tie|barazim(?:i)?)\b/gi, 'X')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i outcomes                                               */
+/* ------------------------------------------------------------------ */
+
+export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
+  const raw = String(name ?? '').trim();
+  if (!raw && !outcomeCode) return '';
+  if (isHalfTimeFullTimeMarket(marketName)) {
+    return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
+  if (isResultBttsMarket(marketName)) {
+    // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
+    return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
+  if (!raw) return '';
+
+  // Fixture teams and 1X2 words are shortened in every displayed outcome.
+  const compact = compactOutcomeTeams(raw, matchName);
+  if (compact !== raw) {
+    const firstGoal = compact.match(/^(?:first goal|first team to score|first goalscorer)\s*[:\-]?\s*([12X])$/i);
+    if (firstGoal) return 'Goli i parë: ' + firstGoal[1];
+    const lastGoal = compact.match(/^(?:last goal|last team to score)\s*[:\-]?\s*([12X])$/i);
+    if (lastGoal) return 'Goli i fundit: ' + lastGoal[1];
+    const teamScores = compact.match(/^(?:team to score|team scores?|scoring team)\s*[:\-]?\s*([12X])$/i);
+    if (teamScores) return 'Ekipi që shënon: ' + teamScores[1];
+    const scoring = compact.match(/^([12])\\s+(?:to score|will score|scores?)(?:\\s+(?:a\\s+)?goal)?$/i);
+    if (scoring) return scoring[1] + ' shënon gol';
+    const noScoring = compact.match(/^([12])\\s+(?:not to score|will not score|does not score)$/i);
+    if (noScoring) return noScoring[1] + ' nuk shënon gol';
+    const scoresFirst = compact.match(/^([12])\\s+(?:to score first|scores first)$/i);
+    if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
+    return compact;
+  }
+
+  const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
+  if (qualifiedScoring) return qualifiedScoring;
+  const beforeMinute = raw.match(/^(?:before|prior to)\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (beforeMinute) return 'Para minutës ' + beforeMinute[1];
+  const afterMinute = raw.match(/^after\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (afterMinute) return 'Pas minutës ' + afterMinute[1];
+  const exactMinute = raw.match(/^(?:minute|min\.?|at\s+minute)\s*(\d{1,3})$/i);
+  if (exactMinute) return 'Minuta ' + exactMinute[1];
+
+  // 0. SHKURTO emrin para përkthimit
+  const short = shortOutcomeName(raw);
+  const shortLower = short.toLowerCase();
+
+  // Nëse shkurtimi e ktheu në diçka si "1", "X", "2", "1X", "12", "X2", "3+", ktheje direkt
+  if (/^(1|x|2)$/i.test(short)) return short.toUpperCase();
+  if (/^(1x|12|x2)$/i.test(short)) return short.toUpperCase();
+  if (/^\d+\+$/.test(short)) return short; // "3+" → "3+"
+  if (/^\d+-$/.test(short)) return short; // "3-" → "3-"
+
+  // 1. Kontrollo për exact goals
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const value = normalized(raw);
+
+  if (/^(1|home|home team|home win|homewin|1 home|w1|h|vendas)$/i.test(value)) return '1';
+  if (/^(x|draw|tie|x draw|barazim|wx|d)$/i.test(value)) return 'X';
+  if (/^(2|away|away team|away win|awaywin|2 away|w2|a|udhetues)$/i.test(value)) return '2';
+  if (/^(1x|home or draw|home draw)$/i.test(value)) return '1X';
+  if (/^(12|home or away|home away)$/i.test(value)) return '12';
+  if (/^(x2|draw or away|draw away)$/i.test(value)) return 'X2';
+  if (/^(over|o|lart|mbi)$/.test(value)) return t('outcomes.over');
+  if (/^(under|u|poshte|nen)$/.test(value)) return t('outcomes.under');
+  if (/^(yes|gg|g|goal|both teams to score|gg ng|g ng)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
+  }
+  if (/^(no|ng|n g|no goal|no both teams to score|jo gol|nuk shenojne)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
+  }
+  if (/^(odd|tek|odd number)$/.test(value)) return t('outcomes.odd');
+  if (/^(even|cift|even number)$/.test(value)) return t('outcomes.even');
+  if (/^draw no bet$/.test(value)) return t('outcomes.draw_no_bet');
+
+  const line = raw.match(/(\d+(?:[.,]\d+)?)/)?.[1];
+  if (/^(over|lart|mbi)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.over')} ${line}`;
+  if (/^(under|poshte|nën|nen)\s+\d+(?:[.,]\d+)?$/i.test(raw)) return `${t('outcomes.under')} ${line}`;
+  if (/both teams? to score|both score|btts|gg\s*\/?\s*ng/i.test(raw)) return t('markets.both_teams_score');
+  if (/^(?:no\s*goal|jo[\s-]*gol|nuk\s*sh[eë]nojne)$/i.test(raw)) return t('outcomes.no_goal');
+  if (/^(?:a\s+)?goal$/i.test(raw)) return t('outcomes.goal');
+
+  // 2. Nëse shkurtimi ndryshoi diçka, kthe shkurtimin
+  if (short !== raw) return short;
+
+  return raw;
+}
+
+export function formatTicketSelection(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  matchName: string | undefined,
+  t: Translate,
+  outcomeCode?: string,
+) {
+  const rawOutcome = String(outcomeName ?? '').trim();
+  if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
+  if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
+  const market = normalized(marketName);
+  const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
+  if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
+
+  const outcome = normalized(rawOutcome);
+  const teams = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i).map(normalized);
+  const [home, away] = teams;
+  if (/^(?:x|draw|tie|barazim)$/.test(outcome)) return 'X';
+  if (/^(?:1|home|home team|home win|homewin|w1|vendas)$/.test(outcome) || (home && outcome === home)) return '1';
+  if (/^(?:2|away|away team|away win|awaywin|w2|udhetues)$/.test(outcome) || (away && outcome === away)) return '2';
+  return translateOutcomeName(rawOutcome, t, marketName);
+}
+
+export function translateTicketType(type: string | undefined, t: Translate) {
+  if (type === 'SINGLE') return t('betslip.single');
+  if (type === 'COMBO') return t('betslip.combo');
+  if (type === 'SYSTEM') return t('betslip.system');
+  return type ?? '';
+}
+
+export function translateTicketStatus(status: string | undefined, t: Translate) {
+  if (!status) return '';
+  const key = `tickets.${status.toLowerCase()}`;
+  const translated = t(key);
+  return translated === key ? status : translated;
+}
+, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match) return match[1].toUpperCase();
+  }
+  return /^[1X2]$/i.test(raw) ? raw.toUpperCase() : null;
+}
+
 /** Scoring-time markets may carry the minute in market.line, not outcome.name.
  * Display the provider's exact minute on each odds button without changing the bet.
  */
