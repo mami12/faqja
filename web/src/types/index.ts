@@ -87,6 +87,11 @@ export interface Outcome {
   odds: number;
   isWinner?: boolean;
   status: 'ACTIVE' | 'SUSPENDED' | 'SETTLED' | 'VOID';
+  /** Real provider/admin lock, independent from server risk policy. */
+  feedSuspended?: boolean;
+  /** Reversible auto-suspension from the server's live risk rules. */
+  riskSuspended?: boolean;
+
 }
 
 export interface BetSelection {
