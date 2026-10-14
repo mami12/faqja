@@ -29,7 +29,7 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     lockedMatches[String(match.id)] === true ||
     currentOdds === null || currentOdds === undefined;
 
-  const label = translateOutcomeName(outcome.name, t, market.name);
+  const label = translateOutcomeName(outcome.name, t, market.name, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
