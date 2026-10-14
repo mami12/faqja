@@ -18,16 +18,16 @@
   }
   
   ::-webkit-scrollbar-thumb {
-    background: #1e293b;
+    background: #364153;
     border-radius: 9999px;
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    background: #334155;
+    background: #4b596e;
   }
 
   body {
-    background-color: #111923;
+    background-color: #0b1018;
     color: #f8fafc;
     overflow-x: hidden;
   }
@@ -85,7 +85,7 @@
   
   /* Subtle glassmorphism */
   .glass-card {
-    background: rgba(37, 48, 62, 0.94);
+    background: rgba(37, 45, 58, 0.94);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
@@ -94,7 +94,7 @@
 @keyframes flashGreen {
   0% { 
     background-color: rgba(16, 185, 129, 0.35);
-    border-color: #2e9f58;
+    border-color: #329448;
     color: #ffffff;
   }
   100% { 
