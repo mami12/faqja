@@ -27,7 +27,7 @@
   }
 
   body {
-    background-color: #111a20;
+    background-color: #111923;
     color: #f8fafc;
     overflow-x: hidden;
   }
@@ -85,7 +85,7 @@
   
   /* Subtle glassmorphism */
   .glass-card {
-    background: rgba(25, 34, 41, 0.88);
+    background: rgba(37, 48, 62, 0.94);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
@@ -94,7 +94,7 @@
 @keyframes flashGreen {
   0% { 
     background-color: rgba(16, 185, 129, 0.35);
-    border-color: #10b981;
+    border-color: #2e9f58;
     color: #ffffff;
   }
   100% { 
