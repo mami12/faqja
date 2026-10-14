@@ -18,10 +18,13 @@ export function riskMinute(match, now = Date.now()) {
   const fallback = num(match?.live_minute);
   const rawClock = num(match?.match_time_ms);
   const clockAt = match?.clock_at ? new Date(match.clock_at).getTime() : null;
+  const phase = String(match?.feed_status ?? match?.feedStatus ?? match?.phase ?? '').trim();
+  const paused = /^(?:ht|half[ -]?time|break[ -]?time)$/i.test(phase);
   const anchored = rawClock !== null && clockAt !== null && Number.isFinite(clockAt)
-    ? Math.floor(rawClock / 60000) + Math.max(0, Math.floor((now - clockAt) / 60000))
+    ? Math.floor(rawClock / 60000) + (paused ? 0 : Math.max(0, Math.floor((now - clockAt) / 60000)))
     : rawClock !== null ? Math.floor(rawClock / 60000) : null;
-  const options = [explicit, fallback, anchored].filter((v) => v !== null && v >= 0);
+  const options = (paused ? [explicit, anchored] : [explicit, fallback, anchored])
+    .filter((v) => v !== null && v >= 0);
   return options.length ? Math.max(...options) : null;
 }
 
@@ -66,7 +69,7 @@ export function liveRiskReason(match, selection, now = Date.now()) {
   const live = service === 'LIVE' || match?.live === true || match?.status === 'LIVE';
   if (!live) return null;
   const price = num(selection?.price ?? selection?.odds);
-  if (price === null || price <= 1) return null;
+  if (price === null || price <= 0) return null;
 
   const minute = riskMinute(match, now);
   if (minute === null) return null;
