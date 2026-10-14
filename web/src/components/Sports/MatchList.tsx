@@ -3,7 +3,6 @@ import { apiClient } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { Match } from '../../types';
 import OddsButton from './OddsButton';
-import MarketPanel from './MarketPanel';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing } from 'lucide-react';
@@ -26,7 +25,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [viewMode, setViewMode] = useState<'all' | 'live' | 'prematch' | 'favorites'>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
@@ -245,14 +243,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">Over / Under {goals?.line ? String(goals.line) : ''}</div>
               {oddsGroup(goals, total, ['Over', 'Under'])}
             </div>
-            <button type="button" onClick={() => setExpandedId(prev => prev === String(m.id) ? null : String(m.id))}
-              aria-expanded={expandedId === String(m.id)} title={t('sections.view_markets')}
+            <button type="button" onClick={() => navigate(`/match/${m.id}`)}
+              title={t('sections.view_markets')}
               className="shrink-0 min-h-[38px] w-7 sm:w-9 rounded-none bg-[#344253] hover:bg-[#435368] text-accent-green text-[10px] font-bold flex items-center justify-center gap-0">
-              +{marketCount}<ChevronRight size={13} className={expandedId === String(m.id) ? 'rotate-90' : ''} />
+              +{marketCount}<ChevronRight size={13}  />
             </button>
           </div>
         </div>
-        {expandedId === String(m.id) && <div className="border-t border-tertiary/70 p-2 sm:p-3"><MarketPanel match={m} /></div>}
       </div>
     );
   };
