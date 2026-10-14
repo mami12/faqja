@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trophy, Goal, FlagTriangleRight, Clock3, ClipboardList, ListFilter } from 'lucide-react';
+import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import { useLanguage } from '../../context/LanguageContext';
@@ -26,11 +26,11 @@ interface CategoryDef {
 
 const CATEGORIES: CategoryDef[] = [
   { key: 'main',    label: 'Kryesore',   icon: Trophy },
-  { key: 'goals',   label: 'Golat',      icon: Goal },
-  { key: 'corners', label: 'Këndet',     icon: FlagTriangleRight },
-  { key: 'cards',   label: 'Kartonat',   icon: ClipboardList },
-  { key: 'htft',    label: 'Pjesa/Ndeshja', icon: Clock3 },
-  { key: 'other',   label: 'Të Tjera',   icon: ListFilter },
+  { key: 'goals',   label: 'Golat',      icon: Target },
+  { key: 'corners', label: 'Këndet',     icon: Flag },
+  { key: 'cards',   label: 'Kartonat',   icon: ShieldAlert },
+  { key: 'htft',    label: 'Pjesa/Ndeshja', icon: Clock },
+  { key: 'other',   label: 'Të Tjera',   icon: ListOrdered },
 ];
 
 /** Kthen kategorinë e një market-i */
@@ -290,7 +290,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               : 'bg-secondary/80 text-text-secondary hover:text-white hover:bg-tertiary border border-tertiary/60'
           }`}
         >
-          <ListFilter size={14} />
+          <ListOrdered size={14} />
           <span>Të Gjitha</span>
           <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
             activeCategory === 'all' ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
