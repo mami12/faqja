@@ -35,4 +35,25 @@ assert.equal(parseResultBttsOutcome('1'), null);
 assert.equal(parseResultBttsOutcome('1-0'), null);
 assert.equal(gradeResultBtts(null, 1, 0), 'VOID');
 
+
+const namedOutcomes = [
+  ['Both Teams Not to Score and Draw', 'X', false, [0, 0]],
+  ['Draw and Both Teams Not to Score', 'X', false, [0, 0]],
+  ['Both Teams to Score and Draw', 'X', true, [1, 1]],
+  ['Arsenal & No', '1', false, [1, 0]],
+  ['Chelsea & No', '2', false, [0, 1]],
+];
+for (const [description, result, bothScore, score] of namedOutcomes) {
+  const parsed = parseResultBttsOutcome(description, 'Arsenal', 'Chelsea');
+  assert.deepEqual(parsed, { result, bothScore }, description);
+  assert.equal(gradeResultBtts(parsed, ...score), 'WON', description);
+}
+assert.equal(
+  gradeResultBtts(parseResultBttsOutcome('Both Teams Not to Score and Draw'), 1, 1),
+  'LOST',
+  'Draw with both scoring is not 0-0',
+);
+assert.equal(parseResultBttsOutcome('Both Teams Not to Score'), null, 'Plain BTTS No is not mixed');
+assert.equal(parseResultBttsOutcome('Draw'), null, 'Plain draw is not mixed');
+
 console.log('Result + BTTS combinations: passed.');
