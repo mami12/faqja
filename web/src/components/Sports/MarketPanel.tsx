@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered } from 'lucide-react';
+import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import { useLanguage } from '../../context/LanguageContext';
@@ -10,13 +10,13 @@ import {
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine, isResultBttsMarket } from '../../utils/sportsbookLabels';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
 /* ------------------------------------------------------------------ */
 
-type Category = 'main' | 'goals' | 'corners' | 'cards' | 'htft' | 'other';
+type Category = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'other';
 
 interface CategoryDef {
   key: Category;
@@ -27,6 +27,7 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   { key: 'main',    label: 'Kryesore',   icon: Trophy },
   { key: 'goals',   label: 'Golat',      icon: Target },
+  { key: 'mixed',   label: 'MIKSE',      icon: Layers },
   { key: 'corners', label: 'Këndet',     icon: Flag },
   { key: 'cards',   label: 'Kartonat',   icon: ShieldAlert },
   { key: 'htft',    label: 'Pjesa/Ndeshja', icon: Clock },
@@ -38,6 +39,7 @@ const categoryOf = (market: Market): Category => {
   const name = String(market.name ?? '').toLowerCase();
   const type = String(market.marketType ?? '').toUpperCase();
 
+  if (isResultBttsMarket(name)) return 'mixed';
   if (type === 'CORNERS' || /corner/i.test(name)) return 'corners';
   if (type === 'CARDS' || /\bcards?\b|booking|yellow|\bred\b/i.test(name)) return 'cards';
   if (/halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time/i.test(name)) return 'htft';
@@ -115,7 +117,7 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
   const is1X2 = /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = /both teams? to score|both score/i.test(mName) && !/half|halves|result/i.test(mName);
+  const isBTTS = !isResultBttsMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
 
   const seen = new Set<string>();
   const res: any[] = [];
@@ -207,10 +209,10 @@ export default function MarketPanel({ match }: { match: Match }) {
 
   const { categorized, counts } = useMemo(() => {
     const result: Record<Category, Market[]> = {
-      main: [], goals: [], corners: [], cards: [], htft: [], other: [],
+      main: [], goals: [], mixed: [], corners: [], cards: [], htft: [], other: [],
     };
     const c: Record<Category, number> = {
-      main: 0, goals: 0, corners: 0, cards: 0, htft: 0, other: 0,
+      main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, other: 0,
     };
 
     for (const market of match.markets ?? []) {
