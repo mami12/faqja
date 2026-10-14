@@ -47,7 +47,9 @@ function outcomeName(key, fallback, marketType, marketName) {
   }
 
   // 2) 1X2 / Result markets: strictly 1, X, 2 (regardless of whether feed passed team names)
-  const is1X2 = !isResultBttsMarket(marketName) && (marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName));
+  // HT/FT is a nine-outcome contract. Do not collapse provider keys to ordinary 1X2.
+  const isHTFT = /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half\s*time\s*\/\s*full\s*time|htft/i.test(mName);
+  const is1X2 = !isHTFT && !isResultBttsMarket(marketName) && (marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName));
   if (is1X2 && !/score|rezultat/i.test(mName)) {
     if (k === '1' || k === 'home' || k === 'h' || k === 'w1' || /^(home|w1)$/i.test(fb)) return '1';
     if (k === 'x' || k === 'draw' || k === 'tie' || k === 'wx' || /^(draw|tie|wx)$/i.test(fb)) return 'X';
