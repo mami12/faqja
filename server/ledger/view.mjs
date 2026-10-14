@@ -11,6 +11,7 @@
 const FOOTBALL = { id: 18, name: 'Football', slug: 'football', iconName: 'Activity', sortOrder: 1, isActive: true };
 import * as overrides from './overrides.mjs';
 import { isResultBttsMarket } from './result-btts.mjs';
+import { liveRiskReason } from '../live-risk.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -101,16 +102,27 @@ export function toClientMatch(m) {
         const price = o.price !== null && o.price !== undefined
           ? (forced?.price ?? Number(o.price))
           : null;
+        const providerSuspended = Boolean(
+          o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended
+        );
+        const riskSuspended = liveRiskReason(m, {
+          marketName: mk.name,
+          marketKey: mk.key,
+          outcomeName: o.name,
+          outcomeKey: o.key,
+          price,
+        }) !== null;
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),
           name: outcomeName(o.key, o.name, mType, mk.name),
           code: String(o.key),
           odds: price,
-          status:
-            o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended
-              ? 'SUSPENDED'
-              : 'ACTIVE',
+          // Differentiate provider/admin suspensions from this server-owned,
+          // reversible risk lock, so score changes may reopen only our own lock.
+          feedSuspended: providerSuspended,
+          riskSuspended,
+          status: providerSuspended || riskSuspended ? 'SUSPENDED' : 'ACTIVE',
         };
       });
 

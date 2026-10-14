@@ -10,7 +10,7 @@ interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boole
 
 export default function OddsButton({ match, market, outcome, isWide }: Props) {
   const { selections, addSelection, removeSelection } = useBetslip();
-  const { oddsDeltas, lockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
+  const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
   const { t } = useLanguage();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
@@ -19,9 +19,15 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
   const unidentifiedMixedOutcome = isResultBttsMarket(market.name) &&
     !parseResultBttsOutcome(outcome.code, match.homeTeam, match.awayTeam) &&
     !parseResultBttsOutcome(outcome.name, match.homeTeam, match.awayTeam);
+  // Once the server clears a risk lock, a stale REST status must not keep the
+  // choice disabled. Provider/admin locks always remain authoritative.
+  const providerSuspended = outcome.feedSuspended ??
+    (outcome.status === 'SUSPENDED' && outcome.riskSuspended !== true);
+  const autoSuspended = riskLockedOutcomes[outcome.id] ?? outcome.riskSuspended === true;
   const isSuspended =
     unidentifiedMixedOutcome ||
-    outcome.status === 'SUSPENDED' ||
+    providerSuspended ||
+    autoSuspended ||
     market.status === 'SUSPENDED' ||
     match.isSuspended ||
     lockedOutcomes[outcome.id] === true ||
