@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Trophy, Goal, FlagTriangleRight, Clock3, ClipboardList, ListFilter } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import { useLanguage } from '../../context/LanguageContext';
@@ -20,16 +21,16 @@ type Category = 'main' | 'goals' | 'corners' | 'cards' | 'htft' | 'other';
 interface CategoryDef {
   key: Category;
   label: string;
-  icon: string;
+  icon: typeof Trophy;
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: 'main',    label: 'Kryesore',   icon: '⭐' },
-  { key: 'goals',   label: 'Golat',      icon: '⚽' },
-  { key: 'corners', label: 'Këndet',     icon: '🚩' },
-  { key: 'cards',   label: 'Kartonat',   icon: '🟨' },
-  { key: 'htft',    label: 'Pjesa/Ndeshja', icon: '⏱️' },
-  { key: 'other',   label: 'Të Tjera',   icon: '📊' },
+  { key: 'main',    label: 'Kryesore',   icon: Trophy },
+  { key: 'goals',   label: 'Golat',      icon: Goal },
+  { key: 'corners', label: 'Këndet',     icon: FlagTriangleRight },
+  { key: 'cards',   label: 'Kartonat',   icon: ClipboardList },
+  { key: 'htft',    label: 'Pjesa/Ndeshja', icon: Clock3 },
+  { key: 'other',   label: 'Të Tjera',   icon: ListFilter },
 ];
 
 /** Kthen kategorinë e një market-i */
@@ -289,7 +290,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               : 'bg-secondary/80 text-text-secondary hover:text-white hover:bg-tertiary border border-tertiary/60'
           }`}
         >
-          <span>📋</span>
+          <ListFilter size={14} />
           <span>Të Gjitha</span>
           <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
             activeCategory === 'all' ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
@@ -312,7 +313,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   : 'bg-secondary/80 text-text-secondary hover:text-white hover:bg-tertiary border border-tertiary/60'
               }`}
             >
-              <span>{cat.icon}</span>
+              <cat.icon size={14} strokeWidth={1.9} />
               <span>{cat.label}</span>
               <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
                 isActive ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
@@ -334,7 +335,7 @@ export default function MarketPanel({ match }: { match: Match }) {
           <section key={cat.key} className="space-y-1.5">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="w-1 h-3 sm:h-4 rounded-full bg-accent-green"></span>
-              <span className="text-xs sm:text-sm">{cat.icon}</span>
+              <cat.icon size={15} className="text-accent-green" strokeWidth={1.9} />
               <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
                 {cat.label}
               </div>
