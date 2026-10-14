@@ -1,0 +1,62 @@
+{
+  "name": "faqja",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Real-football live/prematch board: Railway backend (Node) + GitHub Pages frontend + Supabase Postgres",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "start:local": "node scripts/start-local.mjs",
+    "probe:db": "node scripts/probe-db.mjs",
+    "probe:gateway": "node scripts/probe-gateway.mjs",
+    "probe:sockets": "node scripts/probe-sockets.mjs",
+    "probe:subscribe": "node scripts/probe-subscribe.mjs",
+    "probe:suspension": "node scripts/probe-suspension.mjs",
+    "probe:push": "node scripts/probe-push2.mjs",
+    "probe:local": "node scripts/probe-local-socket.mjs",
+    "test:frames": "node scripts/test-frames.mjs",
+    "test:store": "node scripts/test-odds-store.mjs",
+    "test:matches": "node scripts/test-match-store.mjs",
+    "test:plan": "node scripts/test-subscribe-plan.mjs",
+    "build:web": "npm --prefix web run build",
+    "dev:web": "npm --prefix web run dev",
+    "test:ingest": "node scripts/test-live-ingest.mjs",
+    "test:markets": "node scripts/test-markets.mjs",
+    "test:providers": "node scripts/test-provider-pin.mjs",
+    "odds:clean": "node scripts/clean-odds.mjs",
+    "verify:app": "node scripts/verify-app.mjs",
+    "verify:admin": "node scripts/verify-admin.mjs",
+    "verify:suspension": "node scripts/verify-suspension.mjs",
+    "verify:idle": "node scripts/verify-idle.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.0",
+    "puppeteer": "^25.12.0",
+    "socket.io": "^4.8.3",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.6.1",
+    "axios": "^1.20.0",
+    "lucide-react": "^0.294.0",
+    "postcss": "^8.5.28",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6",
+    "socket.io-client": "^4.8.4",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  }
+}

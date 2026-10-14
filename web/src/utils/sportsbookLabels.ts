@@ -1,0 +1,363 @@
+type Translate = (key: string) => string;
+
+/* ------------------------------------------------------------------ */
+/* Emra të shkurtër për outcomes                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Map i emrave të shkurtër. Përdoret përpara se emri të kalojë në përkthim.
+ * Shkurton "3 or more" → "3+", "1 (Vendas)" → "1", etj.
+ */
+const SHORT_OUTCOME_NAMES: Record<string, string> = {
+  // 1X2 — vetëm 1, X, 2 pa kllapa dhe pa fjalë
+  '1 (vendas)': '1',
+  '1 (home)': '1',
+  'x (barazim)': 'X',
+  'x (draw)': 'X',
+  '2 (udhetues)': '2',
+  '2 (udhëtues)': '2',
+  '2 (away)': '2',
+  'vendas': '1',
+  'barazim': 'X',
+  'udhetues': '2',
+  'udhëtues': '2',
+  'home': '1',
+  'draw': 'X',
+  'away': '2',
+  '1': '1',
+  'x': 'X',
+  '2': '2',
+  '1x': '1X',
+  '12': '12',
+  'x2': 'X2',
+  '1x (1x)': '1X',
+  '12 (12)': '12',
+  'x2 (x2)': 'X2',
+  'home or draw': '1X',
+  'home or away': '12',
+  'draw or away': 'X2',
+  
+  // Golat — "X or more" → "X+"
+  '1 or more': '1+',
+  '2 or more': '2+',
+  '3 or more': '3+',
+  '4 or more': '4+',
+  '5 or more': '5+',
+  '6 or more': '6+',
+  '7 or more': '7+',
+  '8 or more': '8+',
+  '9 or more': '9+',
+  '10 or more': '10+',
+  '11 or more': '11+',
+  '12 or more': '12+',
+  
+  // Golat — "X or less" → "X-"
+  '1 or less': '1-',
+  '2 or less': '2-',
+  '3 or less': '3-',
+  '4 or less': '4-',
+  '5 or less': '5-',
+  
+  // Golat — "X-Y" format
+  'no goal': 'Pa Gol',
+  'no goal 2': 'Pa Gol 2',
+  'no goal 3': 'Pa Gol 3',
+  
+  // Tjera
+  'none': 'Asnjë',
+  'neither': 'Asnjë',
+};
+
+/**
+ * Shkurton emrin e outcome-it:
+ *  - "3 or more" → "3+"
+ *  - "3 or less" → "3-"
+ *  - "1 (Vendas)" → "1"
+ *  - "X (Barazim)" → "X"
+ */
+export function shortOutcomeName(name?: string): string {
+  if (!name) return '';
+  const clean = String(name).trim();
+  const lower = clean.toLowerCase();
+
+  // 1. Kontrollo map-in e drejtpërdrejtë
+  if (SHORT_OUTCOME_NAMES[lower]) return SHORT_OUTCOME_NAMES[lower];
+
+  // 2. "X or more" → "X+"
+  const orMore = clean.match(/^(\d+)\s+or\s+more$/i);
+  if (orMore) return `${orMore[1]}+`;
+
+  // 3. "X or less" → "X-"
+  const orLess = clean.match(/^(\d+)\s+or\s+less$/i);
+  if (orLess) return `${orLess[1]}-`;
+
+  // 4. "X or fewer" → "X-"
+  const orFewer = clean.match(/^(\d+)\s+or\s+fewer$/i);
+  if (orFewer) return `${orFewer[1]}-`;
+
+  // 5. Hiq kllapat: "1 (Vendas)" → "1", "X (Barazim)" → "X"
+  const withoutParens = clean.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  if (withoutParens && withoutParens !== clean) {
+    const lowerStripped = withoutParens.toLowerCase();
+    if (SHORT_OUTCOME_NAMES[lowerStripped]) return SHORT_OUTCOME_NAMES[lowerStripped];
+    return withoutParens;
+  }
+
+  return clean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Ndihmës                                                            */
+/* ------------------------------------------------------------------ */
+
+const normalized = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+function translateExactGoalsLabel(value: string) {
+  const exactGoals = value.match(
+    /^(.*?)\bexact\s+(?:number|amount)\s+of\s+(?:the\s+)?(?:goals?|golat)\s+(?:scored|made)(?:\s+by\s+(.*))?$/i,
+  );
+  if (!exactGoals) return null;
+  const team = (exactGoals[1] || exactGoals[2] || '').replace(/[\s:,-]+$/, '').trim();
+  return team
+    ? `Numri i saktë i golave të shënuar nga ${team}`
+    : 'Numri i saktë i golave të shënuar';
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i market-eve                                             */
+/* ------------------------------------------------------------------ */
+
+export function translateMarketName(name: string | undefined, t: Translate) {
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+  const exactKey = `markets.${raw}`;
+  const exactTranslation = t(exactKey);
+  if (exactTranslation !== exactKey) return exactTranslation;
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const value = normalized(raw);
+
+  const line = raw.match(/\d+(?:[.,]\d+)?/)?.[0];
+  const withLine = (label: string) => line ? `${label} ${line}` : label;
+  const groupedMarket = value.match(/^(?:(yellow|red) )?(corners?|cards?|goals?) (result|total|double chance|over under)$/);
+  if (groupedMarket) {
+    const [, color, kind, subtype] = groupedMarket;
+    const subject = color === 'yellow' ? 'kartonëve të verdhë'
+      : color === 'red' ? 'kartonëve të kuq'
+      : kind.startsWith('corner') ? 'këndeve'
+      : kind.startsWith('card') ? 'kartonëve'
+      : 'golave';
+    const object = kind.startsWith('corner') ? 'këndet'
+      : kind.startsWith('card') ? color === 'yellow' ? 'kartonët e verdhë' : color === 'red' ? 'kartonët e kuq' : 'kartonët'
+      : 'golat';
+    if (subtype === 'result') return `Rezultati i ${subject}`;
+    if (subtype === 'total') return withLine(`Totali i ${subject}`);
+    if (subtype === 'double chance') return `Shans i dyfishtë për ${object}`;
+    return withLine(`Lart / Poshtë ${subject}`);
+  }
+
+  if (/^(match winner|full time result|fulltime result|match result|1x2)( |$)/.test(value)) return t('markets.match_result');
+  if (/^(both teams to score|both teams score|both score|btts|gg ng|gg\/ng)/.test(value)) return t('markets.both_teams_score');
+  if (/^(?:anytime|first|last) goalscorers?$/.test(value) || /^(?:first|last) goal scorer$/.test(value)) return 'Shënuesi i golit';
+  if (/^(?:home|away) team to win$/.test(value)) return value.startsWith('home') ? 'Fiton ekipi vendas' : 'Fiton ekipi udhëtues';
+  if (/^(double chance|1st half double chance)/.test(value)) return t('markets.double_chance');
+  if (/^(over under|under over|total goals over under|total over under|goals over under)/.test(value)) return withLine(t('markets.over_under'));
+  if (/^(over|under|lart|poshte) \d/.test(value)) {
+    return `${/^(over|lart)/.test(value) ? t('outcomes.over') : t('outcomes.under')} ${line}`;
+  }
+  if (/^(total goals|total goal|goals total|goal total|goals?)( |$)/.test(value)) return withLine(t('markets.totals'));
+  if (/^(total corners|corners total|corner total|corners?)( |$)/.test(value)) return withLine(t('markets.corners'));
+  if (/^(total cards|cards total|card total|yellow cards|red cards|cards?)( |$)/.test(value)) {
+    const cardType = value.startsWith('yellow') ? 'Të verdha' : value.startsWith('red') ? 'Të kuqe' : t('markets.cards');
+    return withLine(cardType);
+  }
+  if (/^(correct score)( |$)/.test(value)) return t('markets.correct_score');
+  if (/^(odd even|odd even goals)( |$)/.test(value)) return t('markets.odd_even');
+  if (/^(next goal|last goal|first goal)( |$)/.test(value)) {
+    return line ? `${t('markets.next_goal')} ${line}'` : t('markets.next_goal');
+  }
+  if (/^(halftime fulltime|half time full time|half time fulltime)/.test(value)) return t('markets.halftime_fulltime');
+  if (/^(1st half result|first half result)/.test(value)) return t('markets.first_half_result');
+  if (/^(2nd half result|second half result)/.test(value)) return t('markets.second_half_result');
+  if (/^(handicap|asian handicap|fora)( |$)/.test(value)) return t('markets.handicap');
+  if (/^cols? ?-?\d+$/.test(value)) return t('markets.match_result');
+
+  const phrases: Array<[RegExp, string]> = [
+    [/\b(?:1st|first)\s+half\b/gi, 'Pjesa e parë'],
+    [/\b(?:2nd|second)\s+half\b/gi, 'Pjesa e dytë'],
+    [/\bhalf[\s/-]*time\b/gi, 'Pjesa e parë'],
+    [/\bfull[\s/-]*time\b/gi, 'Koha e rregullt'],
+    [/\bmatch\s+winner\b/gi, t('markets.match_result')],
+    [/\b(?:match\s+)?result\b/gi, 'Rezultati'],
+    [/\bwinner\b/gi, 'Fituesi'],
+    [/\bcorrect\s+score\b/gi, t('markets.correct_score')],
+    [/\bdouble\s+chance\b/gi, t('markets.double_chance')],
+    [/\bdraw\s+no\s+bet\b/gi, t('outcomes.draw_no_bet')],
+    [/\bboth\s+teams?\s+(?:to\s+)?score\b/gi, t('markets.both_teams_score')],
+    [/\bgoal\s+in\s+minute\s*(\d+)\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+in\s+(\d+)(?:th|st|nd|rd)?\s+minute\b/gi, 'Shënon gol në minutën $1'],
+    [/\bgoal\s+before\s+(\d+)(?::00)?(?:'|\s*min)?\b/gi, 'Gol para minutës $1'],
+    [/\bnext\s+goal\s+in\s+minute\s*(\d+)\b/gi, 'Goli i radhës në minutën $1'],
+    [/\bgoal\s+in\s+minutes\b/gi, 'Shënon gol në minutat'],
+    [/\bgoal\s+in\s+minute\b/gi, 'Shënon gol në minutën'],
+    [/\bminute\b/gi, 'minutën'],
+    [/\bminutes\b/gi, 'minutat'],
+    [/\b(?:anytime|first|last)\s+goal\s+scorers?\b/gi, 'Shënuesi i golit'],
+    [/\b(?:anytime|first|last)\s+goalscorers?\b/gi, 'Shënuesi i golit'],
+    [/\bhome\s+team\s+to\s+win\b/gi, 'Fiton ekipi vendas'],
+    [/\baway\s+team\s+to\s+win\b/gi, 'Fiton ekipi udhëtues'],
+    [/\bhome\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit vendas'],
+    [/\baway\s+team\s+(?:total\s+)?goals?\b/gi, 'Golat e ekipit udhëtues'],
+    [/\bhome\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit vendas: Lart / Poshtë'],
+    [/\baway\s+team\s+(?:over\s*\/?\s*under|total)\b/gi, 'Golat e ekipit udhëtues: Lart / Poshtë'],
+    [/\basian\s+corners?\b/gi, 'Këndet aziatike'],
+    [/\basian\s+handicap\b/gi, 'Handikap aziatik'],
+    [/\bcorners?\s+handicap\b/gi, 'Handikap i këndeve'],
+    [/\bcards?\s+handicap\b/gi, 'Handikap i kartonëve'],
+    [/\bplayers?\s+to\s+score\b/gi, 'Lojtari që shënon'],
+    [/\bteams?\s+to\s+score\b/gi, 'Ekipi që shënon'],
+    [/\bboth\s+halves\b/gi, 'Të dyja pjesët'],
+    [/\btotal\s+goals?\b|\bgoals?\s+total\b/gi, t('markets.totals')],
+    [/\btotal\s+corners?\b|\bcorners?\s+total\b/gi, t('markets.corners')],
+    [/\btotal\s+cards?\b|\bcards?\s+total\b/gi, t('markets.cards')],
+    [/\byellow\s+cards?\b/gi, 'Kartonat e verdhë'],
+    [/\bred\s+cards?\b/gi, 'Kartonat e kuq'],
+    [/\bcorners?\b/gi, 'Këndet'],
+    [/\bcards?\b/gi, 'Kartonat'],
+    [/\bgoals?\b/gi, 'Golat'],
+    [/\bgoal\b/gi, 'Goli'],
+    [/\bover\s*\/\s*under\b|\bover\s+under\b|\bunder\s+over\b/gi, t('markets.over_under')],
+    [/\bover\b/gi, t('outcomes.over')],
+    [/\bunder\b/gi, t('outcomes.under')],
+    [/\bodd\s*\/\s*even\b|\bodd\s+even\b/gi, t('markets.odd_even')],
+    [/\bodd\b/gi, t('outcomes.odd')],
+    [/\beven\b/gi, t('outcomes.even')],
+    [/\bhome\s+team\b/gi, 'Ekipi vendas'],
+    [/\baway\s+team\b/gi, 'Ekipi udhëtues'],
+    [/\bhome\b/gi, 'Vendas'],
+    [/\baway\b/gi, 'Udhëtues'],
+    [/\bteam\b/gi, 'Ekipi'],
+    [/\basian\b/gi, 'Aziatik'],
+    [/\bhandicap\b/gi, 'Handikap'],
+    [/\bfirst\b/gi, 'I pari'],
+    [/\blast\b/gi, 'I fundit'],
+    [/\bnext\b/gi, 'i radhës'],
+    [/\bscore\b/gi, 'Shënimi'],
+    [/\bwinning\b/gi, 'Fitues'],
+    [/\bmargin\b/gi, 'Diferenca'],
+    [/\bclean\s+sheet\b/gi, 'Pa pësuar gol'],
+    [/\bto\s+nil\b/gi, 'pa pësuar gol'],
+    [/\bpenalty\b/gi, 'Penallti'],
+    [/\bpenalties\b/gi, 'Penalltitë'],
+    [/\bpoints?\b/gi, 'Pikë'],
+    [/\bplayers?\b/gi, 'Lojtari'],
+    [/\bscorers?\b/gi, 'Shënuesit'],
+    [/\bwin\b/gi, 'Fitore'],
+    [/\bmatch\b/gi, 'Ndeshja'],
+    [/\bto\b/gi, 'për të'],
+  ];
+
+  let result = phrases.reduce((label, [pattern, replacement]) => label.replace(pattern, replacement), raw)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (line && /(?:minut[eë]n?|minute)\s*$/i.test(result)) {
+    result += ` ${line}`;
+  }
+
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Përkthimi i outcomes                                               */
+/* ------------------------------------------------------------------ */
+
+export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string) {
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+
+  // 0. SHKURTO emrin para përkthimit
+  const short = shortOutcomeName(raw);
+  const shortLower = short.toLowerCase();
+
+  // Nëse shkurtimi e ktheu në diçka si "1", "X", "2", "1X", "12", "X2", "3+", ktheje direkt
+  if (/^(1|x|2)$/i.test(short)) return short.toUpperCase();
+  if (/^(1x|12|x2)$/i.test(short)) return short.toUpperCase();
+  if (/^\d+\+$/.test(short)) return short; // "3+" → "3+"
+  if (/^\d+-$/.test(short)) return short; // "3-" → "3-"
+
+  // 1. Kontrollo për exact goals
+  const exactGoalsLabel = translateExactGoalsLabel(raw);
+  if (exactGoalsLabel) return exactGoalsLabel;
+  const value = normalized(raw);
+
+  if (/^(1|home|home team|home win|homewin|1 home|w1|h|vendas)$/i.test(value)) return '1';
+  if (/^(x|draw|tie|x draw|barazim|wx|d)$/i.test(value)) return 'X';
+  if (/^(2|away|away team|away win|awaywin|2 away|w2|a|udhetues)$/i.test(value)) return '2';
+  if (/^(1x|home or draw|home draw)$/i.test(value)) return '1X';
+  if (/^(12|home or away|home away)$/i.test(value)) return '12';
+  if (/^(x2|draw or away|draw away)$/i.test(value)) return 'X2';
+  if (/^(over|o|lart|mbi)$/.test(value)) return t('outcomes.over');
+  if (/^(under|u|poshte|nen)$/.test(value)) return t('outcomes.under');
+  if (/^(yes|gg|g|goal|both teams to score|gg ng|g ng)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
+  }
+  if (/^(no|ng|n g|no goal|no both teams to score|jo gol|nuk shenojne)$/.test(value)) {
+    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
+  }
+  if (/^(odd|tek|odd number)$/.test(value)) return t('outcomes.odd');
+  if (/^(even|cift|even number)$/.test(value)) return t('outcomes.even');
+  if (/^draw no bet$/.test(value)) return t('outcomes.draw_no_bet');
+
+  const line = raw.match(/(\d+(?:[.,]\d+)?)/)?.[1];
+  if (line && /\b(over|lart|mbi)\b/i.test(raw)) return `${t('outcomes.over')} ${line}`;
+  if (line && /\b(under|poshte|nën|nen)\b/i.test(raw)) return `${t('outcomes.under')} ${line}`;
+  if (/both teams? to score|both score|btts|gg\s*\/?\s*ng/i.test(raw)) return t('markets.both_teams_score');
+  if (/no\s*goal|jo[\s-]*gol|nuk\s*sh[eë]nojne/i.test(raw)) return t('outcomes.no_goal');
+  if (/\bgoal\b/i.test(raw)) return t('outcomes.goal');
+
+  // 2. Nëse shkurtimi ndryshoi diçka, kthe shkurtimin
+  if (short !== raw) return short;
+
+  return raw;
+}
+
+export function formatTicketSelection(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  matchName: string | undefined,
+  t: Translate,
+) {
+  const rawOutcome = String(outcomeName ?? '').trim();
+  const market = normalized(marketName);
+  const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
+  if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName);
+
+  const outcome = normalized(rawOutcome);
+  const teams = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i).map(normalized);
+  const [home, away] = teams;
+  if (/^(?:x|draw|tie|barazim)$/.test(outcome)) return 'X';
+  if (/^(?:1|home|home team|home win|homewin|w1|vendas)$/.test(outcome) || (home && outcome === home)) return '1';
+  if (/^(?:2|away|away team|away win|awaywin|w2|udhetues)$/.test(outcome) || (away && outcome === away)) return '2';
+  return translateOutcomeName(rawOutcome, t, marketName);
+}
+
+export function translateTicketType(type: string | undefined, t: Translate) {
+  if (type === 'SINGLE') return t('betslip.single');
+  if (type === 'COMBO') return t('betslip.combo');
+  if (type === 'SYSTEM') return t('betslip.system');
+  return type ?? '';
+}
+
+export function translateTicketStatus(status: string | undefined, t: Translate) {
+  if (!status) return '';
+  const key = `tickets.${status.toLowerCase()}`;
+  const translated = t(key);
+  return translated === key ? status : translated;
+}

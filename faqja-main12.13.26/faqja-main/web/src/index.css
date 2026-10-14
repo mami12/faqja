@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Custom sleek dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+
+  body {
+    background-color: #111a20;
+    color: #f8fafc;
+    overflow-x: hidden;
+  }
+}
+
+@media print {
+  @page {
+    margin: 2mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .ticket-print-overlay,
+  .ticket-print-overlay * {
+    visibility: visible !important;
+  }
+
+  .ticket-print-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .ticket-print-panel {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 72mm !important;
+    max-width: none !important;
+    padding: 2mm !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .ticket-print-actions {
+    display: none !important;
+  }
+}
+
+@layer utilities {
+  .animate-flash-green {
+    animation: flashGreen 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .animate-flash-red {
+    animation: flashRed 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Subtle glassmorphism */
+  .glass-card {
+    background: rgba(25, 34, 41, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+@keyframes flashGreen {
+  0% { 
+    background-color: rgba(16, 185, 129, 0.35);
+    border-color: #10b981;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
+}
+
+@keyframes flashRed {
+  0% { 
+    background-color: rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
+}

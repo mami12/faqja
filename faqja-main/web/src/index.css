@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Custom sleek dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+
+  body {
+    background-color: #090d16;
+    color: #f8fafc;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .animate-flash-green {
+    animation: flashGreen 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .animate-flash-red {
+    animation: flashRed 1s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Subtle glassmorphism */
+  .glass-card {
+    background: rgba(19, 27, 46, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+@keyframes flashGreen {
+  0% { 
+    background-color: rgba(16, 185, 129, 0.35);
+    border-color: #10b981;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
+}
+
+@keyframes flashRed {
+  0% { 
+    background-color: rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+    color: #ffffff;
+  }
+  100% { 
+    background-color: transparent; 
+  }
+}
+
+/* Shared, restrained surfaces and usable controls throughout the application. */
+@layer base {
+  html { color-scheme: dark; }
+  body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.5; }
+  button, input, select { font: inherit; }
+  button, a, input, select { touch-action: manipulation; }
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid #34d399; outline-offset: 3px;
+  }
+  button:disabled { cursor: not-allowed; }
+}
+@layer components {
+  .ui-card { @apply rounded-2xl border border-white/10 bg-[#131b2b] shadow-sm; }
+  .ui-empty { @apply rounded-2xl border border-dashed border-white/10 bg-[#131b2b]/60 p-8 text-center text-text-secondary; }
+  .filter-chip { @apply min-h-[44px] shrink-0 whitespace-nowrap rounded-xl border border-white/10 bg-[#182232] px-3.5 py-2 text-xs font-semibold text-text-secondary transition-colors hover:bg-[#202d42] hover:text-white; }
+  .filter-chip-active { @apply border-emerald-500 bg-emerald-500 text-slate-950 hover:bg-emerald-400 hover:text-slate-950; }
+}
+@media (pointer: coarse) {
+  button { min-height: 44px; }
+  input, select { min-height: 44px; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
