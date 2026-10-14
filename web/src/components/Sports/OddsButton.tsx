@@ -4,7 +4,7 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { translateOutcomeName } from '../../utils/sportsbookLabels';
+import { translateOutcomeName, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; }
 
@@ -16,7 +16,11 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
   const [flashClass, setFlashClass] = useState('');
 
   const isSelected = selections.some(s => s.outcomeId === outcome.id);
+  const unidentifiedMixedOutcome = isResultBttsMarket(market.name) &&
+    !parseResultBttsOutcome(outcome.code, match.homeTeam, match.awayTeam) &&
+    !parseResultBttsOutcome(outcome.name, match.homeTeam, match.awayTeam);
   const isSuspended =
+    unidentifiedMixedOutcome ||
     outcome.status === 'SUSPENDED' ||
     market.status === 'SUSPENDED' ||
     match.isSuspended ||
