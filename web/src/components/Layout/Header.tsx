@@ -99,13 +99,13 @@ export default function Header({ onToggleNav }: Props) {
   );
 
   return (
-    <header className="shrink-0 z-20 border-b border-white/10 bg-[#25303e] ">
+    <header className="shrink-0 z-20 border-b border-white/10 bg-[#17294b] ">
       <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-[68px] sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
           {onToggleNav && (
             <button
               onClick={onToggleNav}
-              className="rounded-lg border border-white/10 bg-[#111923] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
+              className="rounded-lg border border-white/10 bg-[#0b1018] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
               aria-label={t('nav.sports')}
             >
               <Menu size={18} />
@@ -126,7 +126,7 @@ export default function Header({ onToggleNav }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
-          <div className="relative flex items-center rounded-lg border border-white/10 bg-[#111923] px-2 py-1.5 text-xs transition hover:border-emerald-500/30">
+          <div className="relative flex items-center rounded-lg border border-white/10 bg-[#0b1018] px-2 py-1.5 text-xs transition hover:border-emerald-500/30">
             <Globe size={13} className="mr-1.5 shrink-0 text-text-secondary" />
             <select
               value={lang}
@@ -147,7 +147,7 @@ export default function Header({ onToggleNav }: Props) {
                 {links}
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-[#111923] px-2.5 py-1.5 sm:px-3">
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-[#0b1018] px-2.5 py-1.5 sm:px-3">
                 <Wallet size={14} className="shrink-0 text-amber-300" />
                 <div className="flex flex-col text-left">
                   <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-text-secondary/80 sm:inline">
