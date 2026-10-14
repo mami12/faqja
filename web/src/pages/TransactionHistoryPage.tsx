@@ -79,32 +79,32 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
   return (
     <div className="min-h-[100dvh] bg-primary text-white">
       {!embedded && <Header />}
-      <main className={`mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 ${embedded ? '' : 'flex-1'}`}>
+      <main className={`mx-auto w-full max-w-7xl space-y-3 p-3 sm:p-5 ${embedded ? '' : 'flex-1'}`}>
         <header>
-          <h1 className="text-2xl font-black">Historiku i transaksioneve</h1>
-          <p className="mt-1 text-sm text-text-secondary">
+          <h1 className="text-lg sm:text-xl font-bold">Historiku i transaksioneve</h1>
+          <p className="mt-1 text-xs text-text-secondary">
             {user?.role === 'ADMIN' ? 'Të gjitha lëvizjet financiare në platformë.'
               : user?.role === 'MANAGER' ? 'Transaksionet e portofolit tënd dhe të lojtarëve të tu.'
                 : 'Depozitat, bastet dhe pagesat e llogarisë tënde.'}
           </p>
         </header>
-        <form onSubmit={fetchTransactions} className="flex flex-col gap-3 rounded-2xl border border-tertiary bg-secondary p-4 sm:flex-row sm:items-end">
+        <form onSubmit={fetchTransactions} className="flex flex-col gap-2 border border-tertiary bg-secondary p-3 sm:flex-row sm:items-end">
           <label className="flex-1 text-xs font-semibold text-text-secondary">Nga data
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block w-full rounded-lg border border-tertiary bg-primary px-3 py-2 text-white" />
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
           </label>
           <label className="flex-1 text-xs font-semibold text-text-secondary">Deri më
-            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block w-full rounded-lg border border-tertiary bg-primary px-3 py-2 text-white" />
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
           </label>
-          <button type="submit" className="rounded-lg bg-accent-green px-5 py-2.5 text-sm font-bold text-primary">Filtro</button>
+          <button type="submit" className="bg-accent-yellow px-5 py-2.5 text-sm font-bold text-[#17212c] hover:brightness-110">Filtro</button>
         </form>
         {user?.role === 'PLAYER' && summary && (
-          <section aria-label="Përmbledhja e fitimeve dhe humbjeve" className="grid gap-3 sm:grid-cols-3">
+          <section aria-label="Përmbledhja e fitimeve dhe humbjeve" className="grid gap-2 sm:grid-cols-3">
             {[
-              { label: 'Fitimi neto', value: summary.winnings, color: 'text-emerald-300' },
+              { label: 'Fitimet', value: summary.winnings, color: 'text-amber-200' },
               { label: 'Humbjet', value: summary.losses, color: 'text-rose-300' },
-              { label: 'Bilanci neto', value: summary.net, color: summary.net >= 0 ? 'text-emerald-300' : 'text-rose-300' },
+              { label: 'Bilanci neto', value: summary.net, color: summary.net >= 0 ? 'text-amber-200' : 'text-rose-300' },
             ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-tertiary bg-secondary p-4">
+              <div key={item.label} className="border border-tertiary bg-secondary p-3">
                 <div className="text-xs font-semibold text-text-secondary">{item.label}</div>
                 <div className={`mt-1 font-mono text-xl font-black ${item.color}`}>
                   {item.value.toFixed(2)} Lëk
@@ -113,7 +113,8 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
             ))}
           </section>
         )}
-        <section className="overflow-hidden rounded-2xl border border-tertiary bg-secondary shadow-xl">
+        <section className="overflow-hidden border border-tertiary bg-secondary">
+          {!loading && !error && <div className="border-b border-tertiary bg-[#394758] px-3 py-2 text-[11px] font-semibold text-slate-200">{transactions.length} transaksione</div>}
           {loading ? <div className="p-16 text-center text-text-secondary">Duke ngarkuar transaksionet…</div>
             : error ? <div role="alert" className="p-8 text-center text-rose-300">{error}</div>
               : transactions.length === 0 ? <div className="p-12 text-center text-text-secondary">Nuk ka transaksione për këtë periudhë.</div>
@@ -124,7 +125,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                       {transactions.map((transaction) => {
                         const isPositive = transaction.amount >= 0;
                         return (
-                          <div key={transaction.id} className="p-3.5 space-y-2">
+                          <div key={transaction.id} className="px-3 py-3 space-y-2">
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <div className="font-bold text-white text-xs">
@@ -136,7 +137,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                                   </div>
                                 )}
                               </div>
-                              <span className={`text-sm font-black tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              <span className={`text-sm font-black tabular-nums ${isPositive ? 'text-amber-300' : 'text-rose-300'}`}>
                                 {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} Lëk
                               </span>
                             </div>
@@ -147,7 +148,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                             </div>
 
                             {transaction.description && (
-                              <div className="text-[11px] text-text-secondary bg-primary/60 px-2 py-1 rounded-lg border border-tertiary/40">
+                              <div className="text-[11px] text-text-secondary bg-primary/50 px-2 py-1 border-l-2 border-tertiary">
                                 {transaction.description}
                               </div>
                             )}
@@ -159,29 +160,29 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                     {/* DESKTOP VIEW: Table (>= md) */}
                     <div className="hidden md:block overflow-x-auto">
                       <table className="w-full min-w-[780px] text-left text-sm">
-                        <thead className="bg-tertiary/60 text-[11px] uppercase text-text-secondary font-bold tracking-wider">
+                        <thead className="bg-[#394758] text-[11px] uppercase text-text-secondary font-bold tracking-wider">
                           <tr>
-                            <th className="p-3.5">Data & Ora</th>
-                            {user?.role !== 'PLAYER' && <th className="p-3.5">Llogaria</th>}
-                            <th className="p-3.5">Lloji</th>
-                            <th className="p-3.5">Përshkrimi</th>
-                            <th className="p-3.5 text-right">Shuma</th>
-                            <th className="p-3.5 text-right">Bilanci pas veprimit</th>
+                            <th className="p-3">Data & Ora</th>
+                            {user?.role !== 'PLAYER' && <th className="p-3">Llogaria</th>}
+                            <th className="p-3">Lloji</th>
+                            <th className="p-3">Përshkrimi</th>
+                            <th className="p-3 text-right">Shuma</th>
+                            <th className="p-3 text-right">Bilanci pas veprimit</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-tertiary/60">
                           {transactions.map((transaction) => (
                             <tr key={transaction.id} className="text-white hover:bg-primary/40 transition">
-                              <td className="p-3.5 whitespace-nowrap text-xs text-text-secondary tabular-nums">
+                              <td className="p-3 whitespace-nowrap text-xs text-text-secondary tabular-nums">
                                 {new Date(transaction.createdAt).toLocaleString('sq-AL')}
                               </td>
-                              {user?.role !== 'PLAYER' && <td className="p-3.5 font-semibold">{transaction.username}</td>}
-                              <td className="p-3.5 font-semibold text-xs">{TYPE_LABELS[transaction.type] ?? transaction.type}</td>
-                              <td className="p-3.5 text-xs text-text-secondary">{transaction.description || '—'}</td>
-                              <td className={`p-3.5 text-right font-mono font-black tabular-nums ${transaction.amount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {user?.role !== 'PLAYER' && <td className="p-3 font-semibold">{transaction.username}</td>}
+                              <td className="p-3 font-semibold text-xs">{TYPE_LABELS[transaction.type] ?? transaction.type}</td>
+                              <td className="p-3 text-xs text-text-secondary">{transaction.description || '—'}</td>
+                              <td className={`p-3 text-right font-mono font-black tabular-nums ${transaction.amount >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                                 {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} Lëk
                               </td>
-                              <td className="p-3.5 text-right font-mono tabular-nums text-xs font-bold text-text-secondary">{transaction.balanceAfter.toFixed(2)} Lëk</td>
+                              <td className="p-3 text-right font-mono tabular-nums text-xs font-bold text-text-secondary">{transaction.balanceAfter.toFixed(2)} Lëk</td>
                             </tr>
                           ))}
                         </tbody>

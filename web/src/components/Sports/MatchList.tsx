@@ -131,7 +131,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   }
 
   const renderFilterBar = () => (
-    <div className="sticky top-0 z-10 border-y border-white/5 bg-[#192229]/95 backdrop-blur-xl">
+    <div className="hidden md:block sticky top-0 z-10 border-y border-tertiary bg-secondary/95 backdrop-blur-sm">
       <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5">
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111a20] p-1.5">
           {[
@@ -194,7 +194,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const oddsGroup = (mk: any, outcomes: (any | null)[], labels: string[]) => (
       <div className={`grid gap-px bg-[#101720] ${labels.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {labels.map((label, i) => mk && outcomes[i] ? (
-          <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[38px] [&_button]:rounded-none [&_button]:bg-[#263140] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-1 [&_button]:py-1 [&_button_span]:max-w-full [&_button_span]:text-center">
+          <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[38px] [&_button]:rounded-none [&_button]:bg-[#263140] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-0.5 [&_button]:py-1 [&_button_span:last-child]:text-[14px] [&_button_span]:max-w-full [&_button_span]:text-center">
             <OddsButton match={m} market={mk} outcome={outcomes[i]} />
           </div>
         ) : (
@@ -235,7 +235,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             {locked && <span title={t('sections.odds_locked')} className="text-accent-red text-xs">🔒</span>}
           </div>
           <div className="flex shrink-0 items-center gap-px min-w-0">
-            <div className="w-[111px] sm:w-[147px]">
+            <div className="w-[126px] sm:w-[147px]">
               <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">1X2</div>
               {oddsGroup(main, oneXtwo, ['1', 'X', '2'])}
             </div>
@@ -246,7 +246,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
               title={t('sections.view_markets')}
               className="shrink-0 min-h-[38px] w-7 sm:w-9 rounded-none bg-[#344253] hover:bg-[#435368] text-accent-green text-[10px] font-bold flex items-center justify-center gap-0">
-              +{marketCount}<ChevronRight size={13}  />
+              +{marketCount}<ChevronRight size={13} className="hidden sm:block" />
             </button>
           </div>
         </div>
@@ -273,9 +273,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="w-[128px] text-center">Over / Under</span>
           <span className="w-9 text-center">+</span>
         </div>
-        <div className="flex lg:hidden items-center bg-[#286c3e] px-2 py-1 text-[10px] font-semibold text-white">
+        <div className="flex lg:hidden items-center bg-[#394758] px-2 py-1 text-[10px] font-semibold text-slate-200">
           <span className="flex-1 min-w-0">Ndeshja</span>
-          <span className="w-[111px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
+          <span className="w-[126px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
           <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
         </div>
         {fixtures.map(renderMatchCard)}
@@ -284,8 +284,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-3 p-3 sm:p-4">
-      <div className="overflow-hidden rounded-md border border-white/10 bg-[#192229] p-3 sm:p-4">
+    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-1 p-0 sm:p-2 md:space-y-3 md:p-4">
+      <div className="hidden md:block overflow-hidden rounded-sm border border-tertiary bg-secondary p-3 sm:p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
@@ -356,6 +356,51 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       </div>
 
+      {/* Compact two-row mobile search/date and match-status controls. */}
+      <div className="md:hidden w-full border-y border-tertiary bg-secondary">
+        <div className="flex items-center gap-1.5 border-b border-tertiary p-1.5">
+          <div className="relative min-w-0 flex-1">
+            <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary"/>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder={t('common.search_matches')}
+              aria-label={t('common.search_matches')}
+              className="h-8 w-full min-w-0 border border-tertiary bg-primary py-1 pl-7 pr-2 text-[11px] text-white placeholder:text-text-muted focus:border-accent-yellow focus:outline-none"
+            />
+          </div>
+          <select
+            aria-label="Filtro sipas datës"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value as DateFilter)}
+            className="h-8 max-w-[105px] shrink-0 border border-tertiary bg-[#394758] px-1.5 text-[11px] font-semibold text-white focus:border-accent-yellow focus:outline-none"
+          >
+            <option value="all">{t('dates.all')}</option>
+            <option value="today">{t('dates.today')}</option>
+            <option value="tomorrow">{t('dates.tomorrow')}</option>
+          </select>
+        </div>
+        <div className="flex min-w-0 items-center gap-px overflow-x-auto bg-tertiary">
+          {[
+            { id: 'all', label: t('sports.all'), count: pricedMatches.length },
+            { id: 'live', label: t('sports.live'), count: liveMatches.length },
+            { id: 'prematch', label: t('sports.prematch'), count: prematchMatches.length },
+            { id: 'favorites', label: '★', count: favoriteMatches.length },
+          ].map(tab => (
+            <button
+              type="button"
+              key={tab.id}
+              onClick={() => setViewMode(tab.id as 'all' | 'live' | 'prematch' | 'favorites')}
+              className={`flex min-w-0 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] font-semibold transition-colors ${viewMode === tab.id ? 'bg-[#394758] text-accent-yellow' : 'bg-secondary text-slate-300 hover:text-white'}`}
+            >
+              {tab.label}
+              <span className="font-mono text-[10px] text-text-secondary">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {searchTerm && (
         <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}
@@ -390,7 +435,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {((viewMode === 'all' || viewMode === 'live') && liveMatches.length > 0 && !tournamentId) && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
+          <div className="hidden md:flex items-center gap-2 px-1">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-red"></span>
@@ -409,7 +454,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {((viewMode === 'all' || viewMode === 'prematch') && prematchMatches.length > 0) && (
         <div className="space-y-3">
-          <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between px-1">
+          <div className="hidden md:flex text-white font-bold text-sm tracking-wide uppercase items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-accent-green"></span>
               <span>{isLiveOnly ? t('sections.live_now') : t('sections.upcoming_fixtures')}</span>

@@ -128,23 +128,23 @@ export default function SportsbookPage() {
         </div>
 
         {/* small screens: modern bottom navigation dock */}
-        <div className="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary/95 backdrop-blur-xl border-t border-tertiary/80 flex items-stretch text-xs font-bold shadow-2xl pb-[env(safe-area-inset-bottom)]">
+        <div className="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary/95 backdrop-blur-sm border-t border-tertiary/80 flex items-stretch text-xs font-bold shadow-2xl pb-[env(safe-area-inset-bottom)]">
           <button
             className={`flex-1 flex items-center justify-center gap-2 py-3.5 transition-all ${
-              navOpen ? 'text-accent-green bg-primary/40' : 'text-text-secondary active:bg-tertiary/60'
+              navOpen ? 'text-accent-yellow bg-primary/40' : 'text-text-secondary active:bg-tertiary/60'
             }`}
             onClick={() => {
               setBetslipOpen(false);
               setNavOpen((v) => !v);
             }}
           >
-            <ListOrdered size={16} className={navOpen ? 'text-accent-green' : 'text-text-secondary'} />
+            <ListOrdered size={16} className={navOpen ? 'text-accent-yellow' : 'text-text-secondary'} />
             <span className="tracking-wide">{t('nav.sports')}</span>
           </button>
           <button
             className={`flex-1 flex items-center justify-center gap-2 py-3.5 transition-all ${
               selections.length > 0
-                ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-glow-green font-black'
+                ? 'bg-accent-yellow text-[#17212c] font-bold'
                 : 'text-text-secondary bg-primary/50 active:bg-tertiary/60'
             }`}
             onClick={() => {
@@ -155,7 +155,7 @@ export default function SportsbookPage() {
             <Ticket size={16} />
             <span>{t('betslip.betslip')}</span>
             {selections.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-primary text-accent-green border border-primary/20">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-primary text-accent-yellow border border-primary/20">
                 {selections.length}
               </span>
             )}
@@ -186,7 +186,7 @@ export default function SportsbookPage() {
         {/* betslip sheet */}
         {betslipOpen && (
           <div className="xl:hidden fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setBetslipOpen(false)}>
-            <div className="w-full max-h-[92dvh] bg-secondary rounded-t-3xl border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-h-[92dvh] bg-secondary rounded-t-sm border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
               {/* Sheet handle bar */}
               <button
                 type="button"
