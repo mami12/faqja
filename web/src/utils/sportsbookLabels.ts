@@ -167,6 +167,58 @@ export function parseResultBttsOutcome(
     : null;
 }
 
+/** Decode HT/FT only with the corresponding market context. Outcome IDs remain untouched. */
+export function isHalfTimeFullTimeMarket(name: string | undefined): boolean {
+  const value = normalized(name);
+  return /^(?:ht ft|htft|half time full time|halftime fulltime|half time fulltime|half time match result|half time full time result|first half full time|1st half full time|pjesa e pare ndeshja|pjesa e pare koha e rregullt)$/.test(value);
+}
+
+/**
+ * The bookmaker may send "Arsenal / Draw", "Home/Draw", "HD" or "1/X".
+ * Convert labels for display only, using the actual fixture to identify the teams.
+ * Unknown values stay as-is so we never represent a different bet.
+ */
+export function parseHalfTimeFullTimeOutcome(
+  value: string | undefined,
+  matchName?: string,
+  code?: string,
+): string | null {
+  const fixture = String(matchName ?? '').split(/\s+vs?\.?\s+/i);
+  const homeTeam = fixture.length === 2 ? normalized(fixture[0]) : '';
+  const awayTeam = fixture.length === 2 ? normalized(fixture[1]) : '';
+
+  const canonical = (part: string): '1' | 'X' | '2' | null => {
+    const s = normalized(part);
+    if (['1', 'h', 'home', 'home team', 'vendas', 'w1'].includes(s)) return '1';
+    if (['x', 'd', 'draw', 'tie', 'barazim', 'wx'].includes(s)) return 'X';
+    if (['2', 'a', 'away', 'away team', 'vizitor', 'udhetues', 'w2'].includes(s)) return '2';
+    if (homeTeam && s === homeTeam) return '1';
+    if (awayTeam && s === awayTeam) return '2';
+    return null;
+  };
+
+  const fromText = (text: string | undefined): string | null => {
+    const raw = String(text ?? '').trim();
+    const compact = raw.toUpperCase().replace(/\s+/g, '');
+    if (/^[HDAX12]{2}$/.test(compact)) {
+      const a = canonical(compact[0]);
+      const b = canonical(compact[1]);
+      return a && b ? a + '/' + b : null;
+    }
+    const parts = raw.split(/\s*(?:\/|\\|→|–)\s*/);
+    if (parts.length !== 2) return null;
+    const a = canonical(parts[0]);
+    const b = canonical(parts[1]);
+    return a && b ? a + '/' + b : null;
+  };
+
+  const fromName = fromText(value);
+  const fromCode = fromText(code);
+  // A conflicting provider code must not silently replace a descriptive bet selection.
+  if (fromName && fromCode && fromName !== fromCode) return null;
+  return fromName ?? fromCode;
+}
+
 /** A market's numerical line is NOT necessarily a minute; require explicit time context. */
 const hasMinuteContext = (name: string | undefined): boolean =>
   /\bminutes?\b|\bmins?\b|\bminut(?:a|e|ën|es|ës)?\b/i.test(String(name ?? ''));
@@ -403,9 +455,12 @@ export function translateMarketName(name: string | undefined, t: Translate) {
 /* Përkthimi i outcomes                                               */
 /* ------------------------------------------------------------------ */
 
-export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string) {
+export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
+  if (isHalfTimeFullTimeMarket(marketName)) {
+    return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
   if (isResultBttsMarket(marketName)) {
     const combination = parseResultBttsOutcome(raw);
     // Unknown feed codes stay visible, never silently shortened to a plain 1X2/BTTS bet.
@@ -468,6 +523,7 @@ export function formatTicketSelection(
   t: Translate,
 ) {
   const rawOutcome = String(outcomeName ?? '').trim();
+  if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
   if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName);
   const market = normalized(marketName);
   const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
