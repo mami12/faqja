@@ -120,6 +120,53 @@ const normalized = (value: unknown) =>
     .trim();
 
 
+
+/** Result + BTTS is a six-outcome correlated market, not ordinary GG/NG. */
+export function isResultBttsMarket(name: string | undefined): boolean {
+  const s = String(name ?? '').toLowerCase();
+  const result = /\b(?:result|1\s*x\s*2|winner)\b/.test(s);
+  const btts = /\bbtts\b|both\s+teams?\s+(?:to\s+)?score|both\s+score|\bgg\s*[/&-]\s*ng\b/.test(s);
+  return result && btts && !/\b(?:corners?|cards?|handicap|double chance|half.?time|first half|second half)\b/.test(s);
+}
+
+export function parseResultBttsOutcome(
+  value: string | undefined,
+  homeTeam = '',
+  awayTeam = '',
+): { result: '1' | 'X' | '2'; bothScore: boolean } | null {
+  let raw = String(value ?? '').trim();
+  if (!raw) return null;
+  raw = raw.replace(/^\s*(?:match\s+)?result\s*[:=]?\s*/i, '')
+    .replace(/\b(?:both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b\s*[:=]?\s*/gi, '')
+    .replace(/^\(|\)$/g, '').trim();
+  const norm = (v: string) => v.toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const parts = raw.split(/\s*(?:\/|\+|&|\||:|,|;|-|\band\b|\bwith\b)\s*/i)
+    .map(norm).filter(Boolean);
+  if (parts.length !== 2) return null;
+  const readResult = (part: string): '1' | 'X' | '2' | null => {
+    if (['1', 'home', 'home win', 'w1', 'vendas'].includes(part) || (!!homeTeam && part === norm(homeTeam))) return '1';
+    if (['x', 'draw', 'tie', 'barazim'].includes(part)) return 'X';
+    if (['2', 'away', 'away win', 'w2', 'udhetues'].includes(part) || (!!awayTeam && part === norm(awayTeam))) return '2';
+    return null;
+  };
+  const readBtts = (part: string): boolean | null => {
+    if (['yes', 'po', 'gg', 'both score'].includes(part)) return true;
+    if (['no', 'jo', 'ng', 'no goal', 'both not score'].includes(part)) return false;
+    return null;
+  };
+  const forwardResult = readResult(parts[0]);
+  const forwardBtts = readBtts(parts[1]);
+  if (forwardResult !== null && forwardBtts !== null) {
+    return { result: forwardResult, bothScore: forwardBtts };
+  }
+  const reverseResult = readResult(parts[1]);
+  const reverseBtts = readBtts(parts[0]);
+  return reverseResult !== null && reverseBtts !== null
+    ? { result: reverseResult, bothScore: reverseBtts }
+    : null;
+}
+
 /** A market's numerical line is NOT necessarily a minute; require explicit time context. */
 const hasMinuteContext = (name: string | undefined): boolean =>
   /\bminutes?\b|\bmins?\b|\bminut(?:a|e|ën|es|ës)?\b/i.test(String(name ?? ''));
@@ -211,6 +258,7 @@ function translateExactGoalsLabel(value: string) {
 export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
+  if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
   const exactKey = `markets.${raw}`;
   const exactTranslation = t(exactKey);
   if (exactTranslation !== exactKey) return exactTranslation;
@@ -358,6 +406,11 @@ export function translateMarketName(name: string | undefined, t: Translate) {
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
+  if (isResultBttsMarket(marketName)) {
+    const combination = parseResultBttsOutcome(raw);
+    // Unknown feed codes stay visible, never silently shortened to a plain 1X2/BTTS bet.
+    return combination ? combination.result + ' + ' + (combination.bothScore ? 'Po' : 'Jo') : raw;
+  }
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
   if (qualifiedScoring) return qualifiedScoring;
@@ -415,6 +468,7 @@ export function formatTicketSelection(
   t: Translate,
 ) {
   const rawOutcome = String(outcomeName ?? '').trim();
+  if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName);
   const market = normalized(marketName);
   const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
   if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName);
