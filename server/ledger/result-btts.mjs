@@ -23,7 +23,7 @@ export function parseResultBttsOutcome(value, homeTeam = '', awayTeam = '') {
       (_match, clause) => (/not/i.test(clause) ? 'No/' : 'Yes/'))
     .replace(/\s*(?:and\b|&|\+|\/)\s*(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))$/i,
       (_match, clause) => '/' + (/not/i.test(clause) ? 'No' : 'Yes'));
-  text = text.replace(/^\s*(?:match\s+)?result\s*[:=]?\\s*/i, '')
+  text = text.replace(/^\s*(?:match\s+)?result\s*[:=]?\s*/i, '')
     .replace(/\b(?:both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b\s*[:=]?\s*/gi, '')
     .replace(/^\(|\)$/g, '').trim();
 
