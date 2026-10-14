@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
 const cleanMarketName = (name?: string) => {
@@ -88,7 +88,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
   for (const m of markets.filter((market) => !isHandicapMarket(market))) {
     const rawClean = cleanMarketName(m.name);
-    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()}`;
+    const explicitLine = String(m.line ?? '').trim();
+    // Never merge markets containing a minute in their name when the feed has no separate line.
+    const groupingName = explicitLine ? rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim() : rawClean;
+    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${groupingName}`;
 
     if (!map.has(baseKey)) {
       map.set(baseKey, []);
@@ -102,7 +105,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
     result.push({
       baseName: baseKey,
-      title: translateMarketName(marketList[0].name, t),
+      title: translateMarketName(
+        String(marketList[0].line ?? '').trim()
+          ? cleanMarketName(marketList[0].name).replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
+          : marketList[0].name, t),
       category: getGroupCategory(baseKey),
       markets: marketList
     });
@@ -404,7 +410,7 @@ export default function MatchDetail() {
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#232c38]">
                           {showLine && (
                             <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#344253] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
-                              {line || translateMarketName(market.name, t)}
+                              {formatMarketLine(market.name, line) || translateMarketName(market.name, t)}
                             </div>
                           )}
                           <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"
