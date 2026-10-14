@@ -284,7 +284,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-2 p-1.5 sm:p-3 md:space-y-3 md:p-4">
+    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-1 p-0 sm:p-2 md:space-y-3 md:p-4">
       <div className="hidden md:block overflow-hidden rounded-sm border border-tertiary bg-secondary p-3 sm:p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -357,7 +357,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       </div>
 
       {/* Compact two-row mobile search/date and match-status controls. */}
-      <div className="md:hidden border border-tertiary bg-secondary">
+      <div className="md:hidden w-full border-y border-tertiary bg-secondary">
         <div className="flex items-center gap-1.5 border-b border-tertiary p-1.5">
           <div className="relative min-w-0 flex-1">
             <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary"/>
