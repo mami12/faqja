@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine, isResultBttsMarket } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
 const cleanMarketName = (name?: string) => {
@@ -26,6 +26,7 @@ const cleanMarketName = (name?: string) => {
 
 const getGroupCategory = (name?: string) => {
   const value = String(name ?? '').toLowerCase();
+  if (isResultBttsMarket(value)) return 'Mixed';
   if (/card|karton|booking|red card|yellow card/i.test(value)) return 'Cards';
   if (/corner|kendo|kënd|corners/i.test(value)) return 'Corners';
   if (/half|halves|pjesa|1st half|2nd half|1\. pjesë|2\. pjesë/i.test(value)) return 'Halves';
@@ -38,6 +39,7 @@ const getCategoryIcon = (catId: string) => {
   switch (catId) {
     case 'Popular': return <Trophy size={13} className="text-amber-400" />;
     case 'Goals': return <Flame size={13} className="text-orange-400" />;
+    case 'Mixed': return <Layers size={13} className="text-amber-300" />;
     case 'Halves': return <Clock size={13} className="text-purple-400" />;
     case 'Corners': return <Flag size={13} className="text-blue-400" />;
     case 'Cards': return <ShieldAlert size={13} className="text-rose-400" />;
@@ -48,6 +50,7 @@ const getCategoryIcon = (catId: string) => {
 
 const getMarketIcon = (category: string, title: string) => {
   const t = title.toLowerCase();
+  if (category === 'Mixed') return <Layers size={14} className="text-amber-300 shrink-0" />;
   if (category === 'Cards' || /card|karton/i.test(t)) return <ShieldAlert size={14} className="text-rose-400 shrink-0" />;
   if (category === 'Corners' || /corner|kënd/i.test(t)) return <Flag size={14} className="text-blue-400 shrink-0" />;
   if (category === 'Halves' || /half|pjes/i.test(t)) return <Clock size={14} className="text-purple-400 shrink-0" />;
@@ -60,7 +63,7 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
   const is1X2 = /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = /both teams? to score|both score/i.test(mName) && !/half|halves|result/i.test(mName);
+  const isBTTS = !isResultBttsMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
 
   const seen = new Set<string>();
   const res: any[] = [];
@@ -201,6 +204,7 @@ export default function MatchDetail() {
     { id: 'all', label: 'Të Gjitha' },
     { id: 'Popular', label: 'Kryesore' },
     { id: 'Goals', label: 'Golat' },
+    { id: 'Mixed', label: 'MIKSE' },
     { id: 'Halves', label: 'Pjesët' },
     { id: 'Corners', label: 'Këndet' },
     { id: 'Cards', label: 'Kartona' },
