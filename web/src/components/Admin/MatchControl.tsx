@@ -363,11 +363,11 @@ export default function MatchControl() {
                               <div key={oc.id} className="bg-primary/90 border border-tertiary/70 p-2.5 rounded-xl flex flex-col justify-between gap-1.5">
                                 <div className="flex items-center justify-between gap-2">
                                   <button
-                                    onClick={() => { setEditOutcome(oc); setNewOdds(String(oc.odds)); }}
+                                    onClick={() => { setEditOutcome({ ...oc, marketName: mk.name, matchName: `${m.homeTeam} vs ${m.awayTeam}` }); setNewOdds(String(oc.odds)); }}
                                     className="min-w-0 flex-1 text-left group"
                                   >
                                     <span className="block truncate text-xs text-text-secondary group-hover:text-white transition">
-                                      {translateOutcomeName(oc.name, t, mk.name)}
+                                      {translateOutcomeName(oc.name, t, mk.name, `${m.homeTeam} vs ${m.awayTeam}`, oc.code)}
                                     </span>
                                     <span className="text-sm font-black text-accent-green flex items-center gap-1 tabular-nums mt-0.5">
                                       {Number(oc.odds).toFixed(2)} <Edit3 size={12} className="text-text-secondary group-hover:text-white" />
@@ -508,7 +508,7 @@ export default function MatchControl() {
               </button>
             </div>
             <p className="text-xs text-text-secondary mb-4">
-              Zgjedhja: <strong className="text-white">{translateOutcomeName(editOutcome.name, t)}</strong>
+              Zgjedhja: <strong className="text-white">{translateOutcomeName(editOutcome.name, t, editOutcome.marketName, editOutcome.matchName, editOutcome.code)}</strong>
             </p>
             <form onSubmit={handleSaveOdds} className="space-y-4">
               <div>
