@@ -137,7 +137,7 @@ export function buildMarkets(oddsRows) {
     // Matches: "Halftime/Fulltime", "Half Time / Full Time", "HT/FT", "HTFT"
     const isHTFT = /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half\s*time\s*\/\s*full\s*time|htft/i.test(mName);
 
-    const is1X2 = !isHTFT &&
+    const is1X2 = !isHTFT && !isResultBttsMarket(m.name) &&
                   (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
                   !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
     const isBTTS = !isHTFT && !isResultBttsMarket(m.name) && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result|1x2|winner/i.test(mName);
