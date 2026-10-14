@@ -267,35 +267,55 @@ export function formatMarketLine(marketName: string | undefined, marketLine: str
   return /^\d{1,3}$/.test(value) ? value + "'" : value;
 }
 
-/** An ordinal goal/corner number belongs to the market, not the 1/X/2 choice. */
+/**
+ * The market number is displayed in the market heading / line column.
+ * Never guess a market number from an outcome alone: "1 2.5" could mean
+ * something different without the matching provider market context.
+ */
 export function ordinalMarketNumber(marketName?: string, marketLine?: string): string | null {
   const name = String(marketName ?? '').trim();
-  if (!/\b(?:next|first|last|nth|numbered|[0-9]+(?:st|nd|rd|th)?)\b.*\b(?:goal|corner)\b|\b(?:goal|corner)\b.*\b(?:next|first|last|number|[0-9]+(?:st|nd|rd|th)?)\b/i.test(name)) return null;
   const line = String(marketLine ?? '').trim();
-  if (/^\d{1,2}$/.test(line)) return line;
-  const fromName = name.match(/\b(?:goal|corner)s?\s*(?:number|no\.?|#)?\s*(\d{1,2})(?:st|nd|rd|th)?\b/i)
-    ?? name.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:goal|corner)\b/i);
-  return fromName?.[1] ?? null;
+  const numeric = /^\d+(?:[.,]\d+)?$/;
+  if (numeric.test(line)) return line;
+
+  // Some feeds embed the line in the market title instead of market.line.
+  const trailing = name.match(/(?:^|[\s:#])(\d+(?:[.,]\d+)?)(?:st|nd|rd|th)?\s*$/i);
+  if (trailing) return trailing[1];
+  const leadingOrdinal = name.match(/(?:^|\s)(\d+(?:[.,]\d+)?)(?:st|nd|rd|th)?\s+(?:goal|corner)s?\b/i);
+  return leadingOrdinal?.[1] ?? null;
 }
 
+const equalMarketNumber = (a: string, b: string): boolean => {
+  const canonical = (value: string): string => {
+    const [integer, fractional = ''] = value.replace(',', '.').split('.');
+    const whole = integer.replace(/^0+(?=\d)/, '');
+    const decimals = fractional.replace(/0+$/, '');
+    return decimals ? whole + '.' + decimals : whole;
+  };
+  return canonical(a) === canonical(b);
+};
+
+/**
+ * Normalize only a 1/X/2 selection with the EXACT numeric market line alongside it.
+ * Handles any nonnegative integer or decimal (0, 9, 2.5, 2,5, 1000.25, etc).
+ * Do not rewrite scores, standalone totals, or unrelated provider outcome codes.
+ */
 export function formatOrdinalOutcomeLabel(
   outcomeName: string | undefined,
   marketName: string | undefined,
   marketLine: string | undefined,
   matchName?: string,
 ): string | null {
-  const ordinal = ordinalMarketNumber(marketName, marketLine);
-  if (!ordinal) return null;
+  if (isHalfTimeFullTimeMarket(marketName) || isResultBttsMarket(marketName)) return null;
+  const line = ordinalMarketNumber(marketName, marketLine);
+  if (line === null) return null;
   const raw = compactOutcomeTeams(String(outcomeName ?? ''), matchName);
-  // Remove only the ordinal attached to a 1/X/2 result.
-  const patterns = [
-    new RegExp('^([1X2])\\s*[/,:;|\\-]?\\s*' + ordinal + '(?:st|nd|rd|th)?$', 'i'),
-    new RegExp('^' + ordinal + '(?:st|nd|rd|th)?\\s*[/,:;|\\-]?\\s*([1X2])$', 'i'),
-  ];
-  for (const pattern of patterns) {
-    const match = raw.match(pattern);
-    if (match) return match[1].toUpperCase();
-  }
+  const separator = String.raw`(?:\s+|\s*[/,;|:]\s*)`;
+  // A hyphen belongs to an exact score (1-0), so never interpret it as a separator.
+  const resultFirst = raw.match(new RegExp('^([1X2])' + separator + '(\\d+(?:[.,]\\d+)?)(?:st|nd|rd|th)?$', 'i'));
+  if (resultFirst && equalMarketNumber(resultFirst[2], line)) return resultFirst[1].toUpperCase();
+  const lineFirst = raw.match(new RegExp('^(\\d+(?:[.,]\\d+)?)(?:st|nd|rd|th)?' + separator + '([1X2])$', 'i'));
+  if (lineFirst && equalMarketNumber(lineFirst[1], line)) return lineFirst[2].toUpperCase();
   return /^[1X2]$/i.test(raw) ? raw.toUpperCase() : null;
 }
 
@@ -310,7 +330,8 @@ export function formatOddsButtonLabel(
   matchName?: string,
   outcomeCode?: string,
 ): string {
-  const outcome = translateOutcomeName(outcomeName, t, marketName, matchName, outcomeCode);
+  const outcome = formatOrdinalOutcomeLabel(outcomeName, marketName, marketLine, matchName)
+    ?? translateOutcomeName(outcomeName, t, marketName, matchName, outcomeCode);
   const rawMarket = String(marketName ?? '').trim();
   const rawLine = String(marketLine ?? '').trim();
   const timeScoring = /\btime\s+of\s+scoring\b|\btime\s+of\s+(?:the\s+)?(?:first|last|next)\s+goal\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(rawMarket);
@@ -564,7 +585,7 @@ export function compactOutcomeTeams(label: string, matchName?: string): string {
   const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
     .sort((a, b) => b[0].length - a[0].length);
   for (const [team, number] of teams) {
-    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?=$|[^\\p{L}\\p{N}])', 'giu'),
+    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?!\\s+(?:Women|Ladies|Reserves?|Youth|U[0-9]{2}|II|III)\\b)(?=$|[^\\p{L}\\p{N}])', 'giu'),
       (_whole, prefix: string) => prefix + number);
   }
   return result
@@ -600,11 +621,11 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
     if (lastGoal) return 'Goli i fundit: ' + lastGoal[1];
     const teamScores = compact.match(/^(?:team to score|team scores?|scoring team)\s*[:\-]?\s*([12X])$/i);
     if (teamScores) return 'Ekipi që shënon: ' + teamScores[1];
-    const scoring = compact.match(/^([12])\\s+(?:to score|will score|scores?)(?:\\s+(?:a\\s+)?goal)?$/i);
+    const scoring = compact.match(/^([12])\s+(?:to score|will score|scores?)(?:\s+(?:a\s+)?goal)?$/i);
     if (scoring) return scoring[1] + ' shënon gol';
-    const noScoring = compact.match(/^([12])\\s+(?:not to score|will not score|does not score)$/i);
+    const noScoring = compact.match(/^([12])\s+(?:not to score|will not score|does not score)$/i);
     if (noScoring) return noScoring[1] + ' nuk shënon gol';
-    const scoresFirst = compact.match(/^([12])\\s+(?:to score first|scores first)$/i);
+    const scoresFirst = compact.match(/^([12])\s+(?:to score first|scores first)$/i);
     if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
     return compact;
   }
@@ -642,10 +663,10 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
   if (/^(over|o|lart|mbi)$/.test(value)) return t('outcomes.over');
   if (/^(under|u|poshte|nen)$/.test(value)) return t('outcomes.under');
   if (/^(yes|gg|g|goal|both teams to score|gg ng|g ng)$/.test(value)) {
-    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
+    return /\bboth\s+teams\b|\bbtts\b|\bgg\b|\bng\b/i.test(marketName ?? '') ? t('outcomes.btts_yes') : t('outcomes.yes');
   }
   if (/^(no|ng|n g|no goal|no both teams to score|jo gol|nuk shenojne)$/.test(value)) {
-    return /both teams|btts|gg|ng/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
+    return /\bboth\s+teams\b|\bbtts\b|\bgg\b|\bng\b/i.test(marketName ?? '') ? t('outcomes.btts_no') : t('outcomes.no');
   }
   if (/^(odd|tek|odd number)$/.test(value)) return t('outcomes.odd');
   if (/^(even|cift|even number)$/.test(value)) return t('outcomes.even');
@@ -670,8 +691,11 @@ export function formatTicketSelection(
   matchName: string | undefined,
   t: Translate,
   outcomeCode?: string,
+  marketLine?: string,
 ) {
   const rawOutcome = String(outcomeName ?? '').trim();
+  const numericOutcome = formatOrdinalOutcomeLabel(rawOutcome, marketName, marketLine, matchName);
+  if (numericOutcome !== null) return numericOutcome;
   if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
   if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
   const market = normalized(marketName);
