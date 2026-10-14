@@ -21,6 +21,7 @@ import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
+import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -57,6 +58,14 @@ async function resolveSelection(selection) {
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
   if (row.suspended === true) throw badRequest('Kjo kuotë është pezulluar për momentin.');
+
+  // Only sell result + BTTS selections when both parts of the contract are identifiable.
+  // An unknown provider code cannot safely be graded at the end of the match.
+  if (isResultBttsMarket(row.market_name) &&
+      !parseResultBttsOutcome(row.outcome_key, match.home, match.away) &&
+      !parseResultBttsOutcome(row.outcome_name, match.home, match.away)) {
+    throw badRequest('Ky kombinim Rezultati + Të dy ekipet shënojnë nuk është identifikuar plotësisht.');
+  }
 
   // admin overrides win over the feed: a suspended match/market/outcome blocks the bet, and
   // a pinned price is the price the ticket gets
