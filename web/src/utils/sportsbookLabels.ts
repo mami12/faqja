@@ -288,7 +288,7 @@ export function formatOddsButtonLabel(
   const numericLine = rawLine.match(/^\d{1,3}$/)?.[0];
   // Only interpret a line as a minute for a scoring-time market.
   const minute = numericLine ? numericLine + "'" : formattedLine;
-  const description = minute && !new RegExp('(?:^|\\D)' + numericLine + '(?:\\D|$)').test(translatedMarket)
+  const description = minute && (!numericLine || !new RegExp('(?:^|\\D)' + numericLine + '(?:\\D|$)').test(translatedMarket))
     ? translatedMarket + ' · ' + (/\bminute\b|\bminut/i.test(rawMarket) ? minute : 'min. ' + minute)
     : translatedMarket;
   if (!description) return outcome;
