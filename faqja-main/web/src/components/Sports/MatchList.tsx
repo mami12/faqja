@@ -122,12 +122,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) &&
         (type && mk.marketType === type || pattern.test(String(mk.name ?? ''))));
     const main = findMarket(/^(1x2|match result|full time result|winner|moneyline)$/i, '1X2');
-    const goals = findMarket(/total goals|over\/?under|under\/?over|goals over|goal line/i, 'OVER_UNDER');
+    const goals = markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) && (mk.marketType === 'OVER_UNDER' || /total goals|over\/?under|under\/?over|goals over|goal line/i.test(String(mk.name ?? ''))) && (mk.line == null || String(mk.line).includes('2.5'))) ?? null;
     const btts = findMarket(/both teams? to score|both score|btts|gg\/?ng/i);
     const find = (mk: any, names: string[]) => (mk?.outcomes ?? []).find((o: any) => {
       const name = String(o.name ?? '').trim().toLowerCase();
       const code = String(o.code ?? o.key ?? '').trim().toLowerCase();
-      return isOutcomeAvailable(o) && (names.includes(name) || names.includes(code));
+      return isOutcomeAvailable(o) && (names.includes(name) || names.includes(code) || names.some(n => n.length > 2 && (name.startsWith(n + ' ') || name.startsWith(n + ' ('))));
     }) ?? null;
     const oneXtwo = [
       find(main, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
