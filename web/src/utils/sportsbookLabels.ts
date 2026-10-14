@@ -205,7 +205,7 @@ export function parseHalfTimeFullTimeOutcome(
       const b = canonical(compact[1]);
       return a && b ? a + '/' + b : null;
     }
-    const parts = raw.split(/\s*(?:\/|\||→|–)\s*/);
+    const parts = raw.split(/\s*(?:\/|\||→|–|—|\s+-\s+)\s*/);
     if (parts.length !== 2) return null;
     const a = canonical(parts[0]);
     const b = canonical(parts[1]);
