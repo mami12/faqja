@@ -150,10 +150,10 @@ function MarketCard({ market, match, title }: MarketCardProps) {
   const cols = liveOutcomes.length > 3 ? 3 : liveOutcomes.length;
 
   return (
-    <div className="bg-secondary/90 rounded-lg sm:rounded-xl border border-tertiary/80 overflow-hidden shadow-sm">
+    <div className="bg-secondary/90 rounded-md border border-tertiary/80 overflow-hidden">
       {/* Emri i market-it — më kompakt në mobile */}
-      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
-        <span className="text-[10px] sm:text-[11px] font-bold text-slate-200 truncate" title={title}>
+      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/70 border-b border-tertiary/50 flex items-center justify-between gap-2">
+        <span className="text-[11px] sm:text-xs font-bold text-slate-200 break-words min-w-0" title={title}>
           {title}
           {line && <span className="text-accent-green ml-1">({line})</span>}
         </span>
@@ -164,7 +164,7 @@ function MarketCard({ market, match, title }: MarketCardProps) {
 
       {/* Outcomes horizontalisht — më kompakt në mobile */}
       <div
-        className="p-1.5 sm:p-2.5 grid gap-1 sm:gap-1.5"
+        className="p-2 grid gap-1.5"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {liveOutcomes.map(outcome => (
@@ -187,9 +187,9 @@ interface GroupCardProps {
 
 function GroupCard({ group, match, title }: GroupCardProps) {
   return (
-    <div className="bg-secondary/90 rounded-lg sm:rounded-xl border border-tertiary/80 overflow-hidden shadow-sm md:col-span-2">
-      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/40 border-b border-tertiary/50 flex items-center justify-between gap-2">
-        <span className="text-[10px] sm:text-[11px] font-bold text-slate-200 truncate" title={title}>
+    <div className="bg-secondary/90 rounded-md border border-tertiary/80 overflow-hidden md:col-span-2">
+      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/70 border-b border-tertiary/50 flex items-center justify-between gap-2">
+        <span className="text-[11px] sm:text-xs font-bold text-slate-200 break-words min-w-0" title={title}>
           {title}
         </span>
         <span className="text-[9px] sm:text-[10px] font-bold text-text-secondary/70">
@@ -219,7 +219,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
                 </div>
               )}
               <div
-                className="flex-1 grid gap-1 sm:gap-1.5"
+                className="min-w-0 flex-1 grid gap-1.5"
                 style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
               >
                 {liveOutcomes.map(outcome => (
@@ -289,7 +289,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     : CATEGORIES.filter(c => c.key === activeCategory);
 
   return (
-    <div className="border-t border-tertiary/70 bg-primary/50 px-2 py-2 sm:px-5 sm:py-4 space-y-2 sm:space-y-4">
+    <div className="border-t border-tertiary/70 bg-primary/50 px-2 py-3 sm:px-4 sm:py-4 space-y-3">
 
       {/* Strip statistikash live — më kompakt në mobile */}
       <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-secondary bg-secondary/80 p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl border border-tertiary/60">
@@ -383,7 +383,7 @@ export default function MarketPanel({ match }: { match: Match }) {
             </div>
 
             {/* Grid — hapësira më e vogël në mobile */}
-            <div className="grid gap-1.5 sm:gap-3 grid-cols-1 md:grid-cols-2">
+            <div className="grid gap-1.5 sm:gap-3 grid-cols-1 xl:grid-cols-2">
               {marketGroups.map(group => {
                 if (group.markets.length === 1) {
                   const market = group.markets[0];
