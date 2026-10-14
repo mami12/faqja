@@ -585,7 +585,7 @@ export function compactOutcomeTeams(label: string, matchName?: string): string {
   const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
     .sort((a, b) => b[0].length - a[0].length);
   for (const [team, number] of teams) {
-    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?=$|[^\\p{L}\\p{N}])', 'giu'),
+    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?!\\s+(?:Women|Ladies|Reserves?|Youth|U[0-9]{2}|II|III)\\b)(?=$|[^\\p{L}\\p{N}])', 'giu'),
       (_whole, prefix: string) => prefix + number);
   }
   return result
