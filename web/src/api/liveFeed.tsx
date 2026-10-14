@@ -47,6 +47,7 @@ interface LiveFeedValue {
   feedMode: FeedMode;
   /** prices the feed has locked right now, keyed exactly like the REST payload ids */
   lockedOutcomes: Record<string, boolean>;
+  riskLockedOutcomes: Record<string, boolean>;
   lockedMarkets: Record<string, boolean>;
   lockedMatches: Record<string, boolean>;
 }
@@ -60,6 +61,7 @@ const EMPTY: LiveFeedValue = {
   connected: false,
   feedMode: 'live',
   lockedOutcomes: {},
+  riskLockedOutcomes: {},
   lockedMarkets: {},
   lockedMatches: {},
 };
@@ -94,6 +96,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [lockedOutcomes, setLockedOutcomes] = useState<Record<string, boolean>>({});
+  const [riskLockedOutcomes, setRiskLockedOutcomes] = useState<Record<string, boolean>>({});
   const [lockedMarkets, setLockedMarkets] = useState<Record<string, boolean>>({});
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const [feedMode, setFeedMode] = useState<FeedMode>('live');
@@ -166,6 +169,12 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           }) as LivePatch,
         }));
       }
+    });
+
+    // Reversible server-side risk suspensions (separate from provider locks).
+    socket.on('risk:locks', (payload: { locks?: Record<string, boolean> }) => {
+      if (!payload?.locks || typeof payload.locks !== 'object') return;
+      setRiskLockedOutcomes(prev => ({ ...prev, ...payload.locks }));
     });
 
     // the whole live board, once per collector cycle
@@ -269,8 +278,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, lockedMarkets, lockedMatches }),
-    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, lockedMarkets, lockedMatches],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;
