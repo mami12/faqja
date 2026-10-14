@@ -5,6 +5,7 @@ import { upsertMatches, expireStaleMatches, getCounts, getMatches, getMatchById 
 import { getOddsForMatches as getOddsFromDb } from './db.mjs';
 import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
+import { isResultBttsMarket } from './ledger/result-btts.mjs';
 
 /** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
@@ -139,7 +140,7 @@ export function buildMarkets(oddsRows) {
     const is1X2 = !isHTFT &&
                   (m.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mName)) &&
                   !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-    const isBTTS = !isHTFT && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result/i.test(mName);
+    const isBTTS = !isHTFT && !isResultBttsMarket(m.name) && /both teams? to score|both score|\bbtts\b/i.test(mName) && !/half|halves|result|1x2|winner/i.test(mName);
     const isOU = !isHTFT && m.column === 'total' && /total|over\/?under/i.test(mName) && !/corner|card|half|team/i.test(mName);
     const isOddEven = !isHTFT && /odd\/even/i.test(mName);
     const isDoubleChance = !isHTFT && /double chance/i.test(mName);
