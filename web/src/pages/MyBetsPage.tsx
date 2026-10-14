@@ -76,7 +76,7 @@ export default function MyBetsPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-white break-words text-xs sm:text-sm" title={line.matchName}>{line.matchName}</div>
                 <div className="text-text-secondary text-[11px] mt-0.5">
-                  {formatMarketSelectionLabel(line.marketName, line.marketLine, t)} - <span className="text-slate-200 font-semibold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span>
+                  {formatMarketSelectionLabel(line.marketName, line.marketLine, t)} - <span className="text-slate-200 font-semibold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode)}</span>
                 </div>
               </div>
               <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
