@@ -59,12 +59,12 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     <button
       onClick={toggle}
       disabled={isSuspended}
-      className={`group relative flex items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-150 select-none sm:px-3 ${flashClass} ${
+      className={`group relative flex items-center justify-between gap-2 rounded-sm border-0 px-2 py-2 text-left transition-colors duration-150 select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-green focus-visible:outline-offset-[-2px] ${flashClass} ${
         isSuspended
-          ? 'cursor-not-allowed border-tertiary/40 bg-primary/40 opacity-50'
+          ? 'cursor-not-allowed bg-primary/30 opacity-50'
           : isSelected
-          ? 'scale-[1.01] border-accent-green bg-accent-green/20 text-white shadow-glow-green'
-          : 'border-tertiary/80 bg-primary/80 text-text-primary hover:border-slate-500 hover:bg-tertiary/40 active:scale-[0.98]'
+          ? 'bg-accent-green/25 text-white'
+          : 'bg-primary/40 text-text-primary hover:bg-tertiary/60 active:bg-tertiary/80'
       }`}
     >
       <span
