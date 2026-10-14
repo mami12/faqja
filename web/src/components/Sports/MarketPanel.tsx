@@ -10,7 +10,7 @@ import {
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine } from '../../utils/sportsbookLabels';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
@@ -74,7 +74,7 @@ const formatLine = (line?: string) => {
 
 const baseMarketName = (market: Market): string => {
   const raw = String(market.name ?? '').trim();
-  const stripped = raw.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim();
+  const stripped = String(market.line ?? '').trim() ? raw.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim() : raw;
   return cleanMarketName(stripped) || cleanMarketName(raw);
 };
 
@@ -178,7 +178,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#344253] text-xs font-semibold text-slate-200 px-1">
-                {formatLine(market.line) || baseMarketName(market)}
+                {formatMarketLine(market.name, formatLine(market.line)) || translateMarketName(market.name, () => market.name)}
               </div>
               <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
