@@ -310,7 +310,7 @@ export function formatOrdinalOutcomeLabel(
   const line = ordinalMarketNumber(marketName, marketLine);
   if (line === null) return null;
   const raw = compactOutcomeTeams(String(outcomeName ?? ''), matchName);
-  const separator = String.raw`(?:\\s+|\\s*[/,;|:]\\s*)`;
+  const separator = String.raw`(?:\s+|\s*[/,;|:]\s*)`;
   // A hyphen belongs to an exact score (1-0), so never interpret it as a separator.
   const resultFirst = raw.match(new RegExp('^([1X2])' + separator + '(\\d+(?:[.,]\\d+)?)(?:st|nd|rd|th)?$', 'i'));
   if (resultFirst && equalMarketNumber(resultFirst[2], line)) return resultFirst[1].toUpperCase();
