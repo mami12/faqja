@@ -94,6 +94,8 @@ export interface BetSelection {
   matchId: string;
   marketId: string;
   outcomeName: string;
+  /** The provider's untouched outcome code, used only to disambiguate combined labels. */
+  outcomeCode?: string;
   marketName: string;
   marketLine?: string;
   matchName: string;
@@ -107,6 +109,8 @@ export interface TicketLine {
   marketId: string;
   outcomeId: string;
   outcomeName: string;
+  /** Original provider code accompanying a saved ticket line. */
+  outcomeCode?: string;
   marketName: string;
   matchName: string;
   oddsAtPlacement: number;
