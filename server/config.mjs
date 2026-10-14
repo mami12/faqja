@@ -94,6 +94,15 @@ export const config = {
   idleColdBootMs: Number(process.env.IDLE_COLD_BOOT_MS ?? 2 * 60 * 1000),
   idleStopDbProbe: (process.env.IDLE_STOP_DB_PROBE ?? 'true') !== 'false',
 
+  // Automatic live risk controls. The provider's original prices remain untouched.
+  liveRiskEnabled: (process.env.LIVE_RISK_ENABLED ?? 'true') !== 'false',
+  liveRiskLeadMinute: Number(process.env.LIVE_RISK_LEAD_MINUTE ?? 75),
+  liveRiskLeadGoals: Number(process.env.LIVE_RISK_LEAD_GOALS ?? 2),
+  liveRiskLeadOdds: Number(process.env.LIVE_RISK_LEAD_ODDS ?? 1.50),
+  liveRiskLateMinute: Number(process.env.LIVE_RISK_LATE_MINUTE ?? 85),
+  liveRiskLateOdds: Number(process.env.LIVE_RISK_LATE_ODDS ?? 1.10),
+  liveRiskUltraOdds: Number(process.env.LIVE_RISK_ULTRA_ODDS ?? 1.05),
+
   // this feed's football sport id (verified)
   footballSportId: Number(process.env.FOOTBALL_SPORT_ID ?? 18),
 };
