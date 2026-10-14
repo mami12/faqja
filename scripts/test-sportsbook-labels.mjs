@@ -176,4 +176,20 @@ for (const [input, expected] of universalOutcomeExamples) {
 assert.equal(module.exports.compactOutcomeTeams('Arsenal Women', fixture), 'Arsenal Women', 'Do not replace partial team names');
 assert.equal(module.exports.translateOutcomeName('Over 2.5', translate, 'Total Goals', fixture), 'Lart 2.5');
 
+const ordinalExamples = [
+  ['Next Goal', '2', '1 2', '1'],
+  ['Next Goal', '2', 'X 2', 'X'],
+  ['Next Goal', '2', '2 2', '2'],
+  ['Next Corner', '9', '1 9', '1'],
+  ['Next Corner', '9', 'X 9', 'X'],
+  ['Next Corner', '9', '2 9', '2'],
+  ['Next Goal 2', '', 'Chelsea 2', '2'],
+  ['Next Corner 9', '', 'Home 9', '1'],
+];
+for (const [market, line, outcome, expected] of ordinalExamples) {
+  assert.equal(module.exports.formatOddsButtonLabel(outcome, market, line, translate, fixture), expected, market + ': ' + outcome);
+}
+assert.equal(module.exports.formatOrdinalOutcomeLabel('1 9', 'Total Corners', '9', fixture), null);
+assert.equal(module.exports.formatOddsButtonLabel('1 9', 'Total Corners', '9', translate, fixture), '1 9');
+
 console.log('Sportsbook label translation checks passed');
