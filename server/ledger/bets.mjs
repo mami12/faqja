@@ -22,6 +22,7 @@ import { chargeManagerCommission, refundManagerCommission } from './manager-fina
 import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
+import { liveRiskReason } from '../live-risk.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -78,6 +79,21 @@ async function resolveSelection(selection) {
 
   const price = outcomeOverride?.price ?? (row.price === null || row.price === undefined ? null : Number(row.price));
   if (price === null) throw badRequest('Kjo kuotë nuk ka çmim.');
+
+  // Never trust a disabled button as protection: enforce the same reversible
+  // live-risk suspension here, before balance deduction AND booking creation.
+  const riskReason = liveRiskReason(match, {
+    marketName: row.market_name,
+    marketKey: parsed.marketKey,
+    outcomeName: row.outcome_name,
+    outcomeKey: parsed.outcomeKey,
+    price,
+  });
+  if (riskReason) {
+    const err = badRequest('Ky koeficient është pezulluar automatikisht për shkak të rrezikut live.');
+    err.code = 'LIVE_RISK_SUSPENDED';
+    throw err;
+  }
 
   // prices must be fresh, otherwise a bet could take a price that has already moved: live
   // prices have 120s, prematch the hourly refresh window plus a margin (see the constants)
