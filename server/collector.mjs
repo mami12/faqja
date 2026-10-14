@@ -54,11 +54,12 @@ export function buildMarkets(oddsRows) {
     const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
     const oNormName = norm(o.outcome_name);
     const oNormKey = norm(o.outcome_key);
+    const isMixed = isResultBttsMarket(o.market_name ?? markets.get(key).name);
 
     // prevent duplicate outcome keys or outcome names inside the same market group
     const existing = outcomes.find(
       (eo) => (eo.key && oNormKey && norm(eo.key) === oNormKey) ||
-              (eo.name && oNormName && norm(eo.name) === oNormName)
+              (!isMixed && eo.name && oNormName && norm(eo.name) === oNormName)
     );
 
     if (existing) {
@@ -85,6 +86,7 @@ export function buildMarkets(oddsRows) {
     const canon = (oc) => {
       const k = String(oc.key ?? '').trim().toLowerCase();
       const n = norm(oc.name);
+      if (isResultBttsMarket(m.name)) return k || n;
       if (k === '1' || n === '1' || n === 'home' || n === 'w1') return '1';
       if (k === 'x' || n === 'x' || n === 'draw' || n === 'tie') return 'x';
       if (k === '2' || n === '2' || n === 'away' || n === 'w2') return '2';
