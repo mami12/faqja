@@ -621,11 +621,11 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
     if (lastGoal) return 'Goli i fundit: ' + lastGoal[1];
     const teamScores = compact.match(/^(?:team to score|team scores?|scoring team)\s*[:\-]?\s*([12X])$/i);
     if (teamScores) return 'Ekipi që shënon: ' + teamScores[1];
-    const scoring = compact.match(/^([12])\\s+(?:to score|will score|scores?)(?:\\s+(?:a\\s+)?goal)?$/i);
+    const scoring = compact.match(/^([12])\s+(?:to score|will score|scores?)(?:\s+(?:a\s+)?goal)?$/i);
     if (scoring) return scoring[1] + ' shënon gol';
-    const noScoring = compact.match(/^([12])\\s+(?:not to score|will not score|does not score)$/i);
+    const noScoring = compact.match(/^([12])\s+(?:not to score|will not score|does not score)$/i);
     if (noScoring) return noScoring[1] + ' nuk shënon gol';
-    const scoresFirst = compact.match(/^([12])\\s+(?:to score first|scores first)$/i);
+    const scoresFirst = compact.match(/^([12])\s+(?:to score first|scores first)$/i);
     if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
     return compact;
   }
