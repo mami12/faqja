@@ -62,14 +62,14 @@ export default function SportsSidebar({
   const isAllActive = !selectedTournamentId && !selectedSportId && !selectedCategoryId && !isLiveOnly && matchMode !== 'prematch';
 
   return (
-    <div className="w-64 sm:w-72 bg-secondary border-r border-tertiary h-full flex flex-col select-none text-text-primary">
+    <div className="w-60 sm:w-64 bg-secondary border-r border-tertiary h-full flex flex-col select-none text-text-primary">
       {/* Top Quick Filters */}
-      <div className="p-3 border-b border-tertiary space-y-2 bg-secondary/80">
+      <div className="p-2.5 border-b border-tertiary space-y-1.5 bg-secondary">
         <button
           onClick={onSelectAll}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-bold transition-colors ${
             isAllActive
-              ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-glow-green'
+              ? 'bg-accent-green text-primary'
               : 'bg-primary/60 text-text-secondary hover:text-white hover:bg-tertiary/70 border border-tertiary/60'
           }`}
         >
@@ -86,9 +86,9 @@ export default function SportsSidebar({
 
         <button
           onClick={onSelectLive}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-bold transition-colors ${
             isLiveOnly
-              ? 'bg-gradient-to-r from-rose-600 to-accent-red text-white shadow-glow-red'
+              ? 'bg-accent-red text-white'
               : 'bg-primary/60 text-text-secondary hover:text-rose-400 hover:bg-rose-500/10 border border-tertiary/60'
           }`}
         >
@@ -109,7 +109,7 @@ export default function SportsSidebar({
       </div>
 
       {/* Sports Tree */}
-      <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 text-xs">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1 text-xs">
         <div className="px-2.5 py-1 text-[11px] font-black text-text-secondary/70 uppercase tracking-widest flex items-center gap-1.5">
           <Trophy size={13} className="text-accent-yellow/80" />
           <span>{t('nav.sports')}</span>
@@ -122,11 +122,11 @@ export default function SportsSidebar({
           const translatedName = t(`sports.${s.name}`) === `sports.${s.name}` ? s.name : t(`sports.${s.name}`);
 
           return (
-            <div key={s.id} className="rounded-xl overflow-hidden transition-colors">
+            <div key={s.id} className="rounded-md overflow-hidden transition-colors">
               <div 
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors ${
                   isSportSelected
-                    ? 'bg-primary border border-accent-green/50 text-white font-bold shadow-sm'
+                    ? 'bg-primary border border-accent-green/50 text-white font-bold'
                     : 'hover:bg-primary/60 text-text-primary'
                 }`}
                 onClick={() => onSelectSport(String(s.id))}
@@ -154,7 +154,7 @@ export default function SportsSidebar({
                     return (
                       <div key={c.id}>
                         <div 
-                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-primary/50 cursor-pointer text-text-secondary hover:text-white transition"
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-primary/50 cursor-pointer text-text-secondary hover:text-white transition"
                           onClick={(e) => {
                             toggleCat(String(c.id), e);
                             onSelectCategory(String(c.id));

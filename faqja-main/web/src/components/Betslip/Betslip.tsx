@@ -136,13 +136,13 @@ export default function Betslip() {
     <div className="flex flex-col h-full min-h-0 bg-secondary select-none">
       {/* Ticket Type Segmented Control */}
       <div className="shrink-0 p-2.5 bg-secondary border-b border-tertiary/70">
-        <div className="flex bg-primary/80 p-1 rounded-xl border border-tertiary/60">
+        <div className="flex bg-primary p-1 rounded-md border border-tertiary/60">
           {['SINGLE', 'COMBO', 'SYSTEM'].map(type => (
             <button 
               key={type}
               className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 ticketType === type 
-                  ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-sm' 
+                  ? 'bg-accent-green text-primary' 
                   : 'text-text-secondary hover:text-white hover:bg-tertiary/40'
               }`}
               onClick={() => setTicketType(type as any)}
@@ -212,7 +212,7 @@ export default function Betslip() {
 
       {selections.length === 0 ? (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-text-secondary p-6 text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-primary/60 border border-tertiary/60 flex items-center justify-center text-text-muted">
+          <div className="w-10 h-10 rounded-lg bg-primary/60 border border-tertiary/60 flex items-center justify-center text-text-muted">
             <TicketIcon size={24} />
           </div>
           <div className="font-bold text-white text-sm">{t('betslip.empty_title')}</div>
@@ -227,7 +227,7 @@ export default function Betslip() {
             {selections.map(s => (
               <div 
                 key={s.outcomeId} 
-                className="bg-primary/80 p-3 rounded-xl border border-tertiary/80 hover:border-slate-600/60 relative group transition shadow-sm space-y-1.5"
+                className="bg-primary/70 p-2.5 rounded-md border border-tertiary/80 hover:border-slate-600/60 relative group transition-colors space-y-1.5"
               >
                 <button 
                   onClick={() => removeSelection(s.outcomeId)} 
@@ -266,7 +266,7 @@ export default function Betslip() {
           )}
 
           {/* Stake & Calculations Footer — gjithmonë i dukshëm */}
-          <div className="shrink-0 p-3.5 bg-secondary/95 border-t border-tertiary/80 space-y-3 shadow-2xl">
+          <div className="shrink-0 p-3 bg-secondary border-t border-tertiary/80 space-y-2.5">
             {ticketType === 'SYSTEM' && (
               <div>
                 <label className="text-[10px] uppercase font-bold text-text-secondary block mb-1">{t('betslip.system_type')}</label>
@@ -300,7 +300,7 @@ export default function Betslip() {
                   type="number" 
                   value={stake} 
                   onChange={e => setStake(e.target.value)} 
-                  className="w-full bg-primary/90 border border-tertiary rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-green font-mono font-black"
+                  className="w-full bg-primary border border-tertiary rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-green font-mono font-bold"
                   min="1"
                   step="1"
                 />
@@ -339,18 +339,18 @@ export default function Betslip() {
               {user ? (
                 <button 
                   onClick={handlePlaceBet}
-                  className="flex-1 bg-gradient-to-r from-emerald-600 to-accent-green text-primary font-black py-2.5 rounded-xl shadow-glow-green hover:brightness-105 active:scale-[0.99] transition text-xs tracking-wide"
+                  className="flex-1 bg-accent-green text-primary font-bold py-2.5 rounded-md hover:brightness-105 transition-colors text-xs tracking-wide"
                 >
                   {t('betslip.place_bet')}
                 </button>
               ) : (
-                <button disabled className="flex-1 bg-tertiary/50 text-text-muted font-bold py-2.5 rounded-xl text-xs cursor-not-allowed">
+                <button disabled className="flex-1 bg-tertiary/50 text-text-muted font-bold py-2.5 rounded-md text-xs cursor-not-allowed">
                   {t('betslip.login_to_bet')}
                 </button>
               )}
               <button 
                 onClick={handleBook}
-                className="px-3.5 border border-accent-green/60 hover:border-accent-green text-accent-green font-bold py-2.5 rounded-xl hover:bg-accent-green/10 transition text-xs whitespace-nowrap"
+                className="px-3.5 border border-accent-green/60 hover:border-accent-green text-accent-green font-bold py-2.5 rounded-md hover:bg-accent-green/10 transition-colors text-xs whitespace-nowrap"
               >
                 {t('betslip.book_ticket')}
               </button>

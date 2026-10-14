@@ -111,213 +111,114 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     );
   }
 
+
+  // Render a single compact odds board per competition. All odds still use the
+  // existing OddsButton and its live-feed, suspension and betslip behavior.
   const renderMatchCard = (raw: any) => {
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
-
-    const is1X2 = (mk: any) => {
-      const name = String(mk.name ?? '').toLowerCase();
-      if (/half|1st|2nd|pjes|corner|card|handicap|double chance|chance/i.test(name)) return false;
-      if (mk.period && mk.period !== 0) return false;
-      return mk.marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(name);
-    };
-    const isBothScore = (mk: any) =>
-      /both teams? to score|both score|\bbtts\b|\bgg\/?ng\b|\bgg\b|\bng\b/i.test(mk.name ?? '');
-    const isOverUnder = (mk: any) =>
-      mk.marketType === 'OVER_UNDER' ||
-      /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
-
-    const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
-      const findOutcome = (mk: any, targets: string[]) => {
-        const normT = targets.map((t) => t.toLowerCase());
-        const hit = (mk.outcomes ?? []).find((o: any) => {
-          const n = String(o.name ?? '').trim().toLowerCase();
-          const c = String(o.code ?? o.key ?? '').trim().toLowerCase();
-          return normT.includes(n) || normT.includes(c);
-        });
-        return isOutcomeAvailable(hit) ? hit : null;
-      };
-
-      const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isMarketVisible(m, mk, lockedMarkets));
-      if (m1) {
-        const slots = [
-          findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
-          findOutcome(m1, ['x', 'draw', 'tie', 'wx', 'd']),
-          findOutcome(m1, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
-        ];
-        return { market: m1, slots, mode: '1x2' };
-      }
-
-      const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isMarketVisible(m, mk, lockedMarkets));
-      if (m2) {
-        const slots = [
-          findOutcome(m2, ['yes', 'gg']),
-          findOutcome(m2, ['no', 'ng']),
-        ];
-        return { market: m2, slots, mode: 'btts' };
-      }
-
-      const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isMarketVisible(m, mk, lockedMarkets));
-      if (m3) {
-        const slots = [
-          findOutcome(m3, ['over', 'o']),
-          findOutcome(m3, ['under', 'u']),
-        ];
-        return { market: m3, slots, mode: 'ou' };
-      }
-      return null;
-    };
-
-    const quick = pickQuickMarket();
-    const quickMarket = quick?.market ?? null;
-    const quickSlots: (any | null)[] = quick?.slots ?? [];
-
-    // Linja e market-it (2.5, 3.5, ...) — vjen nga `line` ose `specifier`
-    const quickLine = String(quickMarket?.line ?? quickMarket?.specifier ?? '').trim();
-
-    // Label-i: për O/U përfshin linjën, për të tjerat mbetet i njëjti
-    const quickLabel =
-      quick?.mode === '1x2' ? '1X2'
-      : quick?.mode === 'btts' ? t('markets.both_teams_score')
-      : quick?.mode === 'ou' ? t('markets.over_under')
-      : '';
-
-    const quickCols = quick?.mode === '1x2' ? 3 : 2;
-    const isLocked = lockedMatches[String(m.id)] === true;
-
-    const totalMarketsCount = Math.max(m.markets?.length || 0, Number(m.marketCount) || 0);
-
+    const markets: any[] = m.markets ?? [];
+    const visible = (mk: any) => isMarketVisible(m, mk, lockedMarkets);
+    const findMarket = (pattern: RegExp, type?: string) =>
+      markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) &&
+        (type && mk.marketType === type || pattern.test(String(mk.name ?? ''))));
+    const main = findMarket(/^(1x2|match result|full time result|winner|moneyline)$/i, '1X2');
+    const goals = markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) && (mk.marketType === 'OVER_UNDER' || /total goals|over\/?under|under\/?over|goals over|goal line/i.test(String(mk.name ?? ''))) && (mk.line == null || String(mk.line).includes('2.5'))) ?? null;
+    const btts = findMarket(/both teams? to score|both score|btts|gg\/?ng/i);
+    const find = (mk: any, names: string[]) => (mk?.outcomes ?? []).find((o: any) => {
+      const name = String(o.name ?? '').trim().toLowerCase();
+      const code = String(o.code ?? o.key ?? '').trim().toLowerCase();
+      return isOutcomeAvailable(o) && (names.includes(name) || names.includes(code) || names.some(n => n.length > 2 && (name.startsWith(n + ' ') || name.startsWith(n + ' ('))));
+    }) ?? null;
+    const oneXtwo = [
+      find(main, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
+      find(main, ['x', 'draw', 'tie', 'wx', 'd']),
+      find(main, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
+    ];
+    const total = [
+      find(goals, ['over', 'o', 'over 2.5', 'o2.5']),
+      find(goals, ['under', 'u', 'under 2.5', 'u2.5']),
+    ];
+    const both = [find(btts, ['yes', 'gg']), find(btts, ['no', 'ng'])];
+    const marketCount = Math.max(markets.length, Number(m.marketCount) || 0);
+    const locked = lockedMatches[String(m.id)] === true;
+    const oddsGroup = (mk: any, outcomes: (any | null)[], labels: string[]) => (
+      <div className="grid grid-cols-3 gap-1 min-w-[174px]">
+        {labels.map((label, i) => mk && outcomes[i] ? (
+          <OddsButton key={outcomes[i].id ?? i} match={m} market={mk} outcome={outcomes[i]} />
+        ) : (
+          <div key={label} title={label} className="min-h-[40px] rounded border border-tertiary/40 bg-primary/40 flex items-center justify-center text-text-muted text-xs">—</div>
+        ))}
+      </div>
+    );
     return (
-      <div 
-        key={m.id} 
-        className="bg-card-bg/90 hover:bg-card-hover/90 rounded-2xl border border-tertiary/80 hover:border-slate-600/70 shadow-md transition-all duration-200 overflow-hidden group"
-      >
-        <div className="bg-primary/60 px-3.5 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 text-text-secondary truncate">
-            <span className="font-semibold text-text-primary text-[11px] sm:text-xs truncate tracking-wide">
-              {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || t('sections.league')}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {isLocked && (
-              <span
-                className="inline-flex items-center gap-1 bg-accent-red/20 border border-accent-red/40 text-accent-red text-[10px] font-black px-2 py-0.5 rounded-full"
-                title={t('sections.odds_locked')}
-              >
-                🔒 {t('sections.odds_locked')}
-              </span>
-            )}
-            {m.status === 'LIVE' ? (
-              <span className="inline-flex items-center gap-1.5 bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[10px] font-black px-2.5 py-0.5 rounded-full">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-red opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-red"></span>
-                </span>
-                LIVE {m.currentMinute || 0}:{String(m.currentSecond ?? 0).padStart(2, '0')}'
-              </span>
-            ) : (
-              <span className="text-text-secondary flex items-center gap-1.5 text-[11px] font-medium bg-primary/40 px-2 py-0.5 rounded-md border border-tertiary/40">
-                <Clock size={12} className="text-text-muted" />
-                {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} &bull; {new Date(m.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-          <div 
-            role="link" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') navigate(`/match/${m.id}`); }}
-            className="flex-1 cursor-pointer space-y-1.5 min-w-0"
-            onClick={() => navigate(`/match/${m.id}`)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
-                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
-                  {m.homeTeam}
-                </span>
-              </div>
-              {m.status === 'LIVE' && (
-                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
-                  {m.homeScore ?? 0}
-                </span>
+      <div key={m.id} className="border-b border-tertiary/60 last:border-b-0 bg-card-bg hover:bg-card-hover transition-colors">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 px-3 py-2">
+          <div className="flex items-center gap-3 min-w-0 lg:flex-[1.4]">
+            <div className="w-12 shrink-0 text-center text-[10px] font-semibold text-text-secondary tabular-nums">
+              {m.status === 'LIVE' ? (
+                <span className="text-accent-red">LIVE<br />{m.currentMinute ?? 0}'</span>
+              ) : (
+                <span>{new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
             </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
-                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
-                  {m.awayTeam}
-                </span>
-              </div>
-              {m.status === 'LIVE' && (
-                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
-                  {m.awayScore ?? 0}
-                </span>
-              )}
-            </div>
+            <button type="button" onClick={() => navigate(`/match/${m.id}`)}
+              className="min-w-0 flex-1 text-left py-1 hover:text-accent-green transition-colors">
+              <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white">
+                <span className="truncate">{m.homeTeam}</span>
+                {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.homeScore ?? 0}</span>}
+              </span>
+              <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white mt-1">
+                <span className="truncate">{m.awayTeam}</span>
+                {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.awayScore ?? 0}</span>}
+              </span>
+            </button>
+            {locked && <span title={t('sections.odds_locked')} className="text-accent-red text-xs">🔒</span>}
           </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
-            {quickMarket && quickSlots.length >= 2 ? (
-              <div className="flex-1 md:w-56">
-                {/* Label-i i market-it — për O/U shfaqet linja bashkë */}
-                {quickLabel && quickLabel !== '1X2' && (
-                  <div className="text-[9px] font-black uppercase tracking-wider mb-1 pl-1 flex items-baseline gap-1">
-                    <span className="text-accent-green/90">{quickLabel}</span>
-                    {quick?.mode === 'ou' && quickLine && (
-                      <span className="text-white">{quickLine}</span>
-                    )}
-                  </div>
-                )}
-                <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
-                  {quickSlots.map((slot: any, i: number) =>
-                    slot ? (
-                      <OddsButton key={slot.id ?? i} match={m} market={quickMarket} outcome={slot} />
-                    ) : (
-                      <div
-                        key={`empty-${i}`}
-                        className="px-2.5 py-2 rounded-lg border border-tertiary/50 bg-primary/40 text-text-secondary text-center text-xs font-bold opacity-40 cursor-not-allowed"
-                      >
-                        —
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-text-secondary italic text-center flex-1 md:w-56">—</div>
-            )}
-
-            <button
-              onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
-              className={`px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                expandedId === String(m.id)
-                  ? 'bg-accent-green text-primary shadow-glow-green'
-                  : 'bg-primary/80 hover:bg-tertiary text-text-secondary hover:text-white border border-tertiary/80'
-              }`}
-              title={t('sections.view_markets')}
-              aria-expanded={expandedId === String(m.id)}
-            >
-              <span>{t('sections.view_markets')} · {totalMarketsCount}</span>
-              <ChevronRight
-                size={13}
-                className={`transition-transform duration-200 ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
-              />
+          <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto pb-1 lg:pb-0">
+            <div className="shrink-0 w-[174px]">{oddsGroup(main, oneXtwo, ['1', 'X', '2'])}</div>
+            <div className="shrink-0 w-[174px]">{oddsGroup(goals, total, ['Over', 'Under', '—'])}</div>
+            <div className="shrink-0 w-[174px]">{oddsGroup(btts, both, ['Yes', 'No', '—'])}</div>
+            <button type="button" onClick={() => setExpandedId(prev => prev === String(m.id) ? null : String(m.id))}
+              aria-expanded={expandedId === String(m.id)} title={t('sections.view_markets')}
+              className="shrink-0 min-h-[40px] px-2 rounded border border-tertiary bg-primary hover:bg-tertiary text-accent-green text-xs font-bold flex items-center gap-1">
+              +{marketCount}<ChevronRight size={13} className={expandedId === String(m.id) ? 'rotate-90' : ''} />
             </button>
           </div>
         </div>
-
-        {expandedId === String(m.id) && <MarketPanel match={m} />}
+        {expandedId === String(m.id) && <div className="border-t border-tertiary/70 p-2 sm:p-3"><MarketPanel match={m} /></div>}
       </div>
     );
   };
 
+  const renderCompetitionBoards = (items: any[]) => {
+    const groups = new Map<string, any[]>();
+    items.forEach(m => {
+      const key = [m.tournament?.category?.name, m.tournament?.name].filter(Boolean).join(' · ') || t('sections.league');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(m);
+    });
+    return Array.from(groups.entries()).map(([league, fixtures]) => (
+      <section key={league} className="overflow-hidden rounded-md border border-tertiary/80 bg-secondary">
+        <div className="flex items-center justify-between px-3 py-2 bg-tertiary/50 border-b border-tertiary/70">
+          <h3 className="text-xs font-bold text-white truncate">{league}</h3>
+          <span className="text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
+        </div>
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+          <span className="flex-[1.4] min-w-0">{t('sections.league')}</span>
+          <span className="w-[174px] text-center">1X2</span>
+          <span className="w-[174px] text-center">Over / Under</span>
+          <span className="w-[174px] text-center">BTTS</span>
+          <span className="w-[57px] text-center">+</span>
+        </div>
+        {fixtures.map(renderMatchCard)}
+      </section>
+    ));
+  };
+
   return (
-    <div className="p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-5 max-w-6xl mx-auto">
+    <div className="px-3 pb-5 pt-3 sm:px-4 space-y-3 max-w-7xl mx-auto">
       {error && <div role="alert" className="ui-card p-4 text-sm text-amber-300 flex flex-wrap gap-3 items-center justify-between"><span>{t(matches.length ? 'common.refresh_failed' : 'common.load_failed')}</span><button className="filter-chip" onClick={() => setRetry(n => n + 1)}>{t('common.retry')}</button></div>}
-      <div className="bg-secondary/70 backdrop-blur-sm border border-tertiary/80 p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
+      <div className="bg-secondary border border-tertiary/70 p-2.5 sm:p-3 rounded-lg space-y-2.5">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search size={16} className="text-text-secondary" />
@@ -328,7 +229,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             onChange={e => setSearchTerm(e.target.value)}
             aria-label={t('common.search_matches')}
             placeholder={t('common.search_matches')}
-            className="w-full bg-primary/80 border border-tertiary/80 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition"
+            className="w-full bg-primary border border-tertiary/80 rounded-md pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition-colors"
           />
           {(searchTerm || dateFilter !== 'all') && <button className="filter-chip" onClick={() => { setSearchTerm(''); setDateFilter('all'); }}>{t('common.reset_filters')}</button>}
       {searchTerm && (
@@ -347,7 +248,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <CalendarDays size={15} />
             <span className="hidden sm:inline">{t('common.filter')}:</span>
           </div>
-          <div className="bg-primary/70 p-1 rounded-xl border border-tertiary/60 flex items-center gap-1">
+          <div className="bg-primary p-1 rounded-md border border-tertiary/60 flex items-center gap-1">
             <button
               aria-pressed={dateFilter === 'all'}
               onClick={() => setDateFilter('all')}
@@ -393,7 +294,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       )}
 
       {searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="text-4xl">🔍</div>
           <div className="font-bold text-white text-base">{t('common.no_search_results')}</div>
           <p className="text-xs text-text-secondary">{t('common.try_different_search')}</p>
@@ -401,14 +302,14 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       )}
 
       {!searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="text-4xl">📅</div>
           <div className="font-bold text-white text-base">{t('board.empty')}</div>
         </div>
       )}
 
       {filteredMatches.length > 0 && pricedMatches.length === 0 && (
-        <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="font-bold text-white text-base">
             {t(refreshing ? 'common.feed_refreshing' : 'common.no_results')}
           </div>
@@ -430,7 +331,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {liveMatches.map(renderMatchCard)}
+            {renderCompetitionBoards(liveMatches)}
           </div>
         </div>
       )}
@@ -448,7 +349,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {prematchMatches.map(renderMatchCard)}
+            {renderCompetitionBoards(prematchMatches)}
           </div>
         </div>
       )}

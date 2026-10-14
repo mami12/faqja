@@ -73,8 +73,8 @@ export default function Header({ onToggleNav }: Props) {
   );
 
   return (
-    <header className="shrink-0 bg-secondary/95 backdrop-blur-md border-b border-tertiary text-text-primary z-20">
-      <div className="min-h-[64px] py-2 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6">
+    <header className="shrink-0 bg-secondary border-b border-tertiary text-text-primary z-20">
+      <div className="min-h-[56px] py-1.5 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4">
         {/* Brand & Drawer toggle */}
         <div className="flex items-center gap-2 min-w-0">
           {onToggleNav && (
@@ -91,7 +91,7 @@ export default function Header({ onToggleNav }: Props) {
             className="flex items-center gap-2 cursor-pointer group select-none py-1"
             onClick={() => navigate('/')}
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-accent-green flex items-center justify-center text-primary shadow-glow-green group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-md bg-accent-green flex items-center justify-center text-primary transition-colors">
               <Zap size={18} className="fill-primary text-primary" />
             </div>
             <div className="flex items-baseline gap-1 truncate">
@@ -131,7 +131,7 @@ export default function Header({ onToggleNav }: Props) {
               </div>
 
               {/* Wallet / Balance Pill (both desktop & mobile) */}
-              <div className="flex items-center gap-1.5 bg-primary/90 border border-tertiary px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-inner-glow">
+              <div className="flex items-center gap-1.5 bg-primary/90 border border-tertiary px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md">
                 <Wallet size={14} className="text-accent-yellow shrink-0" />
                 <div className="flex flex-col text-left">
                   <span className="text-[9px] uppercase font-bold text-text-secondary leading-none hidden sm:inline">
@@ -172,7 +172,7 @@ export default function Header({ onToggleNav }: Props) {
 
       {/* Mobile Menu Dropdown */}
       {menuOpen && user && (
-        <div className="md:hidden border-t border-tertiary bg-secondary/95 backdrop-blur-md px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
+        <div className="md:hidden border-t border-tertiary bg-secondary px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
           <div className="text-[10px] font-black uppercase tracking-wider text-text-secondary mb-1">
             {user.role} &bull; {user.username}
           </div>
