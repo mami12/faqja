@@ -122,7 +122,7 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const seen = new Set<string>();
   const res: any[] = [];
   for (const o of outcomes) {
-    const k = norm(o.name || o.key || '');
+    const k = norm(isResultBttsMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
     if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
     if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
     if (!seen.has(k)) {
