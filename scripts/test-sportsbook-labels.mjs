@@ -176,7 +176,8 @@ for (const [input, expected] of universalOutcomeExamples) {
 assert.equal(module.exports.compactOutcomeTeams('Arsenal Women', fixture), 'Arsenal Women', 'Do not replace partial team names');
 assert.equal(module.exports.translateOutcomeName('Over 2.5', translate, 'Total Goals', fixture), 'Lart 2.5');
 
-const ordinalExamples = [
+// The number belongs to the market, never to the 1/X/2 odds-button label.
+const numberedExamples = [
   ['Next Goal', '2', '1 2', '1'],
   ['Next Goal', '2', 'X 2', 'X'],
   ['Next Goal', '2', '2 2', '2'],
@@ -185,11 +186,29 @@ const ordinalExamples = [
   ['Next Corner', '9', '2 9', '2'],
   ['Next Goal 2', '', 'Chelsea 2', '2'],
   ['Next Corner 9', '', 'Home 9', '1'],
+  ['Next Goal', '0', '1 0', '1'],
+  ['Next Goal', '10000000000', 'X 10000000000', 'X'],
+  ['Next Corner', '2.5', '1 2.5', '1'],
+  ['Next Corner', '2.5', 'X 2,5', 'X'],
+  ['Next Corner', '2,5', '2 2.5', '2'],
+  ['Next Goal', '1000.25', '1/1000,25', '1'],
+  ['Next Goal', '10.50', '10,5 / X', 'X'],
+  ['Next Corner', '0.0', 'X 0', 'X'],
+  ['Next Corner 12.5', '', '12,5 2', '2'],
+  ['Team Total Corners', '17.5', 'Away 17,5', '2'],
+  ['Any Other Market', '1234.567', 'Draw 1234.567', 'X'],
 ];
-for (const [market, line, outcome, expected] of ordinalExamples) {
+for (const [market, line, outcome, expected] of numberedExamples) {
   assert.equal(module.exports.formatOddsButtonLabel(outcome, market, line, translate, fixture), expected, market + ': ' + outcome);
+  assert.equal(module.exports.formatTicketSelection(outcome, market, fixture, translate, undefined, line), expected, 'Ticket: ' + market + ': ' + outcome);
 }
-assert.equal(module.exports.formatOrdinalOutcomeLabel('1 9', 'Total Corners', '9', fixture), null);
-assert.equal(module.exports.formatOddsButtonLabel('1 9', 'Total Corners', '9', translate, fixture), '1 9');
+assert.equal(module.exports.formatOrdinalOutcomeLabel('1 9', 'Total Corners', '9', fixture), '1');
+assert.equal(module.exports.formatOddsButtonLabel('1 9', 'Total Corners', '9', translate, fixture), '1');
+assert.equal(module.exports.formatOddsButtonLabel('1 8', 'Next Corner', '9', translate, fixture), '1 8', 'Never remove a nonmatching number');
+assert.equal(module.exports.formatOddsButtonLabel('1 2.5', 'Next Corner', '', translate, fixture), '1 2.5', 'Never guess a missing market line');
+assert.equal(module.exports.formatOddsButtonLabel('1-0', 'Correct Score', '0', translate, fixture), '1-0', 'Do not damage correct scores');
+assert.equal(module.exports.formatOddsButtonLabel('Over 2.5', 'Total Goals', '2.5', translate, fixture), 'Lart 2.5', 'Do not turn totals into 1/X/2');
+assert.equal(module.exports.formatOddsButtonLabel('1/X', 'Half Time / Full Time', '1', translate, fixture), '1/X', 'Keep HT/FT combinations');
+assert.equal(module.exports.formatMarketSelectionLabel('Next Corner', '9', translate).includes('9'), true, 'The market heading still carries its line');
 
 console.log('Sportsbook label translation checks passed');
