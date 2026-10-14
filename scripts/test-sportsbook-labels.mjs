@@ -153,4 +153,27 @@ assert.equal(module.exports.translateMarketName('Time of Scoring', translate), '
 assert.equal(module.exports.translateOutcomeName('Before minute 20', translate), 'Para minutës 20');
 assert.equal(module.exports.translateOutcomeName('After minute 60', translate), 'Pas minutës 60');
 
+const universalOutcomeExamples = [
+  ['Arsenal', '1'],
+  ['Chelsea', '2'],
+  ['Draw', 'X'],
+  ['Barazim', 'X'],
+  ['Home', '1'],
+  ['Vendas', '1'],
+  ['Away', '2'],
+  ['Udhëtues', '2'],
+  ['First Goal Arsenal', 'Goli i parë: 1'],
+  ['Team to Score Chelsea', 'Ekipi që shënon: 2'],
+  ['Arsenal to score', '1 shënon gol'],
+  ['Chelsea scores first', 'Goli i parë: 2'],
+  ['Arsenal / Draw', '1 / X'],
+  ['Home or Draw', '1 or X'],
+];
+for (const [input, expected] of universalOutcomeExamples) {
+  assert.equal(module.exports.translateOutcomeName(input, translate, 'First Goal', fixture), expected, input);
+  assert.equal(module.exports.formatTicketSelection(input, 'First Goal', fixture, translate), expected, 'Ticket: ' + input);
+}
+assert.equal(module.exports.compactOutcomeTeams('Arsenal Women', fixture), 'Arsenal Women', 'Do not replace partial team names');
+assert.equal(module.exports.translateOutcomeName('Over 2.5', translate, 'Total Goals', fixture), 'Lart 2.5');
+
 console.log('Sportsbook label translation checks passed');
