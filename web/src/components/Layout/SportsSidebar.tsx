@@ -68,7 +68,7 @@ export default function SportsSidebar({
           onClick={onSelectAll}
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
             isAllActive
-              ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-glow-green'
+              ? 'bg-accent-green text-primary shadow-glow-green'
               : 'bg-primary/60 text-text-secondary hover:text-white hover:bg-tertiary/70 border border-tertiary/60'
           }`}
         >
@@ -87,7 +87,7 @@ export default function SportsSidebar({
           onClick={onSelectLive}
           className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
             isLiveOnly
-              ? 'bg-gradient-to-r from-rose-600 to-accent-red text-white shadow-glow-red'
+              ? 'bg-accent-red text-white shadow-glow-red'
               : 'bg-primary/60 text-text-secondary hover:text-rose-400 hover:bg-rose-500/10 border border-tertiary/60'
           }`}
         >
