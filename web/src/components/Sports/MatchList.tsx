@@ -194,18 +194,20 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const marketCount = Math.max(markets.length, Number(m.marketCount) || 0);
     const locked = lockedMatches[String(m.id)] === true;
     const oddsGroup = (mk: any, outcomes: (any | null)[], labels: string[]) => (
-      <div className="grid grid-cols-3 gap-1 min-w-[174px]">
+      <div className={`grid gap-1 ${labels.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {labels.map((label, i) => mk && outcomes[i] ? (
-          <OddsButton key={outcomes[i].id ?? i} match={m} market={mk} outcome={outcomes[i]} />
+          <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[46px] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-1 [&_button]:py-1 [&_button_span]:max-w-full [&_button_span]:text-center">
+            <OddsButton match={m} market={mk} outcome={outcomes[i]} />
+          </div>
         ) : (
-          <div key={label} title={label} className="min-h-[40px] rounded border border-tertiary/40 bg-primary/40 flex items-center justify-center text-text-muted text-xs">—</div>
+          <div key={label} title={label} className="min-h-[46px] rounded border border-tertiary/40 bg-primary/40 flex items-center justify-center text-text-muted text-xs">—</div>
         ))}
       </div>
     );
     return (
       <div key={m.id} className="border-b border-tertiary/60 last:border-b-0 bg-card-bg hover:bg-card-hover transition-colors">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2 px-3 py-2">
-          <div className="flex items-center gap-3 min-w-0 lg:flex-[1.4]">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0 md:flex-1 md:min-w-[175px]">
             <div className="w-12 shrink-0 text-center text-[10px] font-semibold text-text-secondary tabular-nums">
               {m.status === 'LIVE' ? (
                 <span className="text-accent-red">LIVE<br />{m.currentMinute ?? 0}'</span>
@@ -214,13 +216,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               )}
             </div>
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
-              className="min-w-0 flex-1 text-left py-1 hover:text-accent-green transition-colors">
+              className="min-w-0 flex-1 text-left py-1 hover:text-accent-green transition-colors" title={`${m.homeTeam} - ${m.awayTeam}`}>
               <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white">
-                <span className="truncate">{m.homeTeam}</span>
+                <span className="block break-words leading-snug">{m.homeTeam}</span>
                 {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.homeScore ?? 0}</span>}
               </span>
               <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white mt-1">
-                <span className="truncate">{m.awayTeam}</span>
+                <span className="block break-words leading-snug">{m.awayTeam}</span>
                 {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.awayScore ?? 0}</span>}
               </span>
             </button>
@@ -234,13 +236,18 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             </button>
             {locked && <span title={t('sections.odds_locked')} className="text-accent-red text-xs">🔒</span>}
           </div>
-          <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto pb-1 lg:pb-0">
-            <div className="shrink-0 w-[174px]">{oddsGroup(main, oneXtwo, ['1', 'X', '2'])}</div>
-            <div className="shrink-0 w-[174px]">{oddsGroup(goals, total, ['Over', 'Under', '—'])}</div>
-            <div className="shrink-0 w-[174px]">{oddsGroup(btts, both, ['Yes', 'No', '—'])}</div>
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:flex md:items-center gap-1.5 min-w-0 md:shrink-0">
+            <div className="min-w-0 md:w-[150px]">
+              <div className="md:hidden text-[10px] font-bold text-center text-text-secondary mb-1">1X2</div>
+              {oddsGroup(main, oneXtwo, ['1', 'X', '2'])}
+            </div>
+            <div className="min-w-0 md:w-[130px]">
+              <div className="md:hidden text-[10px] font-bold text-center text-text-secondary mb-1">Over / Under {goals?.line ? String(goals.line) : ''}</div>
+              {oddsGroup(goals, total, ['Over', 'Under'])}
+            </div>
             <button type="button" onClick={() => setExpandedId(prev => prev === String(m.id) ? null : String(m.id))}
               aria-expanded={expandedId === String(m.id)} title={t('sections.view_markets')}
-              className="shrink-0 min-h-[40px] px-2 rounded border border-tertiary bg-primary hover:bg-tertiary text-accent-green text-xs font-bold flex items-center gap-1">
+              className="shrink-0 min-h-[46px] px-2 rounded border border-tertiary bg-primary hover:bg-tertiary text-accent-green text-xs font-bold flex items-center justify-center gap-1 self-end md:self-auto">
               +{marketCount}<ChevronRight size={13} className={expandedId === String(m.id) ? 'rotate-90' : ''} />
             </button>
           </div>
@@ -263,12 +270,11 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <h3 className="text-xs font-bold text-white truncate">{league}</h3>
           <span className="text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
         </div>
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-          <span className="flex-[1.4] min-w-0">{t('sections.league')}</span>
-          <span className="w-[174px] text-center">1X2</span>
-          <span className="w-[174px] text-center">Over / Under</span>
-          <span className="w-[174px] text-center">BTTS</span>
-          <span className="w-[57px] text-center">+</span>
+        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+          <span className="flex-1 min-w-[175px]">Ndeshja</span>
+          <span className="w-[150px] text-center">1X2</span>
+          <span className="w-[130px] text-center">Over / Under</span>
+          <span className="w-[54px] text-center">+</span>
         </div>
         {fixtures.map(renderMatchCard)}
       </section>
