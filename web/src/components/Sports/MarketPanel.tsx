@@ -148,10 +148,10 @@ function MarketCard({ market, match, title }: MarketCardProps) {
   if (!outcomes.length) return null;
   return (
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
-      <div className="bg-[#344253] px-2 py-1.5 text-xs font-semibold text-white">{title}</div>
+      <div className="bg-[#424d60] px-2 py-1.5 text-xs font-semibold text-white">{title}</div>
       <div className="grid gap-px bg-tertiary/80" style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
         {outcomes.map(outcome => (
-          <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
+          <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
             <OddsButton match={match} market={market} outcome={outcome} isWide />
           </div>
         ))}
@@ -169,7 +169,7 @@ interface GroupCardProps {
 function GroupCard({ group, match, title }: GroupCardProps) {
   return (
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
-      <div className="flex items-center justify-between bg-[#344253] px-2 py-1.5">
+      <div className="flex items-center justify-between bg-[#424d60] px-2 py-1.5">
         <span className="text-xs font-semibold text-white">{title}</span>
         <span className="text-[10px] text-slate-300">{group.markets.length} linja</span>
       </div>
@@ -179,13 +179,13 @@ function GroupCard({ group, match, title }: GroupCardProps) {
           if (!outcomes.length) return null;
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
-              <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#344253] text-xs font-semibold text-slate-200 px-1">
+              <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
                 {formatMarketLine(market.name, formatLine(market.line)) || translateMarketName(market.name, () => market.name)}
               </div>
               <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
                 {outcomes.map(outcome => (
-                  <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
+                  <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
                     <OddsButton match={match} market={market} outcome={outcome} isWide />
                   </div>
                 ))}
