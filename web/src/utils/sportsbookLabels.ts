@@ -267,6 +267,35 @@ export function formatMarketLine(marketName: string | undefined, marketLine: str
   return /^\d{1,3}$/.test(value) ? value + "'" : value;
 }
 
+/** Scoring-time markets may carry the minute in market.line, not outcome.name.
+ * Display the provider's exact minute on each odds button without changing the bet.
+ */
+export function formatOddsButtonLabel(
+  outcomeName: string | undefined,
+  marketName: string | undefined,
+  marketLine: string | undefined,
+  t: Translate,
+  matchName?: string,
+  outcomeCode?: string,
+): string {
+  const outcome = translateOutcomeName(outcomeName, t, marketName, matchName, outcomeCode);
+  const rawMarket = String(marketName ?? '').trim();
+  const rawLine = String(marketLine ?? '').trim();
+  const timeScoring = /\btime\s+of\s+scoring\b|\btime\s+of\s+(?:the\s+)?(?:first|last|next)\s+goal\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(rawMarket);
+  if (!timeScoring) return outcome;
+  const translatedMarket = translateMarketName(rawMarket, t);
+  const formattedLine = formatMarketLine(rawMarket, rawLine);
+  const numericLine = rawLine.match(/^\d{1,3}$/)?.[0];
+  // Only interpret a line as a minute for a scoring-time market.
+  const minute = numericLine ? numericLine + "'" : formattedLine;
+  const description = minute && (!numericLine || !new RegExp('(?:^|\\D)' + numericLine + '(?:\\D|$)').test(translatedMarket))
+    ? translatedMarket + ' · ' + (/\bminute\b|\bminut/i.test(rawMarket) ? minute : 'min. ' + minute)
+    : translatedMarket;
+  if (!description) return outcome;
+  if (!outcome || outcome === description) return description;
+  return description + ' · ' + outcome;
+}
+
 /** One canonical display title for match details, betslip and stored tickets. */
 export function formatMarketSelectionLabel(
   marketName: string | undefined,
@@ -346,6 +375,12 @@ export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
   if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
+  if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
+  if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
+  if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
+  if (/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+after\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol pas minutës $1');
+  if (/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?\d+/i.test(raw)) return raw.replace(/^goal\s+before\s+(?:the\s+)?(?:minute\s*)?(\d+)/i, 'Gol para minutës $1');
+
   const exactKey = `markets.${raw}`;
   const exactTranslation = t(exactKey);
   if (exactTranslation !== exactKey) return exactTranslation;
@@ -504,6 +539,12 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
   if (qualifiedScoring) return qualifiedScoring;
+  const beforeMinute = raw.match(/^(?:before|prior to)\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (beforeMinute) return 'Para minutës ' + beforeMinute[1];
+  const afterMinute = raw.match(/^after\s+(?:the\s+)?(?:minute\s*)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?$/i);
+  if (afterMinute) return 'Pas minutës ' + afterMinute[1];
+  const exactMinute = raw.match(/^(?:minute|min\.?|at\s+minute)\s*(\d{1,3})$/i);
+  if (exactMinute) return 'Minuta ' + exactMinute[1];
 
   // 0. SHKURTO emrin para përkthimit
   const short = shortOutcomeName(raw);

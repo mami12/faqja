@@ -4,7 +4,7 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { translateOutcomeName, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
+import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; }
 
@@ -29,7 +29,8 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     lockedMatches[String(match.id)] === true ||
     currentOdds === null || currentOdds === undefined;
 
-  const label = translateOutcomeName(outcome.name, t, market.name, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
+  const label = formatOddsButtonLabel(outcome.name, market.name, market.line || market.specifier, t, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
+  const scoringTimeLabel = /\btime\s+of\s+scoring\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(market.name);
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
@@ -64,7 +65,7 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     <button
       onClick={toggle}
       disabled={isSuspended}
-      className={`group relative flex items-center justify-between gap-2 rounded-sm border-0 px-2 py-2 text-left transition-colors duration-150 select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-green focus-visible:outline-offset-[-2px] ${flashClass} ${
+      className={`group relative flex items-center ${scoringTimeLabel ? 'flex-col justify-center gap-1 py-2.5 text-center' : 'justify-between gap-2'} rounded-sm border-0 px-2 py-2 text-left transition-colors duration-150 select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-green focus-visible:outline-offset-[-2px] ${flashClass} ${
         isSuspended
           ? 'cursor-not-allowed bg-primary/30 opacity-50'
           : isSelected
@@ -74,7 +75,7 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     >
       <span
         className={`text-[11px] font-semibold transition-colors sm:text-xs leading-snug ${
-          isWide || label.length > 10 ? 'break-words line-clamp-2' : 'truncate'
+          scoringTimeLabel ? 'break-words whitespace-normal line-clamp-3' : isWide || label.length > 10 ? 'break-words line-clamp-2' : 'truncate'
         } ${
           isSelected ? 'text-accent-green font-bold' : 'text-text-secondary group-hover:text-slate-200'
         }`}

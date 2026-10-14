@@ -130,4 +130,27 @@ assert.equal(
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
 
+
+const timeExamples = [
+  ['Time of Scoring', '20', 'Yes', 'Koha e shënimit të golit · min. 20\' · Po'],
+  ['Time of Scoring', '45', 'No', 'Koha e shënimit të golit · min. 45\' · Jo'],
+  ['Goal before minute 20', '', 'Yes', 'Gol para minutës 20 · Po'],
+  ['Goal after minute 60', '', 'No', 'Gol pas minutës 60 · Jo'],
+];
+for (const [market, line, selection, expected] of timeExamples) {
+  assert.equal(
+    module.exports.formatOddsButtonLabel(selection, market, line, translate, fixture),
+    expected,
+    'Minute on odds button: ' + market + ' ' + line,
+  );
+}
+assert.equal(
+  module.exports.formatOddsButtonLabel('Over', 'Over/Under 2.5', '2.5', translate, fixture),
+  translate('outcomes.over'),
+  'Unrelated odds buttons must remain unchanged',
+);
+assert.equal(module.exports.translateMarketName('Time of Scoring', translate), 'Koha e shënimit të golit');
+assert.equal(module.exports.translateOutcomeName('Before minute 20', translate), 'Para minutës 20');
+assert.equal(module.exports.translateOutcomeName('After minute 60', translate), 'Pas minutës 60');
+
 console.log('Sportsbook label translation checks passed');

@@ -61,8 +61,8 @@ const categoryOf = (market: Market): Category => {
 const cleanMarketName = (name?: string) => {
   if (!name) return '';
   const s = String(name).trim();
-  if (/^cols-?\d+$/i.test(s)) return 'Match Market';
-  if (/^total-2$/i.test(s)) return 'Total Goals';
+  if (/^cols-?\d+$/i.test(s)) return 'Tregu i ndeshjes';
+  if (/^total-2$/i.test(s)) return 'Totali i golave';
   if (/^fora-2$/i.test(s)) return 'Handicap';
   return s;
 };
