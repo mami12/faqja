@@ -492,7 +492,7 @@ export function translateMarketName(name: string | undefined, t: Translate) {
 
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
   const raw = String(name ?? '').trim();
-  if (!raw) return '';
+  if (!raw && !outcomeCode) return '';
   if (isHalfTimeFullTimeMarket(marketName)) {
     return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
   }
@@ -500,6 +500,7 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
     // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
     return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
   }
+  if (!raw) return '';
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
   if (qualifiedScoring) return qualifiedScoring;
