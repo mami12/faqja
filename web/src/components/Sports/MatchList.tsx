@@ -246,7 +246,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
               title={t('sections.view_markets')}
               className="shrink-0 min-h-[38px] w-7 sm:w-9 rounded-none bg-[#344253] hover:bg-[#435368] text-accent-green text-[10px] font-bold flex items-center justify-center gap-0">
-              +{marketCount}<ChevronRight size={13}  />
+              +{marketCount}<ChevronRight size={13} className="hidden sm:block" />
             </button>
           </div>
         </div>
@@ -273,7 +273,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="w-[128px] text-center">Over / Under</span>
           <span className="w-9 text-center">+</span>
         </div>
-        <div className="flex lg:hidden items-center bg-[#286c3e] px-2 py-1 text-[10px] font-semibold text-white">
+        <div className="flex lg:hidden items-center bg-[#394758] px-2 py-1 text-[10px] font-semibold text-slate-200">
           <span className="flex-1 min-w-0">Ndeshja</span>
           <span className="w-[126px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
           <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
@@ -454,7 +454,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
       {((viewMode === 'all' || viewMode === 'prematch') && prematchMatches.length > 0) && (
         <div className="space-y-3">
-          <div className="text-white font-bold text-sm tracking-wide uppercase flex items-center justify-between px-1">
+          <div className="hidden md:flex text-white font-bold text-sm tracking-wide uppercase items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-accent-green"></span>
               <span>{isLiveOnly ? t('sections.live_now') : t('sections.upcoming_fixtures')}</span>
