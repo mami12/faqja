@@ -164,258 +164,120 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     </div>
   );
 
+  // Render a single compact odds board per competition. All odds still use the
+  // existing OddsButton and its live-feed, suspension and betslip behavior.
   const renderMatchCard = (raw: any) => {
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
-
-    const is1X2 = (mk: any) => {
-      const name = String(mk.name ?? '').toLowerCase();
-      if (/half|1st|2nd|pjes|corner|card|handicap|double chance|chance/i.test(name)) return false;
-      if (mk.period && mk.period !== 0) return false;
-      return mk.marketType === '1X2' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(name);
-    };
-    const isBothScore = (mk: any) =>
-      /both teams? to score|both score|\bbtts\b|\bgg\/?ng\b|\bgg\b|\bng\b/i.test(mk.name ?? '');
-    const isOverUnder = (mk: any) =>
-      mk.marketType === 'OVER_UNDER' ||
-      /total goals|over\/?under|under\/?over|^ou$|goals over|goal line/i.test(mk.name ?? '');
-
-    const pickQuickMarket = (): { market: any; slots: (any | null)[]; mode: '1x2' | 'btts' | 'ou' } | null => {
-      const isQuickMarketVisible = (mk: any) =>
-        !isHandicapMarket(mk) &&
-        isMarketVisible(m, mk, lockedMarkets) &&
-        filterDecidedOutcomes(
-          (mk.outcomes ?? []).filter(isOutcomeAvailable),
-          mk,
-          m,
-        ).length > 0;
-      const findOutcome = (mk: any, targets: string[]) => {
-        const normT = targets.map((t) => t.toLowerCase());
-        const hit = (mk.outcomes ?? []).find((o: any) => {
-          const n = String(o.name ?? '').trim().toLowerCase();
-          const c = String(o.code ?? o.key ?? '').trim().toLowerCase();
-          return normT.includes(n) || normT.includes(c);
-        });
-        return isOutcomeAvailable(hit) ? hit : null;
-      };
-
-      const completeSlots = (mk: any, slots: (any | null)[]) => {
-        const outcomes = mk?.outcomes ?? [];
-        const used = new Set(slots.filter(Boolean));
-        return slots.map((slot) => {
-          if (slot) return slot;
-          const fallback = outcomes.find((outcome: any) =>
-            !used.has(outcome) && isOutcomeAvailable(outcome),
-          );
-          if (fallback) used.add(fallback);
-          return fallback ?? null;
-        });
-      };
-
-      const m1 = (m.markets ?? []).find((mk: any) => is1X2(mk) && isQuickMarketVisible(mk));
-      if (m1) {
-        const slots = completeSlots(m1, [
-          findOutcome(m1, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
-          findOutcome(m1, ['x', 'draw', 'tie', 'wx', 'd']),
-          findOutcome(m1, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
-        ]);
-        return { market: m1, slots, mode: '1x2' };
-      }
-
-      const m2 = (m.markets ?? []).find((mk: any) => isBothScore(mk) && isQuickMarketVisible(mk));
-      if (m2) {
-        const slots = completeSlots(m2, [
-          findOutcome(m2, ['yes', 'gg']),
-          findOutcome(m2, ['no', 'ng']),
-        ]);
-        return { market: m2, slots, mode: 'btts' };
-      }
-
-      const m3 = (m.markets ?? []).find((mk: any) => isOverUnder(mk) && isQuickMarketVisible(mk));
-      if (m3) {
-        const slots = completeSlots(m3, [
-          findOutcome(m3, ['over', 'o']),
-          findOutcome(m3, ['under', 'u']),
-        ]);
-        return { market: m3, slots, mode: 'ou' };
-      }
-      return null;
-    };
-
-    const quick = pickQuickMarket();
-    const quickMarket = quick?.market ?? null;
-    const quickSlots: (any | null)[] = quick?.slots ?? [];
-
-    // Linja e market-it (2.5, 3.5, ...) — vjen nga `line` ose `specifier`
-    const quickLine = String(quickMarket?.line ?? quickMarket?.specifier ?? '').trim();
-
-    // Label-i: për O/U përfshin linjën, për të tjerat mbetet i njëjti
-    const quickLabel =
-      quick?.mode === '1x2' ? '1X2'
-      : quick?.mode === 'btts' ? `${t('outcomes.yes')}/${t('outcomes.no')}`
-      : quick?.mode === 'ou' ? `${t('outcomes.over')}/${t('outcomes.under')}`
-      : '';
-
-    const quickCols = quick?.mode === '1x2' ? 3 : 2;
-    const isLocked = lockedMatches[String(m.id)] === true;
-
-    const totalMarketsCount = m.markets?.length
-      ? m.markets.filter((market: any) => !isHandicapMarket(market)).length
-      : Number(m.marketCount) || 0;
-
+    const markets: any[] = m.markets ?? [];
+    const visible = (mk: any) => !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeAvailable), mk, m).length > 0;
+    const findMarket = (pattern: RegExp, type?: string) =>
+      markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) &&
+        (type && mk.marketType === type || pattern.test(String(mk.name ?? ''))));
+    const main = findMarket(/^(1x2|match result|full time result|winner|moneyline)$/i, '1X2');
+    const goals = markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) && (mk.marketType === 'OVER_UNDER' || /total goals|over\/?under|under\/?over|goals over|goal line/i.test(String(mk.name ?? ''))) && (mk.line == null || String(mk.line).includes('2.5'))) ?? null;
+    const btts = findMarket(/both teams? to score|both score|btts|gg\/?ng/i);
+    const find = (mk: any, names: string[]) => (mk?.outcomes ?? []).find((o: any) => {
+      const name = String(o.name ?? '').trim().toLowerCase();
+      const code = String(o.code ?? o.key ?? '').trim().toLowerCase();
+      return isOutcomeAvailable(o) && filterDecidedOutcomes([o], mk, m).length > 0 && (names.includes(name) || names.includes(code) || names.some(n => n.length > 2 && (name.startsWith(n + ' ') || name.startsWith(n + ' ('))));
+    }) ?? null;
+    const oneXtwo = [
+      find(main, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
+      find(main, ['x', 'draw', 'tie', 'wx', 'd']),
+      find(main, ['2', 'away', 'w2', 'a', String(m.awayTeam ?? '').toLowerCase()]),
+    ];
+    const total = [
+      find(goals, ['over', 'o', 'over 2.5', 'o2.5']),
+      find(goals, ['under', 'u', 'under 2.5', 'u2.5']),
+    ];
+    const both = [find(btts, ['yes', 'gg']), find(btts, ['no', 'ng'])];
+    const marketCount = Math.max(markets.length, Number(m.marketCount) || 0);
+    const locked = lockedMatches[String(m.id)] === true;
+    const oddsGroup = (mk: any, outcomes: (any | null)[], labels: string[]) => (
+      <div className="grid grid-cols-3 gap-1 min-w-[174px]">
+        {labels.map((label, i) => mk && outcomes[i] ? (
+          <OddsButton key={outcomes[i].id ?? i} match={m} market={mk} outcome={outcomes[i]} />
+        ) : (
+          <div key={label} title={label} className="min-h-[40px] rounded border border-tertiary/40 bg-primary/40 flex items-center justify-center text-text-muted text-xs">—</div>
+        ))}
+      </div>
+    );
     return (
-      <div 
-        key={m.id} 
-        className="group overflow-hidden rounded-xl border border-white/10 bg-[#192229] shadow-lg shadow-black/10 transition-all duration-200 hover:border-emerald-400/35 hover:bg-[#1b2a32]"
-      >
-        <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-[#202e37] px-3.5 py-2.5 text-xs sm:px-4">
-          <div className="flex items-center gap-2 truncate text-text-secondary">
-            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            <span className="truncate text-[11px] font-semibold tracking-[0.12em] uppercase text-text-secondary">
-              {m.tournament?.category?.name ? `${m.tournament.category.name} • ` : ''}{m.tournament?.name || 'Liga'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Quick Favorite and Notification Buttons */}
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleFavorite(String(m.id)); }}
-              className={`p-1.5 rounded-lg border transition active:scale-95 ${
-                isFavorite(String(m.id))
-                  ? 'border-amber-500/40 bg-amber-500/20 text-amber-400'
-                  : 'border-white/5 bg-white/5 text-text-secondary hover:text-white hover:bg-white/10'
-              }`}
-              title={isFavorite(String(m.id)) ? "Hiq nga të preferuarat" : "Shto te të preferuarat"}
-            >
-              <Star size={13} className={isFavorite(String(m.id)) ? "fill-amber-400 text-amber-400" : ""} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleAlert(String(m.id)); }}
-              className={`p-1.5 rounded-lg border transition active:scale-95 ${
-                isAlertEnabled(String(m.id))
-                  ? 'border-accent-green/40 bg-accent-green/20 text-accent-green'
-                  : 'border-white/5 bg-white/5 text-text-secondary hover:text-white hover:bg-white/10'
-              }`}
-              title={isAlertEnabled(String(m.id)) ? "Njoftimet live aktive" : "Aktivizo njoftimet"}
-            >
-              {isAlertEnabled(String(m.id)) ? <BellRing size={13} className="text-accent-green animate-pulse" /> : <Bell size={13} />}
-            </button>
-
-            {isLocked && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-black text-rose-300"
-                title={t('sections.odds_locked')}
-              >
-                🔒 {t('sections.odds_locked')}
-              </span>
-            )}
-            {m.status === 'LIVE' ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-[10px] font-black text-rose-300">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
-                </span>
-                LIVE {m.currentMinute || 0}:{String(m.currentSecond ?? 0).padStart(2, '0')}'
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-[#0f1826] px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                <Clock size={12} className="text-text-secondary" />
-                {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} &bull; {new Date(m.startTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col justify-between gap-3 p-3 sm:p-4 md:flex-row md:items-center">
-          <div 
-            className="flex-1 cursor-pointer space-y-1.5 min-w-0"
-            onClick={() => navigate(`/match/${m.id}`)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
-                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
-                  {m.homeTeam}
-                </span>
-              </div>
-              {m.status === 'LIVE' && (
-                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
-                  {m.homeScore ?? 0}
-                </span>
+      <div key={m.id} className="border-b border-tertiary/60 last:border-b-0 bg-card-bg hover:bg-card-hover transition-colors">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 px-3 py-2">
+          <div className="flex items-center gap-3 min-w-0 lg:flex-[1.4]">
+            <div className="w-12 shrink-0 text-center text-[10px] font-semibold text-text-secondary tabular-nums">
+              {m.status === 'LIVE' ? (
+                <span className="text-accent-red">LIVE<br />{m.currentMinute ?? 0}'</span>
+              ) : (
+                <span>{new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
             </div>
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary/40 group-hover:bg-accent-green transition-colors"></span>
-                <span className="font-bold text-white text-xs sm:text-sm group-hover:text-accent-green transition truncate">
-                  {m.awayTeam}
-                </span>
-              </div>
-              {m.status === 'LIVE' && (
-                <span className="font-mono font-black text-xs sm:text-sm px-2 py-0.5 bg-primary/90 border border-tertiary rounded text-accent-yellow tabular-nums shrink-0 shadow-inner">
-                  {m.awayScore ?? 0}
-                </span>
-              )}
-            </div>
+            <button type="button" onClick={() => navigate(`/match/${m.id}`)}
+              className="min-w-0 flex-1 text-left py-1 hover:text-accent-green transition-colors">
+              <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white">
+                <span className="truncate">{m.homeTeam}</span>
+                {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.homeScore ?? 0}</span>}
+              </span>
+              <span className="flex items-center justify-between gap-2 text-xs sm:text-[13px] font-semibold text-white mt-1">
+                <span className="truncate">{m.awayTeam}</span>
+                {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.awayScore ?? 0}</span>}
+              </span>
+            </button>
+            <button type="button" onClick={() => toggleFavorite(String(m.id))} title={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+              className={`shrink-0 p-1.5 rounded border border-white/10 ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-text-secondary hover:text-white'}`}>
+              <Star size={14} className={isFavorite(String(m.id)) ? 'fill-amber-400' : ''} />
+            </button>
+            <button type="button" onClick={() => toggleAlert(String(m.id))} title={isAlertEnabled(String(m.id)) ? 'Çaktivizo njoftimet' : 'Aktivizo njoftimet'}
+              className={`shrink-0 p-1.5 rounded border border-white/10 ${isAlertEnabled(String(m.id)) ? 'text-accent-green' : 'text-text-secondary hover:text-white'}`}>
+              {isAlertEnabled(String(m.id)) ? <BellRing size={14} /> : <Bell size={14} />}
+            </button>
+            {locked && <span title={t('sections.odds_locked')} className="text-accent-red text-xs">🔒</span>}
           </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto pt-2 md:pt-0 border-t border-tertiary/40 md:border-t-0">
-            {quickMarket && quickSlots.length >= 2 ? (
-              <div className="flex-1 md:w-72">
-                {quickLabel && (
-                  <div className="mb-1.5 flex items-baseline gap-1 pl-1 text-[9px] font-black uppercase tracking-[0.14em] text-text-secondary">
-                    <span className="text-emerald-300">{quickLabel}</span>
-                    {quick?.mode === 'ou' && quickLine && (
-                      <span className="text-white">{quickLine}</span>
-                    )}
-                  </div>
-                )}
-                <div className={`grid ${quickCols === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
-                  {quickSlots.map((slot: any, i: number) =>
-                    slot ? (
-                      <OddsButton key={slot.id ?? i} match={m} market={quickMarket} outcome={slot} />
-                    ) : (
-                      <div
-                        key={`empty-${i}`}
-                        className="cursor-not-allowed rounded-lg border border-white/5 bg-[#0f1727] px-2.5 py-2 text-center text-xs font-bold text-text-secondary opacity-40"
-                      >
-                        —
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 text-center text-xs italic text-text-secondary md:w-72">—</div>
-            )}
-
-            <button
-              onClick={() => setExpandedId(prev => (prev === String(m.id) ? null : String(m.id)))}
-              className={`flex shrink-0 items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold transition-all ${
-                expandedId === String(m.id)
-                  ? 'bg-emerald-400 text-[#102019] shadow-md shadow-emerald-500/15'
-                  : 'border border-white/10 bg-[#111a20] text-text-secondary hover:border-white/20 hover:text-white'
-              }`}
-              title={t('sections.view_markets')}
-              aria-expanded={expandedId === String(m.id)}
-            >
-              <span>+{totalMarketsCount}</span>
-              <ChevronRight
-                size={13}
-                className={`transition-transform duration-200 ${expandedId === String(m.id) ? 'rotate-90' : ''}`}
-              />
+          <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto pb-1 lg:pb-0">
+            <div className="shrink-0 w-[174px]">{oddsGroup(main, oneXtwo, ['1', 'X', '2'])}</div>
+            <div className="shrink-0 w-[174px]">{oddsGroup(goals, total, ['Over', 'Under', '—'])}</div>
+            <div className="shrink-0 w-[174px]">{oddsGroup(btts, both, ['Yes', 'No', '—'])}</div>
+            <button type="button" onClick={() => setExpandedId(prev => prev === String(m.id) ? null : String(m.id))}
+              aria-expanded={expandedId === String(m.id)} title={t('sections.view_markets')}
+              className="shrink-0 min-h-[40px] px-2 rounded border border-tertiary bg-primary hover:bg-tertiary text-accent-green text-xs font-bold flex items-center gap-1">
+              +{marketCount}<ChevronRight size={13} className={expandedId === String(m.id) ? 'rotate-90' : ''} />
             </button>
           </div>
         </div>
-
-        {expandedId === String(m.id) && <MarketPanel match={m} />}
+        {expandedId === String(m.id) && <div className="border-t border-tertiary/70 p-2 sm:p-3"><MarketPanel match={m} /></div>}
       </div>
     );
   };
 
+  const renderCompetitionBoards = (items: any[]) => {
+    const groups = new Map<string, any[]>();
+    items.forEach(m => {
+      const key = [m.tournament?.category?.name, m.tournament?.name].filter(Boolean).join(' · ') || t('sections.league');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(m);
+    });
+    return Array.from(groups.entries()).map(([league, fixtures]) => (
+      <section key={league} className="overflow-hidden rounded-md border border-tertiary/80 bg-secondary">
+        <div className="flex items-center justify-between px-3 py-2 bg-tertiary/50 border-b border-tertiary/70">
+          <h3 className="text-xs font-bold text-white truncate">{league}</h3>
+          <span className="text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
+        </div>
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+          <span className="flex-[1.4] min-w-0">{t('sections.league')}</span>
+          <span className="w-[174px] text-center">1X2</span>
+          <span className="w-[174px] text-center">Over / Under</span>
+          <span className="w-[174px] text-center">BTTS</span>
+          <span className="w-[57px] text-center">+</span>
+        </div>
+        {fixtures.map(renderMatchCard)}
+      </section>
+    ));
+  };
+
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-3 sm:p-5 md:p-6">
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#192229] p-4 shadow-xl shadow-black/10 sm:p-5">
+    <div className="mx-auto max-w-7xl space-y-3 p-3 sm:p-4">
+      <div className="overflow-hidden rounded-md border border-white/10 bg-[#192229] p-3 sm:p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
@@ -433,7 +295,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder={t('common.search_matches')}
-              className="w-full rounded-xl border border-white/10 bg-[#111a20] py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
+              className="w-full rounded-md border border-white/10 bg-[#111a20] py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
             />
             {searchTerm && (
               <button
@@ -450,7 +312,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               <CalendarDays size={15} />
               <span className="hidden sm:inline">{t('common.filter')}:</span>
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-[#111a20] p-1">
+            <div className="flex items-center gap-1 rounded-md border border-white/10 bg-[#111a20] p-1">
               <button
                 onClick={() => setDateFilter('all')}
                 className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
@@ -532,7 +394,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {liveMatches.map(renderMatchCard)}
+            {renderCompetitionBoards(liveMatches)}
           </div>
         </div>
       )}
@@ -550,10 +412,24 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {prematchMatches.map(renderMatchCard)}
+            {renderCompetitionBoards(prematchMatches)}
           </div>
         </div>
       )}
+      {viewMode === 'favorites' && (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2 px-1 text-xs font-bold text-white">
+            <Star size={14} className="text-amber-400" /> Të Preferuarat
+            <span className="text-text-secondary">{favoriteMatches.length}</span>
+          </div>
+          {favoriteMatches.length ? renderCompetitionBoards(favoriteMatches) : (
+            <div className="rounded-md border border-tertiary bg-secondary p-8 text-center text-xs text-text-secondary">
+              Nuk ka ndeshje të preferuara.
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
