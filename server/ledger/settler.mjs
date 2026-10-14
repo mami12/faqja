@@ -14,7 +14,7 @@ import { pool, query } from '../db.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
-import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
+import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from './result-btts.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -72,8 +72,7 @@ export function gradeLine(line, result) {
       const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
         ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
       if (!selection) return 'VOID'; // Never grade an unidentified combination as ordinary BTTS.
-      const matchResult = homeWin ? '1' : draw ? 'X' : '2';
-      return decide(selection.result === matchResult && selection.bothScore === bothScored);
+      return gradeResultBtts(selection, home, away);
     }
     case '1X2': {
       if (key === '1' || key === 'home' || /^home/.test(name)) return decide(homeWin);
