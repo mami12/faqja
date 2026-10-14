@@ -189,7 +189,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return (
       <div 
         key={m.id} 
-        className="bg-card-bg/90 hover:bg-card-hover/90 rounded-2xl border border-tertiary/80 hover:border-slate-600/70 shadow-md transition-all duration-200 overflow-hidden group"
+        className="bg-card-bg hover:bg-card-hover rounded-lg border border-tertiary/70 hover:border-slate-600/80 transition-colors duration-150 overflow-hidden group"
       >
         <div className="bg-primary/60 px-3.5 sm:px-4 py-2 border-b border-tertiary/60 flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 text-text-secondary truncate">
@@ -224,7 +224,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="px-3 py-2.5 sm:px-3.5 sm:py-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
           <div 
             role="link" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') navigate(`/match/${m.id}`); }}
             className="flex-1 cursor-pointer space-y-1.5 min-w-0"
@@ -317,7 +317,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-5 max-w-6xl mx-auto">
       {error && <div role="alert" className="ui-card p-4 text-sm text-amber-300 flex flex-wrap gap-3 items-center justify-between"><span>{t(matches.length ? 'common.refresh_failed' : 'common.load_failed')}</span><button className="filter-chip" onClick={() => setRetry(n => n + 1)}>{t('common.retry')}</button></div>}
-      <div className="bg-secondary/70 backdrop-blur-sm border border-tertiary/80 p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
+      <div className="bg-secondary border border-tertiary/70 p-2.5 sm:p-3 rounded-lg space-y-2.5">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search size={16} className="text-text-secondary" />
@@ -328,7 +328,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             onChange={e => setSearchTerm(e.target.value)}
             aria-label={t('common.search_matches')}
             placeholder={t('common.search_matches')}
-            className="w-full bg-primary/80 border border-tertiary/80 rounded-xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition"
+            className="w-full bg-primary border border-tertiary/80 rounded-md pl-10 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary/70 focus:outline-none focus:border-accent-green transition-colors"
           />
           {(searchTerm || dateFilter !== 'all') && <button className="filter-chip" onClick={() => { setSearchTerm(''); setDateFilter('all'); }}>{t('common.reset_filters')}</button>}
       {searchTerm && (
@@ -347,7 +347,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <CalendarDays size={15} />
             <span className="hidden sm:inline">{t('common.filter')}:</span>
           </div>
-          <div className="bg-primary/70 p-1 rounded-xl border border-tertiary/60 flex items-center gap-1">
+          <div className="bg-primary p-1 rounded-md border border-tertiary/60 flex items-center gap-1">
             <button
               aria-pressed={dateFilter === 'all'}
               onClick={() => setDateFilter('all')}
@@ -393,7 +393,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       )}
 
       {searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="text-4xl">🔍</div>
           <div className="font-bold text-white text-base">{t('common.no_search_results')}</div>
           <p className="text-xs text-text-secondary">{t('common.try_different_search')}</p>
@@ -401,14 +401,14 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       )}
 
       {!searchTerm && filteredMatches.length === 0 && (
-        <div className="p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="text-4xl">📅</div>
           <div className="font-bold text-white text-base">{t('board.empty')}</div>
         </div>
       )}
 
       {filteredMatches.length > 0 && pricedMatches.length === 0 && (
-        <div className="p-8 sm:p-12 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-2xl border border-tertiary">
+        <div className="p-8 sm:p-8 sm:p-10 text-center text-text-secondary space-y-3 max-w-md mx-auto bg-secondary/50 rounded-lg border border-tertiary">
           <div className="font-bold text-white text-base">
             {t(refreshing ? 'common.feed_refreshing' : 'common.no_results')}
           </div>
