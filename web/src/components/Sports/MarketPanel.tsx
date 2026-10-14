@@ -141,43 +141,21 @@ interface MarketCardProps {
 }
 
 function MarketCard({ market, match, title }: MarketCardProps) {
-  const cleanOutcomes = dedupeOutcomes(market.outcomes ?? [], market.name);
-  const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
-  if (!liveOutcomes.length) return null;
-
-  const line = formatLine(market.line);
-  const isSuspended = market.status === 'SUSPENDED';
-  const cols = liveOutcomes.length > 3 ? 3 : liveOutcomes.length;
-
+  const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes ?? [], market.name), market, match);
+  if (!outcomes.length) return null;
   return (
-    <div className="bg-secondary/90 rounded-md border border-tertiary/80 overflow-hidden">
-      {/* Emri i market-it — më kompakt në mobile */}
-      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/70 border-b border-tertiary/50 flex items-center justify-between gap-2">
-        <span className="text-[11px] sm:text-xs font-bold text-slate-200 break-words min-w-0" title={title}>
-          {title}
-          {line && <span className="text-accent-green ml-1">({line})</span>}
-        </span>
-        {isSuspended && (
-          <span className="shrink-0 text-[10px] font-bold text-accent-red">🔒</span>
-        )}
-      </div>
-
-      {/* Outcomes horizontalisht — më kompakt në mobile */}
-      <div
-        className="p-2 grid gap-1.5"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-      >
-        {liveOutcomes.map(outcome => (
-          <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
+    <section className="overflow-hidden border border-tertiary/80 bg-secondary">
+      <div className="bg-[#344253] px-2 py-1.5 text-xs font-semibold text-white">{title}</div>
+      <div className="grid gap-px bg-tertiary/80" style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
+        {outcomes.map(outcome => (
+          <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
+            <OddsButton match={match} market={market} outcome={outcome} isWide />
+          </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* GroupCard — karta e një grupi me disa linja                         */
-/* ------------------------------------------------------------------ */
 
 interface GroupCardProps {
   group: MarketGroup;
@@ -187,50 +165,33 @@ interface GroupCardProps {
 
 function GroupCard({ group, match, title }: GroupCardProps) {
   return (
-    <div className="bg-secondary/90 rounded-md border border-tertiary/80 overflow-hidden md:col-span-2">
-      <div className="px-2 py-1 sm:px-3 sm:py-2 bg-primary/70 border-b border-tertiary/50 flex items-center justify-between gap-2">
-        <span className="text-[11px] sm:text-xs font-bold text-slate-200 break-words min-w-0" title={title}>
-          {title}
-        </span>
-        <span className="text-[9px] sm:text-[10px] font-bold text-text-secondary/70">
-          {group.markets.length} linja
-        </span>
+    <section className="overflow-hidden border border-tertiary/80 bg-secondary">
+      <div className="flex items-center justify-between bg-[#344253] px-2 py-1.5">
+        <span className="text-xs font-semibold text-white">{title}</span>
+        <span className="text-[10px] text-slate-300">{group.markets.length} linja</span>
       </div>
-
-      <div className="divide-y divide-tertiary/40">
+      <div className="divide-y divide-tertiary/70">
         {group.markets.map(market => {
-          const cleanOutcomes = dedupeOutcomes(market.outcomes ?? [], market.name);
-          const liveOutcomes = filterDecidedOutcomes(cleanOutcomes, market, match);
-          if (!liveOutcomes.length) return null;
-
-          const line = formatLine(market.line);
-          const cols = liveOutcomes.length > 3 ? 3 : liveOutcomes.length;
-
+          const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes ?? [], market.name), market, match);
+          if (!outcomes.length) return null;
           return (
-            <div
-              key={market.id}
-              className="px-1.5 py-1 sm:px-3 sm:py-2 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2"
-            >
-              {line && (
-                <div className="shrink-0 sm:w-14 flex items-center">
-                  <span className="text-[10px] sm:text-xs font-black text-accent-green tabular-nums bg-accent-green/10 px-1.5 py-0.5 rounded sm:px-2 rounded-md border border-accent-green/20">
-                    {line}
-                  </span>
-                </div>
-              )}
-              <div
-                className="min-w-0 flex-1 grid gap-1.5"
-                style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-              >
-                {liveOutcomes.map(outcome => (
-                  <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} />
+            <div key={market.id} className="flex items-stretch min-h-[40px]">
+              <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#344253] text-xs font-semibold text-slate-200 px-1">
+                {formatLine(market.line) || baseMarketName(market)}
+              </div>
+              <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
+                style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
+                {outcomes.map(outcome => (
+                  <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
+                    <OddsButton match={match} market={market} outcome={outcome} isWide />
+                  </div>
                 ))}
               </div>
             </div>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -292,7 +253,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     <div className="border-t border-tertiary/70 bg-primary/50 px-2 py-3 sm:px-4 sm:py-4 space-y-3">
 
       {/* Strip statistikash live — më kompakt në mobile */}
-      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-secondary bg-secondary/80 p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl border border-tertiary/60">
+      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-text-secondary bg-secondary/80 p-1.5 sm:p-2.5 rounded-sm border border-tertiary/60">
         {match.status === 'LIVE' && (
           <span className="font-bold text-accent-red flex items-center gap-1 sm:gap-1.5 bg-rose-500/10 px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md border border-rose-500/20">
             <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-accent-red animate-ping"></span>
@@ -370,7 +331,7 @@ export default function MarketPanel({ match }: { match: Match }) {
         const marketGroups = groupByBaseName(markets);
 
         return (
-          <section key={cat.key} className="space-y-1.5 sm:space-y-3">
+          <section key={cat.key} className="space-y-1.5">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="w-1 h-3 sm:h-4 rounded-full bg-accent-green"></span>
               <span className="text-xs sm:text-sm">{cat.icon}</span>
@@ -383,7 +344,7 @@ export default function MarketPanel({ match }: { match: Match }) {
             </div>
 
             {/* Grid — hapësira më e vogël në mobile */}
-            <div className="grid gap-1.5 sm:gap-3 grid-cols-1 xl:grid-cols-2">
+            <div className="grid gap-1.5 sm:gap-3 grid-cols-1">
               {marketGroups.map(group => {
                 if (group.markets.length === 1) {
                   const market = group.markets[0];

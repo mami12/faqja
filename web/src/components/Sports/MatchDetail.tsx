@@ -88,7 +88,7 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
   for (const m of markets.filter((market) => !isHandicapMarket(market))) {
     const rawClean = cleanMarketName(m.name);
-    const baseKey = rawClean.replace(/[\d\.]+/g, '').trim();
+    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()}`;
 
     if (!map.has(baseKey)) {
       map.set(baseKey, []);
@@ -207,7 +207,7 @@ export default function MatchDetail() {
   const isLive = live.status === 'LIVE';
 
   return (
-    <div className="mx-auto max-w-5xl px-2.5 py-3 sm:px-5 lg:px-6 space-y-3">
+    <div className="mx-auto max-w-6xl px-1.5 py-2 sm:px-3 space-y-2">
       {/* Top Navigation Bar & Action Icons */}
       <div className="flex items-center justify-between gap-2">
         <button
@@ -256,7 +256,7 @@ export default function MatchDetail() {
       </div>
 
       {/* Hero Match Scoreboard Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-secondary p-3.5 sm:p-5 shadow-2xl shadow-black/25">
+      <div className="relative overflow-hidden rounded-sm border border-tertiary bg-secondary p-2.5 sm:p-3">
         {isLive && (
           <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
         )}
@@ -288,7 +288,7 @@ export default function MatchDetail() {
             <h1 className="text-sm font-black tracking-tight text-white sm:text-xl line-clamp-2">{live.homeTeam}</h1>
           </div>
 
-          <div className="min-w-[80px] rounded-xl border border-white/10 bg-primary/95 px-3 py-1.5 shadow-inner sm:min-w-[110px]">
+          <div className="min-w-[80px] rounded-sm bg-primary/95 px-3 py-1.5 sm:min-w-[110px]">
             <span className="font-mono text-lg font-black tracking-widest text-emerald-400 sm:text-2xl">
               {isLive ? `${live.homeScore ?? 0} - ${live.awayScore ?? 0}` : t('common.vs')}
             </span>
@@ -326,7 +326,7 @@ export default function MatchDetail() {
         </div>
 
         {/* Category Filter Pills with Icons */}
-        <div className="rounded-xl border border-white/10 bg-primary/90 p-1.5 shadow-sm">
+        <div className="rounded-sm border border-tertiary bg-primary/90 p-0.5">
           <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pb-0.5">
             {filteredCategories.map((cat) => {
               const count = categoryCounts[cat.id] || 0;
@@ -336,9 +336,9 @@ export default function MatchDetail() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveTab(cat.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${
+                  className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors ${
                     isActive
-                      ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary shadow-sm font-black'
+                      ? 'bg-accent-green text-primary font-bold'
                       : 'border border-transparent bg-transparent text-text-secondary hover:bg-tertiary/60 hover:text-white'
                   }`}
                 >
@@ -381,73 +381,38 @@ export default function MatchDetail() {
             const isCollapsed = collapsedGroups[group.baseName] ?? false;
 
             return (
-              <div 
-                key={`${group.baseName}-${idx}`} 
-                className="overflow-hidden rounded-2xl border border-white/10 bg-secondary shadow-md transition hover:border-white/15"
-              >
-                {/* Accordion Market Header */}
-                <button
-                  type="button"
-                  onClick={() => toggleGroupCollapse(group.baseName)}
-                  className="w-full flex items-center justify-between bg-card-bg/95 hover:bg-card-hover px-3.5 py-2.5 text-left border-b border-white/5 transition"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary border border-white/5 shadow-inner shrink-0">
-                      {getMarketIcon(group.category, group.title)}
-                    </div>
-                    <span className="text-xs sm:text-sm font-black text-white truncate">{group.title}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] font-bold text-text-secondary">
-                      {group.markets.length} {group.markets.length === 1 ? 'linjë' : 'linja'}
-                    </span>
-                    <div className="text-text-secondary hover:text-white transition">
-                      {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                    </div>
-                  </div>
+              <section key={`${group.baseName}-${idx}`} className="overflow-hidden border border-tertiary/80 bg-secondary">
+                <button type="button" onClick={() => toggleGroupCollapse(group.baseName)}
+                  className="w-full flex items-center justify-between gap-2 bg-[#344253] hover:bg-[#3c4a5b] px-2.5 py-1.5 text-left border-b border-tertiary">
+                  <span className="min-w-0 flex items-center gap-1.5 text-xs font-semibold text-white">
+                    <Star size={12} className="shrink-0 text-text-secondary" />
+                    <span className="break-words">{group.title}</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] text-text-secondary flex items-center gap-1">
+                    {group.markets.length} {group.markets.length === 1 ? 'linjë' : 'linja'}
+                    {isCollapsed ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
+                  </span>
                 </button>
-
-                {/* Sub-markets and Outcomes (Collapsible) */}
                 {!isCollapsed && (
-                  <div className="p-2 sm:p-2.5 space-y-2 bg-secondary/50">
-                    {group.markets.map((market) => {
+                  <div className="divide-y divide-tertiary/70">
+                    {group.markets.map(market => {
                       const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? [], market.name);
-
-                      // Detect if market options have long text (e.g. team names or descriptive text)
-                      const hasLongText = cleanOutcomes.some((o: any) => (o.name || '').length > 8);
-                      const isSingleOrPair = cleanOutcomes.length <= 2;
-
+                      if (!cleanOutcomes.length) return null;
+                      const line = String(market.line ?? '').trim();
+                      const showLine = group.markets.length > 1 || !!line;
                       return (
-                        <div key={market.id} className="rounded-xl border border-white/5 bg-primary/60 p-2 sm:p-2.5 space-y-2">
-                          {/* Sub-market line header if more than 1 market or if line exists */}
-                          {(group.markets.length > 1 || market.line) && (
-                            <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary truncate">
-                                {translateMarketName(market.name, t) || t('markets.market')}
-                              </span>
-                              {market.line && (
-                                <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-black text-emerald-400">
-                                  {market.line}
-                                </span>
-                              )}
+                        <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#232c38]">
+                          {showLine && (
+                            <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#344253] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
+                              {line || translateMarketName(market.name, t)}
                             </div>
                           )}
-
-                          {/* Outcomes Grid/Table: Adapts dynamically so long text is NEVER truncated with ... */}
-                          <div className={`grid gap-1.5 ${
-                            hasLongText
-                              ? (isSingleOrPair ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')
-                              : (cleanOutcomes.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-3')
-                          }`}>
+                          <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"
+                            style={{gridTemplateColumns: `repeat(${Math.min(cleanOutcomes.length, 3)}, minmax(0, 1fr))`}}>
                             {cleanOutcomes.map((outcome: any) => (
-                              <OddsButton
-                                key={outcome.id}
-                                match={match}
-                                market={market}
-                                outcome={outcome}
-                                isWide={hasLongText}
-                              />
+                              <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:h-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-xs">
+                                <OddsButton match={live} market={market} outcome={outcome} isWide />
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -455,7 +420,7 @@ export default function MatchDetail() {
                     })}
                   </div>
                 )}
-              </div>
+              </section>
             );
           })
         )}
