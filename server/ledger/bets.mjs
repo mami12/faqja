@@ -124,6 +124,8 @@ const toClientLine = (l) => ({
   marketId: marketIdOf(String(l.match_id), l.market_key, l.line),
   outcomeId: outcomeIdOf(String(l.match_id), l.market_key, l.line, l.outcome_key),
   outcomeName: l.outcome_name,
+  // Return the provider code so UI can disambiguate correlated market labels.
+  outcomeCode: l.outcome_key,
   marketName: l.market_name,
   // This parameter is essential for goal-by-minute and other line-specific tickets.
   marketLine: String(l.line ?? ''),
