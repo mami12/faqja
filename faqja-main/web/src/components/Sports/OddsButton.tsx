@@ -65,20 +65,20 @@ export default function OddsButton({ match, market, outcome }: Props) {
       title={`${marketLabel(t, market.name)} · ${label}${isSuspended ? ` · ${t('sections.odds_locked')}` : ''}`}
       onClick={toggle}
       disabled={isSuspended}
-      className={`group min-w-0 min-h-[46px] relative flex justify-between items-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg border transition-all duration-150 select-none ${flashClass} ${
+      className={`group min-w-0 min-h-[40px] relative flex justify-between items-center gap-2 px-2 py-1.5 rounded-md border transition-colors duration-150 select-none ${flashClass} ${
         isSuspended
-          ? 'bg-primary/40 border-tertiary/40 opacity-50 cursor-not-allowed'
+          ? 'bg-primary/30 border-tertiary/30 opacity-45 cursor-not-allowed'
           : isSelected
-          ? 'bg-accent-green/20 border-accent-green text-white shadow-glow-green scale-[1.01]'
-          : 'bg-primary/80 border-tertiary/80 hover:border-slate-500 hover:bg-tertiary/40 text-text-primary active:scale-[0.98]'
+          ? 'bg-accent-green/15 border-accent-green/80 text-white'
+          : 'bg-primary/70 border-tertiary/70 hover:border-slate-500 hover:bg-tertiary/50 text-text-primary'
       }`}
     >
-      <span className={`text-[11px] sm:text-xs font-semibold truncate transition-colors ${
+      <span className={`text-[10px] sm:text-[11px] font-medium truncate transition-colors ${
         isSelected ? 'text-accent-green font-bold' : 'text-text-secondary group-hover:text-slate-200'
       }`} title={label}>
         {label}
       </span>
-      <span className={`font-mono font-black text-xs sm:text-sm ml-1.5 tabular-nums shrink-0 ${
+      <span className={`font-mono font-bold text-xs sm:text-[13px] ml-1 tabular-nums shrink-0 ${
         isSuspended ? 'text-text-secondary' : isSelected ? 'text-white' : 'text-accent-yellow sm:text-text-primary group-hover:text-accent-yellow'
       }`}>
         {isSuspended ? <Lock size={12} className="inline text-text-secondary" /> : currentOdds !== null && currentOdds !== undefined ? currentOdds.toFixed(2) : '-'}
