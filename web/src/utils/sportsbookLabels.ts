@@ -136,6 +136,13 @@ export function parseResultBttsOutcome(
 ): { result: '1' | 'X' | '2'; bothScore: boolean } | null {
   let raw = String(value ?? '').trim();
   if (!raw) return null;
+  // Some feeds write the complete condition instead of a compact "X/No".
+  // "Both Teams Not to Score and Draw" means X + BTTS No, which is 0-0.
+  raw = raw
+    .replace(/^(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))\s*(?:and\b|&|\+|\/)\s*/i,
+      (_match, clause: string) => (/not/i.test(clause) ? 'No/' : 'Yes/'))
+    .replace(/\s*(?:and\b|&|\+|\/)\s*(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))$/i,
+      (_match, clause: string) => '/' + (/not/i.test(clause) ? 'No' : 'Yes'));
   raw = raw.replace(/^\s*(?:match\s+)?result\s*[:=]?\s*/i, '')
     .replace(/\b(?:both\s+teams?\s+(?:to\s+)?score|both\s+score|btts)\b\s*[:=]?\s*/gi, '')
     .replace(/^\(|\)$/g, '').trim();
