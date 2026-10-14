@@ -70,4 +70,12 @@ try {
   config.liveRiskEnabled = enabled;
 }
 
+assert.equal(check(match(90, 1, 0), result('1', 1.00)), 'ultra_low_late_price');
+const halfTime = match(45, 2, 0, {
+  phase: 'HT',
+  clock_at: new Date(now - 45 * 60000).toISOString(),
+});
+assert.equal(riskMinute(halfTime, now), 45, 'Do not drift the clock during halftime');
+assert.equal(check(halfTime, result('1', 1.01)), null);
+
 console.log('Live risk policy checks passed');
