@@ -393,7 +393,7 @@ export default function MatchDetail() {
             return (
               <section key={`${group.baseName}-${idx}`} className="overflow-hidden border border-tertiary/80 bg-secondary">
                 <button type="button" onClick={() => toggleGroupCollapse(group.baseName)}
-                  className="w-full flex items-center justify-between gap-2 bg-[#344253] hover:bg-[#3c4a5b] px-2.5 py-1.5 text-left border-b border-tertiary">
+                  className="w-full flex items-center justify-between gap-2 bg-[#424d60] hover:bg-[#526176] px-2.5 py-1.5 text-left border-b border-tertiary">
                   <span className="min-w-0 flex items-center gap-1.5 text-xs font-semibold text-white">
                     <Star size={12} className="shrink-0 text-text-secondary" />
                     <span className="break-words">{group.title}</span>
@@ -411,16 +411,16 @@ export default function MatchDetail() {
                       const line = String(market.line ?? '').trim();
                       const showLine = group.markets.length > 1 || !!line;
                       return (
-                        <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#232c38]">
+                        <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
                           {showLine && (
-                            <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#344253] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
+                            <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#424d60] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
                               {formatMarketLine(market.name, line) || translateMarketName(market.name, t)}
                             </div>
                           )}
                           <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"
                             style={{gridTemplateColumns: `repeat(${Math.min(cleanOutcomes.length, 3)}, minmax(0, 1fr))`}}>
                             {cleanOutcomes.map((outcome: any) => (
-                              <div key={outcome.id} className="min-w-0 bg-[#232c38] [&_button]:w-full [&_button]:h-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-xs">
+                              <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:h-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-xs">
                                 <OddsButton match={live} market={market} outcome={outcome} isWide />
                               </div>
                             ))}
