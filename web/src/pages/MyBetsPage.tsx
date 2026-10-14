@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Ticket } from '../types';
 import { Ticket as TicketIcon } from 'lucide-react';
-import { formatTicketSelection, translateMarketName, translateTicketType } from '../utils/sportsbookLabels';
+import { formatTicketSelection, formatMarketSelectionLabel, translateTicketType } from '../utils/sportsbookLabels';
 
 export default function MyBetsPage() {
   const { t } = useLanguage();
@@ -76,8 +76,7 @@ export default function MyBetsPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-white break-words text-xs sm:text-sm" title={line.matchName}>{line.matchName}</div>
                 <div className="text-text-secondary text-[11px] mt-0.5">
-                  {translateMarketName(line.marketName, t)}
-                  {line.marketLine && !translateMarketName(line.marketName, t).includes(String(line.marketLine)) ? ` (${line.marketLine})` : ''} - <span className="text-slate-200 font-semibold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span>
+                  {formatMarketSelectionLabel(line.marketName, line.marketLine, t)} - <span className="text-slate-200 font-semibold">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span>
                 </div>
               </div>
               <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
