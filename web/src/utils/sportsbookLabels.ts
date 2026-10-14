@@ -521,6 +521,29 @@ export function translateMarketName(name: string | undefined, t: Translate) {
   return result;
 }
 
+/** Shorten fixture teams and result words in displayed selections only. */
+export function compactOutcomeTeams(label: string, matchName?: string): string {
+  let result = String(label ?? '').trim();
+  if (!result) return result;
+  const fixture = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i);
+  const home = fixture.length === 2 ? fixture[0].trim() : '';
+  const away = fixture.length === 2 ? fixture[1].trim() : '';
+  const escapeRegex = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '\\/* ------------------------------------------------------------------ */
+/* Përkthimi i outcomes');
+  const teams = [[home, '1'], [away, '2']].filter(([team]) => !!team)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [team, number] of teams) {
+    result = result.replace(new RegExp('(^|[^\\p{L}\\p{N}])' + escapeRegex(team) + '(?=$|[^\\p{L}\\p{N}])', 'giu'),
+      (_whole, prefix: string) => prefix + number);
+  }
+  return result
+    .replace(/\b(?:home\s+team|home|vendas(?:i)?|vend[aë]s(?:i)?)\b/gi, '1')
+    .replace(/\b(?:away\s+team|away|udhetues(?:i)?|udh[eë]tues(?:i)?|vizitor(?:i)?)\b/gi, '2')
+    .replace(/\b(?:draw|tie|barazim(?:i)?)\b/gi, 'X')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /* ------------------------------------------------------------------ */
 /* Përkthimi i outcomes                                               */
 /* ------------------------------------------------------------------ */
@@ -536,6 +559,24 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
     return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
   }
   if (!raw) return '';
+
+  // Fixture teams and 1X2 words are shortened in every displayed outcome.
+  const compact = compactOutcomeTeams(raw, matchName);
+  if (compact !== raw) {
+    const firstGoal = compact.match(/^(?:first goal|first team to score|first goalscorer)\s*[:\-]?\s*([12X])$/i);
+    if (firstGoal) return 'Goli i parë: ' + firstGoal[1];
+    const lastGoal = compact.match(/^(?:last goal|last team to score)\s*[:\-]?\s*([12X])$/i);
+    if (lastGoal) return 'Goli i fundit: ' + lastGoal[1];
+    const teamScores = compact.match(/^(?:team to score|team scores?|scoring team)\s*[:\-]?\s*([12X])$/i);
+    if (teamScores) return 'Ekipi që shënon: ' + teamScores[1];
+    const scoring = compact.match(/^([12])\\s+(?:to score|will score|scores?)(?:\\s+(?:a\\s+)?goal)?$/i);
+    if (scoring) return scoring[1] + ' shënon gol';
+    const noScoring = compact.match(/^([12])\\s+(?:not to score|will not score|does not score)$/i);
+    if (noScoring) return noScoring[1] + ' nuk shënon gol';
+    const scoresFirst = compact.match(/^([12])\\s+(?:to score first|scores first)$/i);
+    if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
+    return compact;
+  }
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
   if (qualifiedScoring) return qualifiedScoring;
@@ -604,7 +645,7 @@ export function formatTicketSelection(
   if (isResultBttsMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
   const market = normalized(marketName);
   const resultMarket = /(?:^| )(?:1x2|moneyline|match winner|winner|full time result|fulltime result|match result|1st half result|first half result|2nd half result|second half result)(?: |$)/.test(market);
-  if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName);
+  if (!resultMarket) return translateOutcomeName(rawOutcome, t, marketName, matchName, outcomeCode);
 
   const outcome = normalized(rawOutcome);
   const teams = String(matchName ?? '').split(/\s+(?:vs\.?|v)\s+/i).map(normalized);
