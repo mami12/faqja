@@ -39,7 +39,7 @@ export function verifiedFirstHalf(periodsScore) {
   const first = periods[0];
   const home = first?.t1, away = first?.t2;
   if (home === null || home === undefined || away === null || away === undefined) return null;
-  if (!/^\\d+$/.test(String(home)) || !/^\\d+$/.test(String(away))) return null;
+  if (!/^[0-9]+$/.test(String(home)) || !/^[0-9]+$/.test(String(away))) return null;
   return { home: Number(home), away: Number(away) };
 }
 
