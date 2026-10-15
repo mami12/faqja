@@ -243,8 +243,8 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   }
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
-  const lines = [];
-  for (const selection of selections) lines.push(await resolveSelection(selection));
+  // Independent odds checks can be awaited together instead of serially.
+  const lines = await Promise.all(selections.map(resolveSelection));
 
   const totalOdds = totalOddsForSelections(lines);
   const payout = calculatePotentialPayout(amount, totalOdds);
@@ -280,12 +280,21 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     );
     const ticketId = inserted.rows[0].id;
 
-    for (const line of lines) {
+    // Store all ticket lines in one DB round trip (rather than one per pick).
+    for (let offset = 0; offset < lines.length; offset += 100) {
+      const batch = lines.slice(offset, offset + 100);
+      const params = [];
+      const tuples = batch.map((line, index) => {
+        const base = index * 9;
+        params.push(ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey,
+          line.outcomeName, line.marketName, line.matchName, line.price);
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, 'PENDING')`;
+      });
       await client.query(
         `insert into app_ticket_line
            (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING')`,
-        [ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey, line.outcomeName, line.marketName, line.matchName, line.price],
+         values ${tuples.join(', ')}`,
+        params,
       );
     }
 
