@@ -126,7 +126,7 @@ export function isResultBttsMarket(name: string | undefined): boolean {
   const s = String(name ?? '').toLowerCase();
   const result = /\b(?:result|1\s*x\s*2|winner)\b/.test(s);
   const btts = /\bbtts\b|both\s+teams?\s+(?:to\s+)?score|both\s+score|\bgg\s*[/&-]\s*ng\b/.test(s);
-  return result && btts && !/\b(?:corners?|cards?|handicap|double chance|half.?time|first half|second half)\b/.test(s);
+  return result && btts && !/\b(?:corners?|cards?|handicap|double chance)\b/.test(s);
 }
 
 /** An existing provider market combining BTTS (GG/NG) with a goal total.
@@ -140,6 +140,20 @@ export function isBttsGoalsComboMarket(name: string | undefined): boolean {
   return hasBtts && hasGoalsTotal;
 }
 
+/** Existing provider result + goals-total, or total + BTTS markets. */
+export function isResultTotalMarket(name: string | undefined): boolean {
+  return /^\s*(?:full\s*time\.?\s*)?result\s+and\s+total\s*$/i.test(String(name ?? ''));
+}
+export function isTotalBttsMarket(name: string | undefined): boolean {
+  return /^\s*(?:full\s*time\.?\s*)?total\s+and\s+(?:both\s+teams?\s+(?:to\s+)?score|btts)\s*$/i.test(String(name ?? ''));
+}
+export function isFirstHalfResultBtts(name: string | undefined): boolean {
+  return /^\s*(?:1st|first)\s+half\.\s*result\s+and\s+both\s+teams?\s+(?:to\s+)?score\s*$/i.test(String(name ?? ''));
+}
+export function isAnyMixedMarket(name: string | undefined): boolean {
+  return isResultBttsMarket(name) || isResultTotalMarket(name) || isTotalBttsMarket(name) || isBttsGoalsComboMarket(name);
+}
+
 export function parseResultBttsOutcome(
   value: string | undefined,
   homeTeam = '',
@@ -147,6 +161,14 @@ export function parseResultBttsOutcome(
 ): { result: '1' | 'X' | '2'; bothScore: boolean } | null {
   let raw = String(value ?? '').trim();
   if (!raw) return null;
+  const nilWin = raw.match(/^(.+?)\s+to\s+nil$/i);
+  if (nilWin) {
+    const winner = nilWin[1].trim().toLowerCase();
+    if (winner === homeTeam.trim().toLowerCase() || ['1', 'home'].includes(winner)) return { result: '1', bothScore: false };
+    if (winner === awayTeam.trim().toLowerCase() || ['2', 'away'].includes(winner)) return { result: '2', bothScore: false };
+    return null;
+  }
+  raw = raw.replace(/\band\s+both\s+(?:teams?\s+)?to\s+score\b/gi, ' And Yes');
   // Some feeds write the complete condition instead of a compact "X/No".
   // "Both Teams Not to Score and Draw" means X + BTTS No, which is 0-0.
   raw = raw
@@ -439,7 +461,7 @@ export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
   // Keep original provider market names for MIKSE while auditing combo contracts.
-  if (isResultBttsMarket(raw) || isBttsGoalsComboMarket(raw)) return raw;
+  if (isAnyMixedMarket(raw)) return raw;
   if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
   if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
   if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
