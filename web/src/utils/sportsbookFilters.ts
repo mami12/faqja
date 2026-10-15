@@ -45,21 +45,27 @@ export function isHandicapMarket(market: any) {
 }
 
 /**
- * Hide generic full-time 1X2 duplicates only when the canonical feed market
- * "Full Time Result" is available. Never touch halftime, combined markets,
- * prices or original selection IDs.
+ * Prefer the feed's canonical full-time 1X2 to alternative generic 1X2
+ * presentations. A suffix such as "(3-way)" or a feed period prefix is not
+ * a different betting contract. Half-time, HT/FT, combined, 2-way and
+ * handicapped selections are separate contracts and must not be hidden.
  */
+const isCanonicalFullTime1X2 = (market: { name: string; period?: number }) =>
+  Number(market.period ?? 0) === 0 &&
+  /^(?:full time|fulltime) result(?: 1x2)?$/.test(normalize(market.name));
+
+const isGenericFullTime1X2 = (market: { name: string; period?: number }) => {
+  if (Number(market.period ?? 0) !== 0) return false;
+  const name = normalize(market.name);
+  return /^(?:match winner|match result|1x2)(?: 3 way| three way| 1x2)?$/.test(name);
+};
+
 export function filterRedundantMatchResultMarkets<T extends { name: string; period?: number; outcomes?: Array<{ odds?: number; status?: string }> }>(
   markets: T[],
 ): T[] {
   const canonical = markets.some(m =>
-    Number(m.period ?? 0) === 0 &&
-    normalize(m.name) === 'full time result' &&
-    (m.outcomes ?? []).some(o => typeof o.odds === 'number' && o.odds > 0 && o.status !== 'SUSPENDED')
+    isCanonicalFullTime1X2(m) &&
+    (m.outcomes ?? []).some(o => Number.isFinite(Number(o.odds)) && Number(o.odds) > 0 && o.status !== 'SUSPENDED')
   );
-  if (!canonical) return markets;
-  return markets.filter(m =>
-    Number(m.period ?? 0) !== 0 ||
-    !/^(match winner|match result)$/.test(normalize(m.name))
-  );
+  return canonical ? markets.filter(m => !isGenericFullTime1X2(m)) : markets;
 }
