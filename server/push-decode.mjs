@@ -173,36 +173,32 @@ function columnFromName(name) {
 }
 
 /**
- * Only show a market when the provider gives its descriptive English title,
- * or an explicit, verified group/type mapping identifies the market.
+ * Prefer the upstream's own English market name, including short real names
+ * such as "Total", "Result", "Corners" and "Cards". IDs/subgames classify the
+ * subject but never rename a market whose name arrived from the provider.
  *
- * A price line, outcome pattern or subgame family does NOT identify the bet:
- * Over/Under 6.5 might be goals, corners, cards, etc. Never guess.
- * Return null for unidentified groups. Raw push frames remain available for
- * diagnostics and later explicit mapping.
+ * In partial push deltas with no name, use cached snapshot metadata or the
+ * explicit verified group/type map. If both are absent, do not invent names.
  */
 export function describeMarket({ name, typeId, groupId, subgames = '' }) {
+  const raw = String(name ?? '').trim();
+  const placeholder = /^(?:cols-?\d+|total-2|fora-2|market|unknown|unverified market(?:\b.*)?)$/i;
   const fromGroup = MARKET_MAP.groups[String(groupId)];
+  const subColumn = columnFromSubgames(subgames);
+
+  if (raw && !placeholder.test(raw)) {
+    const byName = columnFromName(raw);
+    const column = byName !== 'other'
+      ? byName
+      : /^result$/i.test(raw)
+        ? 'result'
+        : fromGroup?.column ?? subColumn ?? 'other';
+    return { column, name: raw };
+  }
+
   if (fromGroup?.name && fromGroup?.column) {
     return { column: fromGroup.column, name: fromGroup.name };
   }
-
-  const subColumn = columnFromSubgames(subgames);
-  const raw = String(name ?? '').trim();
-  const placeholder = /^(?:cols-?\d+|total-2|fora-2|market|unknown|unverified market(?:\b.*)?)$/i;
-  const ambiguous = /^(?:corners?|cards?|result|match market)$/i;
-  if (raw && !placeholder.test(raw) && !ambiguous.test(raw)) {
-    // "Total" is an authentic feed name, but needs independent evidence
-    // that the subject is goals (subgame 3). An unnamed Over/Under 6.5
-    // must never be called corners simply because the line is large.
-    if (/^total$/i.test(raw)) {
-      if (subColumn === 'total') return { column: 'total', name: 'Total Goals' };
-    } else {
-      const byName = columnFromName(raw);
-      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: raw };
-    }
-  }
-
   const fromType = MARKET_MAP.types[String(typeId)];
   if (fromType?.name && fromType?.column) {
     return { column: fromType.column, name: fromType.name };
