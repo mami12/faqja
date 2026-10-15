@@ -7,7 +7,7 @@ import TicketAudit from '../components/Admin/TicketAudit';
 import { useLanguage } from '../context/LanguageContext';
 import AdminAuditLog from '../components/Admin/AdminAuditLog';
 import TransactionHistoryPage from './TransactionHistoryPage';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Search } from 'lucide-react';
 
 type AdminTab = 'dashboard' | 'users' | 'matches' | 'tickets' | 'transactions' | 'audit';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
@@ -36,6 +36,11 @@ const allItems = sections.flatMap(section => section.items);
 export default function AdminPage() {
   const { t } = useLanguage();
   const [tab, setTab] = useState<AdminTab>('dashboard');
+  const [menuSearch, setMenuSearch] = useState('');
+  const filteredSections = sections.map(section => ({
+    ...section,
+    items: section.items.filter(item => (item.label + ' ' + item.description).toLowerCase().includes(menuSearch.trim().toLowerCase())),
+  })).filter(section => section.items.length > 0);
   const active = allItems.find(item => item.id === tab)!;
   const ActiveIcon = active.icon;
 
@@ -53,8 +58,14 @@ export default function AdminPage() {
               <div className="text-xs text-text-secondary">Qendra e kontrollit</div>
             </div>
           </div>
+          <label className="relative mt-5 block">
+            <span className="sr-only">Kërko seksionin e administrimit</span>
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+            <input type="search" value={menuSearch} onChange={event => setMenuSearch(event.target.value)}
+              placeholder="Kërko seksionin..." className="w-full rounded-xl border border-tertiary bg-primary py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-text-secondary focus:border-accent-green focus:outline-none" />
+          </label>
           <nav aria-label="Menuja e administratorit" className="mt-5 space-y-5">
-            {sections.map(section => (
+            {filteredSections.map(section => (
               <div key={section.title}>
                 <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">{section.title}</div>
                 <div className="space-y-1">
@@ -81,6 +92,7 @@ export default function AdminPage() {
                 </div>
               </div>
             ))}
+            {filteredSections.length === 0 && <p className="px-3 text-sm text-text-secondary">Nuk u gjet asnjë seksion.</p>}
           </nav>
         </aside>
         <div className="min-w-0 flex-1">
@@ -105,6 +117,11 @@ export default function AdminPage() {
           </div>
           <main className="min-w-0 pb-10">
             <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                <button type="button" onClick={() => setTab('dashboard')} className="rounded-lg px-2 py-1 hover:bg-secondary hover:text-white">Administrimi</button>
+                <ChevronRight size={13} />
+                <span className="font-semibold text-white">{active.label}</span>
+              </div>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary border border-tertiary text-accent-green">
                   <ActiveIcon size={19} />
@@ -115,7 +132,22 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-            {tab === 'dashboard' && <AdminDashboard />}
+            {tab === 'dashboard' && <>
+              <div className="mx-auto max-w-7xl px-3 pt-4 sm:px-6">
+                <h2 className="mb-3 text-sm font-bold text-white">Veprime të shpejta</h2>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {allItems.filter(item => item.id !== 'dashboard').slice(0,4).map(item => {
+                    const Icon = item.icon;
+                    return <button key={item.id} type="button" onClick={() => setTab(item.id)}
+                      className="flex min-h-[78px] items-center gap-3 rounded-xl border border-tertiary bg-secondary p-3 text-left text-sm font-semibold text-white transition hover:border-accent-green/60 hover:bg-tertiary/50">
+                      <Icon size={20} className="shrink-0 text-accent-green" />
+                      <span>{item.label}</span><ChevronRight size={14} className="ml-auto shrink-0 text-text-secondary" />
+                    </button>;
+                  })}
+                </div>
+              </div>
+              <AdminDashboard />
+            </>}
             {tab === 'users' && <UserManagement />}
             {tab === 'matches' && <MatchControl />}
             {tab === 'tickets' && <TicketAudit />}
