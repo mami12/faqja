@@ -265,6 +265,22 @@ export default function Betslip() {
             ))}
           </div>
 
+          {columns.length > 1 && (
+            <div className="shrink-0 border-t border-accent-yellow/30 bg-[#1d2835] px-3 py-2 text-xs">
+              <div className="font-bold text-accent-yellow">{columns.length} kolona automatike</div>
+              <p className="mt-1 text-text-secondary">Një zgjedhje për ndeshje në çdo kolonë. Shuma vendoset për kolonë.</p>
+              <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                {columns.slice(0, 24).map((col, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 border-b border-tertiary/50 py-1">
+                    <span className="min-w-0 truncate text-slate-200">#{i+1} {col.map(s => s.outcomeName).join(' + ')}</span>
+                    <strong className="shrink-0 font-mono text-accent-yellow">{col.reduce((n,s)=>n*s.odds,1).toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+              {columns.length > 24 && <p className="text-rose-300">Maksimumi 24 kolona. Hiq disa zgjedhje.</p>}
+            </div>
+          )}
+
           {oddsChangedError && (
             <div className="shrink-0 flex items-center justify-between gap-2 border-t border-accent-yellow/30 bg-accent-yellow/10 px-3 py-2 text-xs text-amber-200">
               <span className="flex items-center gap-1.5"><AlertTriangle size={15}/>{t('betslip.odds_changed')}</span>
