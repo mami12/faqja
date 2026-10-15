@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { marketCategoryOf, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
@@ -78,6 +78,7 @@ interface GroupedMarket {
 const groupMarkets = (markets: Market[], lang: MarketLanguage): GroupedMarket[] => {
   const groups = new Map<string, Market[]>();
   for (const market of markets) {
+    if (!isIdentifiedMarket(market)) continue;
     const key = marketGroupKey(market);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(market);
