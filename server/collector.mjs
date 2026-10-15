@@ -278,30 +278,9 @@ export function buildMarkets(oddsRows) {
     visible = visible.filter((m) => !m.hidden);
   }
 
-  // Deduplicate markets with the exact same name, line and period from different providers.
-  // The market with the most priced outcomes is kept. We NEVER merge different markets.
-  if (visible.length > 1) {
-    const deduped = [];
-    const merged = new Set();
-    for (let i = 0; i < visible.length; i++) {
-      if (merged.has(i)) continue;
-      const a = visible[i];
-      let best = i;
-      for (let j = i + 1; j < visible.length; j++) {
-        const b = visible[j];
-        // Only markets with the exact same name, line, and period are duplicates
-        if (a.name !== b.name || a.line !== b.line || a.period !== b.period) continue;
-        merged.add(j);
-        const aPriced = a.outcomes.filter((o) => o.price !== null).length;
-        const bPriced = b.outcomes.filter((o) => o.price !== null).length;
-        if (bPriced > aPriced || (bPriced === aPriced && b.outcomes.length > a.outcomes.length)) {
-          best = j;
-        }
-      }
-      deduped.push(visible[best]);
-    }
-    visible = deduped;
-  }
+  // Keep every distinct provider group. The Map above already coalesces rows
+  // with the SAME market_key + line. A duplicate display name is not proof
+  // that two different provider IDs are interchangeable betting contracts.
 
   // Hide handicap offers from every public market view, never from stored
   // provider odds or historical ticket settlement.
