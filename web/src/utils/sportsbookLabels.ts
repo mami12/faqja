@@ -603,12 +603,13 @@ export function compactOutcomeTeams(label: string, matchName?: string): string {
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
   const raw = String(name ?? '').trim();
   if (!raw && !outcomeCode) return '';
+  if (/^nil$/i.test(raw)) return 'Jo';
   if (isHalfTimeFullTimeMarket(marketName)) {
     return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
   }
   if (isResultBttsMarket(marketName)) {
     // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
-    return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw;
+    return formatResultBttsOutcome(raw, matchName, outcomeCode) ?? raw.replace(/\bnil\b/gi, 'Jo');
   }
   if (!raw) return '';
 
