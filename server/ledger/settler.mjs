@@ -15,6 +15,7 @@ import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from './result-btts.mjs';
+import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts, gradeMixedTotal } from './mixed-combos.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -28,6 +29,9 @@ const norm = (s) =>
 
 /** which family a market belongs to, from the name we stored with the line */
 function classify(marketName = '') {
+  if (isFirstHalfResultBtts(marketName)) return 'HALF_RESULT_BTTS';
+  if (isResultTotalMarket(marketName)) return 'RESULT_TOTAL';
+  if (isTotalBttsMarket(marketName)) return 'TOTAL_BTTS';
   if (isResultBttsMarket(marketName)) return 'RESULT_BTTS';
   const s = String(marketName).toLowerCase();
   if (/corner/.test(s)) return 'CORNERS';
@@ -68,6 +72,15 @@ export function gradeLine(line, result) {
   const decide = (yes) => (yes ? 'WON' : 'LOST');
 
   switch (type) {
+    case 'HALF_RESULT_BTTS':
+      return 'VOID'; // No verified halftime scores stored. Never grade against final score.
+    case 'RESULT_TOTAL':
+    case 'TOTAL_BTTS': {
+      const parse = type === 'RESULT_TOTAL' ? parseResultTotal : parseTotalBtts;
+      const selection = parse(line.outcome_key, result.home_team, result.away_team)
+        ?? parse(line.outcome_name, result.home_team, result.away_team);
+      return gradeMixedTotal(line.market_name, selection, home, away);
+    }
     case 'RESULT_BTTS': {
       const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
         ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
