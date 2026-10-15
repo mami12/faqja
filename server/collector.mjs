@@ -5,6 +5,7 @@ import { upsertMatches, expireStaleMatches, getCounts, getMatches, getMatchById 
 import { getOddsForMatches as getOddsFromDb } from './db.mjs';
 import { getOddsForMatches as getOddsFromMemory } from './odds-store.mjs';
 import { marketColumn } from './odds.mjs';
+import { isHandicapOfferMarket } from './market-policy.mjs';
 import { isResultBttsMarket } from './ledger/result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket } from './ledger/mixed-combos.mjs';
 
@@ -14,20 +15,12 @@ const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 /** a market name that is just a render-type label because the feed omitted the real name */
 
 /** Do not expose unresolved labels from old stored odds or older decoder frames. */
-export function isIdentifiedMarketName(name, subgames = '', marketKey = '') {
+/** Every original provider market name, including "Total", "Corners", "Cards"
+ * and "Result", is a real named market. Only synthetic placeholders are hidden.
+ */
+export function isIdentifiedMarketName(name) {
   const raw = String(name ?? '').trim();
-  if (!raw || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(raw)) return false;
-  // A family alone ("Corners") gives no indication whether the wager is
-  // total, 1X2, next corner, etc. It is not a valid market description.
-  if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(raw)) return false;
-  // A generic "Total" is only safely goals when the upstream declares
-  // subgame=3 (totals), without corner/card subgame markers.
-  if (/^total$/i.test(raw)) {
-    if (/^g6379(?:p\d+)?$/i.test(String(marketKey))) return true;
-    const ids = String(subgames).split(',').map(s => s.trim());
-    return ids.includes('3') && !ids.includes('13') && !ids.includes('174');
-  }
-  return true;
+  return !!raw && !/^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(raw);
 }
 const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
 
@@ -45,11 +38,7 @@ export function buildMarkets(oddsRows) {
       // classify from the name at read time; the provider stops re-sending
       // unchanged markets, so a stored column can go stale. market-map.json
       // overrides still apply because they set the market *name*.
-      // The provider's bare "Total" becomes an identified goal market only
-      // when subgame=3 proves its subject; keep original odds/selection keys.
-      const rawName = o.market_name ?? '';
-      const name = /^total$/i.test(String(rawName).trim()) && isIdentifiedMarketName(rawName, o.subgames, o.market_key)
-        ? 'Total Goals' : rawName;
+      const name = String(o.market_name ?? '').trim();
       const byName = marketColumn(o.market_key, name);
       const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
       const column = /handicap|fora|asian/i.test(String(name))
@@ -313,6 +302,10 @@ export function buildMarkets(oddsRows) {
     }
     visible = deduped;
   }
+
+  // Hide handicap offers from every public market view, never from stored
+  // provider odds or historical ticket settlement.
+  visible = visible.filter((m) => !isHandicapOfferMarket({ name: m.name, marketType: m.column }));
 
   visible.sort(
     (a, b) =>
