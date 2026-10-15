@@ -12,6 +12,22 @@ import { isResultTotalMarket, isTotalBttsMarket } from './ledger/mixed-combos.mj
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 
 /** a market name that is just a render-type label because the feed omitted the real name */
+
+/** Do not expose unresolved labels from old stored odds or older decoder frames. */
+export function isIdentifiedMarketName(name, subgames = '') {
+  const raw = String(name ?? '').trim();
+  if (!raw || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(raw)) return false;
+  // A family alone ("Corners") gives no indication whether the wager is
+  // total, 1X2, next corner, etc. It is not a valid market description.
+  if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(raw)) return false;
+  // A generic "Total" is only safely goals when the upstream declares
+  // subgame=3 (totals), without corner/card subgame markers.
+  if (/^total$/i.test(raw)) {
+    const ids = String(subgames).split(',').map(s => s.trim());
+    return ids.includes('3') && !ids.includes('13') && !ids.includes('174');
+  }
+  return true;
+}
 const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
 
 /** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
@@ -22,6 +38,7 @@ export function buildMarkets(oddsRows) {
   const markets = new Map();
 
   for (const o of oddsRows) {
+    if (!isIdentifiedMarketName(o.market_name, o.subgames)) continue;
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
       // classify from the name at read time; the provider stops re-sending
