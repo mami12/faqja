@@ -46,6 +46,8 @@ jobs:
       - name: Validate mixed market contracts and settlement
         run: node scripts/test-mixed-combos.mjs
       - name: Validate universal builder contracts
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: node scripts/test-bet-builder.mjs
       - name: Check backend syntax
         run: |
