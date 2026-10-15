@@ -39,7 +39,7 @@ export function parseResultBttsOutcome(value, homeTeam = '', awayTeam = '') {
   };
   const bttsPart = (part) => {
     if (['yes', 'po', 'gg', 'both score'].includes(part)) return true;
-    if (['no', 'jo', 'ng', 'no goal', 'both not score'].includes(part)) return false;
+    if (['no', 'jo', 'ng', 'nil', 'no goal', 'no goals', 'both not score'].includes(part)) return false;
     return null;
   };
 
