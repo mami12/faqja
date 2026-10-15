@@ -41,6 +41,12 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     : formatOddsButtonLabel(outcome.name, market.name, market.line || market.specifier, t, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
   const scoringTimeLabel = !showRawLabel && /\btime\s+of\s+scoring\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(market.name);
 
+  // Synthetic builder quotes are derived on REST refresh, not emitted as
+  // provider outcome deltas. Keep their displayed price in sync with props.
+  useEffect(() => {
+    if (outcome.id.startsWith('BB|')) setCurrentOdds(outcome.odds);
+  }, [outcome.id, outcome.odds]);
+
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
     if (delta) {
