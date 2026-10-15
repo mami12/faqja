@@ -88,21 +88,21 @@ assert.equal(module.exports.translateOutcomeName('Arsenal/Draw', translate, htft
 // Left/right Po/Jo refer to home/away scoring; 1/X/2 is the match result.
 const mixedMarket = 'Result and Both Teams to Score';
 const mixedExamples = [
-  ['1/Yes', 'Po/Po&1'],
-  ['1/No', 'Po/Jo&1'],
-  ['X/Yes', 'Po/Po&X'],
-  ['X/No', 'Jo/Jo&X'],
-  ['2/Yes', 'Po/Po&2'],
-  ['2/No', 'Jo/Po&2'],
-  ['1/Nil', 'Po/Jo&1'],
-  ['X/Nil', 'Jo/Jo&X'],
-  ['2/Nil', 'Jo/Po&2'],
-  ['Nil/1', 'Po/Jo&1'],
-  ['Arsenal & No', 'Po/Jo&1'],
-  ['Chelsea & No', 'Jo/Po&2'],
-  ['Both Teams Not to Score and Draw', 'Jo/Jo&X'],
-  ['Draw and Both Teams Not to Score', 'Jo/Jo&X'],
-  ['Both Teams to Score and Draw', 'Po/Po&X'],
+  ['1/Yes', '1 & Po'],
+  ['1/No', '1 & Jo'],
+  ['X/Yes', 'X & Po'],
+  ['X/No', 'X & Jo'],
+  ['2/Yes', '2 & Po'],
+  ['2/No', '2 & Jo'],
+  ['1/Nil', '1 & Jo'],
+  ['X/Nil', 'X & Jo'],
+  ['2/Nil', '2 & Jo'],
+  ['Nil/1', '1 & Jo'],
+  ['Arsenal & No', '1 & Jo'],
+  ['Chelsea & No', '2 & Jo'],
+  ['Both Teams Not to Score and Draw', 'X & Jo'],
+  ['Draw and Both Teams Not to Score', 'X & Jo'],
+  ['Both Teams to Score and Draw', 'X & Po'],
 ];
 for (const [input, expected] of mixedExamples) {
   assert.equal(
@@ -118,7 +118,7 @@ for (const [input, expected] of mixedExamples) {
 }
 assert.equal(
   module.exports.translateOutcomeName('Unrecognized', translate, mixedMarket, fixture, 'X/No'),
-  'Jo/Jo&X',
+  'X & Jo',
   'Use verified provider code if its descriptive name is unknown',
 );
 assert.equal(
@@ -133,10 +133,13 @@ assert.equal(
 );
 assert.equal(module.exports.translateOutcomeName('Nil', translate, mixedMarket, fixture), 'Jo', 'Display Nil in Albanian without inventing the result');
 assert.equal(module.exports.translateOutcomeName('Nil', translate, 'Both Teams to Score', fixture), 'Jo', 'Translate standalone provider Nil to Jo');
-assert.equal(module.exports.translateOutcomeName('2/Nil', translate, mixedMarket, fixture), 'Jo/Po&2', 'Translate Nil mixed combination');
+assert.equal(module.exports.translateOutcomeName('2/Nil', translate, mixedMarket, fixture), '2 & Jo', 'Translate Nil mixed combination');
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
-assert.equal(module.exports.translateMarketName(mixedMarket, translate), mixedMarket, 'Keep original MIKSE market heading');
+assert.equal(module.exports.translateMarketName(mixedMarket, translate), 'Rezultati & Gol/Gol');
+assert.equal(module.exports.translateMarketName('1st half. Result and both teams to score', translate), 'Pjesa e Parë: Rezultati & Gol/Gol');
+assert.equal(module.exports.translateMarketName('Result and total', translate), 'Rezultati & Totali i Golave');
+assert.equal(module.exports.translateMarketName('Total and both teams to score', translate), 'Totali i Golave & Gol/Gol');
 
 
 // Feed-defined BTTS + goals-total combinations belong in MIKSE, not plain BTTS.
@@ -147,7 +150,7 @@ for (const title of [
   'Total Goals Over/Under & Both Teams to Score',
 ]) {
   assert.equal(module.exports.isBttsGoalsComboMarket(title), true, title);
-  assert.equal(module.exports.translateMarketName(title, translate), title, 'Keep provider combo heading: ' + title);
+  assert.equal(module.exports.translateMarketName(title, translate), 'Totali i Golave & Gol/Gol', title);
 }
 assert.equal(module.exports.isBttsGoalsComboMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isBttsGoalsComboMarket('Total Goals 2.5'), false);
@@ -265,3 +268,18 @@ assert.deepEqual(
   [mockMarket('Full Time Result', 0, 'SUSPENDED'), genericWinner],
   'Do not hide live available result market when canonical odds are suspended',
 );
+
+const comboCases = [
+  ['Result and total', 'Lyon And Over 2.5', '1 & Mbi 2.5'],
+  ['Result and total', 'Crystal Palace And Under 2.5', '2 & Nën 2.5'],
+  ['Result and total', 'Draw And Over 2.5', 'X & Mbi 2.5'],
+  ['Total and both teams to score', 'Over 2.5 And No', 'Mbi 2.5 & Jo'],
+  ['Total and both teams to score', 'Under 2.5 And Yes', 'Nën 2.5 & Po'],
+  ['Result and both teams to score', 'Lyon To Nil', '1 & Jo'],
+  ['Result and both teams to score', 'Crystal Palace And Both To Score', '2 & Po'],
+  ['1st half. Result and both teams to score', 'Both Teams Not To Score and Draw', 'X & Jo'],
+];
+for (const [market, outcome, expected] of comboCases) {
+  assert.equal(module.exports.translateOutcomeName(outcome, translate, market, 'Lyon vs Crystal Palace'), expected, outcome);
+  assert.equal(module.exports.formatTicketSelection(outcome, market, 'Lyon vs Crystal Palace', translate), expected, 'Ticket ' + outcome);
+}

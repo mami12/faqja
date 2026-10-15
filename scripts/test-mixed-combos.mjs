@@ -4,6 +4,7 @@ import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from '../
 // The settler's database pool is constructed on import, but these tests never connect.
 process.env.DATABASE_URL ||= 'postgres://test:test@127.0.0.1:5432/mixed_test';
 const { gradeLine } = await import('../server/ledger/settler.mjs');
+const { verifiedFirstHalf } = await import('../server/ledger/results.mjs');
 const home = 'Lyon', away = 'Crystal Palace';
 assert.ok(isResultTotalMarket('Result and total'));
 assert.ok(isTotalBttsMarket('Total and both teams to score'));
@@ -46,3 +47,15 @@ assert.equal(gradeLine(line('Total and both teams to score','Over 2.5 And Yes'),
 assert.equal(gradeLine(line('Result and both teams to score','Lyon And Both To Score'), result), 'WON');
 assert.equal(gradeLine(line('1st half. Result and both teams to score','Lyon And Both To Score'), result), 'VOID');
 console.log('All four provider mixed market contract regressions passed.');
+
+assert.deepEqual(verifiedFirstHalf([{t1:'1',t2:'1'}, {t1:'2',t2:'0'}]), {home:1,away:1});
+assert.equal(verifiedFirstHalf([{t1:'1',t2:'1'}]), null, 'One unlabeled period is not enough');
+assert.equal(verifiedFirstHalf([{t1:null,t2:'1'}, {t1:'1',t2:'0'}]), null);
+assert.equal(gradeLine(
+  line('1st half. Result and both teams to score', 'Both Teams To Score And Draw'),
+  {...result, half_home_score:1, half_away_score:1}
+), 'WON', 'Settle first-half draw with BTTS using halftime data');
+assert.equal(gradeLine(
+  line('1st half. Result and both teams to score', 'Both Teams To Score And Draw'),
+  {...result, half_home_score:1, half_away_score:0}
+), 'LOST', 'Do not use final result for first-half grading');

@@ -61,9 +61,6 @@ async function resolveSelection(selection) {
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
   if (row.suspended === true) throw badRequest('Kjo kuotë është pezulluar për momentin.');
 
-  if (isFirstHalfResultBtts(row.market_name)) {
-    throw badRequest('Kombinimi i pjesës së parë nuk pranon ende baste: mungon rezultati i verifikuar i pjesës së parë për llogaritjen.');
-  }
   const comboParser = isResultTotalMarket(row.market_name) ? parseResultTotal
     : isTotalBttsMarket(row.market_name) ? parseTotalBtts : null;
   if (comboParser && !comboParser(row.outcome_key, match.home, match.away) &&

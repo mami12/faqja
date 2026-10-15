@@ -229,10 +229,7 @@ export function formatResultBttsOutcome(
   const combined = fromName ?? fromCode;
   if (!combined) return null;
 
-  const homeScores = combined.bothScore || combined.result === '1';
-  const awayScores = combined.bothScore || combined.result === '2';
-  return (homeScores ? 'Po' : 'Jo') + '/' +
-    (awayScores ? 'Po' : 'Jo') + '&' + combined.result;
+  return combined.result + ' & ' + (combined.bothScore ? 'Po' : 'Jo');
 }
 
 /** Decode HT/FT only with the corresponding market context. Outcome IDs remain untouched. */
@@ -460,8 +457,10 @@ function translateExactGoalsLabel(value: string) {
 export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
-  // Keep original provider market names for MIKSE while auditing combo contracts.
-  if (isAnyMixedMarket(raw)) return raw;
+  if (isFirstHalfResultBtts(raw)) return 'Pjesa e Parë: Rezultati & Gol/Gol';
+  if (isResultTotalMarket(raw)) return 'Rezultati & Totali i Golave';
+  if (isTotalBttsMarket(raw) || isBttsGoalsComboMarket(raw)) return 'Totali i Golave & Gol/Gol';
+  if (isResultBttsMarket(raw)) return 'Rezultati & Gol/Gol';
   if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
   if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
   if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
@@ -640,6 +639,24 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
   if (/^nil$/i.test(raw)) return 'Jo';
   if (isHalfTimeFullTimeMarket(marketName)) {
     return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? raw;
+  }
+  if (isResultTotalMarket(marketName)) {
+    const candidate = raw.match(/^(.+?)\s+and\s+(over|under)\s+(\d+(?:[.,]\d+)?)$/i);
+    if (candidate) {
+      const teamResult = compactOutcomeTeams(candidate[1], matchName);
+      if (/^(1|x|2)$/i.test(teamResult)) {
+        return teamResult.toUpperCase() + ' & ' + (/^over$/i.test(candidate[2]) ? 'Mbi ' : 'Nën ') + candidate[3].replace(',', '.');
+      }
+    }
+    return raw;
+  }
+  if (isTotalBttsMarket(marketName)) {
+    const candidate = raw.match(/^(over|under)\s+(\d+(?:[.,]\d+)?)\s+and\s+(yes|no)$/i);
+    if (candidate) {
+      return (/^over$/i.test(candidate[1]) ? 'Mbi ' : 'Nën ') +
+        candidate[2].replace(',', '.') + ' & ' + (/^yes$/i.test(candidate[3]) ? 'Po' : 'Jo');
+    }
+    return raw;
   }
   if (isResultBttsMarket(marketName)) {
     // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.

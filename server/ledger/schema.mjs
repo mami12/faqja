@@ -123,6 +123,9 @@ create table if not exists app_match_result (
   settled_at   timestamptz
 );
 
+alter table app_match_result add column if not exists half_home_score int;
+alter table app_match_result add column if not exists half_away_score int;
+
 -- admin overrides survive the next feed frame (suspend a match/market/outcome, pin a price)
 create table if not exists app_feed_override (
   kind        text not null,      -- match | market | outcome
