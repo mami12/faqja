@@ -98,6 +98,16 @@ create unique index if not exists app_ticket_user_request_uidx
 create index if not exists app_ticket_user_idx   on app_ticket (user_id, placed_at desc);
 create index if not exists app_ticket_status_idx on app_ticket (status);
 
+-- Atomic, idempotent multi-column bets: all tickets and the wallet debit commit together.
+create table if not exists app_ticket_batch (
+  user_id uuid not null references app_user(id) on delete cascade,
+  client_request_id uuid not null,
+  request_payload_hash text not null,
+  ticket_ids uuid[] not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, client_request_id)
+);
+
 -- names and odds are snapshotted here, so settlement never depends on the live feed
 create table if not exists app_ticket_line (
   id               uuid primary key default gen_random_uuid(),
