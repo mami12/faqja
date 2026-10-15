@@ -72,8 +72,12 @@ export function gradeLine(line, result) {
   const decide = (yes) => (yes ? 'WON' : 'LOST');
 
   switch (type) {
-    case 'HALF_RESULT_BTTS':
-      return 'VOID'; // No verified halftime scores stored. Never grade against final score.
+    case 'HALF_RESULT_BTTS': {
+      if (result.half_home_score == null || result.half_away_score == null) return 'VOID';
+      const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
+        ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
+      return gradeResultBtts(selection, result.half_home_score, result.half_away_score);
+    }
     case 'RESULT_TOTAL':
     case 'TOTAL_BTTS': {
       const parse = type === 'RESULT_TOTAL' ? parseResultTotal : parseTotalBtts;
