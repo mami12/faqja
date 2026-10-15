@@ -140,4 +140,41 @@ for (const name of ['Handicap', 'Asian Handicap', 'Corners. Handicap', 'Asian Co
 assert.equal(ui.isHandicapMarket(mk('Asian Total')), false);
 assert.equal(ui.isHandicapMarket(mk('Total')), false);
 
+
+// First goal time is a TEN-outcome market. A provider can reuse the same
+// technical code for each interval; do not collapse to the last (81-FT).
+const goalTimeSelections = [
+  ['1-10', 6.0], ['11-20', 6.0], ['21-30', 7.0],
+  ['31-40', 8.0], ['41-50', 8.0], ['51-60', 12.0],
+  ['61-70', 15.0], ['71-80', 15.0], ['81 - Full Time', 15.0],
+  ['No Goal', 5.5],
+];
+const timingRows = goalTimeSelections.map(([name, price]) => ({
+  market_key: 'gGoalTime', market_name: '1st goal time', line: '',
+  outcome_key: '1', outcome_name: name, price, board_column: 'other',
+}));
+const goalTimeMarkets = buildMarkets(timingRows);
+assert.equal(goalTimeMarkets.length, 1);
+assert.equal(goalTimeMarkets[0].outcomes.length, 10, 'all ten distinct original intervals survive');
+assert.deepEqual(goalTimeMarkets[0].outcomes.map(o => o.name),
+  goalTimeSelections.map(([name]) => name));
+assert.deepEqual(goalTimeMarkets[0].outcomes.map(o => o.price),
+  goalTimeSelections.map(([, price]) => price));
+
+const timingFrame = decodePushMessage({
+  messageType: 'match-odds',
+  data: { matchId: 87654321, oddsGroups: [{
+    id: 90010, name: '1st goal time', renderType: 'cols-10',
+    outcomes: goalTimeSelections.map(([name]) => name),
+    oddsList: goalTimeSelections.map(([name, price], idx) => ({
+      id: '12:L:' + (900100 + idx) + ':[90010,[],[0],1,' + idx + ',[]]',
+      outcome: '1', name, cf: price, status: 1,
+    })),
+  }] },
+});
+assert.equal(timingFrame.rows.length, 10, 'decoder must preserve all ten odds');
+assert.deepEqual(new Set(timingFrame.rows.map(r => r.outcomeKey)),
+  new Set(goalTimeSelections.map(([name]) => name)),
+  'each interval needs its own unique bettable outcome ID');
+
 console.log('Provider names, category grouping and handicap exclusions passed');
