@@ -61,7 +61,8 @@ export function marketLineValue(market: Market): string {
  * in the same provider family and period.
  */
 export function marketGroupKey(market: Market): string {
-  const family = [normalized(market.marketType), market.period ?? 0, normalized(marketBaseName(market))].join('::');
+  const identity = String(market.extId ?? '').trim() || normalized(marketBaseName(market));
+  const family = [normalized(market.marketType), market.period ?? 0, identity, normalized(marketBaseName(market))].join('::');
   return marketLineValue(market) ? family : family + '::' + String(market.id);
 }
 
