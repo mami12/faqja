@@ -38,6 +38,13 @@ const getGroupCategory = (name?: string) => {
   return 'Other';
 };
 
+// Show every returned market in an easy-to-scan family, regardless of feed order.
+const CATEGORY_ORDER = ['Popular', 'Goals', 'Mixed', 'Halves', 'Corners', 'Cards', 'Handicap', 'Players', 'Other'];
+const CATEGORY_LABELS: Record<string, string> = {
+  Popular: 'Main', Goals: 'Goals', Mixed: 'Combos', Halves: 'Halves / Periods',
+  Corners: 'Corners', Cards: 'Cards', Handicap: 'Handicap', Players: 'Players', Other: 'Other',
+};
+
 const getCategoryIcon = (catId: string) => {
   switch (catId) {
     case 'Popular': return <Trophy size={13} className="text-amber-400" />;
@@ -121,7 +128,11 @@ const groupMarkets = (markets: Market[]): GroupedMarket[] => {
     });
   });
 
-  return result;
+  return result.sort((a, b) => {
+    const aRank = CATEGORY_ORDER.indexOf(a.category);
+    const bRank = CATEGORY_ORDER.indexOf(b.category);
+    return (aRank < 0 ? CATEGORY_ORDER.length : aRank) - (bRank < 0 ? CATEGORY_ORDER.length : bRank);
+  });
 };
 
 export default function MatchDetail() {
@@ -184,6 +195,8 @@ export default function MatchDetail() {
       return true;
     });
   }, [allGrouped, activeTab, marketSearch]);
+
+  const visibleLines = groupedMarkets.reduce((sum, group) => sum + group.markets.length, 0);
 
   const toggleGroupCollapse = (baseName: string) => {
     setCollapsedGroups(prev => ({
@@ -384,7 +397,7 @@ export default function MatchDetail() {
       {/* Header controls: market counter and collapse toggle */}
       <div className="flex items-center justify-between text-xs px-1 text-text-secondary">
         <span className="font-semibold">
-          Duke shfaqur <strong className="text-white">{groupedMarkets.length}</strong> tregje
+          Showing <strong className="text-white">{groupedMarkets.length}</strong> markets / <strong className="text-white">{visibleLines}</strong> lines
         </span>
         <button
           onClick={toggleAllCollapse}
@@ -406,9 +419,20 @@ export default function MatchDetail() {
         ) : (
           groupedMarkets.map((group, idx) => {
             const isCollapsed = collapsedGroups[group.baseName] ?? false;
+            const sectionStart = idx === 0 || groupedMarkets[idx - 1].category !== group.category;
 
             return (
-              <section key={`${group.baseName}-${idx}`} className="overflow-hidden border border-tertiary/80 bg-secondary">
+              <div key={group.baseName} className="space-y-1.5">
+                {sectionStart && (
+                  <div className="flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
+                    {getCategoryIcon(group.category)}
+                    <span>{CATEGORY_LABELS[group.category] ?? group.category}</span>
+                    <span className="rounded bg-tertiary/70 px-2 py-0.5 text-[10px] text-text-secondary">
+                      {groupedMarkets.filter(g => g.category === group.category).length}
+                    </span>
+                  </div>
+                )}
+              <section className="overflow-hidden border border-tertiary/80 bg-secondary">
                 <button type="button" onClick={() => toggleGroupCollapse(group.baseName)}
                   className="w-full flex items-center justify-between gap-2 bg-[#424d60] hover:bg-[#526176] px-2.5 py-1.5 text-left border-b border-tertiary">
                   <span className="min-w-0 flex items-center gap-1.5 text-xs font-semibold text-white">
@@ -449,6 +473,7 @@ export default function MatchDetail() {
                   </div>
                 )}
               </section>
+              </div>
             );
           })
         )}
