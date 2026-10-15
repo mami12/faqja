@@ -116,7 +116,7 @@ const groupMarkets = (markets: Market[]): GroupedMarket[] => {
     // still sort 1.5, 2.5, 3.5, 4.5 in numeric order.
     const numericLine = (market: Market): number => {
       const line = String(market.line ?? '').trim() ||
-        String(market.name ?? '').match(/\\s+(\\d+[.,]\\d+)$/)?.[1] || '';
+        String(market.name ?? '').match(/\s+(\d+[.,]\d+)$/)?.[1] || '';
       const value = Number(line.replace(',', '.'));
       return Number.isFinite(value) && line !== '' ? value : Number.POSITIVE_INFINITY;
     };
