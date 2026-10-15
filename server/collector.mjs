@@ -29,7 +29,7 @@ const hideSyntheticLines = config.oddsHideSyntheticLines;
 
 /** First-goal timing is a multi-selection market, NOT a 1X2 or total line. */
 export function isGoalTimeMarket(name) {
-  return /(?:\\b(?:1st|first|next|last)\\s+goal\\s+time\\b|\\btime\\s+of\\s+(?:the\\s+)?(?:1st|first|next|last)\\s+goal\\b|\\btime\\s+of\\s+scoring\\b)/i.test(String(name ?? ''));
+  return /(?:\b(?:1st|first|next|last)\s+goal\s+time\b|\btime\s+of\s+(?:the\s+)?(?:1st|first|next|last)\s+goal\b|\btime\s+of\s+scoring\b)/i.test(String(name ?? ''));
 }
 
 /** groups odds_current rows into markets for the UI */
