@@ -159,11 +159,11 @@ function GroupCard({ group, match, title }: GroupCardProps) {
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
       <div className="flex items-center justify-between bg-[#424d60] px-2 py-1.5">
         <span className="text-xs font-semibold text-white">{title}</span>
-        <span className="text-[10px] text-slate-300">{group.markets.length} linja</span>
+        <span className="text-[10px] text-slate-300">{group.markets.length} lines</span>
       </div>
       <div className="divide-y divide-tertiary/70">
         {group.markets.map(market => {
-          const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes ?? [], market.name), market, match);
+          const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes), market, match);
           if (!outcomes.length) return null;
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
@@ -174,7 +174,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
                 {outcomes.map(outcome => (
                   <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
-                    <OddsButton match={match} market={market} outcome={outcome} isWide />
+                    <OddsButton match={match} market={market} outcome={outcome} isWide showRawLabel />
                   </div>
                 ))}
               </div>
