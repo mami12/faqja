@@ -120,3 +120,17 @@ export function marketSelectionLabel(raw: string, lang: MarketLanguage): string 
   if (withLine) return (withLine[1].toLowerCase() === 'over' ? 'Mbi ' : 'Nën ') + withLine[2];
   return value;
 }
+
+const AL_CATEGORY_LABELS: Record<MarketCategory, string> = {
+  main: 'Kryesore', goals: 'Golat', mixed: 'Të kombinuara', corners: 'Kornet',
+  cards: 'Kartonët', htft: 'Pjesët / Periudhat', handicap: 'Handikap',
+  players: 'Lojtarët', other: 'Të tjera',
+};
+const EN_CATEGORY_LABELS: Record<MarketCategory, string> = {
+  main: 'Main', goals: 'Goals', mixed: 'Combos', corners: 'Corners',
+  cards: 'Cards', htft: 'Halves / Periods', handicap: 'Handicap',
+  players: 'Players', other: 'Other',
+};
+export function marketCategoryLabel(category: MarketCategory, lang: MarketLanguage): string {
+  return (lang === 'al' ? AL_CATEGORY_LABELS : EN_CATEGORY_LABELS)[category];
+}
