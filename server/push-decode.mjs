@@ -139,9 +139,6 @@ function rememberSlot(matchId, groupId, oddsId, slot) {
   ITEM_META_CACHE.set(`${matchId}|${oddsId}`, { ...existing, ...slot });
 }
 
-const isTotalPair = (outcomes) =>
-  outcomes.length > 0 && outcomes.every((o) => ['under', 'over', 'u', 'o'].includes(String(o).toLowerCase()));
-
 /** /subgames/get-many?sportId=18 -> market family per subgame id (verified against the API) */
 const SUBGAME_FAMILY = {
   3: 'total',    // Total
@@ -154,9 +151,6 @@ const SUBGAME_FAMILY = {
 // NOTE: subgame 2 ("Main") is a bucket marker present on most markets, so it is
 // deliberately not mapped - otherwise everything lands in the 1X2 column.
 const SUBGAME_PRIORITY = ['13', '174', '3', '6', '11'];
-
-/** groupId -> last known market name (snapshot frames carry names, incremental don't) */
-const GROUP_NAME_CACHE = new Map();
 
 function columnFromSubgames(subgames = '') {
   const ids = String(subgames).split(',').map((s) => s.trim()).filter(Boolean);
@@ -176,34 +170,6 @@ function columnFromName(name) {
   if (/handicap|fora|asian/.test(s)) return 'other';
   if (/total|over\/?under|\bgoals?\b|odd\/even/.test(s)) return 'total';
   return 'other';
-}
-
-/**
- * The outcome set each market type carries, when a delta frame gives us neither an explicit
- * outcome nor a cached snapshot. The old code used one hardcoded idxMap written for 1X2, so
- * index 0 always meant "1" (Home) - which is wrong for every other market and is exactly what
- * put a Home price inside Both Teams to Score.
- *
- * Unknown types fall back to [] so the caller's renderType heuristics still apply.
- */
-function defaultOutcomesForType(typeId, renderType) {
-  switch (String(typeId ?? '')) {
-    case '1': return ['1', 'x', '2']; // Full Time Result
-    case '302': return ['1x', '12', 'x2']; // Double Chance
-    case '303': return ['yes', 'no']; // Both Teams to Score
-    case '264': // Total Goals (Over/Under)
-    case '320': return ['over', 'under']; // Total Corners
-    case '323': return ['over', 'under']; // Total Cards
-    case '311': return ['over', 'under']; // Yellow Cards
-    case '312': return ['over', 'under']; // Red Cards
-    case '301': return ['1', '2']; // Asian Handicap (home/away handicap)
-    case '304': return ['1', 'x', '2']; // Half Time Result
-    case '306': return ['1', 'x', '2']; // Correct Score (positional, refined below)
-    default:
-      if (renderType === 'cols-3') return ['1', 'x', '2'];
-      if (renderType === 'total-2' || renderType === 'fora-2') return ['over', 'under'];
-      return [];
-  }
 }
 
 /**
@@ -235,13 +201,6 @@ export function describeMarket({ name, typeId, groupId, subgames = '' }) {
       const byName = columnFromName(raw);
       return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: raw };
     }
-  }
-
-  // Snapshot group names may be omitted from incremental push updates.
-  const cached = GROUP_NAME_CACHE.get(String(groupId));
-  if (cached && cached !== raw) {
-    const resolved = describeMarket({ name: cached, typeId: null, groupId: null, subgames });
-    if (resolved) return resolved;
   }
 
   const fromType = MARKET_MAP.types[String(typeId)];
@@ -337,7 +296,6 @@ export function decodePushMessage(message) {
       const rawGroupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
       if (rawGroupName && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(rawGroupName)) {
         cachedGroup.name = rawGroupName;
-        GROUP_NAME_CACHE.set(String(group.id), rawGroupName);
       }
       if (group.renderType) {
         cachedGroup.renderType = group.renderType;
