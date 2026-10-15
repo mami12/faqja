@@ -234,3 +234,34 @@ assert.equal(module.exports.formatOddsButtonLabel('1/X', 'Half Time / Full Time'
 assert.equal(module.exports.formatMarketSelectionLabel('Next Corner', '9', translate).includes('9'), true, 'The market heading still carries its line');
 
 console.log('Sportsbook label translation checks passed');
+
+const filtersSource = readFileSync(new URL('../web/src/utils/sportsbookFilters.ts', import.meta.url), 'utf8');
+const filterCompiled = ts.transpileModule(filtersSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const filtersModule = { exports: {} };
+new Function('exports', 'require', 'module', filterCompiled)(filtersModule.exports, require, filtersModule);
+const filter1X2 = filtersModule.exports.filterRedundantMatchResultMarkets;
+const mockMarket = (name, period = 0, status = 'ACTIVE') => ({
+  name, period, outcomes: [{ odds: 2.1, status }],
+});
+const fulltime = mockMarket('Full Time Result');
+const genericWinner = mockMarket('Match Winner');
+const genericResult = mockMarket('Match Result');
+const firstHalf = mockMarket('1st Half Result', 1);
+const combined = mockMarket('Result and both teams to score');
+assert.deepEqual(
+  filter1X2([fulltime, genericWinner, genericResult, firstHalf, combined]),
+  [fulltime, firstHalf, combined],
+  'When Full Time Result exists, hide only duplicated generic Match Winner / Match Result',
+);
+assert.deepEqual(
+  filter1X2([genericWinner, genericResult, firstHalf]),
+  [genericWinner, genericResult, firstHalf],
+  'Never remove the only remaining result markets',
+);
+assert.deepEqual(
+  filter1X2([mockMarket('Full Time Result', 0, 'SUSPENDED'), genericWinner]),
+  [mockMarket('Full Time Result', 0, 'SUSPENDED'), genericWinner],
+  'Do not hide live available result market when canonical odds are suspended',
+);

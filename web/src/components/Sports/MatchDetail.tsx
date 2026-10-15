@@ -11,7 +11,7 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
-import { isHandicapMarket } from '../../utils/sportsbookFilters';
+import { isHandicapMarket, filterRedundantMatchResultMarkets } from '../../utils/sportsbookFilters';
 import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
@@ -89,7 +89,7 @@ interface GroupedMarket {
 const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
   const map = new Map<string, Market[]>();
 
-  for (const m of markets.filter((market) => !isHandicapMarket(market))) {
+  for (const m of filterRedundantMatchResultMarkets(markets).filter((market) => !isHandicapMarket(market))) {
     const rawClean = cleanMarketName(m.name);
     const explicitLine = String(m.line ?? '').trim();
     // Never merge markets containing a minute in their name when the feed has no separate line.

@@ -43,3 +43,23 @@ export function isHandicapMarket(market: any) {
   const details = normalize(`${market?.name ?? ''} ${market?.marketType ?? ''} ${market?.key ?? ''} ${market?.extId ?? ''}`);
   return /\b(handicap|asian|fora)\b/.test(details);
 }
+
+/**
+ * Hide generic full-time 1X2 duplicates only when the canonical feed market
+ * "Full Time Result" is available. Never touch halftime, combined markets,
+ * prices or original selection IDs.
+ */
+export function filterRedundantMatchResultMarkets<T extends { name: string; period?: number; outcomes?: Array<{ odds?: number; status?: string }> }>(
+  markets: T[],
+): T[] {
+  const canonical = markets.some(m =>
+    Number(m.period ?? 0) === 0 &&
+    normalize(m.name) === 'full time result' &&
+    (m.outcomes ?? []).some(o => typeof o.odds === 'number' && o.odds > 0 && o.status !== 'SUSPENDED')
+  );
+  if (!canonical) return markets;
+  return markets.filter(m =>
+    Number(m.period ?? 0) !== 0 ||
+    !/^(match winner|match result)$/.test(normalize(m.name))
+  );
+}
