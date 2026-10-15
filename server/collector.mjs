@@ -27,6 +27,11 @@ const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)$/i
 /** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
 const hideSyntheticLines = config.oddsHideSyntheticLines;
 
+/** First-goal timing is a multi-selection market, NOT a 1X2 or total line. */
+export function isGoalTimeMarket(name) {
+  return /(?:\\b(?:1st|first|next|last)\\s+goal\\s+time\\b|\\btime\\s+of\\s+(?:the\\s+)?(?:1st|first|next|last)\\s+goal\\b|\\btime\\s+of\\s+scoring\\b)/i.test(String(name ?? ''));
+}
+
 /** groups odds_current rows into markets for the UI */
 export function buildMarkets(oddsRows) {
   const markets = new Map();
@@ -67,11 +72,14 @@ export function buildMarkets(oddsRows) {
     const oNormName = norm(o.outcome_name);
     const oNormKey = norm(o.outcome_key);
     const isMixed = isResultBttsMarket(o.market_name ?? markets.get(key).name) || isResultTotalMarket(o.market_name ?? markets.get(key).name) || isTotalBttsMarket(o.market_name ?? markets.get(key).name);
+    const isGoalTime = isGoalTimeMarket(o.market_name ?? markets.get(key).name);
 
     // prevent duplicate outcome keys or outcome names inside the same market group
     const existing = outcomes.find(
-      (eo) => (eo.key && oNormKey && norm(eo.key) === oNormKey) ||
-              (!isMixed && eo.name && oNormName && norm(eo.name) === oNormName)
+      (eo) => isGoalTime
+        ? eo.name && oNormName && norm(eo.name) === oNormName
+        : (eo.key && oNormKey && norm(eo.key) === oNormKey) ||
+          (!isMixed && eo.name && oNormName && norm(eo.name) === oNormName)
     );
 
     if (existing) {
@@ -98,6 +106,7 @@ export function buildMarkets(oddsRows) {
     const canon = (oc) => {
       const k = String(oc.key ?? '').trim().toLowerCase();
       const n = norm(oc.name);
+      if (isGoalTimeMarket(m.name)) return n || k;
       if (isResultBttsMarket(m.name) || isResultTotalMarket(m.name) || isTotalBttsMarket(m.name)) return k || n;
       if (k === '1' || n === '1' || n === 'home' || n === 'w1') return '1';
       if (k === 'x' || n === 'x' || n === 'draw' || n === 'tie') return 'x';
