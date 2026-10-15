@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers } from 'lucide-react';
+import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers, Search, SlidersHorizontal, UserRound } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import { useLanguage } from '../../context/LanguageContext';
@@ -9,14 +9,13 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { isHandicapMarket, filterRedundantMatchResultMarkets } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
+import { formatMarketLine, isAnyMixedMarket } from '../../utils/sportsbookLabels';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
 /* ------------------------------------------------------------------ */
 
-type Category = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'other';
+type Category = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'handicap' | 'players' | 'other';
 
 interface CategoryDef {
   key: Category;
@@ -25,32 +24,31 @@ interface CategoryDef {
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: 'main',    label: 'Kryesore',   icon: Trophy },
-  { key: 'goals',   label: 'Golat',      icon: Target },
-  { key: 'mixed',   label: 'MIKSE',      icon: Layers },
-  { key: 'corners', label: 'Këndet',     icon: Flag },
-  { key: 'cards',   label: 'Kartonat',   icon: ShieldAlert },
-  { key: 'htft',    label: 'Pjesa/Ndeshja', icon: Clock },
-  { key: 'other',   label: 'Të Tjera',   icon: ListOrdered },
+  { key: 'main', label: 'Main', icon: Trophy },
+  { key: 'goals', label: 'Goals', icon: Target },
+  { key: 'mixed', label: 'Combos', icon: Layers },
+  { key: 'corners', label: 'Corners', icon: Flag },
+  { key: 'cards', label: 'Cards', icon: ShieldAlert },
+  { key: 'htft', label: 'Halves / Periods', icon: Clock },
+  { key: 'handicap', label: 'Handicap', icon: SlidersHorizontal },
+  { key: 'players', label: 'Players', icon: UserRound },
+  { key: 'other', label: 'Other', icon: ListOrdered },
 ];
 
 /** Kthen kategorinë e një market-i */
 const categoryOf = (market: Market): Category => {
   const name = String(market.name ?? '').toLowerCase();
   const type = String(market.marketType ?? '').toUpperCase();
-
-  if (isAnyMixedMarket(name)) return 'mixed';
-  if (type === 'CORNERS' || /corner/i.test(name)) return 'corners';
-  if (type === 'CARDS' || /\bcards?\b|booking|yellow|\bred\b/i.test(name)) return 'cards';
-  if (/halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time/i.test(name)) return 'htft';
-  if (
-    type === '1X2' ||
-    /1x2|match result|full time result|winner|double chance|draw no bet|moneyline/i.test(name)
-  ) return 'main';
-  if (
-    type === 'OVER_UNDER' ||
-    /total|over\/?under|both teams|btts|next goal|correct score|exact|goals/i.test(name)
-  ) return 'goals';
+  // The provider often calls a corner market "Corners. Result" or a
+  // cards market "Yellow cards. Total". Categorize by subject first.
+  if (type === 'CORNERS' || /\bcorners?\b|\bcorner\s*kicks?\b/.test(name)) return 'corners';
+  if (type === 'CARDS' || /\bcards?\b|bookings?|yellow|\bred\s+cards?\b|disciplin/.test(name)) return 'cards';
+  if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/.test(name)) return 'players';
+  if (/\bhandicap\b|\basian\b|\bfora\b/.test(name)) return 'handicap';
+  if (isAnyMixedMarket(name) || /\b(?:result|1x2|winner)\b.*\b(?:total|goals|btts)\b|\b(?:total|goals)\b.*\b(?:btts|both teams)\b/.test(name)) return 'mixed';
+  if (/halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time|\b(?:1st|2nd|first|second)\s+half\b|\bperiods?\b/.test(name)) return 'htft';
+  if (/\b(?:1x2|match result|full time result|winner|double chance|draw no bet|moneyline|to qualify)\b/.test(name) || type === '1X2') return 'main';
+  if (type === 'OVER_UNDER' || /\bgoals?\b|\btotal\b|over\/?under|both teams|btts|correct score|odd\/even/.test(name)) return 'goals';
   return 'other';
 };
 
@@ -58,14 +56,7 @@ const categoryOf = (market: Market): Category => {
 /* Ndihmës                                                            */
 /* ------------------------------------------------------------------ */
 
-const cleanMarketName = (name?: string) => {
-  if (!name) return '';
-  const s = String(name).trim();
-  if (/^cols-?\d+$/i.test(s)) return 'Tregu i ndeshjes';
-  if (/^total-2$/i.test(s)) return 'Totali i golave';
-  if (/^fora-2$/i.test(s)) return 'Handicap';
-  return s;
-};
+const cleanMarketName = (name?: string) => String(name ?? '').trim() || 'Unknown market';
 
 const formatLine = (line?: string) => {
   if (!line) return '';
@@ -76,8 +67,14 @@ const formatLine = (line?: string) => {
 
 const baseMarketName = (market: Market): string => {
   const raw = String(market.name ?? '').trim();
-  const stripped = String(market.line ?? '').trim() ? raw.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim() : raw;
-  return cleanMarketName(stripped) || cleanMarketName(raw);
+  const line = String(market.line ?? '').trim().replace(',', '.');
+  // Only remove a numeric suffix if it is the exact line supplied by the feed.
+  // Otherwise preserve its name verbatim (e.g. "Next Goal 2").
+  const numberInName = raw.match(/\s+(\d+(?:[.,]\d+)?)$/);
+  const stripped = line && numberInName && numberInName[1].replace(',', '.') === line
+    ? raw.slice(0, numberInName.index).trim()
+    : raw;
+  return cleanMarketName(stripped);
 };
 
 const groupKeyOf = (market: Market): string => {
@@ -113,24 +110,15 @@ const groupByBaseName = (markets: Market[]): MarketGroup[] => {
   return Array.from(groups.values());
 };
 
-const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
-  const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
-  const mName = norm(marketName);
-  const is1X2 = !isResultBttsMarket(mName) && /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = !isAnyMixedMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
-
+// Provider labels can repeat in a legitimate multi-selection market.
+// Deduplication by name incorrectly removes valid outcomes.
+const dedupeOutcomes = (outcomes: Market['outcomes'] = []) => {
   const seen = new Set<string>();
-  const res: any[] = [];
-  for (const o of outcomes) {
-    const k = norm(isAnyMixedMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
-    if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
-    if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
-    if (!seen.has(k)) {
-      seen.add(k);
-      res.push(o);
-    }
-  }
-  return res;
+  return (outcomes ?? []).filter(outcome => {
+    if (seen.has(outcome.id)) return false;
+    seen.add(outcome.id);
+    return true;
+  });
 };
 
 /* ------------------------------------------------------------------ */
@@ -144,7 +132,7 @@ interface MarketCardProps {
 }
 
 function MarketCard({ market, match, title }: MarketCardProps) {
-  const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes ?? [], market.name), market, match);
+  const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes), market, match);
   if (!outcomes.length) return null;
   return (
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
@@ -152,7 +140,7 @@ function MarketCard({ market, match, title }: MarketCardProps) {
       <div className="grid gap-px bg-tertiary/80" style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
         {outcomes.map(outcome => (
           <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
-            <OddsButton match={match} market={market} outcome={outcome} isWide />
+            <OddsButton match={match} market={market} outcome={outcome} isWide showRawLabel />
           </div>
         ))}
       </div>
@@ -171,22 +159,22 @@ function GroupCard({ group, match, title }: GroupCardProps) {
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
       <div className="flex items-center justify-between bg-[#424d60] px-2 py-1.5">
         <span className="text-xs font-semibold text-white">{title}</span>
-        <span className="text-[10px] text-slate-300">{group.markets.length} linja</span>
+        <span className="text-[10px] text-slate-300">{group.markets.length} lines</span>
       </div>
       <div className="divide-y divide-tertiary/70">
         {group.markets.map(market => {
-          const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes ?? [], market.name), market, match);
+          const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes), market, match);
           if (!outcomes.length) return null;
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
-                {formatMarketLine(market.name, formatLine(market.line)) || translateMarketName(market.name, () => market.name)}
+                {formatMarketLine(market.name, formatLine(market.line)) || market.name}
               </div>
               <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
                 {outcomes.map(outcome => (
                   <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
-                    <OddsButton match={match} market={market} outcome={outcome} isWide />
+                    <OddsButton match={match} market={market} outcome={outcome} isWide showRawLabel />
                   </div>
                 ))}
               </div>
@@ -206,17 +194,20 @@ export default function MarketPanel({ match }: { match: Match }) {
   const { t } = useLanguage();
   const { lockedMarkets } = useLiveFeed();
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
+  const [marketSearch, setMarketSearch] = useState('');
 
   const { categorized, counts } = useMemo(() => {
     const result: Record<Category, Market[]> = {
-      main: [], goals: [], mixed: [], corners: [], cards: [], htft: [], other: [],
+      main: [], goals: [], mixed: [], corners: [], cards: [], htft: [], handicap: [], players: [], other: [],
     };
     const c: Record<Category, number> = {
-      main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, other: 0,
+      main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, handicap: 0, players: 0, other: 0,
     };
 
-    for (const market of filterRedundantMatchResultMarkets(match.markets ?? [])) {
-      if (isHandicapMarket(market)) continue;
+    const query = marketSearch.trim().toLowerCase();
+    for (const market of match.markets ?? []) {
+      if (query && ![market.name, market.line, ...(market.outcomes ?? []).map(o => o.name)]
+        .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
       const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
       if (!filterDecidedOutcomes(available, market, match).length) continue;
@@ -236,11 +227,11 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [match, lockedMarkets]);
+  }, [match, lockedMarkets, marketSearch]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
-  if (totalMarkets === 0) {
+  if (totalMarkets === 0 && !marketSearch) {
     return (
       <div className="border-t border-tertiary/60 px-4 py-3 text-xs text-text-secondary">
         {t('common.no_results')}
@@ -282,6 +273,14 @@ export default function MarketPanel({ match }: { match: Match }) {
         </span>
       </div>
 
+      <label className="flex items-center gap-2 border border-tertiary/70 bg-secondary px-3 py-2 text-text-secondary">
+        <Search size={16} className="shrink-0" />
+        <input value={marketSearch} onChange={e => setMarketSearch(e.target.value)}
+          placeholder="Search markets, lines, outcomes..."
+          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-text-secondary" />
+        {marketSearch && <button type="button" onClick={() => setMarketSearch('')} className="text-xs underline">Clear</button>}
+      </label>
+
       {/* Filtrat e kategorive — më kompakt në mobile */}
       <div className="flex gap-1 sm:gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
         <button
@@ -293,7 +292,7 @@ export default function MarketPanel({ match }: { match: Match }) {
           }`}
         >
           <ListOrdered size={14} />
-          <span>Të Gjitha</span>
+          <span>All Markets</span>
           <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
             activeCategory === 'all' ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
           }`}>
@@ -327,6 +326,12 @@ export default function MarketPanel({ match }: { match: Match }) {
         })}
       </div>
 
+      {totalMarkets === 0 && (
+        <div className="border border-tertiary/60 p-4 text-center text-sm text-text-secondary">
+          No available markets match your search.
+        </div>
+      )}
+
       {/* Seksionet e kategorive */}
       {categoriesToShow.map(cat => {
         const markets = categorized[cat.key];
@@ -351,7 +356,8 @@ export default function MarketPanel({ match }: { match: Match }) {
               {marketGroups.map(group => {
                 if (group.markets.length === 1) {
                   const market = group.markets[0];
-                  const title = translateMarketName(market.name, t) || t('markets.market');
+                  const line = formatMarketLine(market.name, formatLine(market.line));
+                  const title = cleanMarketName(market.name) + (line && !market.name.includes(line) ? ' (' + line + ')' : '');
                   return (
                     <MarketCard
                       key={market.id}
@@ -362,7 +368,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   );
                 }
 
-                const baseTitle = translateMarketName(group.base, t) || group.base;
+                const baseTitle = group.base;
                 return (
                   <GroupCard
                     key={groupKeyOf(group.markets[0])}
