@@ -51,6 +51,12 @@ const VERIFIED_AL: Record<string, string> = {
 
 const normalized = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 
+/** Documented provider group: g6379 is the football goals Total market. */
+const isVerifiedGoalTotal = (market: Market): boolean => {
+  const key = String(market.extId ?? '').trim() || String(market.id ?? '').split('|')[1] || '';
+  return /^g6379(?:p\\d+)?$/i.test(key);
+};
+
 /** Strip only a line whose number is explicit, or a decimal total embedded in the name. */
 export function marketBaseName(market: Market): string {
   const raw = String(market.name ?? '').trim() || 'Unverified market';
@@ -86,7 +92,7 @@ export function isIdentifiedMarket(market: Market): boolean {
   if (!name || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name)) return false;
   if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(name)) return false;
   // The bare "Total" without a known subject is ambiguous in the browser.
-  if (/^total(?:\s+\d+(?:[.,]\d+)?)?$/i.test(name)) return false;
+  if (/^total(?:\s+\d+(?:[.,]\d+)?)?$/i.test(name)) return isVerifiedGoalTotal(market);
   return true;
 }
 
@@ -108,7 +114,8 @@ export function marketCategoryOf(market: Market): MarketCategory {
 
 export function marketDisplayTitle(market: Market, lang: MarketLanguage, withLine = false): string {
   const base = marketBaseName(market);
-  const display = lang === 'al' ? VERIFIED_AL[normalized(base)] ?? base : base;
+  const title = /^total$/i.test(base) && isVerifiedGoalTotal(market) ? 'Total Goals' : base;
+  const display = lang === 'al' ? VERIFIED_AL[normalized(title)] ?? title : title;
   // The period is already explicit in some provider labels. Do not add an invented period.
   const rawHasPeriod = /\b(?:1st|2nd|first|second)\s+half\b|half\s*time|halftime|\bperiod\b/i.test(base);
   const period = !rawHasPeriod && (market.period === 1 || market.period === 2)
