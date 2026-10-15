@@ -11,7 +11,7 @@ import { formatTicketSelection, formatMarketSelectionLabel } from '../../utils/s
 
 export default function Betslip() {
   const { 
-    selections, stake, setStake, ticketType, setTicketType, systemType, setSystemType, 
+    selections, columns, stake, setStake, ticketType, setTicketType, systemType, setSystemType, 
     removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet 
   } = useBetslip();
   const { t } = useLanguage();
@@ -30,7 +30,7 @@ export default function Betslip() {
   } | null>(null);
   const [bookingCode, setBookingCode] = useState('');
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [placedTicket, setPlacedTicket] = useState<Ticket | null>(null);
+  const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]);
   const [stakeError, setStakeError] = useState('');
   const placeBetClickLock = useRef(false);
 
@@ -44,7 +44,7 @@ export default function Betslip() {
   const handlePlaceBet = async () => {
     if (placeBetClickLock.current) return;
     const stakeNum = parseFloat(stake) || 0;
-    if (stakeNum < 1) {
+    if (stakeNum < 100) {
       setStakeError(t('betslip.min_stake'));
       return;
     }
@@ -52,7 +52,7 @@ export default function Betslip() {
     placeBetClickLock.current = true;
     try {
       const ticket = await placeBet(() => refreshUser());
-      setPlacedTicket(ticket);
+      setPlacedTickets(Array.isArray(ticket.tickets) ? ticket.tickets : [ticket]);
       clearAll();
     } catch (e: any) {
       const errData = e.response?.data;
@@ -90,7 +90,7 @@ export default function Betslip() {
       setShowBookingModal(true);
       clearAll();
     } catch (e: any) {
-      alert(e.response?.data?.message || t('common.error'));
+      alert(e.response?.data?.message || e.message || t('common.error'));
     }
   };
 
@@ -188,6 +188,7 @@ export default function Betslip() {
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
           <select
+            disabled={columns.length > 1}
             value={ticketType}
             onChange={e => setTicketType(e.target.value as 'SINGLE' | 'COMBO' | 'SYSTEM')}
             aria-label="Lloji i skedinës"
@@ -276,7 +277,7 @@ export default function Betslip() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300">{t('betslip.total_odds')}:</span>
                 <strong className="font-mono text-sm font-bold tabular-nums text-accent-yellow">
-                  {ticketType === 'COMBO' ? totalOdds.toFixed(2) : selections.length === 1 ? selections[0].odds.toFixed(2) : '-'}
+                  {columns.length === 1 ? totalOdds.toFixed(2) : 'Sipas kolonave'}
                 </strong>
               </div>
               {ticketType === 'SYSTEM' && (
@@ -292,9 +293,9 @@ export default function Betslip() {
                 </label>
               )}
               <div className="flex items-center justify-between gap-3 text-xs">
-                <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">{t('betslip.stake')}:</label>
+                <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">{columns.length > 1 ? 'Shuma për kolonë' : t('betslip.stake')}:</label>
                 <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
-                  <input id="betslip-stake" type="number" min="1" step="1" value={stake}
+                  <input id="betslip-stake" type="number" min="100" step="1" value={stake}
                     onChange={e => setStake(e.target.value)}
                     className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
                   />
@@ -310,6 +311,12 @@ export default function Betslip() {
                   </button>
                 ))}
               </div>
+              {columns.length > 1 && (
+                <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
+                  <span className="text-slate-300">Shuma totale ({columns.length} kolona):</span>
+                  <strong className="font-mono font-bold text-white">{(Number(stake || 0) * columns.length).toFixed(2)} Lëk</strong>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
                 <span className="text-slate-300">{t('betslip.potential_payout')}:</span>
                 <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{potentialPayout.toFixed(2)} Lëk</strong>
@@ -317,7 +324,7 @@ export default function Betslip() {
             </div>
             <div className="grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet}
+                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columns.length > 24}
                   aria-busy={isPlacingBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
                   {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
@@ -325,7 +332,8 @@ export default function Betslip() {
               ) : (
                 <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
               )}
-              <button type="button" onClick={handleBook}
+              <button type="button" onClick={handleBook} disabled={columns.length > 1}
+                title={columns.length > 1 ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
                 className="bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
                 {t('betslip.book_ticket')}
               </button>
@@ -335,7 +343,7 @@ export default function Betslip() {
       )}
 
       {showBookingModal && <BookingModal code={bookingCode} onClose={() => setShowBookingModal(false)} />}
-      {placedTicket && <TicketReceipt ticket={placedTicket} onClose={() => setPlacedTicket(null)} />}
+      {placedTickets.length > 0 && <TicketReceipt ticket={placedTickets[0]} onClose={() => setPlacedTickets(prev => prev.slice(1))} />}
 
       {/* Modal kur koeficienti ka ndryshuar */}
       {oddsChangeModal && (
