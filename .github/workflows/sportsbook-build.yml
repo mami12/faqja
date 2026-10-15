@@ -8,6 +8,7 @@ on:
       - 'scripts/test-live-risk.mjs'
       - 'scripts/test-mixed-combos.mjs'
       - 'scripts/test-sportsbook-labels.mjs'
+      - 'scripts/test-market-identity.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/sportsbook-build.yml'
@@ -34,12 +35,18 @@ jobs:
           npm --prefix web ci
       - name: Validate sportsbook label regressions
         run: npm run test:sportsbook-labels
+      - name: Validate market identities and unknown-market exclusions
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: node scripts/test-market-identity.mjs
       - name: Validate server risk suspensions
         run: node scripts/test-live-risk.mjs
       - name: Validate mixed market contracts and settlement
         run: node scripts/test-mixed-combos.mjs
       - name: Check backend syntax
         run: |
+          node --check server/push-decode.mjs
+          node --check server/collector.mjs
           node --check server/live-risk.mjs
           node --check server/index.mjs
           node --check server/ledger/bets.mjs

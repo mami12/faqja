@@ -12,6 +12,23 @@ import { isResultTotalMarket, isTotalBttsMarket } from './ledger/mixed-combos.mj
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 
 /** a market name that is just a render-type label because the feed omitted the real name */
+
+/** Do not expose unresolved labels from old stored odds or older decoder frames. */
+export function isIdentifiedMarketName(name, subgames = '', marketKey = '') {
+  const raw = String(name ?? '').trim();
+  if (!raw || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(raw)) return false;
+  // A family alone ("Corners") gives no indication whether the wager is
+  // total, 1X2, next corner, etc. It is not a valid market description.
+  if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(raw)) return false;
+  // A generic "Total" is only safely goals when the upstream declares
+  // subgame=3 (totals), without corner/card subgame markers.
+  if (/^total$/i.test(raw)) {
+    if (/^g6379(?:p\d+)?$/i.test(String(marketKey))) return true;
+    const ids = String(subgames).split(',').map(s => s.trim());
+    return ids.includes('3') && !ids.includes('13') && !ids.includes('174');
+  }
+  return true;
+}
 const isSyntheticName = (name) => /^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
 
 /** hide the invented duplicate markets: ODDS_HIDE_SYNTHETIC_LINES=false shows them again */
@@ -22,12 +39,17 @@ export function buildMarkets(oddsRows) {
   const markets = new Map();
 
   for (const o of oddsRows) {
+    if (!isIdentifiedMarketName(o.market_name, o.subgames, o.market_key)) continue;
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
       // classify from the name at read time; the provider stops re-sending
       // unchanged markets, so a stored column can go stale. market-map.json
       // overrides still apply because they set the market *name*.
-      const name = o.market_name ?? '';
+      // The provider's bare "Total" becomes an identified goal market only
+      // when subgame=3 proves its subject; keep original odds/selection keys.
+      const rawName = o.market_name ?? '';
+      const name = /^total$/i.test(String(rawName).trim()) && isIdentifiedMarketName(rawName, o.subgames, o.market_key)
+        ? 'Total Goals' : rawName;
       const byName = marketColumn(o.market_key, name);
       const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
       const column = /handicap|fora|asian/i.test(String(name))
@@ -39,7 +61,7 @@ export function buildMarkets(oddsRows) {
             : o.board_column ?? 'other';
       markets.set(key, {
         key: o.market_key,
-        name: o.market_name,
+        name,
         line: o.line,
         column,
         period: Number(o.period ?? 0),

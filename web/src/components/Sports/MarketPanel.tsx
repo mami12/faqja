@@ -9,13 +9,15 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { formatMarketLine, isAnyMixedMarket } from '../../utils/sportsbookLabels';
+import { formatMarketLine } from '../../utils/sportsbookLabels';
+import { marketBaseName, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import type { MarketCategory } from '../../utils/marketCatalog';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
 /* ------------------------------------------------------------------ */
 
-type Category = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'handicap' | 'players' | 'other';
+type Category = MarketCategory;
 
 interface CategoryDef {
   key: Category;
@@ -35,54 +37,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'other', label: 'Other', icon: ListOrdered },
 ];
 
-/** Kthen kategorinë e një market-i */
-const categoryOf = (market: Market): Category => {
-  const name = String(market.name ?? '').toLowerCase();
-  const type = String(market.marketType ?? '').toUpperCase();
-  // The provider often calls a corner market "Corners. Result" or a
-  // cards market "Yellow cards. Total". Categorize by subject first.
-  if (type === 'CORNERS' || /\bcorners?\b|\bcorner\s*kicks?\b/.test(name)) return 'corners';
-  if (type === 'CARDS' || /\bcards?\b|bookings?|yellow|\bred\s+cards?\b|disciplin/.test(name)) return 'cards';
-  if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/.test(name)) return 'players';
-  if (/\bhandicap\b|\basian\b|\bfora\b/.test(name)) return 'handicap';
-  if (isAnyMixedMarket(name) || /\b(?:result|1x2|winner)\b.*\b(?:total|goals|btts)\b|\b(?:total|goals)\b.*\b(?:btts|both teams)\b/.test(name)) return 'mixed';
-  if (/halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time|\b(?:1st|2nd|first|second)\s+half\b|\bperiods?\b/.test(name)) return 'htft';
-  if (/\b(?:1x2|match result|full time result|winner|double chance|draw no bet|moneyline|to qualify)\b/.test(name) || type === '1X2') return 'main';
-  if (type === 'OVER_UNDER' || /\bgoals?\b|\btotal\b|over\/?under|both teams|btts|correct score|odd\/even/.test(name)) return 'goals';
-  return 'other';
-};
-
-/* ------------------------------------------------------------------ */
-/* Ndihmës                                                            */
-/* ------------------------------------------------------------------ */
-
-const cleanMarketName = (name?: string) => String(name ?? '').trim() || 'Unknown market';
-
-const formatLine = (line?: string) => {
-  if (!line) return '';
-  const s = String(line).trim();
-  if (!s || /^#\d+$/.test(s)) return '';
-  return s;
-};
-
-const baseMarketName = (market: Market): string => {
-  const raw = String(market.name ?? '').trim();
-  const line = String(market.line ?? '').trim().replace(',', '.');
-  // Only remove a numeric suffix if it is the exact line supplied by the feed.
-  // Otherwise preserve its name verbatim (e.g. "Next Goal 2").
-  const numberInName = raw.match(/\s+(\d+(?:[.,]\d+)?)$/);
-  const stripped = line && numberInName && numberInName[1].replace(',', '.') === line
-    ? raw.slice(0, numberInName.index).trim()
-    : raw;
-  return cleanMarketName(stripped);
-};
-
-const groupKeyOf = (market: Market): string => {
-  const base = baseMarketName(market);
-  const type = String(market.marketType ?? '').toUpperCase();
-  const period = Number(market.period ?? 0);
-  return `${type}::${period}::${base}`;
-};
+/* Family and group identification now share one catalog with MatchDetail. */
 
 interface MarketGroup {
   base: string;
@@ -92,12 +47,12 @@ interface MarketGroup {
 const groupByBaseName = (markets: Market[]): MarketGroup[] => {
   const groups = new Map<string, MarketGroup>();
   for (const mk of markets) {
-    const key = groupKeyOf(mk);
+    const key = marketGroupKey(mk);
     const existing = groups.get(key);
     if (existing) {
       existing.markets.push(mk);
     } else {
-      groups.set(key, { base: baseMarketName(mk), markets: [mk] });
+      groups.set(key, { base: marketBaseName(mk), markets: [mk] });
     }
   }
   for (const g of groups.values()) {
@@ -168,7 +123,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
-                {formatMarketLine(market.name, formatLine(market.line)) || market.name}
+                {formatMarketLine(market.name, marketLineValue(market)) || market.name}
               </div>
               <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
@@ -191,7 +146,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
 /* ------------------------------------------------------------------ */
 
 export default function MarketPanel({ match }: { match: Match }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { lockedMarkets } = useLiveFeed();
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [marketSearch, setMarketSearch] = useState('');
@@ -206,13 +161,14 @@ export default function MarketPanel({ match }: { match: Match }) {
 
     const query = marketSearch.trim().toLowerCase();
     for (const market of match.markets ?? []) {
-      if (query && ![market.name, market.line, ...(market.outcomes ?? []).map(o => o.name)]
+      if (!isIdentifiedMarket(market)) continue;
+      if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
       const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
       if (!filterDecidedOutcomes(available, market, match).length) continue;
 
-      const cat = categoryOf(market);
+      const cat = marketCategoryOf(market);
       result[cat].push(market);
       c[cat]++;
     }
@@ -227,7 +183,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [match, lockedMarkets, marketSearch]);
+  }, [match, lockedMarkets, marketSearch, lang]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
@@ -315,7 +271,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               }`}
             >
               <cat.icon size={14} strokeWidth={1.9} />
-              <span>{cat.label}</span>
+              <span>{marketCategoryLabel(cat.key, lang)}</span>
               <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
                 isActive ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
               }`}>
@@ -344,7 +300,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               <span className="w-1 h-3 sm:h-4 rounded-full bg-accent-green"></span>
               <cat.icon size={15} className="text-accent-green" strokeWidth={1.9} />
               <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
-                {cat.label}
+                {marketCategoryLabel(cat.key, lang)}
               </div>
               <span className="text-[9px] sm:text-[10px] font-bold text-text-secondary bg-secondary px-1.5 sm:px-2 py-0.5 rounded-full border border-tertiary/60">
                 {marketGroups.length}
@@ -356,8 +312,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               {marketGroups.map(group => {
                 if (group.markets.length === 1) {
                   const market = group.markets[0];
-                  const line = formatMarketLine(market.name, formatLine(market.line));
-                  const title = cleanMarketName(market.name) + (line && !market.name.includes(line) ? ' (' + line + ')' : '');
+                  const title = marketDisplayTitle(market, lang, true);
                   return (
                     <MarketCard
                       key={market.id}
@@ -368,10 +323,10 @@ export default function MarketPanel({ match }: { match: Match }) {
                   );
                 }
 
-                const baseTitle = group.base;
+                const baseTitle = marketDisplayTitle(group.markets[0], lang);
                 return (
                   <GroupCard
-                    key={groupKeyOf(group.markets[0])}
+                    key={marketGroupKey(group.markets[0])}
                     group={group}
                     match={match}
                     title={baseTitle}

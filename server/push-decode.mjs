@@ -139,9 +139,6 @@ function rememberSlot(matchId, groupId, oddsId, slot) {
   ITEM_META_CACHE.set(`${matchId}|${oddsId}`, { ...existing, ...slot });
 }
 
-const isTotalPair = (outcomes) =>
-  outcomes.length > 0 && outcomes.every((o) => ['under', 'over', 'u', 'o'].includes(String(o).toLowerCase()));
-
 /** /subgames/get-many?sportId=18 -> market family per subgame id (verified against the API) */
 const SUBGAME_FAMILY = {
   3: 'total',    // Total
@@ -154,9 +151,6 @@ const SUBGAME_FAMILY = {
 // NOTE: subgame 2 ("Main") is a bucket marker present on most markets, so it is
 // deliberately not mapped - otherwise everything lands in the 1X2 column.
 const SUBGAME_PRIORITY = ['13', '174', '3', '6', '11'];
-
-/** groupId -> last known market name (snapshot frames carry names, incremental don't) */
-const GROUP_NAME_CACHE = new Map();
 
 function columnFromSubgames(subgames = '') {
   const ids = String(subgames).split(',').map((s) => s.trim()).filter(Boolean);
@@ -179,99 +173,41 @@ function columnFromName(name) {
 }
 
 /**
- * The outcome set each market type carries, when a delta frame gives us neither an explicit
- * outcome nor a cached snapshot. The old code used one hardcoded idxMap written for 1X2, so
- * index 0 always meant "1" (Home) - which is wrong for every other market and is exactly what
- * put a Home price inside Both Teams to Score.
+ * Only show a market when the provider gives its descriptive English title,
+ * or an explicit, verified group/type mapping identifies the market.
  *
- * Unknown types fall back to [] so the caller's renderType heuristics still apply.
+ * A price line, outcome pattern or subgame family does NOT identify the bet:
+ * Over/Under 6.5 might be goals, corners, cards, etc. Never guess.
+ * Return null for unidentified groups. Raw push frames remain available for
+ * diagnostics and later explicit mapping.
  */
-function defaultOutcomesForType(typeId, renderType) {
-  switch (String(typeId ?? '')) {
-    case '1': return ['1', 'x', '2']; // Full Time Result
-    case '302': return ['1x', '12', 'x2']; // Double Chance
-    case '303': return ['yes', 'no']; // Both Teams to Score
-    case '264': // Total Goals (Over/Under)
-    case '320': return ['over', 'under']; // Total Corners
-    case '323': return ['over', 'under']; // Total Cards
-    case '311': return ['over', 'under']; // Yellow Cards
-    case '312': return ['over', 'under']; // Red Cards
-    case '301': return ['1', '2']; // Asian Handicap (home/away handicap)
-    case '304': return ['1', 'x', '2']; // Half Time Result
-    case '306': return ['1', 'x', '2']; // Correct Score (positional, refined below)
-    default:
-      if (renderType === 'cols-3') return ['1', 'x', '2'];
-      if (renderType === 'total-2' || renderType === 'fora-2') return ['over', 'under'];
-      return [];
-  }
-}
-
-/**
- * Names/columns come from, in order: market-map.json -> group name cache ->
- * the feed's own `name` -> the odds type id -> heuristics based on outcomes/period.
- */
-function describeMarket({ name, typeId, groupId, line, renderType, outcomes, subgames, period = 0 }) {
+export function describeMarket({ name, typeId, groupId, subgames = '' }) {
   const fromGroup = MARKET_MAP.groups[String(groupId)];
-  if (fromGroup) return { column: fromGroup.column, name: fromGroup.name };
+  if (fromGroup?.name && fromGroup?.column) {
+    return { column: fromGroup.column, name: fromGroup.name };
+  }
 
   const subColumn = columnFromSubgames(subgames);
-
-  if (name && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim())) {
-    // the feed's own market name is the most reliable signal; subgames only fill gaps
-    const byName = columnFromName(name);
-    return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: name.trim() };
-  }
-
-  // Check the group name cache (snapshot frames carry names, incremental frames don't)
-  if (groupId) {
-    const cached = GROUP_NAME_CACHE.get(String(groupId));
-    if (cached && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(cached).trim())) {
-      const byName = columnFromName(cached);
-      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: cached.trim() };
+  const raw = String(name ?? '').trim();
+  const placeholder = /^(?:cols-?\d+|total-2|fora-2|market|unknown|unverified market(?:\b.*)?)$/i;
+  const ambiguous = /^(?:corners?|cards?|result|match market)$/i;
+  if (raw && !placeholder.test(raw) && !ambiguous.test(raw)) {
+    // "Total" is an authentic feed name, but needs independent evidence
+    // that the subject is goals (subgame 3). An unnamed Over/Under 6.5
+    // must never be called corners simply because the line is large.
+    if (/^total$/i.test(raw)) {
+      if (subColumn === 'total') return { column: 'total', name: 'Total Goals' };
+    } else {
+      const byName = columnFromName(raw);
+      return { column: byName !== 'other' ? byName : (subColumn ?? 'other'), name: raw };
     }
   }
 
   const fromType = MARKET_MAP.types[String(typeId)];
-  if (fromType) return { column: subColumn ?? fromType.column, name: fromType.name };
-
-  if (subColumn) {
-    return { column: subColumn, name: subColumn === 'corners' ? 'Corners' : subColumn === 'cards' ? 'Cards' : 'Market' };
+  if (fromType?.name && fromType?.column) {
+    return { column: fromType.column, name: fromType.name };
   }
-
-  // Heuristics: derive name from outcomes + period
-  if (outcomes.length > 0) {
-    // 3-way with Draw (1, x, 2) -> Result market
-    if (outcomes.some((o) => String(o).toLowerCase() === 'x')) {
-      const periodLabel = period === 1 ? '1st Half' : period === 2 ? '2nd Half' : 'Full Time';
-      return { column: 'result', name: `${periodLabel} Result` };
-    }
-    // Double Chance (1x, 12, x2)
-    if (outcomes.some((o) => /^(1x|12|x2)$/i.test(String(o)))) {
-      return { column: 'result', name: 'Double Chance' };
-    }
-    // Both Teams To Score (yes, no)
-    if (outcomes.every((o) => /^(yes|no)$/i.test(String(o)))) {
-      return { column: 'total', name: 'Both Teams To Score' };
-    }
-    // Odd/Even
-    if (outcomes.every((o) => /^(odd|even)$/i.test(String(o)))) {
-      return { column: 'total', name: 'Odd/Even' };
-    }
-    // Under/Over pair
-    if (isTotalPair(outcomes)) {
-      const n = Number(line);
-      if (Number.isFinite(n) && n >= 6.5) return { column: 'corners', name: 'Total Corners' };
-      if (Number.isFinite(n) && n >= 4.5) return { column: 'cards', name: 'Total Cards' };
-      return { column: 'total', name: subColumn === 'corners' ? 'Total Corners' : subColumn === 'cards' ? 'Total Cards' : 'Total' };
-    }
-    // 2-way result
-    if (outcomes.length === 2) {
-      return { column: 'result', name: 'Match Result (2-way)' };
-    }
-  }
-
-  if (renderType === 'fora-2') return { column: 'other', name: 'Handicap' };
-  return { column: subColumn ?? 'other', name: subColumn === 'corners' ? 'Corners' : subColumn === 'cards' ? 'Cards' : 'Market' };
+  return null;
 }
 
 /** one decoded push message: { kind: 'info' | 'odds' | 'unknown', ... } */
@@ -360,7 +296,6 @@ export function decodePushMessage(message) {
       const rawGroupName = typeof group.name === 'string' && group.name.trim() ? group.name.trim() : null;
       if (rawGroupName && !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(rawGroupName)) {
         cachedGroup.name = rawGroupName;
-        GROUP_NAME_CACHE.set(String(group.id), rawGroupName);
       }
       if (group.renderType) {
         cachedGroup.renderType = group.renderType;
@@ -428,28 +363,20 @@ export function decodePushMessage(message) {
           outcomeKey = String(item.name).trim();
         } else if (cachedItem?.outcomeKey) {
           outcomeKey = cachedItem.outcomeKey;
-        } else if (outcomes.length > 0) {
+        } else if (outcomes.length > 0 && ordered.length >= outcomes.length &&
+                   ordered.length % outcomes.length === 0) {
+          // Only a complete sequence permits positional outcome interpretation.
           outcomeKey = outcomes[i % outcomes.length];
-        } else {
-          const def = defaultOutcomesForType(tuple?.typeId, renderType);
-          if (def.length) {
-            outcomeKey = def[i % def.length];
-          } else if (tuple?.outcomeIdx !== null && tuple?.outcomeIdx !== undefined) {
-            const idxMap = { 0: '1', 1: 'x', 2: '2', 3: '2', 4: 'under', 5: 'over', 6: '1x', 7: '12', 8: 'x2', 9: 'yes', 10: 'no' };
-            outcomeKey = idxMap[tuple.outcomeIdx] ?? String(tuple.outcomeIdx);
-          } else if (renderType === 'cols-3') {
-            const threeWay = ['1', 'x', '2'];
-            outcomeKey = threeWay[i % 3];
-          } else if (renderType === 'cols-2') {
-            const twoWay = ['1', '2'];
-            outcomeKey = twoWay[i % 2];
-          } else if (renderType === 'total-2') {
-            const totalWay = ['under', 'over'];
-            outcomeKey = totalWay[i % 2];
-          } else {
-            outcomeKey = '1';
-          }
+        } else if (tuple?.outcomeIdx !== null && tuple?.outcomeIdx !== undefined) {
+          // Verified provider index layouts. All other partial deltas must
+          // await an explicit selection/cached full snapshot.
+          const trustedIndices = {
+            '1': { 0: '1', 1: 'x', 2: '2', 3: '2' },
+            '264': { 4: 'under', 5: 'over' },
+          };
+          outcomeKey = trustedIndices[String(tuple.typeId)]?.[tuple.outcomeIdx] ?? null;
         }
+        if (!outcomeKey || /^#\d+$/.test(outcomeKey)) continue;
 
         let outcomeName =
           item.name !== null && item.name !== undefined && String(item.name).trim()
@@ -474,7 +401,7 @@ export function decodePushMessage(message) {
           }
         }
 
-        const { column, name } = describeMarket({
+        const identified = describeMarket({
           name: groupName ?? cachedItem?.marketName,
           subgames,
           typeId: tuple?.typeId ?? null,
@@ -484,6 +411,9 @@ export function decodePushMessage(message) {
           outcomes,
           period,
         });
+        // The group has no trustworthy identity: keep it out of the odds store/UI.
+        if (!identified) continue;
+        const { column, name } = identified;
 
         // Cache item metadata so subsequent delta frames (which omit names/outcomes) never invent keys or scramble slots
         if (ITEM_META_CACHE.size >= ITEM_META_CACHE_MAX) ITEM_META_CACHE.clear();

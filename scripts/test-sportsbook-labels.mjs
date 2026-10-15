@@ -287,9 +287,11 @@ for (const [market, outcome, expected] of comboCases) {
 const matchDetailSource = readFileSync(new URL('../web/src/components/Sports/MatchDetail.tsx', import.meta.url), 'utf8');
 assert.match(
   matchDetailSource,
-  /category:\s*getGroupCategory\(marketList\[0\]\.name\)/,
-  'Categorize match detail groups by the original market name, never by composite type:period:name keys',
+  /category:\s*getGroupCategory\(entries\[0\]\)/,
+  'Categorize match detail groups by the first raw provider market, never by a composite key',
 );
+assert.match(matchDetailSource, /const category = marketCategoryOf\(market\)/,
+  'MatchDetail must use the shared market-family catalog, not grouped keys');
 for (const providerMarket of [
   'Result and total',
   'Total and both teams to score',

@@ -11,39 +11,25 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
-import { formatMarketLine, isResultBttsMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
+import { formatMarketLine } from '../../utils/sportsbookLabels';
+import { marketCategoryOf, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
-const cleanMarketName = (name?: string) => {
-  if (!name) return '';
-  const s = String(name).trim();
-  if (/^cols-?\d+$/i.test(s)) return 'Tregu i ndeshjes';
-  if (/^total-2$/i.test(s)) return 'Totali i golave';
-  if (/^fora-2$/i.test(s)) return 'Handicap';
-  return s;
+// MatchDetail keeps its original tab IDs, but uses the same canonical
+// classification and localized labels as MarketPanel.
+const CATEGORY_KEY: Record<string, MarketCategory> = {
+  Popular: 'main', Goals: 'goals', Mixed: 'mixed', Halves: 'htft',
+  Corners: 'corners', Cards: 'cards', Handicap: 'handicap',
+  Players: 'players', Other: 'other',
 };
-
-const getGroupCategory = (name?: string) => {
-  const value = String(name ?? '').toLowerCase();
-  // Group by the subject first: "Corners. Result" must remain under Corners,
-  // and "Yellow Cards. Total" must remain under Cards.
-  if (/\bcorners?\b|\bcorner\s*kicks?\b|kendo|kënd/i.test(value)) return 'Corners';
-  if (/\bcards?\b|karton|booking|yellow|\bred\b|disciplin/i.test(value)) return 'Cards';
-  if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/i.test(value)) return 'Players';
-  if (/handicap|fora|asian/i.test(value)) return 'Handicap';
-  if (isAnyMixedMarket(value) || /\b(?:result|winner)\b.*\b(?:total|goals|btts)\b/i.test(value)) return 'Mixed';
-  if (/half|halves|period|pjesa|1st half|2nd half/i.test(value)) return 'Halves';
-  if (/goal|total|over|under|score|btts|gg|ng|gola|both teams to score|odd\/even/i.test(value)) return 'Goals';
-  if (/\b1x2\b|result|winner|double chance|draw no bet|moneyline|qualify/i.test(value)) return 'Popular';
-  return 'Other';
+const getGroupCategory = (market: Market): string => {
+  const category = marketCategoryOf(market);
+  return Object.keys(CATEGORY_KEY).find((key) => CATEGORY_KEY[key] === category) ?? 'Other';
 };
-
-// Show every returned market in an easy-to-scan family, regardless of feed order.
+const categoryLabel = (category: string, lang: MarketLanguage): string =>
+  marketCategoryLabel(CATEGORY_KEY[category] ?? 'other', lang);
 const CATEGORY_ORDER = ['Popular', 'Goals', 'Mixed', 'Halves', 'Corners', 'Cards', 'Handicap', 'Players', 'Other'];
-const CATEGORY_LABELS: Record<string, string> = {
-  Popular: 'Main', Goals: 'Goals', Mixed: 'Combos', Halves: 'Halves / Periods',
-  Corners: 'Corners', Cards: 'Cards', Handicap: 'Handicap', Players: 'Players', Other: 'Other',
-};
 
 const getCategoryIcon = (catId: string) => {
   switch (catId) {
@@ -89,64 +75,37 @@ interface GroupedMarket {
   markets: Market[];
 }
 
-const groupMarkets = (markets: Market[]): GroupedMarket[] => {
-  const map = new Map<string, Market[]>();
-
-  for (const m of markets) {
-    const rawClean = cleanMarketName(m.name);
-    const explicitLine = String(m.line ?? '').trim();
-    // Group exact numeric lines including 2.5, 3.5 and 4.5 even when the
-    // provider embeds the line in the name rather than the separate line field.
-    // Bare integer suffixes without an explicit line may be goal/minute numbers.
-    const embeddedHalfLine = /\s+\d+[.,]\d+$/.test(rawClean);
-    const groupingName = explicitLine || embeddedHalfLine
-      ? rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
-      : rawClean;
-    const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${groupingName}`;
-
-    if (!map.has(baseKey)) {
-      map.set(baseKey, []);
-    }
-    map.get(baseKey)!.push(m);
+const groupMarkets = (markets: Market[], lang: MarketLanguage): GroupedMarket[] => {
+  const groups = new Map<string, Market[]>();
+  for (const market of markets) {
+    if (!isIdentifiedMarket(market)) continue;
+    const key = marketGroupKey(market);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(market);
   }
-
+  const rankedLine = (market: Market): number => {
+    const raw = marketLineValue(market);
+    if (!raw) return Number.POSITIVE_INFINITY;
+    const n = Number(raw.replace(',', '.'));
+    return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+  };
   const result: GroupedMarket[] = [];
-  map.forEach((marketList, baseKey) => {
-    // Prefer the provider's line; when the line is encoded in the market name,
-    // still sort 1.5, 2.5, 3.5, 4.5 in numeric order.
-    const numericLine = (market: Market): number => {
-      const line = String(market.line ?? '').trim() ||
-        String(market.name ?? '').match(/\\s+(\\d+[.,]\\d+)$/)?.[1] || '';
-      const value = Number(line.replace(',', '.'));
-      return Number.isFinite(value) && line !== '' ? value : Number.POSITIVE_INFINITY;
-    };
-    marketList.sort((a, b) => numericLine(a) - numericLine(b));
-
+  for (const [key, entries] of groups) {
+    entries.sort((a, b) => rankedLine(a) - rankedLine(b));
     result.push({
-      baseName: baseKey,
-      title: cleanMarketName(
-        String(marketList[0].line ?? '').trim() || /\s+\d+[.,]\d+$/.test(String(marketList[0].name ?? ''))
-          ? String(marketList[0].name ?? '').replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
-          : marketList[0].name),
-      // Category detection must use the provider's raw name, not the grouped
-      // key (e.g. OVER_UNDER:0:Result and total), because combo matchers
-      // deliberately identify exact market names.
-      category: getGroupCategory(marketList[0].name),
-      markets: marketList
+      baseName: key,
+      title: marketDisplayTitle(entries[0], lang),
+      category: getGroupCategory(entries[0]),
+      markets: entries,
     });
-  });
-
-  return result.sort((a, b) => {
-    const aRank = CATEGORY_ORDER.indexOf(a.category);
-    const bRank = CATEGORY_ORDER.indexOf(b.category);
-    return (aRank < 0 ? CATEGORY_ORDER.length : aRank) - (bRank < 0 ? CATEGORY_ORDER.length : bRank);
-  });
+  }
+  return result.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
 };
 
 export default function MatchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [match, setMatch] = useState<Match | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -176,7 +135,7 @@ export default function MatchDetail() {
     };
   }, [id]);
 
-  const allGrouped = useMemo(() => groupMarkets(markets), [markets]);
+  const allGrouped = useMemo(() => groupMarkets(markets, lang), [markets, lang]);
 
   // Available categories with count
   const categoryCounts = useMemo(() => {
@@ -237,16 +196,8 @@ export default function MatchDetail() {
   const isAlert = isAlertEnabled(matchIdStr);
 
   const categories = [
-    { id: 'all', label: 'All Markets' },
-    { id: 'Popular', label: 'Main' },
-    { id: 'Goals', label: 'Goals' },
-    { id: 'Mixed', label: 'Combos' },
-    { id: 'Halves', label: 'Halves / Periods' },
-    { id: 'Corners', label: 'Corners' },
-    { id: 'Cards', label: 'Cards' },
-    { id: 'Handicap', label: 'Handicap' },
-    { id: 'Players', label: 'Players' },
-    { id: 'Other', label: 'Other' }
+    { id: 'all', label: lang === 'al' ? 'Të gjitha tregjet' : 'All Markets' },
+    ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, lang) })),
   ];
 
   const filteredCategories = categories.filter(c => c.id === 'all' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
@@ -434,7 +385,7 @@ export default function MatchDetail() {
                 {sectionStart && (
                   <div className="flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
                     {getCategoryIcon(group.category)}
-                    <span>{CATEGORY_LABELS[group.category] ?? group.category}</span>
+                    <span>{categoryLabel(group.category, lang)}</span>
                     <span className="rounded bg-tertiary/70 px-2 py-0.5 text-[10px] text-text-secondary">
                       {groupedMarkets.filter(g => g.category === group.category).length}
                     </span>
@@ -457,8 +408,7 @@ export default function MatchDetail() {
                     {group.markets.map(market => {
                       const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
                       if (!cleanOutcomes.length) return null;
-                      const line = String(market.line ?? '').trim() ||
-                        String(market.name ?? '').match(/\s+(\d+[.,]\d+)$/)?.[1] || '';
+                      const line = marketLineValue(market);
                       const showLine = group.markets.length > 1 || !!line;
                       return (
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
