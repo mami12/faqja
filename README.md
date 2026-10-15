@@ -70,7 +70,7 @@ suspend/price overrides that survive the next feed frame).
 | `POST /app/api/bets/place` | validates every selection against the **live feed**, then charges the stake, freezes the prices into `app_ticket_line` and records the movement — all in one transaction |
 | `POST /app/api/bets/book` | same validation, no stake/account: returns a shareable 6-char booking code |
 | `GET /app/api/bets/active` / `history` | My Bets: open tickets / the last 50 settled |
-| `POST /app/api/bets/cashout/:id` | pays **70%** of the potential payout early and closes the ticket as WON |
+| Early payout / Cash Out | Disabled. Tickets settle only according to the final result. |
 | `GET /app/api/tickets/search?q=` / `booking/:code` | find a ticket by code or id fragment (public) |
 
 Rules enforced (verified): minimum stake **100 LEK**, only `ACTIVE` accounts, balance checked under a row lock,
@@ -297,7 +297,7 @@ accounts, so the seeded `demo` balance is never touched):
 
 ```bash
 ODDS_SOCKET=true npm start  # the server subscribes to the feed, so the board has real prices
-npm run verify:app          # auth, board, betslip, booking codes, cash-out, settlement payout  (33 checks)
+npm run verify:app          # auth, board, betslip, booking codes, disabled cash-out, settlement payout  (33 checks)
 npm run verify:admin        # users, money, account status, roles, ticket revert, match control  (48 checks)
 npm run verify:suspension   # a feed suspension reaches the board and the socket at once       (6 checks)
 ```
