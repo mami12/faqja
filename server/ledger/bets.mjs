@@ -340,7 +340,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
         const base = index * 10;
         params.push(ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey,
           line.outcomeName, line.marketName, line.matchName, line.price, JSON.stringify(line.builderLegs ?? null));
-        return `(${base + 1}, ${base + 2}, ${base + 3}, ${base + 4}, ${base + 5}, ${base + 6}, ${base + 7}, ${base + 8}, ${base + 9}, 'PENDING', ${base + 10}::jsonb)`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, 'PENDING', $${base + 10}::jsonb)`;
       });
       await client.query(
         `insert into app_ticket_line
