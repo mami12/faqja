@@ -6,7 +6,7 @@ export function isResultBttsMarket(name = '') {
   const s = String(name).toLowerCase();
   const result = /\b(?:result|1\s*x\s*2|winner)\b/.test(s);
   const btts = /\bbtts\b|both\s+teams?\s+(?:to\s+)?score|both\s+score|\bgg\s*[/&-]\s*ng\b/.test(s);
-  return result && btts && !/\b(?:corners?|cards?|handicap|double chance|half.?time|first half|second half)\b/.test(s);
+  return result && btts && !/\b(?:corners?|cards?|handicap|double chance)\b/.test(s);
 }
 
 const fold = (value) => String(value ?? '')
@@ -17,6 +17,16 @@ const fold = (value) => String(value ?? '')
 export function parseResultBttsOutcome(value, homeTeam = '', awayTeam = '') {
   let text = String(value ?? '').trim();
   if (!text) return null;
+  // Provider's 'Lyon To Nil' means Lyon wins while conceding no goals.
+  const nilWin = text.match(/^(.+?)\s+to\s+nil$/i);
+  if (nilWin) {
+    const winner = fold(nilWin[1]);
+    if (winner === fold(homeTeam) || ['1', 'home'].includes(winner)) return { result: '1', bothScore: false };
+    if (winner === fold(awayTeam) || ['2', 'away'].includes(winner)) return { result: '2', bothScore: false };
+    return null;
+  }
+  text = text.replace(/\band\s+both\s+to\s+score\b/gi, ' And Yes')
+    .replace(/\band\s+both\s+teams?\s+to\s+score\b/gi, ' And Yes');
   // Parse unambiguous full phrases too, without guessing from a plain BTTS No.
   text = text
     .replace(/^(both\s+teams?\s+(?:not\s+to\s+score|to\s+score))\s*(?:and\b|&|\+|\/)\s*/i,
