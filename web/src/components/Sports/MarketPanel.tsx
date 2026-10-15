@@ -10,7 +10,7 @@ import {
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { marketBaseName, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { marketBaseName, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory } from '../../utils/marketCatalog';
 
 /* ------------------------------------------------------------------ */
@@ -161,7 +161,8 @@ export default function MarketPanel({ match }: { match: Match }) {
 
     const query = marketSearch.trim().toLowerCase();
     for (const market of match.markets ?? []) {
-      if (query && ![market.name, market.line, ...(market.outcomes ?? []).map(o => o.name)]
+      if (!isIdentifiedMarket(market)) continue;
+      if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
       const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
@@ -182,7 +183,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [match, lockedMarkets, marketSearch]);
+  }, [match, lockedMarkets, marketSearch, lang]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
