@@ -9,7 +9,7 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { isHandicapMarket } from '../../utils/sportsbookFilters';
+import { isHandicapMarket, filterRedundantMatchResultMarkets } from '../../utils/sportsbookFilters';
 import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
 
 /* ------------------------------------------------------------------ */
@@ -215,7 +215,7 @@ export default function MarketPanel({ match }: { match: Match }) {
       main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, other: 0,
     };
 
-    for (const market of match.markets ?? []) {
+    for (const market of filterRedundantMatchResultMarkets(match.markets ?? [])) {
       if (isHandicapMarket(market)) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
       const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
