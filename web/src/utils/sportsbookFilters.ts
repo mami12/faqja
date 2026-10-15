@@ -45,23 +45,21 @@ export function isHandicapMarket(market: any) {
 }
 
 /**
- * Keep the explicitly named Full Time Result market over redundant generic
- * Match Winner / Match Result feeds. Only hide duplicate generic titles when
- * the canonical full-time 1X2 market is present and has bettable prices.
- * Never touch the feed, ticket IDs, or first/second-half result markets.
+ * Hide generic full-time 1X2 duplicates only when the canonical feed market
+ * "Full Time Result" is available. Never touch halftime, combined markets,
+ * prices or original selection IDs.
  */
 export function filterRedundantMatchResultMarkets<T extends { name: string; period?: number; outcomes?: Array<{ odds?: number; status?: string }> }>(
   markets: T[],
-  translateMarketName: (name: string) => string,
 ): T[] {
-  const fullTimeName = 'Rezultati i Plotë (1X2)';
-  const genericName = 'Rezultati i Ndeshjes (1X2)';
-  const fullTimeMarkets = markets.filter(m =>
-    Number(m.period ?? 0) === 0 && translateMarketName(m.name) === fullTimeName &&
+  const canonical = markets.some(m =>
+    Number(m.period ?? 0) === 0 &&
+    normalize(m.name) === 'full time result' &&
     (m.outcomes ?? []).some(o => typeof o.odds === 'number' && o.odds > 0 && o.status !== 'SUSPENDED')
   );
-  if (fullTimeMarkets.length === 0) return markets;
+  if (!canonical) return markets;
   return markets.filter(m =>
-    Number(m.period ?? 0) !== 0 || translateMarketName(m.name) !== genericName
+    Number(m.period ?? 0) !== 0 ||
+    !/^(match winner|match result)$/.test(normalize(m.name))
   );
 }
