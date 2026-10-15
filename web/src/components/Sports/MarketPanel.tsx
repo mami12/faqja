@@ -10,7 +10,7 @@ import {
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
@@ -39,7 +39,7 @@ const categoryOf = (market: Market): Category => {
   const name = String(market.name ?? '').toLowerCase();
   const type = String(market.marketType ?? '').toUpperCase();
 
-  if (isResultBttsMarket(name) || isBttsGoalsComboMarket(name)) return 'mixed';
+  if (isAnyMixedMarket(name)) return 'mixed';
   if (type === 'CORNERS' || /corner/i.test(name)) return 'corners';
   if (type === 'CARDS' || /\bcards?\b|booking|yellow|\bred\b/i.test(name)) return 'cards';
   if (/halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time/i.test(name)) return 'htft';
@@ -117,12 +117,12 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
   const is1X2 = !isResultBttsMarket(mName) && /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = !isResultBttsMarket(mName) && !isBttsGoalsComboMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
+  const isBTTS = !isAnyMixedMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
 
   const seen = new Set<string>();
   const res: any[] = [];
   for (const o of outcomes) {
-    const k = norm(isResultBttsMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
+    const k = norm(isAnyMixedMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
     if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
     if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
     if (!seen.has(k)) {

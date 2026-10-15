@@ -4,7 +4,7 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
+import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome, isFirstHalfResultBtts } from '../../utils/sportsbookLabels';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; }
 
@@ -25,6 +25,7 @@ export default function OddsButton({ match, market, outcome, isWide }: Props) {
     (outcome.status === 'SUSPENDED' && outcome.riskSuspended !== true);
   const autoSuspended = riskLockedOutcomes[outcome.id] ?? outcome.riskSuspended === true;
   const isSuspended =
+    isFirstHalfResultBtts(market.name) ||
     unidentifiedMixedOutcome ||
     providerSuspended ||
     autoSuspended ||

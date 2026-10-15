@@ -6,6 +6,7 @@ on:
       - 'web/**'
       - 'server/**'
       - 'scripts/test-live-risk.mjs'
+      - 'scripts/test-mixed-combos.mjs'
       - 'scripts/test-sportsbook-labels.mjs'
       - 'package.json'
       - 'package-lock.json'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'web/**'
       - 'scripts/test-sportsbook-labels.mjs'
+      - 'scripts/test-mixed-combos.mjs'
       - '.github/workflows/sportsbook-build.yml'
 
 jobs:
@@ -34,6 +36,8 @@ jobs:
         run: npm run test:sportsbook-labels
       - name: Validate server risk suspensions
         run: node scripts/test-live-risk.mjs
+      - name: Validate mixed market contracts and settlement
+        run: node scripts/test-mixed-combos.mjs
       - name: Check backend syntax
         run: |
           node --check server/live-risk.mjs

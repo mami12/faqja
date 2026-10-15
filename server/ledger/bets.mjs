@@ -23,6 +23,7 @@ import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
+import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -59,6 +60,16 @@ async function resolveSelection(selection) {
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
   if (row.suspended === true) throw badRequest('Kjo kuotë është pezulluar për momentin.');
+
+  if (isFirstHalfResultBtts(row.market_name)) {
+    throw badRequest('Kombinimi i pjesës së parë nuk pranon ende baste: mungon rezultati i verifikuar i pjesës së parë për llogaritjen.');
+  }
+  const comboParser = isResultTotalMarket(row.market_name) ? parseResultTotal
+    : isTotalBttsMarket(row.market_name) ? parseTotalBtts : null;
+  if (comboParser && !comboParser(row.outcome_key, match.home, match.away) &&
+      !comboParser(row.outcome_name, match.home, match.away)) {
+    throw badRequest('Kombinimi nuk u identifikua saktë nga furnizuesi.');
+  }
 
   // Only sell result + BTTS selections when both parts of the contract are identifiable.
   // An unknown provider code cannot safely be graded at the end of the match.
