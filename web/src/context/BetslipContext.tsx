@@ -108,7 +108,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
       .catch(err => {
         // Definitive server rejection permits a fresh attempt. For a network
         // failure with unknown outcome, preserve the key for safe retries.
-        if (err.response) pendingBet.current = null;
+        if (err.response && err.response.status >= 400 && err.response.status < 500) pendingBet.current = null;
         throw err;
       })
       .finally(() => {
