@@ -397,6 +397,14 @@ export function decodePushMessage(message) {
           }
         }
 
+        // Some timing feeds reuse a generic outcome code for every minute
+        // interval. Keep each original named interval as its own bettable ID.
+        // Do not fabricate ranges from an unlabeled price.
+        const goalTimeMarket = /(?:\\b(?:1st|first|next|last)\\s+goal\\s+time\\b|\\btime\\s+of\\s+(?:the\\s+)?(?:1st|first|next|last)\\s+goal\\b|\\btime\\s+of\\s+scoring\\b)/i.test(String(groupName ?? cachedItem?.marketName ?? ''));
+        if (goalTimeMarket && outcomeName && !/^#\\d+$/.test(outcomeName)) {
+          outcomeKey = outcomeName;
+        }
+
         const identified = describeMarket({
           name: groupName ?? cachedItem?.marketName,
           subgames,
