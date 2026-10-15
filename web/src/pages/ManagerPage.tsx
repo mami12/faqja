@@ -5,7 +5,7 @@ import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X } from 'lucide-react';
 import FinancialChart from '../components/Finance/FinancialChart';
-import { formatTicketSelection, translateMarketName, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
+import { formatTicketSelection, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
 
 interface PlayerFinancial {
   id: string;
@@ -610,7 +610,7 @@ export default function ManagerPage() {
                           {ticket.lines.map((line) => (
                             <div key={line.id} className="rounded-lg border border-tertiary bg-primary p-3 text-xs">
                               <div className="text-text-secondary">{line.matchName}</div>
-                              <div className="mt-1 font-semibold text-white">{translateMarketName(line.marketName, t)}: <span className="text-accent-green">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span></div>
+                              <div className="mt-1 font-semibold text-white">{line.marketName}: <span className="text-accent-green">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span></div>
                               <div className="mt-1 flex justify-between text-text-secondary">
                                 <span>Kuota <b className="text-white">{line.oddsAtPlacement.toFixed(2)}</b></span>
                                 <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{translateTicketStatus(line.status, t)}</span>

@@ -3,74 +3,103 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { decodePushMessage, describeMarket } from '../server/push-decode.mjs';
 import { isIdentifiedMarketName, buildMarkets } from '../server/collector.mjs';
+import { isHandicapOfferMarket } from '../server/market-policy.mjs';
 
-// No numerical guesswork: a total line of 9.5 could mean goals,
-// corners, cards, or something else without an identifying group/type.
-assert.equal(describeMarket({ name: null, typeId: 777, groupId: 9898, line: 9.5, outcomes: ['under', 'over'] }), null);
-assert.equal(describeMarket({ name: 'Corners', typeId: 777, groupId: 9898, subgames: '13' }), null);
-assert.equal(describeMarket({ name: 'Total', typeId: 777, groupId: 9898 }), null);
-assert.equal(describeMarket({ name: 'Total', typeId: 777, groupId: 9898, subgames: '3' }).name, 'Total Goals');
-assert.deepEqual(describeMarket({ name: 'Corners. Result', typeId: null, groupId: 6481, subgames: '13' }), {
-  column: 'corners', name: 'Corners. Result',
-});
-assert.deepEqual(describeMarket({ name: 'Yellow cards. Total', typeId: null, groupId: 7840, subgames: '174' }), {
-  column: 'cards', name: 'Yellow cards. Total',
-});
-assert.deepEqual(describeMarket({ name: null, typeId: 320, groupId: 9998 }), {
-  column: 'corners', name: 'Total Corners',
-});
+// A descriptive name from upstream is authoritative, even if the backend
+// assigns marketType OTHER or the title is as brief as "Total" or "Corners".
+for (const [raw, expectedColumn] of [
+  ['Total', 'total'],
+  ['Corners', 'corners'],
+  ['Cards', 'cards'],
+  ['Result', 'result'],
+  ['Correct score', 'other'],
+  ['Corners. Result', 'corners'],
+  ['Corners. Double chance', 'corners'],
+  ['Yellow cards. Total', 'cards'],
+]) {
+  const market = describeMarket({ name: raw, typeId: null, groupId: 90000 });
+  assert.equal(market?.name, raw, 'raw provider title must not be translated/rewritten: ' + raw);
+  assert.equal(market?.column, expectedColumn, raw);
+}
+assert.deepEqual(describeMarket({ name: 'Total', typeId: null, groupId: 6379 }), {
+  name: 'Total', column: 'total',
+}, 'g6379 preserves the exact provider name');
+assert.equal(describeMarket({ name: null, typeId: 777, groupId: 9898 }), null,
+  'truly nameless + unmapped markets must not be guessed');
+assert.equal(describeMarket({ name: null, typeId: 320, groupId: 9898 })?.name, 'Total Corners',
+  'a known type may provide its mapped English title in an unnamed delta');
+assert.equal(describeMarket({ name: null, groupId: 6379 })?.name, 'Total Goals',
+  'a verified group map can supply a title only when the provider does not send one');
 
-const mkGroup = (id, name, typeId, opts = {}) => ({
-  id: String(id), ...(name === null ? {} : { name }),
-  renderType: 'total-2', outcomes: ['under', 'over'],
+const group = (id, name, typeId) => ({
+  id: String(id),
+  ...(name === null ? {} : { name }),
+  renderType: 'total-2',
+  outcomes: ['under', 'over'],
   oddsList: [
-    { id: '12:L:example:[' + typeId + ',[9.5],[0],1,4,[]]', cf: 1.87, status: 1 },
-    { id: '12:L:example:[' + typeId + ',[9.5],[0],1,5,[]]', cf: 1.93, status: 1 },
+    { id: '12:L:markettest:[' + typeId + ',[9.5],[0],1,4,[]]', cf: 1.87, status: 1 },
+    { id: '12:L:markettest:[' + typeId + ',[9.5],[0],1,5,[]]', cf: 1.93, status: 1 },
   ],
-  ...opts,
 });
-const frame = (groups) => ({
-  messageType: 'match-odds', data: { matchId: 987654321, oddsGroups: groups },
+const decoded = decodePushMessage({
+  messageType: 'match-odds',
+  data: {
+    matchId: 987654321,
+    oddsGroups: [
+      group(99001, null, 777),
+      group(99002, 'Corners', 777),
+      group(99003, 'Corners. Result', 777),
+      group(99004, null, 320),
+    ],
+  },
 });
-const decoded = decodePushMessage(frame([
-  mkGroup(99001, null, 777),
-  mkGroup(99002, 'Corners', 777, { subgameIds: [13] }),
-  mkGroup(99003, 'Corners. Result', 777),
-  mkGroup(99004, null, 320),
-]));
 assert.equal(decoded.kind, 'odds');
-assert.equal(decoded.rows.length, 4, 'only identified groups emit their prices');
-assert.deepEqual(new Set(decoded.rows.map(row => row.marketName)), new Set(['Corners. Result', 'Total Corners']));
-assert.equal(decoded.rows.filter(row => row.marketName === 'Total Corners')[0].line, '9.5');
-assert.equal(decoded.rows.every(row => row.price > 0), true);
+assert.equal(decoded.rows.length, 6, 'all three named/mapped groups are included');
+assert.deepEqual(new Set(decoded.rows.map(x => x.marketName)),
+  new Set(['Corners', 'Corners. Result', 'Total Corners']));
+assert.equal(decoded.rows.every(x => x.price > 0 && x.line === '9.5'), true);
 
-// Old cached prices with placeholders must not show even if a client receives them.
-for (const name of ['Market', 'Unknown', 'Corners', 'Cards', 'Total', 'cols-2', 'Unverified market (g999)', 'Match Result (2-way)']) {
+for (const name of ['Market', 'Unknown', 'cols-2', 'Unverified market (g999)']) {
   assert.equal(isIdentifiedMarketName(name), false, name);
 }
-assert.equal(isIdentifiedMarketName('Total', '3'), true, 'known goal-total subgame still usable on the backend');
-assert.equal(isIdentifiedMarketName('Total', '', 'g6379'), true, 'g6379 is the verified football goals total');
-assert.equal(isIdentifiedMarketName('Correct score', '', 'g6371'), true, 'OTHER is a generic marketType, not an unknown provider name');
-assert.deepEqual(describeMarket({ name: 'Total', typeId: null, groupId: 6379 }), {
-  column: 'total', name: 'Total Goals'
-});
-for (const name of ['Corners. Result', 'Corners. Odd/Even', 'Yellow cards. Total', 'Total Goals', 'Result and total']) {
+for (const name of ['Total', 'Correct score', 'Corners', 'Cards', 'Result', 'Match Result (2-way)']) {
   assert.equal(isIdentifiedMarketName(name), true, name);
 }
-const odds = [
-  ['Unverified market (g1)', 'g1'],
-  ['Corners', 'g2'],
-  ['Corners. Result', 'g3'],
-].map(([name, id]) => ({
-  market_key: id, market_name: name, line: '', outcome_key: '1',
-  outcome_name: 'Home', price: 1.8, board_column: 'corners',
-}));
-const shown = buildMarkets(odds);
-assert.equal(shown.length, 1);
-assert.equal(shown[0].name, 'Corners. Result');
+for (const name of ['Handicap', 'Asian Handicap', 'Corners. Handicap', 'Asian Corners', 'European Handicap']) {
+  assert.equal(isHandicapOfferMarket({ name }), true, name + ' must not appear in any market API response');
+}
+for (const name of ['Asian Total', 'Total', 'Corners. Result', 'Yellow cards. Total', 'Correct score']) {
+  assert.equal(isHandicapOfferMarket({ name }), false, name + ' is not a handicap');
+}
 
-// Test the UI catalog without browser/runtime, using the same TS transpiler
-// already installed and used by test-sportsbook-labels.mjs.
+// buildMarkets supplies the API, so it must include named groups but exclude
+// handicap contracts, even if the client accidentally fails to filter them.
+const rows = [
+  ['Unverified market (g1)', 'g1'],
+  ['Total', 'g6379'],
+  ['Correct score', 'g6371'],
+  ['Corners', 'g100'],
+  ['Corners. Result', 'g6481'],
+  ['Yellow cards. Total', 'g200'],
+  ['Handicap', 'g6344'],
+  ['Asian Corners', 'g321'],
+  ['Asian Total', 'g322'],
+].map(([marketName, marketKey]) => ({
+  market_key: marketKey, market_name: marketName, line: '',
+  outcome_key: '1', outcome_name: 'Home', price: 1.8,
+  board_column: marketName.toLowerCase().includes('corner') ? 'corners' : 'total',
+}));
+const named = buildMarkets(rows).map(x => x.name);
+assert.deepEqual(new Set(named),
+  new Set(['Total', 'Correct score', 'Corners', 'Corners. Result', 'Yellow cards. Total', 'Asian Total']));
+
+// Identical text is not proof that two provider group IDs describe one bet.
+const distinct = buildMarkets(['g11111', 'g22222'].map(id => ({
+  market_key: id, market_name: 'Corners. Result', line: '',
+  outcome_key: '1', outcome_name: 'Home', price: 2.0, board_column: 'corners',
+})));
+assert.equal(distinct.length, 2, 'retain distinct provider market IDs sharing the same English title');
+
 const require = createRequire(import.meta.url);
 const ts = require('../web/node_modules/typescript/lib/typescript.js');
 const source = readFileSync(new URL('../web/src/utils/marketCatalog.ts', import.meta.url), 'utf8');
@@ -80,27 +109,35 @@ const compiled = ts.transpileModule(source, {
 const mod = { exports: {} };
 new Function('exports', 'require', 'module', compiled)(mod.exports, require, mod);
 const ui = mod.exports;
-const mk = (name, line = '', period = 0, marketType = 'OTHER') =>
-  ({ id: 'test-' + name, name, line, period, marketType });
-assert.equal(ui.isIdentifiedMarket(mk('Corners')), false);
-assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
-assert.equal(ui.isIdentifiedMarket(mk('Corners. Double chance')), true);
-assert.equal(ui.isIdentifiedMarket({ ...mk('Total'), id: '41360008|g6379|4.5', extId: 'g6379' }), true);
-assert.equal(ui.marketDisplayTitle({ ...mk('Total', '4.5', 0, 'OVER_UNDER'), id: '41360008|g6379|4.5', extId: 'g6379' }, 'al', true),
-  'Totali i golave (Mbi/Nën) (4.5)');
-assert.equal(ui.isIdentifiedMarket({ ...mk('Correct score'), id: '41360008|g6371|', extId: 'g6371', marketType: 'OTHER' }), true);
-assert.equal(ui.marketCategoryOf(mk('Correct score', '', 0, 'OTHER')), 'goals');
-assert.equal(ui.marketCategoryOf(mk('Corners. Double chance')), 'corners');
-assert.equal(ui.marketCategoryOf(mk('Yellow cards. Result')), 'cards');
-assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
-assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Kornet: Rezultati (1X2)');
-assert.equal(ui.marketDisplayTitle(mk('Corners. Double chance'), 'al'), 'Kornet: Shansi i dyfishtë (1X / 12 / X2)');
-assert.equal(ui.marketDisplayTitle(mk('Corners. Odd/Even'), 'en'), 'Corners. Odd/Even');
-assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Kornet: Totali (Mbi/Nën) (9.5)');
-assert.equal(ui.marketCategoryLabel('corners', 'al'), 'Kornet');
-assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Mbi 9.5');
-assert.equal(ui.marketSelectionLabel('Iraq', 'al'), 'Iraq');
-assert.equal(ui.marketGroupKey(mk('Total Corners', '9.5')), ui.marketGroupKey(mk('Total Corners', '10.5')));
-assert.notEqual(ui.marketGroupKey(mk('Corners. Result')), ui.marketGroupKey(mk('Corners. Odd/Even')));
+const mk = (name, line = '', period = 0, marketType = 'OTHER', extId = '') =>
+  ({ id: 'test-' + extId + name + line, name, line, period, marketType, extId });
 
-console.log('Market identity, grouping, language and unidentified-market tests passed');
+for (const name of ['Total', 'Correct score', 'Corners', 'Cards', 'Result']) {
+  assert.equal(ui.isIdentifiedMarket(mk(name)), true, name + ' is a real upstream name');
+  assert.equal(ui.marketDisplayTitle(mk(name), 'al'), name, name + ' must stay English');
+}
+assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
+assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Total (4.5)');
+assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Corners. Result');
+assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Yellow cards. Total');
+assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Total Corners (9.5)');
+assert.equal(ui.marketCategoryOf(mk('Corners. Double chance')), 'corners');
+assert.equal(ui.marketCategoryOf(mk('Corners. Result', '', 0, '1X2')), 'corners');
+assert.equal(ui.marketCategoryOf(mk('Yellow cards. Result')), 'cards');
+assert.equal(ui.marketCategoryOf(mk('Correct score')), 'goals');
+assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
+assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Over 9.5');
+assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'Draw');
+assert.equal(ui.marketCategoryLabel('corners', 'en'), 'Corners');
+assert.equal(ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g320')),
+  ui.marketGroupKey(mk('Total Corners', '10.5', 0, 'CORNERS', 'g320')));
+assert.notEqual(ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g320')),
+  ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g900')),
+  'different provider group IDs must never merge');
+for (const name of ['Handicap', 'Asian Handicap', 'Corners. Handicap', 'Asian Corners']) {
+  assert.equal(ui.isHandicapMarket(mk(name)), true, name);
+}
+assert.equal(ui.isHandicapMarket(mk('Asian Total')), false);
+assert.equal(ui.isHandicapMarket(mk('Total')), false);
+
+console.log('Provider names, category grouping and handicap exclusions passed');

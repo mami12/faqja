@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers, Search, SlidersHorizontal, UserRound } from 'lucide-react';
+import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers, Search, UserRound } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import { useLanguage } from '../../context/LanguageContext';
@@ -9,8 +9,7 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { marketBaseName, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory } from '../../utils/marketCatalog';
 
 /* ------------------------------------------------------------------ */
@@ -32,7 +31,6 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'corners', label: 'Corners', icon: Flag },
   { key: 'cards', label: 'Cards', icon: ShieldAlert },
   { key: 'htft', label: 'Halves / Periods', icon: Clock },
-  { key: 'handicap', label: 'Handicap', icon: SlidersHorizontal },
   { key: 'players', label: 'Players', icon: UserRound },
   { key: 'other', label: 'Other', icon: ListOrdered },
 ];
@@ -57,8 +55,8 @@ const groupByBaseName = (markets: Market[]): MarketGroup[] => {
   }
   for (const g of groups.values()) {
     g.markets.sort((a, b) => {
-      const la = parseFloat(String(a.line ?? '0')) || 0;
-      const lb = parseFloat(String(b.line ?? '0')) || 0;
+      const la = parseFloat(marketLineValue(a)) || 0;
+      const lb = parseFloat(marketLineValue(b)) || 0;
       return la - lb;
     });
   }
@@ -123,7 +121,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
-                {formatMarketLine(market.name, marketLineValue(market)) || market.name}
+                {marketLineValue(market) || market.name}
               </div>
               <div className="min-w-0 flex-1 grid gap-px bg-tertiary/80"
                 style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
@@ -153,15 +151,15 @@ export default function MarketPanel({ match }: { match: Match }) {
 
   const { categorized, counts } = useMemo(() => {
     const result: Record<Category, Market[]> = {
-      main: [], goals: [], mixed: [], corners: [], cards: [], htft: [], handicap: [], players: [], other: [],
+      main: [], goals: [], mixed: [], corners: [], cards: [], htft: [], players: [], other: [],
     };
     const c: Record<Category, number> = {
-      main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, handicap: 0, players: 0, other: 0,
+      main: 0, goals: 0, mixed: 0, corners: 0, cards: 0, htft: 0, players: 0, other: 0,
     };
 
     const query = marketSearch.trim().toLowerCase();
     for (const market of match.markets ?? []) {
-      if (!isIdentifiedMarket(market)) continue;
+      if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
@@ -271,7 +269,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               }`}
             >
               <cat.icon size={14} strokeWidth={1.9} />
-              <span>{marketCategoryLabel(cat.key, lang)}</span>
+              <span>{marketCategoryLabel(cat.key, 'en')}</span>
               <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
                 isActive ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
               }`}>
@@ -300,7 +298,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               <span className="w-1 h-3 sm:h-4 rounded-full bg-accent-green"></span>
               <cat.icon size={15} className="text-accent-green" strokeWidth={1.9} />
               <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
-                {marketCategoryLabel(cat.key, lang)}
+                {marketCategoryLabel(cat.key, 'en')}
               </div>
               <span className="text-[9px] sm:text-[10px] font-bold text-text-secondary bg-secondary px-1.5 sm:px-2 py-0.5 rounded-full border border-tertiary/60">
                 {marketGroups.length}

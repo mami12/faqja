@@ -7,7 +7,8 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
-import { isHandicapMarket, isMainFootballMatch } from '../../utils/sportsbookFilters';
+import { isMainFootballMatch } from '../../utils/sportsbookFilters';
+import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
 interface Props {
@@ -195,7 +196,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       <div className={`grid gap-px bg-[#10151e] ${labels.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {labels.map((label, i) => mk && outcomes[i] ? (
           <div key={outcomes[i].id ?? i} className="min-w-0 [&_button]:w-full [&_button]:min-h-[38px] [&_button]:rounded-none [&_button]:bg-[#28313f] [&_button]:flex-col [&_button]:items-center [&_button]:justify-center [&_button]:gap-0.5 [&_button]:px-0.5 [&_button]:py-1 [&_button_span:last-child]:text-[14px] [&_button_span]:max-w-full [&_button_span]:text-center">
-            <OddsButton match={m} market={mk} outcome={outcomes[i]} />
+            <OddsButton match={m} market={mk} outcome={outcomes[i]} showRawLabel />
           </div>
         ) : (
           <div key={label} title={label} className="min-h-[38px] bg-[#242d3a] flex items-center justify-center text-text-muted text-xs">—</div>

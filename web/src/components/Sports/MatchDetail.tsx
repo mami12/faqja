@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, TrendingUp, Trophy, Sparkles, Flame, Clock, Flag, 
-  ShieldAlert, Scale, ChevronDown, ChevronUp, Star, Bell, BellRing, 
+  ShieldAlert, ChevronDown, ChevronUp, Star, Bell, BellRing, 
   Search, X, Layers, Layers2
 } from 'lucide-react';
 import { apiClient } from '../../api/client';
@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { marketCategoryOf, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
@@ -20,7 +20,7 @@ import { useFavorites } from '../../context/FavoritesContext';
 // classification and localized labels as MarketPanel.
 const CATEGORY_KEY: Record<string, MarketCategory> = {
   Popular: 'main', Goals: 'goals', Mixed: 'mixed', Halves: 'htft',
-  Corners: 'corners', Cards: 'cards', Handicap: 'handicap',
+  Corners: 'corners', Cards: 'cards',
   Players: 'players', Other: 'other',
 };
 const getGroupCategory = (market: Market): string => {
@@ -29,7 +29,7 @@ const getGroupCategory = (market: Market): string => {
 };
 const categoryLabel = (category: string, lang: MarketLanguage): string =>
   marketCategoryLabel(CATEGORY_KEY[category] ?? 'other', lang);
-const CATEGORY_ORDER = ['Popular', 'Goals', 'Mixed', 'Halves', 'Corners', 'Cards', 'Handicap', 'Players', 'Other'];
+const CATEGORY_ORDER = ['Popular', 'Goals', 'Mixed', 'Halves', 'Corners', 'Cards', 'Players', 'Other'];
 
 const getCategoryIcon = (catId: string) => {
   switch (catId) {
@@ -39,7 +39,6 @@ const getCategoryIcon = (catId: string) => {
     case 'Halves': return <Clock size={13} className="text-purple-400" />;
     case 'Corners': return <Flag size={13} className="text-blue-400" />;
     case 'Cards': return <ShieldAlert size={13} className="text-rose-400" />;
-    case 'Handicap': return <Scale size={13} className="text-emerald-400" />;
     default: return <Sparkles size={13} className="text-accent-green" />;
   }
 };
@@ -50,7 +49,6 @@ const getMarketIcon = (category: string, title: string) => {
   if (category === 'Cards' || /card|karton/i.test(t)) return <ShieldAlert size={14} className="text-rose-400 shrink-0" />;
   if (category === 'Corners' || /corner|kënd/i.test(t)) return <Flag size={14} className="text-blue-400 shrink-0" />;
   if (category === 'Halves' || /half|pjes/i.test(t)) return <Clock size={14} className="text-purple-400 shrink-0" />;
-  if (category === 'Handicap' || /handicap|fora/i.test(t)) return <Scale size={14} className="text-emerald-400 shrink-0" />;
   if (category === 'Goals' || /goal|score|gola/i.test(t)) return <Flame size={14} className="text-orange-400 shrink-0" />;
   return <Trophy size={14} className="text-accent-yellow shrink-0" />;
 };
@@ -78,7 +76,7 @@ interface GroupedMarket {
 const groupMarkets = (markets: Market[], lang: MarketLanguage): GroupedMarket[] => {
   const groups = new Map<string, Market[]>();
   for (const market of markets) {
-    if (!isIdentifiedMarket(market)) continue;
+    if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
     const key = marketGroupKey(market);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(market);
@@ -196,8 +194,8 @@ export default function MatchDetail() {
   const isAlert = isAlertEnabled(matchIdStr);
 
   const categories = [
-    { id: 'all', label: lang === 'al' ? 'Të gjitha tregjet' : 'All Markets' },
-    ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, lang) })),
+    { id: 'all', label: 'All Markets' },
+    ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, 'en') })),
   ];
 
   const filteredCategories = categories.filter(c => c.id === 'all' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
@@ -385,7 +383,7 @@ export default function MatchDetail() {
                 {sectionStart && (
                   <div className="flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
                     {getCategoryIcon(group.category)}
-                    <span>{categoryLabel(group.category, lang)}</span>
+                    <span>{categoryLabel(group.category, 'en')}</span>
                     <span className="rounded bg-tertiary/70 px-2 py-0.5 text-[10px] text-text-secondary">
                       {groupedMarkets.filter(g => g.category === group.category).length}
                     </span>

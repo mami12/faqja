@@ -379,19 +379,18 @@ export function formatOddsButtonLabel(
   return description + ' · ' + outcome;
 }
 
-/** One canonical display title for match details, betslip and stored tickets. */
+/** Keep market names exactly as received from the provider in slips and tickets. */
 export function formatMarketSelectionLabel(
   marketName: string | undefined,
   marketLine: string | undefined,
-  t: Translate,
+  _t: Translate,
 ): string {
-  const label = translateMarketName(marketName, t);
+  const label = String(marketName ?? '').trim();
   const rawLine = String(marketLine ?? '').trim();
-  const formattedLine = formatMarketLine(marketName, rawLine);
-  if (!formattedLine) return label;
-  const shownNumbers = label.match(/\d+(?:[.,]\d+)?/g) ?? [];
-  if (shownNumbers.includes(rawLine)) return label;
-  return hasMinuteContext(marketName) ? label + ' ' + formattedLine : label + ' (' + formattedLine + ')';
+  if (!rawLine || /^#\d+$/.test(rawLine)) return label;
+  const shownNumbers = label.match(/-?\d+(?:[.,]\d+)?/g) ?? [];
+  if (shownNumbers.some(n => n.replace(',', '.') === rawLine.replace(',', '.'))) return label;
+  return label + ' (' + rawLine + ')';
 }
 
 /** Keep any unfamiliar qualifier verbatim rather than changing the bet's meaning. */

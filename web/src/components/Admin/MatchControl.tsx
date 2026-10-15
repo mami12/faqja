@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp, Edit3, Lock, Unlock, PlayCircle, Search, X, RefreshCw, Trophy, Clock } from 'lucide-react';
-import { translateMarketName, translateOutcomeName } from '../../utils/sportsbookLabels';
+import { translateOutcomeName } from '../../utils/sportsbookLabels';
 import { useLanguage } from '../../context/LanguageContext';
 
 export default function MatchControl() {
@@ -340,7 +340,7 @@ export default function MatchControl() {
                         <div key={mk.id} className="bg-secondary p-3 rounded-xl border border-tertiary/80 space-y-2.5 shadow-sm">
                           <div className="flex flex-wrap justify-between items-center gap-2">
                             <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-                              {translateMarketName(mk.name, t)}
+                              {mk.name}
                               {mk.status === 'SUSPENDED' && (
                                 <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black border border-amber-500/30">
                                   Pezulluar
