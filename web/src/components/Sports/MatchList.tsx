@@ -7,7 +7,8 @@ import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
-import { isHandicapMarket, isMainFootballMatch } from '../../utils/sportsbookFilters';
+import { isMainFootballMatch } from '../../utils/sportsbookFilters';
+import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
 interface Props {
