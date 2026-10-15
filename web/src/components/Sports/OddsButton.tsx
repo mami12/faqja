@@ -10,7 +10,7 @@ import { marketSelectionLabel } from '../../utils/marketCatalog';
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
 
 export default function OddsButton({ match, market, outcome, isWide, showRawLabel = false }: Props) {
-  const { selections, addSelection, removeSelection } = useBetslip();
+  const { selections, addSelection, removeSelection, updateOdds } = useBetslip();
   const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
   const { t, lang } = useLanguage();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
@@ -44,7 +44,10 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
   // Synthetic builder quotes are derived on REST refresh, not emitted as
   // provider outcome deltas. Keep their displayed price in sync with props.
   useEffect(() => {
-    if (outcome.id.startsWith('BB|')) setCurrentOdds(outcome.odds);
+    if (outcome.id.startsWith('BB|')) {
+      setCurrentOdds(outcome.odds);
+      if (isSelected && Number.isFinite(outcome.odds)) updateOdds(outcome.id, outcome.odds);
+    }
   }, [outcome.id, outcome.odds]);
 
   useEffect(() => {
