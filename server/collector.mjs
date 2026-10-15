@@ -44,7 +44,11 @@ export function buildMarkets(oddsRows) {
       // classify from the name at read time; the provider stops re-sending
       // unchanged markets, so a stored column can go stale. market-map.json
       // overrides still apply because they set the market *name*.
-      const name = o.market_name ?? '';
+      // The provider's bare "Total" becomes an identified goal market only
+      // when subgame=3 proves its subject; keep original odds/selection keys.
+      const rawName = o.market_name ?? '';
+      const name = /^total$/i.test(String(rawName).trim()) && isIdentifiedMarketName(rawName, o.subgames)
+        ? 'Total Goals' : rawName;
       const byName = marketColumn(o.market_key, name);
       const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
       const column = /handicap|fora|asian/i.test(String(name))
@@ -56,7 +60,7 @@ export function buildMarkets(oddsRows) {
             : o.board_column ?? 'other';
       markets.set(key, {
         key: o.market_key,
-        name: o.market_name,
+        name,
         line: o.line,
         column,
         period: Number(o.period ?? 0),
