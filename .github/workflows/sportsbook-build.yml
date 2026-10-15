@@ -36,6 +36,8 @@ jobs:
       - name: Validate sportsbook label regressions
         run: npm run test:sportsbook-labels
       - name: Validate market identities and unknown-market exclusions
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: node scripts/test-market-identity.mjs
       - name: Validate server risk suspensions
         run: node scripts/test-live-risk.mjs
