@@ -58,9 +58,9 @@ export function marketBaseName(market: Market): string {
   const suffix = raw.match(/\s+(-?\d+(?:[.,]\d+)?)$/);
   if (!suffix) return raw;
   const embedded = suffix[1].replace(',', '.');
-  if (providedLine && providedLine === embedded) return raw.slice(0, suffix.index).trim();
+  if (providedLine && providedLine === embedded) return raw.slice(0, suffix.index ?? raw.length).trim();
   if (!providedLine && /[.,]\d+$/.test(suffix[1]) && /\b(?:total|over\s*\/?\s*under|goals?|corners?|cards?|handicap)\b/i.test(raw)) {
-    return raw.slice(0, suffix.index).trim();
+    return raw.slice(0, suffix.index ?? raw.length).trim();
   }
   return raw;
 }
@@ -74,7 +74,10 @@ export function marketLineValue(market: Market): string {
 }
 
 export function marketGroupKey(market: Market): string {
-  return [String(market.marketType ?? '').toUpperCase(), String(market.period ?? 0), normalized(marketBaseName(market))].join('::');
+  const family = [String(market.marketType ?? '').toUpperCase(), String(market.period ?? 0), normalized(marketBaseName(market))].join('::');
+  // Only combine different prices under a common title when their numeric
+  // lines are known; otherwise two unrelated selections could be merged.
+  return marketLineValue(market) ? family : `${family}::${market.id}`;
 }
 
 /** Reject old inferred placeholders; keep distinct descriptive English markets. */
