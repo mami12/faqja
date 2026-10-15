@@ -51,6 +51,13 @@ const num = (v) => (Number.isFinite(Number(String(v).replace(',', '.'))) ? Numbe
  * VOID means "we cannot prove it" - the stake for that line is returned.
  */
 export function gradeLine(line, result) {
+  if (line.builder_legs !== null && line.builder_legs !== undefined) {
+    const legs = line.builder_legs;
+    if (!Array.isArray(legs) || legs.length < 2 || legs.length > 5 || legs.some(l => l.builder_legs)) return 'VOID';
+    const statuses = legs.map(leg => gradeLine(leg,result));
+    if (statuses.includes('LOST')) return 'LOST';
+    return statuses.every(s => s === 'WON') ? 'WON' : 'VOID';
+  }
   const home = Number(result.home_score);
   const away = Number(result.away_score);
   const totalGoals = home + away;

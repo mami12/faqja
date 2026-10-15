@@ -9,6 +9,7 @@ on:
       - 'scripts/test-mixed-combos.mjs'
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-market-identity.mjs'
+      - 'scripts/test-bet-builder.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/sportsbook-build.yml'
@@ -18,6 +19,7 @@ on:
       - 'web/**'
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-mixed-combos.mjs'
+      - 'scripts/test-bet-builder.mjs'
       - '.github/workflows/sportsbook-build.yml'
 
 jobs:
@@ -43,6 +45,10 @@ jobs:
         run: node scripts/test-live-risk.mjs
       - name: Validate mixed market contracts and settlement
         run: node scripts/test-mixed-combos.mjs
+      - name: Validate universal builder contracts
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: node scripts/test-bet-builder.mjs
       - name: Check backend syntax
         run: |
           node --check server/push-decode.mjs

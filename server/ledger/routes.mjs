@@ -5,9 +5,10 @@
  * contract (auth, sports tree, matches) from our live in-memory board.
  */
 import express from 'express';
-import { authenticate, requireAuth } from './auth.mjs';
+import { authenticate, requireAuth, requireAdmin } from './auth.mjs';
 import * as ledger from './store.mjs';
 import * as bets from './bets.mjs';
+import * as builders from './bet-builders.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
@@ -119,6 +120,14 @@ ledgerRouter.post(
   }),
 );
 
+/* ------------------------------------------------------- universal bet builders */
+ledgerRouter.get('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,
+  guard(async (req,res) => res.json(await builders.listTemplates())));
+ledgerRouter.post('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,
+  guard(async (req,res) => res.json(await builders.saveTemplate(req.body ?? {}))));
+ledgerRouter.delete('/admin/bet-builders/:id', requireLedger, requireAuth, requireAdmin,
+  guard(async (req,res) => { await builders.deleteTemplate(req.params.id); res.json({ ok:true }); }));
+
 /* ------------------------------------------------------- bets (stage 2) */
 
 /** place a real ticket: validates against the live feed, then charges the balance */
@@ -139,6 +148,16 @@ ledgerRouter.post(
     res.json(ticket);
   }),
 );
+
+/** Multiple ordinary columns: one atomic wallet transaction. */
+ledgerRouter.post('/bets/place-columns', requireLedger, requireAuth, guard(async (req, res) => {
+  res.json(await bets.placeColumns({
+    user: req.user,
+    stake: req.body?.stake,
+    columns: req.body?.columns,
+    clientRequestId: req.body?.clientRequestId,
+  }));
+}));
 
 /** shareable booking code: no stake, no account */
 ledgerRouter.post(
@@ -221,7 +240,8 @@ ledgerRouter.get(
     if (categoryId) rows = rows.filter((r) => r.category_slug === String(categoryId));
     if (tournamentId) rows = rows.filter((r) => String(r.tournament_id) === String(tournamentId));
 
-    res.json(toClientMatches(await withOdds(rows)));
+    const matches = toClientMatches(await withOdds(rows));
+    res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches) : matches);
   }),
 );
 
@@ -234,7 +254,9 @@ ledgerRouter.get(
     // cards, every total) on the next subscribe cycle, instead of base markets only
     boostMatch(row.match_id);
     const [serialized] = await withOdds([row]);
-    return res.json(toClientMatch(serialized));
+    const match = toClientMatch(serialized);
+    if (ledger.isLedgerReady()) await builders.decorateMatches([match]);
+    return res.json(match);
   }),
 );
 
@@ -281,6 +303,7 @@ ledgerRouter.get(
   guard(async (req, res) => {
     if (String(req.params.sportId) !== '18') return res.json([]);
     const rows = await getMatchRows({ limit: asLimit(req.query.limit, 500, 2000) });
-    return res.json(toClientMatches(await withOdds(rows)));
+    const matches = toClientMatches(await withOdds(rows));
+    return res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches) : matches);
   }),
 );
