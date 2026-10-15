@@ -129,6 +129,17 @@ export function isResultBttsMarket(name: string | undefined): boolean {
   return result && btts && !/\b(?:corners?|cards?|handicap|double chance|half.?time|first half|second half)\b/.test(s);
 }
 
+/** An existing provider market combining BTTS (GG/NG) with a goal total.
+ * Categorization only: never create synthetic odds or change feed selections.
+ */
+export function isBttsGoalsComboMarket(name: string | undefined): boolean {
+  const value = String(name ?? '').toLowerCase();
+  if (/\b(?:corners?|cards?|handicap)\b/.test(value)) return false;
+  const hasBtts = /\bbtts\b|\bgg\s*[/+&-]\s*ng\b|\bboth\s+teams?\s+(?:to\s+)?score\b|\bboth\s+score\b/.test(value);
+  const hasGoalsTotal = /\b(?:total\s+goals?|goals?\s+total|over\s*[/&+-]?\s*under|under\s*[/&+-]?\s*over|over\s+\d|under\s+\d|[ou]\s*2[.,]5)\b/.test(value);
+  return hasBtts && hasGoalsTotal;
+}
+
 export function parseResultBttsOutcome(
   value: string | undefined,
   homeTeam = '',
@@ -428,6 +439,7 @@ export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
   if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
+  if (isBttsGoalsComboMarket(raw)) return 'Gol/Gol dhe Totali i Golave';
   if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
   if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
   if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';

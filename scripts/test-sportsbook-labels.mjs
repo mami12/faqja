@@ -138,6 +138,20 @@ assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
 
 
+// Feed-defined BTTS + goals-total combinations belong in MIKSE, not plain BTTS.
+for (const title of [
+  'Both Teams to Score & Total Goals Over/Under 2.5',
+  'BTTS + Total Goals 2.5',
+  'GG/NG & Over/Under 2.5',
+  'Total Goals Over/Under & Both Teams to Score',
+]) {
+  assert.equal(module.exports.isBttsGoalsComboMarket(title), true, title);
+  assert.equal(module.exports.translateMarketName(title, translate), 'Gol/Gol dhe Totali i Golave', title);
+}
+assert.equal(module.exports.isBttsGoalsComboMarket('Both Teams to Score'), false);
+assert.equal(module.exports.isBttsGoalsComboMarket('Total Goals 2.5'), false);
+assert.equal(module.exports.isBttsGoalsComboMarket('Corners and BTTS Total Goals'), false);
+
 const timeExamples = [
   ['Time of Scoring', '20', 'Yes', 'Koha e shënimit të golit · min. 20\' · Po'],
   ['Time of Scoring', '45', 'No', 'Koha e shënimit të golit · min. 45\' · Jo'],
