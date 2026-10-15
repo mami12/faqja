@@ -136,6 +136,7 @@ assert.equal(module.exports.translateOutcomeName('Nil', translate, 'Both Teams t
 assert.equal(module.exports.translateOutcomeName('2/Nil', translate, mixedMarket, fixture), 'Jo/Po&2', 'Translate Nil mixed combination');
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
+assert.equal(module.exports.translateMarketName(mixedMarket, translate), mixedMarket, 'Keep original MIKSE market heading');
 
 
 // Feed-defined BTTS + goals-total combinations belong in MIKSE, not plain BTTS.
@@ -146,7 +147,7 @@ for (const title of [
   'Total Goals Over/Under & Both Teams to Score',
 ]) {
   assert.equal(module.exports.isBttsGoalsComboMarket(title), true, title);
-  assert.equal(module.exports.translateMarketName(title, translate), 'Gol/Gol dhe Totali i Golave', title);
+  assert.equal(module.exports.translateMarketName(title, translate), title, 'Keep provider combo heading: ' + title);
 }
 assert.equal(module.exports.isBttsGoalsComboMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isBttsGoalsComboMarket('Total Goals 2.5'), false);
