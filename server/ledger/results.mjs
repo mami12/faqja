@@ -27,6 +27,22 @@ const isFinished = (row) => {
 
 const statNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
+/** Safely take first-period scores only from a complete two-half breakdown.
+ * With a single unlabeled period we cannot know whether it is a first-half score.
+ */
+export function verifiedFirstHalf(periodsScore) {
+  let periods = periodsScore;
+  if (typeof periods === 'string') {
+    try { periods = JSON.parse(periods); } catch { return null; }
+  }
+  if (!Array.isArray(periods) || periods.length < 2) return null;
+  const first = periods[0];
+  const home = first?.t1, away = first?.t2;
+  if (home === null || home === undefined || away === null || away === undefined) return null;
+  if (!/^\\d+$/.test(String(home)) || !/^\\d+$/.test(String(away))) return null;
+  return { home: Number(home), away: Number(away) };
+}
+
 /** copies every finished match with a known score into app_match_result (idempotent) */
 export async function captureFinishedMatches() {
   const rows = await getMatches({ includeEnded: true, limit: 2000 });
@@ -59,6 +75,7 @@ export async function captureFinishedMatches() {
       ? (statNum(row.stats.away?.yellow) ?? 0) + (statNum(row.stats.away?.red) ?? 0)
       : null;
 
+    const half = verifiedFirstHalf(row.periods_score);
     const res = await query(
       `insert into app_match_result
          (match_id, home_team, away_team, home_score, away_score, corners_home, corners_away, cards_home, cards_away)
@@ -71,7 +88,7 @@ export async function captureFinishedMatches() {
          cards_home   = coalesce(excluded.cards_home, app_match_result.cards_home),
          cards_away   = coalesce(excluded.cards_away, app_match_result.cards_away)
        returning (xmax = 0) as inserted`,
-      [row.match_id, row.home, row.away, row.home_score, row.away_score, home, away, homeCards, awayCards],
+      [row.match_id, row.home, row.away, row.home_score, row.away_score, home, away, homeCards, awayCards, half?.home ?? null, half?.away ?? null],
     );
     if (res.rows[0]?.inserted) stored++;
   }
