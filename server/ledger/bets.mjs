@@ -14,10 +14,12 @@ import crypto from 'node:crypto';
 import { pool, query } from '../db.mjs';
 import { config } from '../config.mjs';
 import { getOddsForMatches } from '../odds-store.mjs';
+import { withOdds } from '../collector.mjs';
 import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
-import { outcomeIdOf, marketIdOf, parseOutcomeId } from './view.mjs';
+import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
+import { parseBuilderId, findLeg, listTemplates } from './bet-builders.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
@@ -42,6 +44,8 @@ const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUp
  * will store, using our own live price. Throws a 400 with a user-facing message.
  */
 async function resolveSelection(selection) {
+  const builder = parseBuilderId(selection?.outcomeId);
+  if (builder) return resolveBuilderSelection(selection,builder);
   // idle mode: while the feed is paused (or starting again) the prices on the board have not
   // been refreshed since before the pause - selling one of them would be selling a stale price
   if (feedIsRefreshing()) {
@@ -142,6 +146,45 @@ function assertDistinctMatches(lines) {
   if (new Set(ids).size !== ids.length) {
     throw badRequest('Dy markete nga e njëjta ndeshje duhen ndarë në kolona ose zgjedhur si Bet Builder.');
   }
+}
+
+// Resolve each template leg through the exact same price, lock, freshness and
+// risk checks as a normal ticket. Never trust browser-provided composite odds.
+async function resolveBuilderSelection(selection, { matchId, templateId }) {
+  if (feedIsRefreshing()) throw badRequest('Kuotat po rifreskohen.');
+  const template = (await listTemplates({ activeOnly: true })).find(t => t.id === templateId);
+  if (!template) throw badRequest('Bet Builder nuk është më aktiv.');
+  const match = await getMatchById(Number(matchId));
+  if (!match) throw badRequest('Ndeshja nuk është e disponueshme.');
+  const [raw] = await withOdds([match]);
+  const projected = toClientMatch(raw);
+  if (projected.isSuspended || projected.status === 'ENDED') throw badRequest('Ndeshja është pezulluar.');
+  const parts = template.legs.map(leg => findLeg(projected,leg));
+  if (parts.some(p => !p)) throw badRequest('Një market i Bet Builder është pezulluar ose mungon.');
+  const lines = await Promise.all(parts.map(part => resolveSelection({
+    outcomeId: part.outcome.id, oddsAtPlacement: part.outcome.odds,
+  })));
+  const price = Number(lines.reduce((p,l) => p*l.price,1).toFixed(4));
+  if (!Number.isFinite(price) || price <= 1 || price > 1000) throw badRequest('Koeficienti i Bet Builder është jashtë kufirit.');
+  const shown = Number(selection?.oddsAtPlacement ?? selection?.odds);
+  if (Number.isFinite(shown) && shown > 0 && Math.abs(price-shown)/shown > PRICE_TOLERANCE) {
+    const err = badRequest('Koeficienti i Bet Builder ka ndryshuar.');
+    err.code = 'ODDS_CHANGED'; err.outcomeId = selection.outcomeId;
+    err.oldOdds = shown; err.newOdds = price;
+    err.outcomeName = template.name; err.marketName = 'Bet Builder';
+    err.matchName = `${match.home} vs ${match.away}`;
+    throw err;
+  }
+  return {
+    matchId: String(matchId), marketKey: `BB:${templateId}`, line: '',
+    outcomeKey: 'builder', outcomeName: template.name, marketName: 'Bet Builder',
+    matchName: `${match.home} vs ${match.away}`, price,
+    builderLegs: lines.map(({ matchId: _matchId, price: _price, ...rest }) => ({
+      ...rest, match_id: Number(matchId), market_key: rest.marketKey,
+      outcome_key: rest.outcomeKey, outcome_name: rest.outcomeName,
+      market_name: rest.marketName,
+    })),
+  };
 }
 
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
@@ -294,14 +337,14 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
       const batch = lines.slice(offset, offset + 100);
       const params = [];
       const tuples = batch.map((line, index) => {
-        const base = index * 9;
+        const base = index * 10;
         params.push(ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey,
-          line.outcomeName, line.marketName, line.matchName, line.price);
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, 'PENDING')`;
+          line.outcomeName, line.marketName, line.matchName, line.price, JSON.stringify(line.builderLegs ?? null));
+        return `(${base + 1}, ${base + 2}, ${base + 3}, ${base + 4}, ${base + 5}, ${base + 6}, ${base + 7}, ${base + 8}, ${base + 9}, 'PENDING', ${base + 10}::jsonb)`;
       });
       await client.query(
         `insert into app_ticket_line
-           (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status)
+           (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status, builder_legs)
          values ${tuples.join(', ')}`,
         params,
       );
@@ -406,9 +449,9 @@ export async function placeColumns({ user, stake, columns, clientRequestId }) {
       for (const line of lines) {
         await client.query(
           `insert into app_ticket_line
-           (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING')`,
-          [id,line.matchId,line.marketKey,line.line,line.outcomeKey,line.outcomeName,line.marketName,line.matchName,line.price],
+           (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status,builder_legs)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING',$10::jsonb)`,
+          [id,line.matchId,line.marketKey,line.line,line.outcomeKey,line.outcomeName,line.marketName,line.matchName,line.price,JSON.stringify(line.builderLegs ?? null)],
         );
       }
       const after = round(balance - amount * (i + 1));
@@ -463,9 +506,9 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
   for (const line of lines) {
     await query(
       `insert into app_ticket_line
-         (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING')`,
-      [ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey, line.outcomeName, line.marketName, line.matchName, line.price],
+         (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status, builder_legs)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', $10::jsonb)`,
+      [ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey, line.outcomeName, line.marketName, line.matchName, line.price, JSON.stringify(line.builderLegs ?? null)],
     );
   }
 
