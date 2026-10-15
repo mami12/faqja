@@ -3,7 +3,7 @@ import Header from '../components/Layout/Header';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
-import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X } from 'lucide-react';
+import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X, LayoutDashboard, ChevronRight } from 'lucide-react';
 import FinancialChart from '../components/Finance/FinancialChart';
 import { formatTicketSelection, translateMarketName, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
 
@@ -36,7 +36,7 @@ interface FinancialState {
 
 export default function ManagerPage() {
   const { t } = useLanguage();
-  const [tab, setTab] = useState<'users' | 'tickets'>('users');
+  const [tab, setTab] = useState<'overview' | 'users' | 'tickets'>('overview');
   const [searchUser, setSearchUser] = useState('');
   const [userStatus, setUserStatus] = useState<'ALL' | 'ACTIVE' | 'FROZEN' | 'BANNED'>('ALL');
   const [showFinancialDetails, setShowFinancialDetails] = useState(false);
@@ -89,7 +89,7 @@ export default function ManagerPage() {
   };
 
   useEffect(() => {
-    if (tab === 'users') {
+    if (tab === 'users' || tab === 'overview') {
       void fetchUsers();
       const refreshTimer = window.setInterval(() => void fetchUsers(false), 30000);
       return () => window.clearInterval(refreshTimer);
@@ -212,7 +212,7 @@ export default function ManagerPage() {
           </div>
           <button
             type="button"
-            onClick={() => tab === 'users' ? void fetchUsers() : void fetchTickets()}
+            onClick={() => tab === 'tickets' ? void fetchTickets() : void fetchUsers()}
             className="inline-flex items-center gap-2 rounded-xl border border-tertiary bg-primary px-3 py-2.5 text-sm font-bold text-white hover:bg-tertiary"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Rifresko
@@ -221,6 +221,10 @@ export default function ManagerPage() {
       </div>
       <div className="bg-secondary/95 border-b border-tertiary px-3 sm:px-6">
         <div className="mx-auto max-w-7xl flex gap-2 sm:gap-4 overflow-x-auto py-2.5">
+          <button type="button" onClick={() => setTab('overview')}
+            className={`flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors sm:text-sm ${tab === 'overview' ? 'bg-accent-green text-primary' : 'text-text-secondary hover:bg-tertiary/60 hover:text-white'}`}>
+            <LayoutDashboard size={16} /> Përmbledhja
+          </button>
           <button 
             onClick={() => setTab('users')}
             className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
@@ -245,7 +249,43 @@ export default function ManagerPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {tab === 'users' ? (
+        {tab === 'overview' ? (
+          <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
+            <div>
+              <h2 className="text-xl font-black text-white">Përmbledhja e menaxherit</h2>
+              <p className="mt-1 text-sm text-text-secondary">Bilancet, lojtarët dhe veprimet kryesore në një pamje.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {([
+                ['Lojtarë gjithsej', String(users.length), UsersIcon],
+                ['Lojtarë aktivë', String(users.filter(u => u.status === 'ACTIVE').length), CheckCircle],
+                ['Fonde në dispozicion', (financials?.manager.balance ?? 0).toFixed(2) + ' Lëk', Wallet],
+                ['Diferenca neto', (financials?.manager.netDifference ?? 0).toFixed(2) + ' Lëk', BarChart3],
+              ] as const).map(([label, value, Icon]) => (
+                <div key={label} className="rounded-2xl border border-tertiary bg-secondary p-4">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary"><Icon size={16} className="text-accent-green" /> {label}</div>
+                  <div className="mt-3 break-words text-xl font-black text-white sm:text-2xl">{loading ? '...' : value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => setTab('users')} className="flex items-center gap-3 rounded-2xl border border-tertiary bg-secondary p-5 text-left text-white transition hover:border-accent-green/60">
+                <UsersIcon size={23} className="text-accent-green" />
+                <span className="flex-1"><strong className="block">Menaxho lojtarët</strong><span className="text-xs text-text-secondary">Krijo llogari, ndrysho bilance dhe statuse</span></span>
+                <ChevronRight size={19} />
+              </button>
+              <button type="button" onClick={() => setTab('tickets')} className="flex items-center gap-3 rounded-2xl border border-tertiary bg-secondary p-5 text-left text-white transition hover:border-accent-green/60">
+                <TicketIcon size={23} className="text-accent-green" />
+                <span className="flex-1"><strong className="block">Kontrollo skedinat</strong><span className="text-xs text-text-secondary">Shiko bastet dhe historikun e tyre</span></span>
+                <ChevronRight size={19} />
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-tertiary bg-secondary p-4">
+              <div><strong className="block text-sm text-white">Shto një lojtar të ri</strong><span className="text-xs text-text-secondary">Krijo llogari pa kërkuar nëpër menu.</span></div>
+              <button type="button" onClick={() => { setTab('users'); setShowCreateModal(true); }} className="inline-flex items-center gap-2 rounded-xl bg-accent-green px-4 py-2.5 text-sm font-bold text-primary"><Plus size={17} /> Krijo lojtar</button>
+            </div>
+          </div>
+        ) : tab === 'users' ? (
           <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             {financials?.manager && (
               <div className="mb-6 space-y-4">
