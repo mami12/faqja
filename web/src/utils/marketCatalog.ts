@@ -72,6 +72,7 @@ export function marketGroupKey(market: Market): string {
 export function marketCategoryOf(market: Market): MarketCategory {
   const name = normalized(market.name);
   const type = normalized(market.marketType);
+  if (/^bet builder\b/.test(name)) return 'mixed';
   if (type === 'corners' || /\bcorners?\b|\bcorner kicks?\b/.test(name)) return 'corners';
   if (type === 'cards' || /\bcards?\b|\bbookings?\b|yellow card|red card|disciplin/.test(name)) return 'cards';
   if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/.test(name)) return 'players';
