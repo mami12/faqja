@@ -283,3 +283,18 @@ for (const [market, outcome, expected] of comboCases) {
   assert.equal(module.exports.translateOutcomeName(outcome, translate, market, 'Lyon vs Crystal Palace'), expected, outcome);
   assert.equal(module.exports.formatTicketSelection(outcome, market, 'Lyon vs Crystal Palace', translate), expected, 'Ticket ' + outcome);
 }
+
+const matchDetailSource = readFileSync(new URL('../web/src/components/Sports/MatchDetail.tsx', import.meta.url), 'utf8');
+assert.match(
+  matchDetailSource,
+  /category:\s*getGroupCategory\(marketList\[0\]\.name\)/,
+  'Categorize match detail groups by the original market name, never by composite type:period:name keys',
+);
+for (const providerMarket of [
+  'Result and total',
+  'Total and both teams to score',
+  'Result and both teams to score',
+  '1st half. Result and both teams to score',
+]) {
+  assert.equal(module.exports.isAnyMixedMarket(providerMarket), true, providerMarket + ' must be in MIKSE');
+}
