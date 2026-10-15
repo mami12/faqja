@@ -5,6 +5,7 @@ import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from '../
 process.env.DATABASE_URL ||= 'postgres://test:test@127.0.0.1:5432/mixed_test';
 const { gradeLine } = await import('../server/ledger/settler.mjs');
 const { verifiedFirstHalf } = await import('../server/ledger/results.mjs');
+const { betRequestHash } = await import('../server/ledger/bets.mjs');
 const home = 'Lyon', away = 'Crystal Palace';
 assert.ok(isResultTotalMarket('Result and total'));
 assert.ok(isTotalBttsMarket('Total and both teams to score'));
@@ -59,3 +60,13 @@ assert.equal(gradeLine(
   line('1st half. Result and both teams to score', 'Both Teams To Score And Draw'),
   {...result, half_home_score:1, half_away_score:0}
 ), 'LOST', 'Do not use final result for first-half grading');
+
+const ticketPayload = { stake: 500, ticketType: 'SINGLE', systemType: '',
+  selections: [{outcomeId:'match:market:outcome',oddsAtPlacement:2.25}] };
+assert.equal(betRequestHash(ticketPayload), betRequestHash({...ticketPayload}),
+  'The same retry must have the same payload hash');
+assert.notEqual(betRequestHash(ticketPayload), betRequestHash({...ticketPayload, stake: 600}),
+  'A changed stake must not be treated as an identical request');
+assert.notEqual(betRequestHash(ticketPayload),
+  betRequestHash({...ticketPayload, selections:[{outcomeId:'different',oddsAtPlacement:2.25}]}),
+  'A changed selection must not be treated as an identical request');
