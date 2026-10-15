@@ -1,5 +1,5 @@
 /**
- * Bets: place, book (share a code), list, cash out.
+ * Bets: place, book (share a code), list, settle at final result.
  *
  * The rules are the ones the original backend used, kept identical so the UI behaves the
  * same: minimum stake 100 LEK, only ACTIVE accounts, prices validated against the live
@@ -414,69 +414,6 @@ export async function getBookingTicket(code) {
   if (!res.rows.length) return null;
   const [ticket] = await withLines(res.rows);
   return ticket;
-}
-
-/**
- * Cash out an open ticket early: 70% of the potential payout (the original rule), the
- * ticket closes as WON, and a manager who owns the player carries the deduction.
- */
-export async function cashOut(ticketId, userId) {
-  const client = await pool.connect();
-  try {
-    await client.query('begin');
-
-    const found = await client.query('select * from app_ticket where id = $1 and user_id = $2 for update', [ticketId, userId]);
-    const ticket = found.rows[0];
-    if (!ticket || ticket.status !== 'PENDING') throw badRequest('Bileta nuk është e vlefshme ose është mbyllur.');
-
-    const reduced = round(Number(ticket.potential_payout) * 0.7);
-    const lineCount = Number(
-      (await client.query('select count(*)::int as count from app_ticket_line where ticket_id = $1', [ticket.id])).rows[0].count,
-    );
-
-    await client.query(`update app_ticket set status = 'WON', potential_payout = $2, settled_at = now() where id = $1`, [
-      ticket.id,
-      reduced,
-    ]);
-    await client.query(`update app_ticket_line set status = 'VOID' where ticket_id = $1`, [ticket.id]);
-
-    const user = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [userId]);
-    const after = round(Number(user.rows[0].balance) + reduced);
-    await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [userId, after]);
-    await client.query(
-      `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-       values ($1, $2, 'BET_WON', $3, $4, $5)`,
-      [userId, reduced, ticket.id, after, 'Cash-out i biletës'],
-    );
-
-    const managerId = user.rows[0].manager_id;
-    if (managerId) {
-      await chargeManagerCommission(client, {
-        managerId,
-        ticketId: ticket.id,
-        username: user.rows[0].username,
-        stake: ticket.stake,
-        selectionCount: lineCount,
-      });
-      const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
-      if (!manager.rows.length) throw new Error(`Manager account ${managerId} not found during ticket cash-out`);
-      const managerAfter = round(Number(manager.rows[0].balance) - reduced);
-      await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [managerId, managerAfter]);
-      await client.query(
-        `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-         values ($1, $2, 'MANAGER_PAYOUT_DEDUCTION', $3, $4, $5)`,
-        [managerId, -reduced, ticket.id, managerAfter, `Pagesë për cash-out të lojtarit ${user.rows[0].username}`],
-      );
-    }
-
-    await client.query('commit');
-    return { success: true, amount: reduced };
-  } catch (e) {
-    await client.query('rollback').catch(() => {});
-    throw e;
-  } finally {
-    client.release();
-  }
 }
 
 /** Refunds an open ticket and its placement-time manager commission atomically. */
