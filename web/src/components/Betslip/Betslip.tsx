@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useBetslip } from '../../context/BetslipContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -12,7 +12,7 @@ import { formatTicketSelection, formatMarketSelectionLabel } from '../../utils/s
 export default function Betslip() {
   const { 
     selections, stake, setStake, ticketType, setTicketType, systemType, setSystemType, 
-    removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket 
+    removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet 
   } = useBetslip();
   const { t } = useLanguage();
   const { user, refreshUser } = useAuth();
@@ -32,6 +32,7 @@ export default function Betslip() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [placedTicket, setPlacedTicket] = useState<Ticket | null>(null);
   const [stakeError, setStakeError] = useState('');
+  const placeBetClickLock = useRef(false);
 
   // Ticket search state
   const [ticketSearch, setTicketSearch] = useState('');
@@ -41,13 +42,14 @@ export default function Betslip() {
   const [showTicketSearch, setShowTicketSearch] = useState(false);
 
   const handlePlaceBet = async () => {
+    if (placeBetClickLock.current) return;
     const stakeNum = parseFloat(stake) || 0;
     if (stakeNum < 1) {
       setStakeError(t('betslip.min_stake'));
       return;
     }
     setStakeError('');
-    
+    placeBetClickLock.current = true;
     try {
       const ticket = await placeBet(() => refreshUser());
       setPlacedTicket(ticket);
@@ -69,6 +71,8 @@ export default function Betslip() {
       } else {
         alert(errData?.message || e.message || t('common.error'));
       }
+    } finally {
+      placeBetClickLock.current = false;
     }
   };
 
@@ -313,9 +317,10 @@ export default function Betslip() {
             </div>
             <div className="grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" onClick={handlePlaceBet}
-                  className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
-                  {t('betslip.place_bet')}
+                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet}
+                  aria-busy={isPlacingBet}
+                  className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
+                  {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
                 </button>
               ) : (
                 <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
