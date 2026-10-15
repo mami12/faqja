@@ -112,7 +112,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
         String(marketList[0].line ?? '').trim()
           ? cleanMarketName(marketList[0].name).replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
           : marketList[0].name, t),
-      category: getGroupCategory(baseKey),
+      // Category detection must use the provider's raw name, not the grouped
+      // key (e.g. OVER_UNDER:0:Result and total), because combo matchers
+      // deliberately identify exact market names.
+      category: getGroupCategory(marketList[0].name),
       markets: marketList
     });
   });
