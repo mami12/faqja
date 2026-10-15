@@ -14,6 +14,7 @@ interface BetslipContextType {
   removeSelection: (outcomeId: string) => void;
   clearAll: () => void;
   updateOdds: (outcomeId: string, odds: number) => void;
+  columns: BetSelection[][];
   totalOdds: number;
   potentialPayout: number;
   placeBet: (onSuccess?: () => void) => Promise<any>;
@@ -31,9 +32,24 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const inFlightBet = useRef<Promise<any> | null>(null);
   const pendingBet = useRef<{ requestId: string; fingerprint: string } | null>(null);
-  const effectiveTicketType = selections.length > 1 ? 'COMBO' : ticketType;
+  // Cartesian product: at most one pick per match in each ordinary column.
+  // For 1X2 + BTTS in the same match this produces two single tickets.
+  const columns = useMemo(() => {
+    const groups: BetSelection[][] = [];
+    for (const selection of selections) {
+      const group = groups.find(g => g[0].matchId === selection.matchId);
+      if (group) group.push(selection);
+      else groups.push([selection]);
+    }
+    return groups.reduce<BetSelection[][]>((acc, group) =>
+      acc.flatMap(col => group.map(pick => [...col, pick])), [[]]);
+  }, [selections]);
+  const split = columns.length > 1;
+  const effectiveTicketType = split
+    ? (columns[0]?.length > 1 ? 'COMBO' : 'SINGLE')
+    : selections.length > 1 ? 'COMBO' : ticketType;
   const chooseTicketType = (type: 'SINGLE' | 'COMBO' | 'SYSTEM') => {
-    setTicketType(selections.length > 1 ? 'COMBO' : type);
+    setTicketType(split ? effectiveTicketType : selections.length > 1 ? 'COMBO' : type);
   };
 
   const addSelection = (s: BetSelection) => {
@@ -70,15 +86,18 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     setSelections(prev => prev.map(s => s.outcomeId === outcomeId ? { ...s, odds: newOdds } : s));
   };
 
-  const totalOdds = useMemo(() => selections.reduce((acc, s) => acc * s.odds, 1), [selections]);
-  const potentialPayout = useMemo(() => (parseFloat(stake) || 0) * totalOdds, [stake, totalOdds]);
+  const totalOdds = useMemo(() => columns.length === 1
+    ? columns[0].reduce((acc, s) => acc * s.odds, 1) : 0, [columns]);
+  const potentialPayout = useMemo(() => (parseFloat(stake) || 0) *
+    columns.reduce((sum, col) => sum + col.reduce((product, s) => product * s.odds, 1), 0), [stake, columns]);
 
   const placeBet = (onSuccess?: () => void): Promise<any> => {
     // A synchronous ref prevents duplicate requests even before React re-renders.
     if (inFlightBet.current) return inFlightBet.current;
 
     const stakeNum = parseFloat(stake) || 0;
-    if (stakeNum < 1) return Promise.reject(new Error('Shuma minimale është 1 Lëk'));
+    if (stakeNum < 100) return Promise.reject(new Error('Shuma minimale për kolonë është 100 Lek'));
+    if (columns.length > 24) return Promise.reject(new Error('Maksimumi 24 kolona për kupon.'));
 
     const payload = {
       ticketType: effectiveTicketType,
@@ -91,7 +110,11 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
         odds: s.odds,
       })),
     };
-    const fingerprint = JSON.stringify(payload);
+    const columnPayload = split ? {
+      stake: stakeNum,
+      columns: columns.map(col => col.map(s => ({ outcomeId: s.outcomeId, oddsAtPlacement: s.odds }))),
+    } : null;
+    const fingerprint = JSON.stringify(columnPayload ?? payload);
     // If a response is lost, retry the SAME request ID: server will return
     // the original ticket, not charge the wallet again.
     if (!pendingBet.current || pendingBet.current.fingerprint !== fingerprint) {
@@ -99,7 +122,10 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     }
     const clientRequestId = pendingBet.current.requestId;
     setIsPlacingBet(true);
-    const task = apiClient.post('/bets/place', { ...payload, clientRequestId })
+    const task = split
+      ? apiClient.post('/bets/place-columns', { ...columnPayload, clientRequestId })
+      : apiClient.post('/bets/place', { ...payload, clientRequestId });
+    const settled = task
       .then(res => {
         pendingBet.current = null;
         onSuccess?.();
@@ -115,14 +141,15 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
         inFlightBet.current = null;
         setIsPlacingBet(false);
       });
-    inFlightBet.current = task;
-    return task;
+    inFlightBet.current = settled;
+    return settled;
   };
 
   const bookTicket = async () => {
     const stakeNum = parseFloat(stake) || 0;
-    if (stakeNum < 1) {
-      throw new Error('Shuma minimale është 1 Lëk');
+    if (split) throw new Error('Prenotimi i shumë kolonave nuk është ende i disponueshëm.');
+    if (stakeNum < 100) {
+      throw new Error('Shuma minimale është 100 Lek');
     }
     
     const res = await apiClient.post('/bets/book', {
@@ -141,7 +168,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <BetslipContext.Provider value={{
-      selections, stake, setStake, ticketType: effectiveTicketType, setTicketType: chooseTicketType, systemType, setSystemType,
+      selections, columns, stake, setStake, ticketType: effectiveTicketType, setTicketType: chooseTicketType, systemType, setSystemType,
       addSelection, removeSelection, clearAll, updateOdds,
       totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet
     }}>
