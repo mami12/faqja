@@ -136,6 +136,14 @@ async function resolveSelection(selection) {
   };
 }
 
+// A regular ticket must never multiply correlated picks from one match.
+function assertDistinctMatches(lines) {
+  const ids = lines.map(line => String(line.matchId));
+  if (new Set(ids).size !== ids.length) {
+    throw badRequest('Dy markete nga e njëjta ndeshje duhen ndarë në kolona ose zgjedhur si Bet Builder.');
+  }
+}
+
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
 
 const TICKET_COLUMNS = `t.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout,
@@ -246,6 +254,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   // Independent odds checks can be awaited together instead of serially.
   const lines = await Promise.all(selections.map(resolveSelection));
 
+  assertDistinctMatches(lines);
   const totalOdds = totalOddsForSelections(lines);
   const payout = calculatePotentialPayout(amount, totalOdds);
 
@@ -320,6 +329,112 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   } finally {
     client.release();
   }
+}
+
+/**
+ * Places 2–24 columns atomically. Stake is PER COLUMN, not the total.
+ * The server resolves every leg, rejects same-match multiplications, and charges
+ * all columns together under one wallet lock and one idempotency key.
+ */
+export async function placeColumns({ user, stake, columns, clientRequestId }) {
+  const amount = Number(stake);
+  if (!Number.isFinite(amount) || amount < MIN_STAKE || round(amount) !== amount) {
+    throw badRequest(`Shuma minimale për kolonë është ${MIN_STAKE} Lek.`);
+  }
+  if (user.role !== 'PLAYER' || user.status !== 'ACTIVE') {
+    throw Object.assign(new Error('Llogaria nuk mund të vendosë baste.'), { status: 403 });
+  }
+  if (!Array.isArray(columns) || columns.length < 2 || columns.length > 24 ||
+      columns.some(col => !Array.isArray(col) || col.length < 1 || col.length > 20)) {
+    throw badRequest('Numër i pavlefshëm kolonash (2–24).');
+  }
+  if (!requestIdPattern.test(String(clientRequestId ?? ''))) {
+    throw badRequest('Identifikues i pavlefshëm i kërkesës.');
+  }
+  const requestId = String(clientRequestId).toLowerCase();
+  const payloadHash = crypto.createHash('sha256').update(JSON.stringify({ amount, columns })).digest('hex');
+  const getPrevious = async (db) => {
+    const { rows } = await db.query(
+      'select request_payload_hash, ticket_ids from app_ticket_batch where user_id = $1 and client_request_id = $2',
+      [user.id, requestId],
+    );
+    if (!rows.length) return null;
+    if (rows[0].request_payload_hash !== payloadHash) {
+      throw Object.assign(new Error('Kjo kërkesë është përdorur me të dhëna të tjera.'), { status: 409 });
+    }
+    return rows[0].ticket_ids;
+  };
+  const previous = await getPrevious({ query });
+  if (previous) return { tickets: await Promise.all(previous.map(getTicketWithLines)) };
+
+  const resolved = await Promise.all(columns.map(async col => {
+    const lines = await Promise.all(col.map(resolveSelection));
+    assertDistinctMatches(lines);
+    return lines;
+  }));
+  // Identical columns are not a legitimate split and would duplicate the charge.
+  const fingerprints = resolved.map(lines => lines.map(l => outcomeIdOf(l.matchId,l.marketKey,l.line,l.outcomeKey)).sort().join(';'));
+  if (new Set(fingerprints).size !== fingerprints.length) throw badRequest('Kolona të përsëritura.');
+  const totalStake = round(amount * resolved.length);
+  if (!Number.isFinite(totalStake) || totalStake > 100000000) throw badRequest('Shuma totale është shumë e madhe.');
+
+  const client = await pool.connect();
+  let ids = [];
+  try {
+    await client.query('begin');
+    const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
+    if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
+    const retry = await getPrevious(client);
+    if (retry) {
+      await client.query('commit');
+      return { tickets: await Promise.all(retry.map(getTicketWithLines)) };
+    }
+    const balance = Number(locked.rows[0].balance);
+    await assertPlayerCanBet(client, user.id, totalStake);
+    if (balance < totalStake) throw badRequest('Bilanci nuk mjafton për të gjitha kolonat.');
+    for (let i = 0; i < resolved.length; i++) {
+      const lines = resolved[i];
+      const odds = totalOddsForSelections(lines);
+      const type = lines.length > 1 ? 'COMBO' : 'SINGLE';
+      const inserted = await client.query(
+        `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, status)
+         values ($1,$2,$3,$4,$5,'PENDING') returning id`,
+        [user.id, amount, odds, calculatePotentialPayout(amount, odds), type],
+      );
+      const id = inserted.rows[0].id;
+      ids.push(id);
+      for (const line of lines) {
+        await client.query(
+          `insert into app_ticket_line
+           (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING')`,
+          [id,line.matchId,line.marketKey,line.line,line.outcomeKey,line.outcomeName,line.marketName,line.matchName,line.price],
+        );
+      }
+      const after = round(balance - amount * (i + 1));
+      await client.query(
+        `insert into app_transaction (user_id,amount,type,reference_id,balance_after,description)
+         values ($1,$2,'BET_PLACED',$3,$4,$5)`,
+        [user.id,-amount,id,after,`Kolona ${i+1}/${resolved.length} - ${type}`],
+      );
+      await chargeManagerCommission(client, {
+        managerId: locked.rows[0].manager_id, ticketId: id,
+        username: locked.rows[0].username, stake: amount, selectionCount: lines.length,
+      });
+    }
+    await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [user.id, round(balance-totalStake)]);
+    await client.query(
+      'insert into app_ticket_batch (user_id,client_request_id,request_payload_hash,ticket_ids) values ($1,$2,$3,$4)',
+      [user.id,requestId,payloadHash,ids],
+    );
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { tickets: await Promise.all(ids.map(getTicketWithLines)) };
 }
 
 /**
