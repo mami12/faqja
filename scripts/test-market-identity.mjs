@@ -49,6 +49,11 @@ for (const name of ['Market', 'Unknown', 'Corners', 'Cards', 'Total', 'cols-2', 
   assert.equal(isIdentifiedMarketName(name), false, name);
 }
 assert.equal(isIdentifiedMarketName('Total', '3'), true, 'known goal-total subgame still usable on the backend');
+assert.equal(isIdentifiedMarketName('Total', '', 'g6379'), true, 'g6379 is the verified football goals total');
+assert.equal(isIdentifiedMarketName('Correct score', '', 'g6371'), true, 'OTHER is a generic marketType, not an unknown provider name');
+assert.deepEqual(describeMarket({ name: 'Total', typeId: null, groupId: 6379 }), {
+  column: 'total', name: 'Total Goals'
+});
 for (const name of ['Corners. Result', 'Corners. Odd/Even', 'Yellow cards. Total', 'Total Goals', 'Result and total']) {
   assert.equal(isIdentifiedMarketName(name), true, name);
 }
@@ -80,6 +85,11 @@ const mk = (name, line = '', period = 0, marketType = 'OTHER') =>
 assert.equal(ui.isIdentifiedMarket(mk('Corners')), false);
 assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
 assert.equal(ui.isIdentifiedMarket(mk('Corners. Double chance')), true);
+assert.equal(ui.isIdentifiedMarket({ ...mk('Total'), id: '41360008|g6379|4.5', extId: 'g6379' }), true);
+assert.equal(ui.marketDisplayTitle({ ...mk('Total', '4.5', 0, 'OVER_UNDER'), id: '41360008|g6379|4.5', extId: 'g6379' }, 'al', true),
+  'Totali i golave (Mbi/Nën) (4.5)');
+assert.equal(ui.isIdentifiedMarket({ ...mk('Correct score'), id: '41360008|g6371|', extId: 'g6371', marketType: 'OTHER' }), true);
+assert.equal(ui.marketCategoryOf(mk('Correct score', '', 0, 'OTHER')), 'goals');
 assert.equal(ui.marketCategoryOf(mk('Corners. Double chance')), 'corners');
 assert.equal(ui.marketCategoryOf(mk('Yellow cards. Result')), 'cards');
 assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
