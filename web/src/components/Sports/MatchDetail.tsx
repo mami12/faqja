@@ -12,7 +12,7 @@ import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
 import { isHandicapMarket } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine, isResultBttsMarket } from '../../utils/sportsbookLabels';
+import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
 const cleanMarketName = (name?: string) => {
@@ -26,7 +26,7 @@ const cleanMarketName = (name?: string) => {
 
 const getGroupCategory = (name?: string) => {
   const value = String(name ?? '').toLowerCase();
-  if (isResultBttsMarket(value)) return 'Mixed';
+  if (isResultBttsMarket(value) || isBttsGoalsComboMarket(value)) return 'Mixed';
   if (/card|karton|booking|red card|yellow card/i.test(value)) return 'Cards';
   if (/corner|kendo|kënd|corners/i.test(value)) return 'Corners';
   if (/half|halves|pjesa|1st half|2nd half|1\. pjesë|2\. pjesë/i.test(value)) return 'Halves';
@@ -63,7 +63,7 @@ const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
   const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
   const mName = norm(marketName);
   const is1X2 = !isResultBttsMarket(mName) && /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = !isResultBttsMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
+  const isBTTS = !isResultBttsMarket(mName) && !isBttsGoalsComboMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
 
   const seen = new Set<string>();
   const res: any[] = [];
