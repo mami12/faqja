@@ -108,6 +108,16 @@ create table if not exists app_ticket_batch (
   primary key (user_id, client_request_id)
 );
 
+-- Universal admin-defined same-game builders. Each leg is a supported outcome contract.
+create table if not exists app_bet_builder_template (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  legs jsonb not null,
+  active boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- names and odds are snapshotted here, so settlement never depends on the live feed
 create table if not exists app_ticket_line (
   id               uuid primary key default gen_random_uuid(),
@@ -122,6 +132,7 @@ create table if not exists app_ticket_line (
   odds_at_placement numeric(14,4) not null,
   status           text not null default 'PENDING' -- PENDING | WON | LOST | VOID
 );
+alter table app_ticket_line add column if not exists builder_legs jsonb;
 create index if not exists app_ticket_line_ticket_idx on app_ticket_line (ticket_id);
 create index if not exists app_ticket_line_match_idx  on app_ticket_line (match_id);
 
