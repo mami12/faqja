@@ -127,11 +127,12 @@ ledgerRouter.post(
   requireLedger,
   requireAuth,
   guard(async (req, res) => {
-    const { stake, selections, ticketType, type, systemType } = req.body ?? {};
+    const { stake, selections, ticketType, type, systemType, clientRequestId } = req.body ?? {};
     const ticket = await bets.placeBet({
       user: req.user,
       stake,
       selections,
+      clientRequestId,
       ticketType: ticketType ?? type ?? null,
       systemType: systemType ?? null,
     });

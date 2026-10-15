@@ -87,6 +87,14 @@ create table if not exists app_ticket (
   placed_at        timestamptz not null default now(),
   settled_at       timestamptz
 );
+-- A request from the browser may be retried or delivered twice. Enforce exactly
+-- one real ticket per player + request key at the database boundary.
+alter table app_ticket add column if not exists client_request_id uuid;
+alter table app_ticket add column if not exists request_payload_hash text;
+create unique index if not exists app_ticket_user_request_uidx
+  on app_ticket (user_id, client_request_id)
+  where client_request_id is not null;
+
 create index if not exists app_ticket_user_idx   on app_ticket (user_id, placed_at desc);
 create index if not exists app_ticket_status_idx on app_ticket (status);
 

@@ -192,12 +192,39 @@ export async function getTicketWithLines(ticketId) {
   return toClientTicket(res.rows[0], await linesOf(ticketId), res.rows[0].username ?? null);
 }
 
+const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function betRequestHash({ stake, selections, ticketType, systemType }) {
+  const payload = {
+    stake: Number(stake),
+    ticketType: ticketType ?? null,
+    systemType: systemType ?? null,
+    selections: selections.map(s => ({
+      outcomeId: String(s.outcomeId ?? ''),
+      odds: Number(s.oddsAtPlacement ?? s.odds),
+    })),
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+async function existingRequestTicket(userId, requestId, payloadHash, db = { query }) {
+  const { rows } = await db.query(
+    'select id, request_payload_hash from app_ticket where user_id = $1 and client_request_id = $2',
+    [userId, requestId],
+  );
+  if (!rows.length) return null;
+  if (rows[0].request_payload_hash !== payloadHash) {
+    throw Object.assign(new Error('Kjo kërkesë basti është përdorur me të dhëna të tjera.'), { status: 409 });
+  }
+  return rows[0].id;
+}
+
 /**
  * Places a real ticket: every selection is validated against the live feed, then the stake,
  * the ticket (with its frozen lines) and the money movement are written in ONE database
  * transaction - a failure can never leave money and tickets out of step.
  */
-export async function placeBet({ user, stake, selections = [], ticketType = null, systemType = null }) {
+export async function placeBet({ user, stake, selections = [], ticketType = null, systemType = null, clientRequestId = null }) {
   const amount = Number(stake) || 0;
   if (amount < MIN_STAKE) throw badRequest(`Shuma minimale për të vendosur një bast është ${MIN_STAKE} Lek`);
   if (user.status !== 'ACTIVE') {
@@ -205,9 +232,19 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   }
   if (!selections.length) throw badRequest('Bileta është bosh: zgjidh të paktën një kuotë.');
 
+  if (clientRequestId != null && !requestIdPattern.test(String(clientRequestId))) {
+    throw badRequest('Identifikues i pavlefshëm i kërkesës së bastit.');
+  }
+  const requestId = clientRequestId == null ? null : String(clientRequestId).toLowerCase();
+  const payloadHash = requestId ? betRequestHash({ stake: amount, selections, ticketType, systemType }) : null;
+  if (requestId) {
+    const previous = await existingRequestTicket(user.id, requestId, payloadHash);
+    if (previous) return getTicketWithLines(previous);
+  }
+
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
-  const lines = [];
-  for (const selection of selections) lines.push(await resolveSelection(selection));
+  // Independent odds checks can be awaited together instead of serially.
+  const lines = await Promise.all(selections.map(resolveSelection));
 
   const totalOdds = totalOddsForSelections(lines);
   const payout = calculatePotentialPayout(amount, totalOdds);
@@ -219,6 +256,15 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     // lock the balance row: two simultaneous bets must not both pass the check
     const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
     if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
+    // The balance lock serializes simultaneous requests from the same player.
+    // An already committed request returns the same ticket, without another debit.
+    if (requestId) {
+      const previous = await existingRequestTicket(user.id, requestId, payloadHash, client);
+      if (previous) {
+        await client.query('commit');
+        return getTicketWithLines(previous);
+      }
+    }
     const balance = Number(locked.rows[0].balance);
     await assertPlayerCanBet(client, user.id, amount);
     if (balance - amount < 0) {
@@ -227,19 +273,28 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     const after = round(balance - amount);
 
     const inserted = await client.query(
-      `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, system_type, status)
-       values ($1, $2, $3, $4, $5, $6, 'PENDING')
+      `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, system_type, status, client_request_id, request_payload_hash)
+       values ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)
        returning id`,
-      [user.id, amount, totalOdds, payout, type, systemType],
+      [user.id, amount, totalOdds, payout, type, systemType, requestId, payloadHash],
     );
     const ticketId = inserted.rows[0].id;
 
-    for (const line of lines) {
+    // Store all ticket lines in one DB round trip (rather than one per pick).
+    for (let offset = 0; offset < lines.length; offset += 100) {
+      const batch = lines.slice(offset, offset + 100);
+      const params = [];
+      const tuples = batch.map((line, index) => {
+        const base = index * 9;
+        params.push(ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey,
+          line.outcomeName, line.marketName, line.matchName, line.price);
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, 'PENDING')`;
+      });
       await client.query(
         `insert into app_ticket_line
            (ticket_id, match_id, market_key, line, outcome_key, outcome_name, market_name, match_name, odds_at_placement, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING')`,
-        [ticketId, line.matchId, line.marketKey, line.line, line.outcomeKey, line.outcomeName, line.marketName, line.matchName, line.price],
+         values ${tuples.join(', ')}`,
+        params,
       );
     }
 
