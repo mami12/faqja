@@ -93,6 +93,13 @@ const named = buildMarkets(rows).map(x => x.name);
 assert.deepEqual(new Set(named),
   new Set(['Total', 'Correct score', 'Corners', 'Corners. Result', 'Yellow cards. Total', 'Asian Total']));
 
+// Identical text is not proof that two provider group IDs describe one bet.
+const distinct = buildMarkets(['g11111', 'g22222'].map(id => ({
+  market_key: id, market_name: 'Corners. Result', line: '',
+  outcome_key: '1', outcome_name: 'Home', price: 2.0, board_column: 'corners',
+})));
+assert.equal(distinct.length, 2, 'retain distinct provider market IDs sharing the same English title');
+
 const require = createRequire(import.meta.url);
 const ts = require('../web/node_modules/typescript/lib/typescript.js');
 const source = readFileSync(new URL('../web/src/utils/marketCatalog.ts', import.meta.url), 'utf8');
