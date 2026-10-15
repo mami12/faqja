@@ -438,8 +438,8 @@ function translateExactGoalsLabel(value: string) {
 export function translateMarketName(name: string | undefined, t: Translate) {
   const raw = String(name ?? '').trim();
   if (!raw) return '';
-  if (isResultBttsMarket(raw)) return 'Rezultati dhe Të Dyja Ekipet Shënojnë';
-  if (isBttsGoalsComboMarket(raw)) return 'Gol/Gol dhe Totali i Golave';
+  // Keep original provider market names for MIKSE while auditing combo contracts.
+  if (isResultBttsMarket(raw) || isBttsGoalsComboMarket(raw)) return raw;
   if (/^time\s+of\s+scoring(?:\s|$)/i.test(raw)) return 'Koha e shënimit të golit';
   if (/^time\s+of\s+(?:the\s+)?first\s+goal/i.test(raw)) return 'Koha e golit të parë';
   if (/^time\s+of\s+(?:the\s+)?last\s+goal/i.test(raw)) return 'Koha e golit të fundit';
