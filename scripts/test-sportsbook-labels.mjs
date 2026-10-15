@@ -131,7 +131,9 @@ assert.equal(
   'No',
   'Never invent a result from plain BTTS No',
 );
-assert.equal(module.exports.translateOutcomeName('Nil', translate, mixedMarket, fixture), 'Nil', 'Nil alone is not a result');
+assert.equal(module.exports.translateOutcomeName('Nil', translate, mixedMarket, fixture), 'Jo', 'Display Nil in Albanian without inventing the result');
+assert.equal(module.exports.translateOutcomeName('Nil', translate, 'Both Teams to Score', fixture), 'Jo', 'Translate standalone provider Nil to Jo');
+assert.equal(module.exports.translateOutcomeName('2/Nil', translate, mixedMarket, fixture), 'Jo/Po&2', 'Translate Nil mixed combination');
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
 
