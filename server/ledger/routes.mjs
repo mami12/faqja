@@ -171,13 +171,6 @@ ledgerRouter.get(
   guard(async (req, res) => res.json(await bets.listHistory(req.user.id))),
 );
 
-ledgerRouter.post(
-  '/bets/cashout/:ticketId',
-  requireLedger,
-  requireAuth,
-  guard(async (req, res) => res.json(await bets.cashOut(req.params.ticketId, req.user.id))),
-);
-
 /** the betslip's "find ticket" box: booking code or a ticket id fragment */
 ledgerRouter.get(
   '/tickets/search',
