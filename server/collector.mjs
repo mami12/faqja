@@ -14,7 +14,7 @@ const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
 /** a market name that is just a render-type label because the feed omitted the real name */
 
 /** Do not expose unresolved labels from old stored odds or older decoder frames. */
-export function isIdentifiedMarketName(name, subgames = '') {
+export function isIdentifiedMarketName(name, subgames = '', marketKey = '') {
   const raw = String(name ?? '').trim();
   if (!raw || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(raw)) return false;
   // A family alone ("Corners") gives no indication whether the wager is
@@ -23,6 +23,7 @@ export function isIdentifiedMarketName(name, subgames = '') {
   // A generic "Total" is only safely goals when the upstream declares
   // subgame=3 (totals), without corner/card subgame markers.
   if (/^total$/i.test(raw)) {
+    if (/^g6379(?:p\d+)?$/i.test(String(marketKey))) return true;
     const ids = String(subgames).split(',').map(s => s.trim());
     return ids.includes('3') && !ids.includes('13') && !ids.includes('174');
   }
@@ -38,7 +39,7 @@ export function buildMarkets(oddsRows) {
   const markets = new Map();
 
   for (const o of oddsRows) {
-    if (!isIdentifiedMarketName(o.market_name, o.subgames)) continue;
+    if (!isIdentifiedMarketName(o.market_name, o.subgames, o.market_key)) continue;
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
       // classify from the name at read time; the provider stops re-sending
@@ -47,7 +48,7 @@ export function buildMarkets(oddsRows) {
       // The provider's bare "Total" becomes an identified goal market only
       // when subgame=3 proves its subject; keep original odds/selection keys.
       const rawName = o.market_name ?? '';
-      const name = /^total$/i.test(String(rawName).trim()) && isIdentifiedMarketName(rawName, o.subgames)
+      const name = /^total$/i.test(String(rawName).trim()) && isIdentifiedMarketName(rawName, o.subgames, o.market_key)
         ? 'Total Goals' : rawName;
       const byName = marketColumn(o.market_key, name);
       const named = !/^(cols-?\d+|total-2|fora-2|market|unknown)$/i.test(String(name).trim());
