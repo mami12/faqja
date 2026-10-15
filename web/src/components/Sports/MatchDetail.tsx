@@ -11,8 +11,7 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch } from '../../api/liveFeed';
-import { isHandicapMarket, filterRedundantMatchResultMarkets } from '../../utils/sportsbookFilters';
-import { translateMarketName, formatMarketLine, isResultBttsMarket, isBttsGoalsComboMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
+import { formatMarketLine, isResultBttsMarket, isAnyMixedMarket } from '../../utils/sportsbookLabels';
 import { useFavorites } from '../../context/FavoritesContext';
 
 const cleanMarketName = (name?: string) => {
@@ -26,13 +25,17 @@ const cleanMarketName = (name?: string) => {
 
 const getGroupCategory = (name?: string) => {
   const value = String(name ?? '').toLowerCase();
-  if (isAnyMixedMarket(value)) return 'Mixed';
-  if (/card|karton|booking|red card|yellow card/i.test(value)) return 'Cards';
-  if (/corner|kendo|kënd|corners/i.test(value)) return 'Corners';
-  if (/half|halves|pjesa|1st half|2nd half|1\. pjesë|2\. pjesë/i.test(value)) return 'Halves';
+  // Group by the subject first: "Corners. Result" must remain under Corners,
+  // and "Yellow Cards. Total" must remain under Cards.
+  if (/\bcorners?\b|\bcorner\s*kicks?\b|kendo|kënd/i.test(value)) return 'Corners';
+  if (/\bcards?\b|karton|booking|yellow|\bred\b|disciplin/i.test(value)) return 'Cards';
+  if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/i.test(value)) return 'Players';
   if (/handicap|fora|asian/i.test(value)) return 'Handicap';
-  if (/goal|total|over|under|score|btts|gg|ng|gola|both teams to score/i.test(value)) return 'Goals';
-  return 'Popular';
+  if (isAnyMixedMarket(value) || /\b(?:result|winner)\b.*\b(?:total|goals|btts)\b/i.test(value)) return 'Mixed';
+  if (/half|halves|period|pjesa|1st half|2nd half/i.test(value)) return 'Halves';
+  if (/goal|total|over|under|score|btts|gg|ng|gola|both teams to score|odd\/even/i.test(value)) return 'Goals';
+  if (/\b1x2\b|result|winner|double chance|draw no bet|moneyline|qualify/i.test(value)) return 'Popular';
+  return 'Other';
 };
 
 const getCategoryIcon = (catId: string) => {
@@ -59,24 +62,17 @@ const getMarketIcon = (category: string, title: string) => {
   return <Trophy size={14} className="text-accent-yellow shrink-0" />;
 };
 
-const dedupeOutcomes = (outcomes: any[] = [], marketName: string = '') => {
-  const norm = (s: any) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':');
-  const mName = norm(marketName);
-  const is1X2 = !isResultBttsMarket(mName) && /1x2|full time result|match result|winner/i.test(mName) && !/half|score|rezultat|both|corner|card|handicap|chance/i.test(mName);
-  const isBTTS = !isAnyMixedMarket(mName) && /both teams? to score|both score/i.test(mName) && !/half|halves|result|1x2/i.test(mName);
-
+// Do not deduplicate by the label: different selections can legitimately have
+// the same provider text while carrying distinct outcome ids.
+const dedupeOutcomes = (outcomes: any[] = []) => {
   const seen = new Set<string>();
-  const res: any[] = [];
-  for (const o of outcomes) {
-    const k = norm(isAnyMixedMarket(mName) ? (o.code || o.name || '') : (o.name || o.code || ''));
-    if (is1X2 && !['1', 'x', '2', 'home', 'draw', 'away'].includes(k)) continue;
-    if (isBTTS && !['yes', 'no', 'gg', 'ng'].includes(k)) continue;
-    if (!seen.has(k)) {
-      seen.add(k);
-      res.push(o);
-    }
-  }
-  return res;
+  return outcomes.filter((outcome) => {
+    const id = String(outcome.id ?? '');
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 };
 
 interface GroupedMarket {
@@ -86,14 +82,19 @@ interface GroupedMarket {
   markets: Market[];
 }
 
-const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
+const groupMarkets = (markets: Market[]): GroupedMarket[] => {
   const map = new Map<string, Market[]>();
 
-  for (const m of filterRedundantMatchResultMarkets(markets).filter((market) => !isHandicapMarket(market))) {
+  for (const m of markets) {
     const rawClean = cleanMarketName(m.name);
     const explicitLine = String(m.line ?? '').trim();
-    // Never merge markets containing a minute in their name when the feed has no separate line.
-    const groupingName = explicitLine ? rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim() : rawClean;
+    // Group exact numeric lines including 2.5, 3.5 and 4.5 even when the
+    // provider embeds the line in the name rather than the separate line field.
+    // Bare integer suffixes without an explicit line may be goal/minute numbers.
+    const embeddedHalfLine = /\s+\d+[.,]\d+$/.test(rawClean);
+    const groupingName = explicitLine || embeddedHalfLine
+      ? rawClean.replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
+      : rawClean;
     const baseKey = `${String(m.marketType ?? '')}:${String(m.period ?? 0)}:${groupingName}`;
 
     if (!map.has(baseKey)) {
@@ -108,10 +109,10 @@ const groupMarkets = (markets: Market[], t: any): GroupedMarket[] => {
 
     result.push({
       baseName: baseKey,
-      title: translateMarketName(
-        String(marketList[0].line ?? '').trim()
-          ? cleanMarketName(marketList[0].name).replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
-          : marketList[0].name, t),
+      title: cleanMarketName(
+        String(marketList[0].line ?? '').trim() || /\s+\d+[.,]\d+$/.test(String(marketList[0].name ?? ''))
+          ? String(marketList[0].name ?? '').replace(/\s+\d+(?:[.,]\d+)?$/, '').trim()
+          : marketList[0].name),
       // Category detection must use the provider's raw name, not the grouped
       // key (e.g. OVER_UNDER:0:Result and total), because combo matchers
       // deliberately identify exact market names.
@@ -136,17 +137,27 @@ export default function MatchDetail() {
   const patch = useLivePatch(id);
 
   useEffect(() => {
-    if (id) {
+    if (!id) return;
+    let active = true;
+    const refresh = () => {
       apiClient.get(`/matches/${id}`).then(res => {
+        if (!active) return;
         setMatch(res.data);
-        if (res.data?.markets) {
-          setMarkets(res.data.markets);
-        }
+        setMarkets(res.data?.markets ?? []);
       }).catch(console.error);
-    }
+    };
+    refresh();
+    // Opening a fixture boosts its upstream subscription to FULL markets.
+    // The first REST response can predate that push snapshot: re-fetch while open
+    // so extra lines and markets become visible without a manual browser refresh.
+    const timer = window.setInterval(refresh, 20_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [id]);
 
-  const allGrouped = useMemo(() => groupMarkets(markets, t), [markets, t]);
+  const allGrouped = useMemo(() => groupMarkets(markets), [markets]);
 
   // Available categories with count
   const categoryCounts = useMemo(() => {
@@ -165,6 +176,7 @@ export default function MatchDetail() {
         const titleMatches = group.title.toLowerCase().includes(q);
         const subMarketMatches = group.markets.some(m => 
           (m.name?.toLowerCase().includes(q)) || 
+          (String(m.line ?? '').toLowerCase().includes(q)) ||
           ((m as any).outcomes?.some((o: any) => o.name?.toLowerCase().includes(q)))
         );
         return titleMatches || subMarketMatches;
@@ -204,14 +216,16 @@ export default function MatchDetail() {
   const isAlert = isAlertEnabled(matchIdStr);
 
   const categories = [
-    { id: 'all', label: 'Të Gjitha' },
-    { id: 'Popular', label: 'Kryesore' },
-    { id: 'Goals', label: 'Golat' },
-    { id: 'Mixed', label: 'MIKSE' },
-    { id: 'Halves', label: 'Pjesët' },
-    { id: 'Corners', label: 'Këndet' },
-    { id: 'Cards', label: 'Kartona' },
-    { id: 'Handicap', label: 'Handicap' }
+    { id: 'all', label: 'All Markets' },
+    { id: 'Popular', label: 'Main' },
+    { id: 'Goals', label: 'Goals' },
+    { id: 'Mixed', label: 'Combos' },
+    { id: 'Halves', label: 'Halves / Periods' },
+    { id: 'Corners', label: 'Corners' },
+    { id: 'Cards', label: 'Cards' },
+    { id: 'Handicap', label: 'Handicap' },
+    { id: 'Players', label: 'Players' },
+    { id: 'Other', label: 'Other' }
   ];
 
   const filteredCategories = categories.filter(c => c.id === 'all' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
@@ -325,7 +339,7 @@ export default function MatchDetail() {
             type="text"
             value={marketSearch}
             onChange={(e) => setMarketSearch(e.target.value)}
-            placeholder="Kërko tregje (p.sh. golat, pjesa e parë, fituesi, kënde...)"
+            placeholder="Search markets, lines, selections (e.g. 3.5, corners, cards...)"
             className="w-full bg-secondary border border-tertiary rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green shadow-inner"
           />
           {marketSearch && (
@@ -409,22 +423,23 @@ export default function MatchDetail() {
                 {!isCollapsed && (
                   <div className="divide-y divide-tertiary/70">
                     {group.markets.map(market => {
-                      const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? [], market.name);
+                      const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
                       if (!cleanOutcomes.length) return null;
-                      const line = String(market.line ?? '').trim();
+                      const line = String(market.line ?? '').trim() ||
+                        String(market.name ?? '').match(/\s+(\d+[.,]\d+)$/)?.[1] || '';
                       const showLine = group.markets.length > 1 || !!line;
                       return (
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
                           {showLine && (
                             <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#424d60] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
-                              {formatMarketLine(market.name, line) || translateMarketName(market.name, t)}
+                              {formatMarketLine(market.name, line) || market.name}
                             </div>
                           )}
                           <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"
                             style={{gridTemplateColumns: `repeat(${Math.min(cleanOutcomes.length, 3)}, minmax(0, 1fr))`}}>
                             {cleanOutcomes.map((outcome: any) => (
                               <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:h-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-xs">
-                                <OddsButton match={live} market={market} outcome={outcome} isWide />
+                                <OddsButton match={live} market={market} outcome={outcome} isWide showRawLabel />
                               </div>
                             ))}
                           </div>
