@@ -5,13 +5,14 @@ import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
+import { marketSelectionLabel } from '../../utils/marketCatalog';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
 
 export default function OddsButton({ match, market, outcome, isWide, showRawLabel = false }: Props) {
   const { selections, addSelection, removeSelection } = useBetslip();
   const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
 
@@ -36,7 +37,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     currentOdds === null || currentOdds === undefined;
 
   const label = showRawLabel
-    ? String(outcome.name || outcome.code || 'Selection').trim()
+    ? marketSelectionLabel(String(outcome.name || outcome.code || 'Selection'), lang)
     : formatOddsButtonLabel(outcome.name, market.name, market.line || market.specifier, t, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
   const scoringTimeLabel = !showRawLabel && /\btime\s+of\s+scoring\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(market.name);
 
