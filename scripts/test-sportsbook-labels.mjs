@@ -94,6 +94,10 @@ const mixedExamples = [
   ['X/No', 'Jo/Jo&X'],
   ['2/Yes', 'Po/Po&2'],
   ['2/No', 'Jo/Po&2'],
+  ['1/Nil', 'Po/Jo&1'],
+  ['X/Nil', 'Jo/Jo&X'],
+  ['2/Nil', 'Jo/Po&2'],
+  ['Nil/1', 'Po/Jo&1'],
   ['Arsenal & No', 'Po/Jo&1'],
   ['Chelsea & No', 'Jo/Po&2'],
   ['Both Teams Not to Score and Draw', 'Jo/Jo&X'],
@@ -127,6 +131,7 @@ assert.equal(
   'No',
   'Never invent a result from plain BTTS No',
 );
+assert.equal(module.exports.translateOutcomeName('Nil', translate, mixedMarket, fixture), 'Nil', 'Nil alone is not a result');
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
 
