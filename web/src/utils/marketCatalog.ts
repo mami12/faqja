@@ -54,7 +54,7 @@ const normalized = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCas
 /** Documented provider group: g6379 is the football goals Total market. */
 const isVerifiedGoalTotal = (market: Market): boolean => {
   const key = String(market.extId ?? '').trim() || String(market.id ?? '').split('|')[1] || '';
-  return /^g6379(?:p\\d+)?$/i.test(key);
+  return /^g6379(?:p\d+)?$/i.test(key);
 };
 
 /** Strip only a line whose number is explicit, or a decimal total embedded in the name. */
