@@ -15,6 +15,12 @@ const scenarios = [
   ['X/No', 'X', false, [0, 0], 'WON'],
   ['2/Yes', '2', true, [1, 2], 'WON'],
   ['2:NG', '2', false, [0, 1], 'WON'],
+  ['1/Nil', '1', false, [1, 0], 'WON'],
+  ['X/Nil', 'X', false, [0, 0], 'WON'],
+  ['2/Nil', '2', false, [0, 1], 'WON'],
+  ['Nil/1', '1', false, [2, 0], 'WON'],
+  ['Home & Nil', '1', false, [1, 0], 'WON'],
+  ['Nil & Chelsea', '2', false, [0, 2], 'WON'],
   ['No/1', '1', false, [2, 0], 'WON'],
   ['Home & BTTS: No', '1', false, [3, 0], 'WON'],
   ['Arsenal & No', '1', false, [1, 0], 'WON'],
@@ -30,6 +36,7 @@ assert.equal(gradeResultBtts(oneNo, 2, 1), 'LOST'); // Won home, but both scored
 assert.equal(gradeResultBtts(oneNo, 0, 0), 'LOST'); // No goals, but it was a draw.
 assert.equal(gradeResultBtts(parseResultBttsOutcome('X/Yes'), 2, 2), 'WON');
 assert.equal(gradeResultBtts(parseResultBttsOutcome('X/No'), 0, 0), 'WON');
+assert.equal(parseResultBttsOutcome('Nil'), null, 'Nil alone does not identify a match result');
 assert.equal(parseResultBttsOutcome('yes'), null);
 assert.equal(parseResultBttsOutcome('1'), null);
 assert.equal(parseResultBttsOutcome('1-0'), null);
