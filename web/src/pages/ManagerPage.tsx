@@ -3,7 +3,7 @@ import Header from '../components/Layout/Header';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
-import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X } from 'lucide-react';
 import FinancialChart from '../components/Finance/FinancialChart';
 import { formatTicketSelection, translateMarketName, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
 
@@ -37,6 +37,9 @@ interface FinancialState {
 export default function ManagerPage() {
   const { t } = useLanguage();
   const [tab, setTab] = useState<'users' | 'tickets'>('users');
+  const [searchUser, setSearchUser] = useState('');
+  const [userStatus, setUserStatus] = useState<'ALL' | 'ACTIVE' | 'FROZEN' | 'BANNED'>('ALL');
+  const [showFinancialDetails, setShowFinancialDetails] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [financials, setFinancials] = useState<FinancialState | null>(null);
@@ -186,6 +189,11 @@ export default function ManagerPage() {
     }
   };
 
+  const filteredUsers = users.filter(u =>
+    (userStatus === 'ALL' || u.status === userStatus) &&
+    u.username.toLocaleLowerCase().includes(searchUser.trim().toLocaleLowerCase())
+  );
+
   const openEditModal = (u: User) => {
     setSelectedUser(u);
     setEditUsername(u.username);
@@ -196,8 +204,23 @@ export default function ManagerPage() {
   return (
     <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
+      <div className="border-b border-tertiary bg-secondary px-4 py-4 sm:px-6">
+        <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white">Paneli i menaxherit</h1>
+            <p className="mt-1 text-xs sm:text-sm text-text-secondary">Lojtarët, bilancet dhe skedinat në një vend</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => tab === 'users' ? void fetchUsers() : void fetchTickets()}
+            className="inline-flex items-center gap-2 rounded-xl border border-tertiary bg-primary px-3 py-2.5 text-sm font-bold text-white hover:bg-tertiary"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Rifresko
+          </button>
+        </div>
+      </div>
       <div className="bg-secondary/95 border-b border-tertiary px-3 sm:px-6">
-        <div className="flex gap-2 sm:gap-4 overflow-x-auto py-2">
+        <div className="mx-auto max-w-7xl flex gap-2 sm:gap-4 overflow-x-auto py-2.5">
           <button 
             onClick={() => setTab('users')}
             className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
@@ -226,6 +249,34 @@ export default function ManagerPage() {
           <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             {financials?.manager && (
               <div className="mb-6 space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-tertiary bg-secondary p-4">
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><UsersIcon size={15} /> Lojtarë gjithsej</div>
+                    <div className="mt-2 text-2xl font-black text-white">{users.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-tertiary bg-secondary p-4">
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><CheckCircle size={15} /> Llogari aktive</div>
+                    <div className="mt-2 text-2xl font-black text-white">{users.filter(u => u.status === 'ACTIVE').length}</div>
+                  </div>
+                  <div className="rounded-xl border border-tertiary bg-secondary p-4">
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><Wallet size={15} /> Fonde në dispozicion</div>
+                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{financials.manager.balance.toFixed(2)} Lëk</div>
+                  </div>
+                  <div className="rounded-xl border border-tertiary bg-secondary p-4">
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><BarChart3 size={15} /> Diferenca neto</div>
+                    <div className={`mt-2 text-lg sm:text-xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} Lëk</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFinancialDetails(open => !open)}
+                  aria-expanded={showFinancialDetails}
+                  className="flex w-full items-center justify-between rounded-xl border border-tertiary bg-secondary px-4 py-3 text-left text-sm font-bold text-white hover:bg-tertiary/60"
+                >
+                  <span className="flex items-center gap-2"><BarChart3 size={17} className="text-accent-green" /> Raporti financiar i detajuar</span>
+                  {showFinancialDetails ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+                {showFinancialDetails && <div className="space-y-4">
                 <div className={`rounded-xl border p-5 ${financials.manager.netDifference >= 0 ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`}>
                   <div className="text-sm text-text-secondary">Pozicioni financiar</div>
                   <div className={`mt-1 text-2xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -267,6 +318,7 @@ export default function ManagerPage() {
                     { label: 'Diferenca neto', value: financials.manager.netDifference, color: 'bg-fuchsia-400' },
                   ]}
                 />
+                </div>}
               </div>
             )}
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 sm:mb-6">
@@ -282,12 +334,74 @@ export default function ManagerPage() {
               </button>
             </div>
 
-            <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-x-auto">
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-tertiary bg-secondary p-3 sm:flex-row sm:items-center">
+              <label className="relative flex-1">
+                <span className="sr-only">Kërko lojtarin</span>
+                <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+                <input
+                  type="search"
+                  value={searchUser}
+                  onChange={event => setSearchUser(event.target.value)}
+                  placeholder="Kërko lojtar sipas emrit..."
+                  className="w-full rounded-xl border border-tertiary bg-primary py-3 pl-10 pr-3 text-sm text-white placeholder:text-text-secondary focus:border-accent-green focus:outline-none"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs text-text-secondary">
+                Statusi
+                <select
+                  value={userStatus}
+                  onChange={event => setUserStatus(event.target.value as typeof userStatus)}
+                  className="min-w-40 rounded-xl border border-tertiary bg-primary px-3 py-3 text-sm text-white focus:border-accent-green focus:outline-none"
+                >
+                  <option value="ALL">Të gjithë</option>
+                  <option value="ACTIVE">Aktivë</option>
+                  <option value="FROZEN">Të ngrirë</option>
+                  <option value="BANNED">Të bllokuar</option>
+                </select>
+              </label>
+              <span className="text-xs text-text-secondary">Shfaqur: {filteredUsers.length}</span>
+            </div>
+            <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-hidden">
               {loading ? (
                 <div className="p-12 text-center text-text-secondary">{t('admin.loading_accounts')}</div>
-              ) : users.length === 0 ? (
-                <div className="p-12 text-center text-text-secondary">{t('manager.no_users')}</div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="p-12 text-center text-text-secondary">{users.length === 0 ? t('manager.no_users') : 'Nuk u gjet asnjë lojtar me këta filtra.'}</div>
               ) : (
+                <>
+                <div className="grid gap-3 p-3 lg:hidden">
+                  {filteredUsers.map(u => {
+                    const finance = financials?.players.find(p => p.id === u.id);
+                    return (
+                      <article key={u.id} className="rounded-xl border border-tertiary bg-primary p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="break-words font-bold text-white">{u.username}</div>
+                            <div className="mt-1 text-xs text-text-secondary">Bilanci i lojtarit</div>
+                            <div className="text-lg font-black text-white">{u.balance.toFixed(2)} {u.currency || 'Lëk'}</div>
+                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${u.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : u.status === 'FROZEN' ? 'bg-amber-500/15 text-amber-400' : 'bg-rose-500/15 text-rose-400'}`}>
+                            {u.status === 'ACTIVE' ? 'Aktiv' : u.status === 'FROZEN' ? 'I ngrirë' : 'I bllokuar'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary p-3 text-xs">
+                          <div><span className="block text-text-secondary">Fonde të luajtura</span><strong className="mt-1 block text-white">{(finance?.totalStake ?? 0).toFixed(2)} Lëk</strong></div>
+                          <div><span className="block text-text-secondary">Diferenca neto</span><strong className={`mt-1 block ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(finance?.netDifference ?? 0).toFixed(2)} Lëk</strong></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('deposit'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-400"><ArrowUpRight size={15} /> {t('admin.deposit')}</button>
+                          <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('withdraw'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/15 py-2.5 text-xs font-bold text-amber-400"><ArrowDownRight size={15} /> {t('admin.withdraw')}</button>
+                          <button type="button" onClick={() => openEditModal(u)} className="flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue/15 py-2.5 text-xs font-bold text-accent-blue"><Edit3 size={15} /> Ndrysho</button>
+                          <button type="button" onClick={() => handleStatusChange(u.id, u.status === 'ACTIVE' ? 'FROZEN' : 'ACTIVE')} className="flex items-center justify-center gap-1.5 rounded-lg bg-tertiary py-2.5 text-xs font-bold text-white">{u.status === 'ACTIVE' ? 'Ngrij' : 'Aktivizo'}</button>
+                        </div>
+                        <div className="flex justify-end gap-4 border-t border-tertiary pt-3">
+                          {u.status !== 'BANNED' && <button type="button" onClick={() => handleStatusChange(u.id, 'BANNED')} className="text-xs font-bold text-rose-400">Blloko</button>}
+                          <button type="button" onClick={() => handleDeleteUser(u.id, u.username)} className="flex items-center gap-1 text-xs font-bold text-rose-400"><Trash2 size={13} /> Fshi</button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[1050px] text-left text-text-primary text-sm">
                   <thead className="bg-tertiary/60 uppercase text-xs text-text-secondary">
                     <tr>
@@ -301,7 +415,7 @@ export default function ManagerPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-tertiary">
-                    {users.map(u => (
+                    {filteredUsers.map(u => (
                       <tr key={u.id} className="hover:bg-primary/40 transition">
                         <td className="p-4 font-semibold text-white flex items-center gap-2">
                           <span className="w-8 h-8 rounded-full bg-accent-blue/20 text-accent-blue flex items-center justify-center font-bold text-xs uppercase">
@@ -405,6 +519,8 @@ export default function ManagerPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
+                </>
               )}
             </div>
           </div>
