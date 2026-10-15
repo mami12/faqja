@@ -260,13 +260,13 @@ assert.deepEqual(
 );
 assert.deepEqual(
   filter1X2([genericWinner, genericResult, firstHalf]),
-  [genericWinner, genericResult, firstHalf],
-  'Never remove the only remaining result markets',
+  [firstHalf],
+  'Generic full-time 1X2 rows are always hidden, even when canonical market is absent',
 );
 assert.deepEqual(
   filter1X2([mockMarket('Full Time Result', 0, 'SUSPENDED'), genericWinner]),
-  [mockMarket('Full Time Result', 0, 'SUSPENDED'), genericWinner],
-  'Do not hide live available result market when canonical odds are suspended',
+  [mockMarket('Full Time Result', 0, 'SUSPENDED')],
+  'Suspended canonical prices must not bring generic duplicates back',
 );
 
 const comboCases = [
@@ -324,4 +324,20 @@ assert.deepEqual(
   filter1X2([mockMarket('Full time result'), ...alt1X2]),
   [mockMarket('Full time result')],
   'Canonical title capitalization must not matter',
+);
+
+assert.deepEqual(
+  filter1X2([
+    mockMarket('Rezultati i Ndeshjes (1X2)'),
+    mockMarket('Match Result (1X2)'),
+    mockMarket('Full Time Result'),
+    mockMarket('Double Chance'),
+  ]),
+  [mockMarket('Full Time Result'), mockMarket('Double Chance')],
+  'Remove two redundant 1X2 rows shown to the user while keeping full time and double chance',
+);
+assert.deepEqual(
+  filter1X2([mockMarket('Match Winner'), mockMarket('Match Result (1X2)'), mockMarket('1X2')]),
+  [],
+  'Do not reintroduce generic 1X2 if canonical result market is absent',
 );
