@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts, gradeMixedTotal } from '../server/ledger/mixed-combos.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from '../server/ledger/result-btts.mjs';
-import { gradeLine } from '../server/ledger/settler.mjs';
+// The settler's database pool is constructed on import, but these tests never connect.
+process.env.DATABASE_URL ||= 'postgres://test:test@127.0.0.1:5432/mixed_test';
+const { gradeLine } = await import('../server/ledger/settler.mjs');
 const home = 'Lyon', away = 'Crystal Palace';
 assert.ok(isResultTotalMarket('Result and total'));
 assert.ok(isTotalBttsMarket('Total and both teams to score'));
