@@ -140,6 +140,16 @@ ledgerRouter.post(
   }),
 );
 
+/** Multiple ordinary columns: one atomic wallet transaction. */
+ledgerRouter.post('/bets/place-columns', requireLedger, requireAuth, guard(async (req, res) => {
+  res.json(await bets.placeColumns({
+    user: req.user,
+    stake: req.body?.stake,
+    columns: req.body?.columns,
+    clientRequestId: req.body?.clientRequestId,
+  }));
+}));
+
 /** shareable booking code: no stake, no account */
 ledgerRouter.post(
   '/bets/book',
