@@ -65,6 +65,8 @@ export interface Match {
 
 export interface Market {
   id: string;
+  /** Original market group identifier (e.g. g6379), separate from generic marketType. */
+  extId?: string;
   matchId: string;
   marketType: string;
   name: string;
