@@ -298,3 +298,30 @@ for (const providerMarket of [
 ]) {
   assert.equal(module.exports.isAnyMixedMarket(providerMarket), true, providerMarket + ' must be in MIKSE');
 }
+
+const alt1X2 = [
+  mockMarket('Match Winner (3-way)'),
+  mockMarket('Match Result (1X2)'),
+  mockMarket('1X2'),
+  mockMarket('Match Winner'),
+  mockMarket('Match Result'),
+];
+assert.deepEqual(filter1X2([fulltime, ...alt1X2]), [fulltime], 'Hide every redundant generic three-way 1X2 alias');
+const retainedDistinctMarkets = [
+  mockMarket('Match Winner (2-way)'),
+  mockMarket('1st half. Result', 1),
+  mockMarket('2nd half. Result', 2),
+  mockMarket('Half Time / Full Time'),
+  mockMarket('Result and total'),
+  mockMarket('Match Winner', 1),
+];
+assert.deepEqual(
+  filter1X2([fulltime, ...retainedDistinctMarkets]),
+  [fulltime, ...retainedDistinctMarkets],
+  'Other-period, 2-way and mixed contracts must not be removed',
+);
+assert.deepEqual(
+  filter1X2([mockMarket('Full time result'), ...alt1X2]),
+  [mockMarket('Full time result')],
+  'Canonical title capitalization must not matter',
+);
