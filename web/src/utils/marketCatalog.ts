@@ -77,6 +77,16 @@ export function marketGroupKey(market: Market): string {
   return [String(market.marketType ?? '').toUpperCase(), String(market.period ?? 0), normalized(marketBaseName(market))].join('::');
 }
 
+/** Reject old inferred placeholders; keep distinct descriptive English markets. */
+export function isIdentifiedMarket(market: Market): boolean {
+  const name = String(market.name ?? '').trim();
+  if (!name || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name)) return false;
+  if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(name)) return false;
+  // The bare "Total" without a known subject is ambiguous in the browser.
+  if (/^total(?:\s+\d+(?:[.,]\d+)?)?$/i.test(name)) return false;
+  return true;
+}
+
 export function marketCategoryOf(market: Market): MarketCategory {
   const name = normalized(String(market.name ?? ''));
   const type = String(market.marketType ?? '').toUpperCase();
