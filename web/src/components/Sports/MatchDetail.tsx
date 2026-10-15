@@ -112,7 +112,15 @@ const groupMarkets = (markets: Market[]): GroupedMarket[] => {
 
   const result: GroupedMarket[] = [];
   map.forEach((marketList, baseKey) => {
-    marketList.sort((a, b) => parseFloat(a.line || '0') - parseFloat(b.line || '0'));
+    // Prefer the provider's line; when the line is encoded in the market name,
+    // still sort 1.5, 2.5, 3.5, 4.5 in numeric order.
+    const numericLine = (market: Market): number => {
+      const line = String(market.line ?? '').trim() ||
+        String(market.name ?? '').match(/\\s+(\\d+[.,]\\d+)$/)?.[1] || '';
+      const value = Number(line.replace(',', '.'));
+      return Number.isFinite(value) && line !== '' ? value : Number.POSITIVE_INFINITY;
+    };
+    marketList.sort((a, b) => numericLine(a) - numericLine(b));
 
     result.push({
       baseName: baseKey,
