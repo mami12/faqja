@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useMemo } from 'react';
+import { createContext, useContext, useState, useMemo, useRef } from 'react';
 import { BetSelection } from '../types';
 import { apiClient } from '../api/client';
 
@@ -17,6 +17,7 @@ interface BetslipContextType {
   totalOdds: number;
   potentialPayout: number;
   placeBet: (onSuccess?: () => void) => Promise<any>;
+  isPlacingBet: boolean;
   bookTicket: () => Promise<any>;
 }
 
@@ -27,6 +28,9 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const [stake, setStake] = useState('0');
   const [ticketType, setTicketType] = useState<'SINGLE' | 'COMBO' | 'SYSTEM'>('SINGLE');
   const [systemType, setSystemType] = useState('');
+  const [isPlacingBet, setIsPlacingBet] = useState(false);
+  const inFlightBet = useRef<Promise<any> | null>(null);
+  const pendingBet = useRef<{ requestId: string; fingerprint: string } | null>(null);
   const effectiveTicketType = selections.length > 1 ? 'COMBO' : ticketType;
   const chooseTicketType = (type: 'SINGLE' | 'COMBO' | 'SYSTEM') => {
     setTicketType(selections.length > 1 ? 'COMBO' : type);
@@ -69,13 +73,14 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const totalOdds = useMemo(() => selections.reduce((acc, s) => acc * s.odds, 1), [selections]);
   const potentialPayout = useMemo(() => (parseFloat(stake) || 0) * totalOdds, [stake, totalOdds]);
 
-  const placeBet = async (onSuccess?: () => void) => {
+  const placeBet = (onSuccess?: () => void): Promise<any> => {
+    // A synchronous ref prevents duplicate requests even before React re-renders.
+    if (inFlightBet.current) return inFlightBet.current;
+
     const stakeNum = parseFloat(stake) || 0;
-    if (stakeNum < 1) {
-      throw new Error('Shuma minimale është 1 Lëk');
-    }
-    
-    const res = await apiClient.post('/bets/place', {
+    if (stakeNum < 1) return Promise.reject(new Error('Shuma minimale është 1 Lëk'));
+
+    const payload = {
       ticketType: effectiveTicketType,
       type: effectiveTicketType,
       systemType,
@@ -83,12 +88,35 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
       selections: selections.map(s => ({
         outcomeId: s.outcomeId,
         oddsAtPlacement: s.odds,
-        odds: s.odds
-      }))
-    });
-    
-    if (onSuccess) onSuccess();
-    return res.data;
+        odds: s.odds,
+      })),
+    };
+    const fingerprint = JSON.stringify(payload);
+    // If a response is lost, retry the SAME request ID: server will return
+    // the original ticket, not charge the wallet again.
+    if (!pendingBet.current || pendingBet.current.fingerprint !== fingerprint) {
+      pendingBet.current = { requestId: crypto.randomUUID(), fingerprint };
+    }
+    const clientRequestId = pendingBet.current.requestId;
+    setIsPlacingBet(true);
+    const task = apiClient.post('/bets/place', { ...payload, clientRequestId })
+      .then(res => {
+        pendingBet.current = null;
+        onSuccess?.();
+        return res.data;
+      })
+      .catch(err => {
+        // Definitive server rejection permits a fresh attempt. For a network
+        // failure with unknown outcome, preserve the key for safe retries.
+        if (err.response) pendingBet.current = null;
+        throw err;
+      })
+      .finally(() => {
+        inFlightBet.current = null;
+        setIsPlacingBet(false);
+      });
+    inFlightBet.current = task;
+    return task;
   };
 
   const bookTicket = async () => {
@@ -115,7 +143,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     <BetslipContext.Provider value={{
       selections, stake, setStake, ticketType: effectiveTicketType, setTicketType: chooseTicketType, systemType, setSystemType,
       addSelection, removeSelection, clearAll, updateOdds,
-      totalOdds, potentialPayout, placeBet, bookTicket
+      totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet
     }}>
       {children}
     </BetslipContext.Provider>
