@@ -1,155 +1,112 @@
 import type { Market } from '../types';
 
 /**
- * Display-only registry. Provider names/codes are never rewritten in the odds
- * store, tickets or settlement. Translate only entries reviewed as whole
- * markets; unknown/provider-specific markets keep their original English name.
+ * Provider market names and outcome labels are presentation source of truth.
+ * This file only decides grouping / visibility. Never translate, rename or
+ * change market IDs, lines, prices, selections or saved ticket contents.
  */
-export type MarketCategory = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'handicap' | 'players' | 'other';
+export type MarketCategory = 'main' | 'goals' | 'mixed' | 'corners' | 'cards' | 'htft' | 'players' | 'other';
 export type MarketLanguage = 'al' | 'en' | 'de' | 'fr';
 
-const VERIFIED_AL: Record<string, string> = {
-  'full time result': 'Rezultati i ndeshjes (1X2)',
-  'match result': 'Rezultati i ndeshjes (1X2)',
-  '1x2': 'Rezultati i ndeshjes (1X2)',
-  'half time result': 'Rezultati i pjesës së parë (1X2)',
-  '1st half result': 'Rezultati i pjesës së parë (1X2)',
-  '1st half. result': 'Rezultati i pjesës së parë (1X2)',
-  '2nd half result': 'Rezultati i pjesës së dytë (1X2)',
-  '2nd half. result': 'Rezultati i pjesës së dytë (1X2)',
-  'half time / full time': 'Pjesa e parë / Ndeshja',
-  'halftime/fulltime': 'Pjesa e parë / Ndeshja',
-  'double chance': 'Shansi i dyfishtë (1X / 12 / X2)',
-  'draw no bet': 'Fituesi, pa barazim',
-  'both teams to score': 'Të dyja ekipet shënojnë (GG/NG)',
-  'total': 'Totali i golave (Mbi/Nën)',
-  'total goals': 'Totali i golave (Mbi/Nën)',
-  'over/under': 'Mbi / Nën',
-  'correct score': 'Rezultati i saktë',
-  'asian handicap': 'Handikap aziatik',
-  'handicap': 'Handikap',
-  'result and total': 'Rezultati & Totali i golave',
-  'total and both teams to score': 'Totali i golave & GG/NG',
-  'result and both teams to score': 'Rezultati & GG/NG',
-  'corners. result': 'Kornet: Rezultati (1X2)',
-  'corners. double chance': 'Kornet: Shansi i dyfishtë (1X / 12 / X2)',
-  'corners. total': 'Kornet: Totali (Mbi/Nën)',
-  'total corners': 'Kornet: Totali (Mbi/Nën)',
-  'corners. odd/even': 'Kornet: Tek / Çift',
-  'corners. handicap': 'Kornet: Handikap',
-  'asian corners': 'Kornet: Handikap aziatik',
-  'yellow cards. result': 'Kartonët e verdhë: Rezultati (1X2)',
-  'yellow cards. total': 'Kartonët e verdhë: Totali (Mbi/Nën)',
-  'yellow cards. double chance': 'Kartonët e verdhë: Shansi i dyfishtë',
-  'yellow cards': 'Kartonët e verdhë',
-  'red cards': 'Kartonët e kuq',
-  'total cards': 'Kartonët: Totali (Mbi/Nën)',
-  'cards. total': 'Kartonët: Totali (Mbi/Nën)',
-  'cards. result': 'Kartonët: Rezultati (1X2)',
-  'cards. double chance': 'Kartonët: Shansi i dyfishtë',
-};
+const normalized = (value: unknown): string =>
+  String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-const normalized = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+/** All handicap variants are excluded from the current sportsbook offer.
+ * "Asian Total" is not necessarily a handicap, so do not discard it simply
+ * because its name includes "Asian".
+ */
+export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): boolean {
+  const name = normalized(market.name);
+  const type = normalized(market.marketType);
+  return type === 'handicap'
+    || /\b(handicap|handicaps|fora|spread|spreads)\b/i.test(name)
+    || /^asian (?:corners?|cards?)\b/.test(name)
+    || /^(?:corners?|cards?)\.\s*asian\b/.test(name);
+}
 
-/** Documented provider group: g6379 is the football goals Total market. */
-const isVerifiedGoalTotal = (market: Market): boolean => {
-  const key = String(market.extId ?? '').trim() || String(market.id ?? '').split('|')[1] || '';
-  return /^g6379(?:p\d+)?$/i.test(key);
-};
+/** Hide unnamed/generated placeholders, not real short provider names.
+ * "Total", "Result", "Corners", "Cards", etc. ARE original provider names.
+ */
+export function isIdentifiedMarket(market: Market): boolean {
+  const name = String(market.name ?? '').trim();
+  if (!name) return false;
+  return !/^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name);
+}
 
-/** Strip only a line whose number is explicit, or a decimal total embedded in the name. */
 export function marketBaseName(market: Market): string {
-  const raw = String(market.name ?? '').trim() || 'Unverified market';
-  const providedLine = String(market.line ?? '').trim().replace(',', '.');
+  const raw = String(market.name ?? '').trim();
+  const explicit = String(market.line ?? '').trim().replace(',', '.');
   const suffix = raw.match(/\s+(-?\d+(?:[.,]\d+)?)$/);
   if (!suffix) return raw;
   const embedded = suffix[1].replace(',', '.');
-  if (providedLine && providedLine === embedded) return raw.slice(0, suffix.index ?? raw.length).trim();
-  if (!providedLine && /[.,]\d+$/.test(suffix[1]) && /\b(?:total|over\s*\/?\s*under|goals?|corners?|cards?|handicap)\b/i.test(raw)) {
+  if (explicit && explicit === embedded) return raw.slice(0, suffix.index ?? raw.length).trim();
+  if (!explicit && /[.,]\d+$/.test(suffix[1]) &&
+      /\b(?:total|over\s*\/?\s*under|goals?|corners?|cards?|handicap)\b/i.test(raw)) {
     return raw.slice(0, suffix.index ?? raw.length).trim();
   }
   return raw;
 }
 
 export function marketLineValue(market: Market): string {
-  const provided = String(market.line ?? '').trim();
-  if (provided && !/^#\d+$/.test(provided)) return provided;
-  const raw = String(market.name ?? '');
-  if (marketBaseName(market) !== raw.trim()) return raw.match(/\s+(-?\d+(?:[.,]\d+)?)$/)?.[1] ?? '';
+  const given = String(market.line ?? '').trim();
+  if (given && !/^#\d+$/.test(given)) return given;
+  const raw = String(market.name ?? '').trim();
+  if (marketBaseName(market) !== raw) {
+    return raw.match(/\s+(-?\d+(?:[.,]\d+)?)$/)?.[1] ?? '';
+  }
   return '';
 }
 
+/** Never join unrelated line-less markets; merge only real numeric lines
+ * in the same provider family and period.
+ */
 export function marketGroupKey(market: Market): string {
-  const family = [String(market.marketType ?? '').toUpperCase(), String(market.period ?? 0), normalized(marketBaseName(market))].join('::');
-  // Only combine different prices under a common title when their numeric
-  // lines are known; otherwise two unrelated selections could be merged.
-  return marketLineValue(market) ? family : `${family}::${market.id}`;
+  const family = [normalized(market.marketType), market.period ?? 0, normalized(marketBaseName(market))].join('::');
+  return marketLineValue(market) ? family : family + '::' + String(market.id);
 }
 
-/** Reject old inferred placeholders; keep distinct descriptive English markets. */
-export function isIdentifiedMarket(market: Market): boolean {
-  const name = String(market.name ?? '').trim();
-  if (!name || /^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name)) return false;
-  if (/^(?:corners?|cards?|result|match result \(2-way\))$/i.test(name)) return false;
-  // The bare "Total" without a known subject is ambiguous in the browser.
-  if (/^total(?:\s+\d+(?:[.,]\d+)?)?$/i.test(name)) return isVerifiedGoalTotal(market);
-  return true;
-}
-
+/** Subjects come before bet types: "Corners. Result" belongs to Corners,
+ * not Main/Result. Period labels are a secondary distinction.
+ */
 export function marketCategoryOf(market: Market): MarketCategory {
-  const name = normalized(String(market.name ?? ''));
-  const type = String(market.marketType ?? '').toUpperCase();
-  if (/^unverified market\b|^(?:market|unknown|cols-?\d+|total-2|fora-2)$/.test(name)) return 'other';
-  // First classify by subject. "Corners. Result" is NOT the result of the football match.
-  if (type === 'CORNERS' || /\bcorners?\b|\bcorner kicks?\b|\bkornet\b/.test(name)) return 'corners';
-  if (type === 'CARDS' || /\bcards?\b|\bbookings?\b|yellow|\bred card\b/.test(name)) return 'cards';
+  const name = normalized(market.name);
+  const type = normalized(market.marketType);
+  if (type === 'corners' || /\bcorners?\b|\bcorner kicks?\b/.test(name)) return 'corners';
+  if (type === 'cards' || /\bcards?\b|\bbookings?\b|yellow card|red card|disciplin/.test(name)) return 'cards';
   if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/.test(name)) return 'players';
-  if (/\bhandicap\b|\basian\b|\bfora\b/.test(name)) return 'handicap';
-  if (/\b(?:result|winner|1x2)\b.*\b(?:total|goals|btts|both teams)\b|\b(?:total|goals|btts)\b.*\b(?:both teams|btts)\b/i.test(name)) return 'mixed';
-  if (/halftime\s*\/?\s*fulltime|half\s*time\s*\/\s*full\s*time|ht\s*\/\s*ft|\b(?:1st|2nd|first|second)\s+half\b|\bperiod\b/.test(name) || market.period === 1 || market.period === 2) return 'htft';
-  if (/\b(?:1x2|match result|full time result|winner|double chance|draw no bet|moneyline|qualify)\b/.test(name) || type === '1X2') return 'main';
-  if (type === 'OVER_UNDER' || /\bgoals?\b|\btotal\b|over\s*\/?\s*under|both teams|btts|correct score|odd\s*\/\s*even/.test(name)) return 'goals';
+  if (/\b(?:result|winner|1x2)\b.*\b(?:total|goals|btts|both teams)\b|\b(?:total|goals|btts)\b.*\b(?:both teams|btts)\b/.test(name)) return 'mixed';
+  if (/halftime\s*\/?\s*fulltime|half\s*time\s*\/\s*full\s*time|ht\s*\/\s*ft|\b(?:1st|2nd|first|second)\s+half\b|\bperiod\b/.test(name) ||
+      Number(market.period ?? 0) === 1 || Number(market.period ?? 0) === 2) return 'htft';
+  if (/\b(?:1x2|match result|full time result|winner|double chance|draw no bet|moneyline|qualify|result)\b/.test(name) || type === '1x2') return 'main';
+  if (type === 'over_under' || /\bgoals?\b|\btotal\b|over\s*\/?\s*under|both teams|btts|correct score|odd\s*\/\s*even/.test(name)) return 'goals';
   return 'other';
 }
 
-export function marketDisplayTitle(market: Market, lang: MarketLanguage, withLine = false): string {
-  const base = marketBaseName(market);
-  const title = /^total$/i.test(base) && isVerifiedGoalTotal(market) ? 'Total Goals' : base;
-  const display = lang === 'al' ? VERIFIED_AL[normalized(title)] ?? title : title;
-  // The period is already explicit in some provider labels. Do not add an invented period.
-  const rawHasPeriod = /\b(?:1st|2nd|first|second)\s+half\b|half\s*time|halftime|\bperiod\b/i.test(base);
-  const period = !rawHasPeriod && (market.period === 1 || market.period === 2)
-    ? (lang === 'al' ? (market.period === 1 ? 'Pjesa e parë · ' : 'Pjesa e dytë · ') : (market.period === 1 ? '1st Half · ' : '2nd Half · '))
-    : '';
-  const line = withLine ? marketLineValue(market) : '';
-  return period + display + (line ? ' (' + line + ')' : '');
+/** The heading is exactly the provider's original name. A separately
+ * supplied line is appended, but never substituted into the provider name.
+ * Group headings drop only a repeated numerical line to share one heading.
+ */
+export function marketDisplayTitle(market: Market, _lang: MarketLanguage, withLine = false): string {
+  const raw = String(market.name ?? '').trim();
+  if (!withLine) return marketBaseName(market);
+  const line = marketLineValue(market);
+  const suffix = raw.match(/(?:^|[\s(])(-?\d+(?:[.,]\d+)?)\)?$/);
+  if (!line || (suffix && suffix[1].replace(',', '.') === line.replace(',', '.'))) return raw;
+  return raw + ' (' + line + ')';
 }
 
-/** Intentionally narrow: only uncomplicated provider selections are translated. */
-export function marketSelectionLabel(raw: string, lang: MarketLanguage): string {
-  const value = String(raw ?? '').trim();
-  if (lang !== 'al') return value;
-  const simple: Record<string, string> = {
-    over: 'Mbi', under: 'Nën', yes: 'Po', no: 'Jo',
-    odd: 'Tek', even: 'Çift', draw: 'Barazim',
-    home: '1', away: '2',
-  };
-  const exact = simple[value.toLowerCase()];
-  if (exact) return exact;
-  const withLine = value.match(/^(over|under)\s+(-?\d+(?:[.,]\d+)?)$/i);
-  if (withLine) return (withLine[1].toLowerCase() === 'over' ? 'Mbi ' : 'Nën ') + withLine[2];
-  return value;
+/** The provider's original outcome text, with no local translation. */
+export function marketSelectionLabel(raw: string, _lang: MarketLanguage): string {
+  return String(raw ?? '').trim();
 }
 
-const AL_CATEGORY_LABELS: Record<MarketCategory, string> = {
-  main: 'Kryesore', goals: 'Golat', mixed: 'Të kombinuara', corners: 'Kornet',
-  cards: 'Kartonët', htft: 'Pjesët / Periudhat', handicap: 'Handikap',
-  players: 'Lojtarët', other: 'Të tjera',
-};
 const EN_CATEGORY_LABELS: Record<MarketCategory, string> = {
   main: 'Main', goals: 'Goals', mixed: 'Combos', corners: 'Corners',
-  cards: 'Cards', htft: 'Halves / Periods', handicap: 'Handicap',
-  players: 'Players', other: 'Other',
+  cards: 'Cards', htft: 'Halves / Periods', players: 'Players', other: 'Other',
+};
+const AL_CATEGORY_LABELS: Record<MarketCategory, string> = {
+  main: 'Kryesore', goals: 'Golat', mixed: 'Të kombinuara', corners: 'Kornet',
+  cards: 'Kartonët', htft: 'Pjesët / Periudhat', players: 'Lojtarët', other: 'Të tjera',
 };
 export function marketCategoryLabel(category: MarketCategory, lang: MarketLanguage): string {
   return (lang === 'al' ? AL_CATEGORY_LABELS : EN_CATEGORY_LABELS)[category];
