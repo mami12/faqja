@@ -282,6 +282,7 @@ app.get('/api/matches/:id', async (req, res, next) => {
     const row = await getMatchById(Number(req.params.id));
     if (!row) return res.status(404).json({ error: 'match not found' });
     boostMatch(row.match_id); // opened matches always get their full market list
+    pusher?.subscribeFull(row.match_id); // request full lines now, not next subscription tick
     const [match] = await withOdds([row]);
     res.json(match);
   } catch (e) {
@@ -555,6 +556,13 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 });
 
 /* --------------------------------------- React app (betting / admin panels) */
+
+// Detail-page GETs need complete markets immediately, including distant prematch
+// fixtures which otherwise stay on the hourly base-only subscription tier.
+app.use('/app/api/matches/:id', (req, _res, next) => {
+  if (req.method === 'GET') pusher?.subscribeFull(req.params.id);
+  next();
+});
 
 app.use('/app/api', adminRouter);
 app.use('/app/api', ledgerRouter);

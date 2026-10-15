@@ -262,6 +262,15 @@ export function startPusher({
 
   return {
     stats: () => ({ ...counts, intervals, lastSent }),
+    // A detail-page open must not wait for the hourly prematch subscription.
+    // Request only this fixture's complete list, leaving the cheap board tiers intact.
+    subscribeFull(matchId) {
+      const id = Number(matchId);
+      if (!Number.isSafeInteger(id) || id <= 0 || !ready || !ws || ws.readyState !== WebSocket.OPEN) return false;
+      const data = { matchIds: [id], isBaseOddsGroups: false };
+      ws.send(`42["subscribe",${JSON.stringify({ messageType: 'subscribe-match-odds', data })}]`);
+      return true;
+    },
     pause() {
       if (counts.paused) return false;
       counts.paused = true;
