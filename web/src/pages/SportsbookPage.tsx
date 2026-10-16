@@ -113,6 +113,7 @@ export default function SportsbookPage() {
       isFavoritesOnly={isFavoritesOnly}
       searchTerm={searchTerm}
       onSearchChange={handleSearchChange}
+      onSearchSubmit={() => setNavOpen(false)}
       onSelectFavorites={handleSelectFavorites}
       onSelectTournament={handleSelectTournament}
       onSelectSport={handleSelectSport}
@@ -200,7 +201,7 @@ export default function SportsbookPage() {
             <div className="relative h-full animate-in slide-in-from-left duration-250 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               {sidebar}
               <button
-                className="absolute top-3 right-3 p-2 rounded-full bg-primary/80 hover:bg-primary border border-tertiary/80 text-white shadow-lg transition"
+                className="absolute top-2 -right-11 p-2 rounded-full bg-primary/80 hover:bg-primary border border-tertiary/80 text-white shadow-lg transition"
                 onClick={() => setNavOpen(false)}
                 aria-label={t('common.cancel')}
               >
