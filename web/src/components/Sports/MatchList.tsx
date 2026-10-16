@@ -62,7 +62,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   const mainLeagueMatches = matches.filter(isMainFootballMatch);
   const searchFiltered = searchTerm.trim()
-    ? mainLeagueMatches.filter(m => {
+    ? matches.filter(m => {
         const search = searchTerm.toLowerCase();
         return (
           m.homeTeam?.toLowerCase().includes(search) ||
