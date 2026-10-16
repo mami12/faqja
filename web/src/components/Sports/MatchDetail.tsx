@@ -10,7 +10,8 @@ import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
-import { useLivePatch } from '../../api/liveFeed';
+import { useLivePatch, useLiveFeed } from '../../api/liveFeed';
+import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
 import { marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
@@ -111,6 +112,8 @@ export default function MatchDetail() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
+  const { lockedMarkets } = useLiveFeed();
+  const liveMarketMatch = useMemo(() => match ? { ...match, ...(patch ?? {}) } : null, [match, patch]);
 
   useEffect(() => {
     if (!id) return;
@@ -133,7 +136,20 @@ export default function MatchDetail() {
     };
   }, [id]);
 
-  const allGrouped = useMemo(() => groupMarkets(markets, lang), [markets, lang]);
+  // One visibility rule for the full market page, search, category counts and rows.
+  // Apply pushed scores immediately instead of waiting for the 20s REST refresh.
+  const filteredMarkets = useMemo(() => {
+    if (!liveMarketMatch) return [];
+    return markets.flatMap(market => {
+      if (!isMarketVisible(liveMarketMatch, market, lockedMarkets)) return [];
+      const outcomes = filterDecidedOutcomes(
+        (market.outcomes ?? []).filter(isOutcomeAvailable), market, liveMarketMatch,
+      );
+      return outcomes.length ? [{ ...market, outcomes }] : [];
+    });
+  }, [markets, liveMarketMatch, lockedMarkets]);
+
+  const allGrouped = useMemo(() => groupMarkets(filteredMarkets, lang), [filteredMarkets, lang]);
 
   // Available categories with count
   const categoryCounts = useMemo(() => {
@@ -188,7 +204,7 @@ export default function MatchDetail() {
     );
   }
 
-  const live = { ...match, ...(patch ?? {}) };
+  const live = liveMarketMatch!;
   const matchIdStr = String(live.id);
   const isFav = isFavorite(matchIdStr);
   const isAlert = isAlertEnabled(matchIdStr);
