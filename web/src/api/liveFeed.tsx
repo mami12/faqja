@@ -24,6 +24,9 @@ export interface LivePatch {
   period?: string | null;
   homeScore?: number;
   awayScore?: number;
+  /** Optional team names used by the favorites alert view. */
+  homeTeam?: string;
+  awayTeam?: string;
   corners?: { home: number; away: number } | null;
   cards?: { home: number; away: number } | null;
   /** how many markets the board currently prices for this match (0 = nothing to bet yet) */

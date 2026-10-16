@@ -1,183 +1,274 @@
 /**
- * Logjika që detekton market-et e skaduara.
+ * Live market visibility policy. A market disappears only when its contract is
+ * irreversible from the *available* live facts. In particular a current 1X2
+ * leader, correct-score hit, or an unknown provider market is NOT final.
  *
- * Feed-i NUK i shënon market-et e skaduara si `suspended` ose `expired` — ai thjesht
- * ndalon së dërguari ato. Pra `lockedMarkets` nuk merr kurrë `true` për ta, dhe frontend-i
- * vazhdon t'i shfaqë. Ky file e zgjidh duke detektuar skadimin nga:
- *
- *   - emri i market-it    ("1st half. ...", "Halftime/Fulltime", ...)
- *   - faza e ndeshjes      (period: 1H, 2H, HT, FT)
- *   - minuta               (currentMinute > 45 → 1H mbaroi)
- *   - statusi i ndeshjes   (ENDED / FINISHED)
- *   - rezultati live       (për "first goal", "HT result", etj.)
+ * Presentation-only: placement/settlement continue to rely on server rules.
  */
 
-/** Normalizon emrin e market-it për krahasim */
-const norm = (s: any) => String(s ?? '').toLowerCase().trim();
+type Score = { home: number; away: number };
+type MarketLike = {
+  name?: string; line?: string; specifier?: string; marketType?: string;
+  period?: number; status?: string; suspended?: boolean;
+  outcomes?: OutcomeLike[];
+};
+type OutcomeLike = {
+  id?: string; name?: string; code?: string; odds?: number;
+  status?: string; suspended?: boolean; feedSuspended?: boolean;
+};
+type MatchLike = {
+  status?: string; period?: string | null; currentMinute?: number;
+  homeScore?: number; awayScore?: number;
+  corners?: Score | null; cards?: Score | null;
+};
 
-/** A i përket ky market pjesës së parë? */
+const norm = (s: unknown) => String(s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
+const number = (v: unknown): number | null => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+const scoreOf = (home: unknown, away: unknown): Score | null => {
+  const h = number(home), a = number(away);
+  return h !== null && a !== null ? { home: h, away: a } : null;
+};
+const isLive = (m: MatchLike) => norm(m.status) === 'live';
+
 export const isFirstHalfMarket = (name: string): boolean =>
-  /1st half|first half|half\s*1|\b1h\b|pjes(?:a|ë)\s*e\s*par[eë]/i.test(name);
+  /\b(?:1st|first)\s*half\b|half\s*1\b|\b1h\b|pjes(?:a|ë)\s*e\s*par[eë]/i.test(name);
 
-/** A i përket ky market pjesës së dytë? */
 export const isSecondHalfMarket = (name: string): boolean =>
-  /2nd half|second half|half\s*2|\b2h\b|pjes(?:a|ë)\s*e\s*dyte/i.test(name);
+  /\b(?:2nd|second)\s*half\b|half\s*2\b|\b2h\b|pjes(?:a|ë)\s*e\s*dyte/i.test(name);
 
-/** A është "Halftime/Fulltime" ose "HT/FT"? */
 export const isHTFTMarket = (name: string): boolean =>
-  /halftime\/?fulltime|ht\/?ft|half.?time\s*\/\s*full.?time/i.test(name);
+  /halftime\s*\/?\s*fulltime|ht\s*\/?\s*ft|half.?time\s*\/\s*full.?time/i.test(name);
 
-/** A është "1st half. Result" / "Half Time Result"? */
 export const isFirstHalfResultMarket = (name: string): boolean =>
   /1st half.*result|first half.*result|half.?time\s*(result|winner|score)|ht\s*(result|winner|score)/i.test(name);
 
-/** A është "first goal" / "first corner" / "first card"? */
 export const isFirstEventMarket = (name: string): boolean =>
-  /\b(first|1st)\b.*\b(goal|corner|card|yellow|red|booking|point|set|score|scorer)\b/i.test(name);
+  /\b(?:first|1st)\b.*\b(?:goal|corner|card|booking|point|scorer)\b/i.test(name);
 
-/** A ka mbaruar ndeshja? */
-const isMatchFinished = (m: any): boolean => {
-  const status = String(m?.status ?? '').toUpperCase();
-  const phase = String(m?.period ?? '').toUpperCase();
-  return (
-    status === 'ENDED' ||
-    status === 'FINISHED' ||
-    status === 'FT' ||
-    phase === 'FT' ||
-    phase === 'ENDED' ||
-    phase === 'FINISHED'
+const isMatchFinished = (m: MatchLike): boolean =>
+  /^(?:ended|finished|ft|cancelled)$/.test(norm(m.status)) ||
+  /^(?:ft|ended|finished)$/.test(norm(m.period));
+
+const isSecondHalfOrLater = (m: MatchLike): boolean => {
+  const phase = norm(m.period);
+  return /^(?:2h|ht|ft|2nd half|second half|break time|half time|halftime|ended|finished)\b/.test(phase) ||
+    (number(m.currentMinute) ?? 0) > 45;
+};
+
+const isFirstHalf = (market: MarketLike): boolean => {
+  const name = norm(market.name);
+  return Number(market.period ?? 0) === 1 ||
+    isFirstHalfMarket(name) || isFirstHalfResultMarket(name) ||
+    /\b(?:half time|halftime|ht)\b(?!\s*\/?\s*(?:fulltime|ft))/.test(name);
+};
+const isSecondHalf = (market: MarketLike): boolean =>
+  Number(market.period ?? 0) === 2 || isSecondHalfMarket(norm(market.name));
+
+const counter = (m: MatchLike, family: 'goals' | 'corners' | 'cards'): Score | null => {
+  if (family === 'goals') return scoreOf(m.homeScore, m.awayScore);
+  const stats = m[family];
+  return stats ? scoreOf(stats.home, stats.away) : null;
+};
+
+const familyOf = (market: MarketLike): 'goals' | 'corners' | 'cards' => {
+  const name = norm(market.name);
+  const type = norm(market.marketType);
+  if (/corner|korners?|kënd/.test(name) || type === 'corners') return 'corners';
+  if (/\bcards?\b|booking|yellow|red card/.test(name) || type === 'cards') return 'cards';
+  return 'goals';
+};
+
+/** A period-specific market must never use full-time aggregate stats from an
+ * already-started second half. First-half counts are valid during 1H only.
+ */
+const observedCounter = (m: MatchLike, market: MarketLike): Score | null => {
+  if (!isLive(m)) return null;
+  if (isSecondHalf(market)) return null; // no separate 2H score/corners/cards
+  if (isFirstHalf(market) && isSecondHalfOrLater(m)) return null;
+  return counter(m, familyOf(market));
+};
+
+const fullTimeCounter = (m: MatchLike, family: 'goals' | 'corners' | 'cards'): Score | null =>
+  isLive(m) ? counter(m, family) : null;
+
+const isStandaloneBtts = (market: MarketLike): boolean => {
+  const n = norm(market.name);
+  // Mixed result/BTTS and half-by-half contracts remain independent.
+  if (/&|\+|and (?:total|result|score)|either half|each half|both halves/.test(n)) return false;
+  return /^(?:both teams to score|btts|both teams score|both score)(?:\s*[-(].*)?$/.test(n) ||
+    /^(?:1st|first|2nd|second) half[.: -]+(?:both teams to score|btts)$/.test(n);
+};
+
+const totalLine = (market: MarketLike): number | null => {
+  for (const candidate of [market.line, market.specifier]) {
+    const value = number(candidate);
+    if (value !== null) return value;
+  }
+  // The provider sometimes carries "2.5" in the name, with no line field.
+  const n = norm(market.name);
+  const last = n.match(/(?:^|[\s(])(\d+(?:[.,]\d+)?)\)?$/);
+  return last ? number(last[1]) : null;
+};
+
+const isSimpleTotal = (market: MarketLike): boolean => {
+  const name = norm(market.name);
+  if (/bet builder|both teams|btts|correct|exact|result|winner|1x2|odd.?even|handicap|asian|next|last|race|score in|goal in|time of|&|\+|\b(?:first|1st)\s+(?:goal|corner|card|scorer)\b/.test(name)) return false;
+  const o = market.outcomes ?? [];
+  const hasOverUnder = o.some(item =>
+    /^(?:over|under|o|u)(?:\b|$)/i.test(String(item.code ?? item.name ?? '').trim()));
+  const type = norm(market.marketType);
+  return hasOverUnder && (
+    /\b(?:total|goals?|corners?|cards?|over\s*\/?\s*under|under\s*\/?\s*over|goal line)\b/.test(name) ||
+    ['over_under', 'totals', 'corners', 'cards'].includes(type)
   );
 };
 
-/** A jemi në pjesën e dytë ose më vonë? */
-const isSecondHalfOrLater = (m: any): boolean => {
-  const phase = String(m?.period ?? '').toUpperCase();
-  const minute = Number(m?.currentMinute ?? 0);
-  return /^(2H|HT|FT|2ND HALF|SECOND HALF|ENDED|FINISHED)\b/.test(phase) || minute > 45;
+const teamSide = (name: string): 'home' | 'away' | null => {
+  const n = norm(name);
+  const home = /\b(?:home(?: team)?|team 1|1st team)\b/.test(n);
+  const away = /\b(?:away(?: team)?|team 2|2nd team)\b/.test(n);
+  return home !== away ? (home ? 'home' : 'away') : null;
 };
 
-/**
- * A ka skaduar ky market? Bazuar në emër + fazë + minutë + status + rezultat.
- * Kjo është logjika kryesore që zëvendëson mungesën e shenjës nga feed-i.
+const observedTotal = (m: MatchLike, market: MarketLike): number | null => {
+  const counts = observedCounter(m, market);
+  if (!counts) return null;
+  const side = teamSide(String(market.name ?? ''));
+  return side ? counts[side] : counts.home + counts.away;
+};
+
+/** Examples: "Race to 3 Goals" and "First Corner". Do not infer from a
+ * whole-match total for a second-half first-event contract.
  */
-export function isMarketExpired(m: any, market: any): boolean {
-  if (!market) return false;
+const completedEvent = (m: MatchLike, market: MarketLike): boolean => {
   const name = norm(market.name);
+  if (isSecondHalf(market)) return false;
+  const first = /\b(?:first|1st)\s+(?:team\s+to\s+score|goal|corner|card|booking|goalscorer|scorer)\b/.test(name) ||
+    /\b(?:time of|minute of)\s+(?:the\s+)?first\s+goal\b/.test(name) ||
+    /\b(?:first|1st)\s+(?:goal|corner|card)\s+(?:time|minute)\b/.test(name);
+  const ordinal = name.match(/\b(?:2nd|second|3rd|third|4th|fourth|5th|fifth)\s+(goal|corner|card)\b/);
+  const race = name.match(/\brace\s+to\s+(\d+)\s+(goals?|corners?|cards?)\b/);
+  if (!first && !ordinal && !race) return false;
+  const counts = observedCounter(m, market);
+  if (!counts) return false;
+  const total = counts.home + counts.away;
+  if (first) return total >= 1;
+  if (race) return Math.max(counts.home, counts.away) >= Number(race[1]);
+  const required = ordinal ? ({ '2nd': 2, second: 2, '3rd': 3, third: 3, '4th': 4, fourth: 4, '5th': 5, fifth: 5 } as Record<string, number>)[ordinal[0].split(/\s+/)[0]] : null;
+  return required !== null && total >= required;
+};
 
-  // 0) Ndeshja mbaroi → çdo market skadon
+/** "Goal before 20 minutes" expires after that clock window. */
+const elapsedWindow = (m: MatchLike, market: MarketLike): boolean => {
+  if (isSecondHalf(market)) return false;
+  const name = norm(market.name);
+  if (!/\b(?:goal|score|corner|card)\b/.test(name)) return false;
+  const limit = name.match(/\b(?:before|within|by)\s+(\d{1,3})\s*(?:min(?:ute)?s?)\b/);
+  const minute = number(m.currentMinute);
+  return !!limit && minute !== null && minute > Number(limit[1]);
+};
+
+export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
+  if (!market) return false;
   if (isMatchFinished(m)) return true;
+  if (!isLive(m)) return false;
+  if ((isFirstHalf(market) || isHTFTMarket(String(market.name ?? ''))) && isSecondHalfOrLater(m)) return true;
 
-  const firstHalfMarket = isFirstHalfMarket(name) || Number(market.period) === 1;
-  const secondHalfMarket = isSecondHalfMarket(name) || Number(market.period) === 2;
+  if (completedEvent(m, market) || elapsedWindow(m, market)) return true;
 
-  // A first-half market must not remain visible once the match has moved on.
-  if (firstHalfMarket) {
-    if (isSecondHalfOrLater(m)) return true;
+  if (isStandaloneBtts(market)) {
+    const counts = observedCounter(m, market);
+    return !!counts && counts.home >= 1 && counts.away >= 1;
+  }
+  const name = norm(market.name);
+  // Outcome "Yes/No" on a standalone team's scoring-one-goal market is
+  // already settled as soon as that side scores.
+  if (/^(?:(?:home(?: team)?|away(?: team)?|team [12])\s+(?:to score|scores?(?: a goal)?)|(?:to score|scores?)\s+(?:home|away)(?: team)?)$/.test(name)) {
+    const counts = observedCounter(m, market);
+    const side = teamSide(name);
+    if (counts && side && counts[side] > 0) return true;
   }
 
-  // 2) "Halftime/Fulltime" → skadon kur pjesa e parë mbaroi
-  if (isHTFTMarket(name)) {
-    if (isSecondHalfOrLater(m)) return true;
+  if (isSimpleTotal(market)) {
+    const line = totalLine(market);
+    const value = observedTotal(m, market);
+    // Strict '>' handles quarter/whole lines safely: at exactly 2.0,
+    // another event can still change push into win, so keep the market.
+    if (line !== null && value !== null && value > line) return true;
   }
-
-  // 3) "1st half. Result" / "Half Time Result" → skadon kur pjesa e parë mbaroi
-  if (isFirstHalfResultMarket(name)) {
-    if (isSecondHalfOrLater(m)) return true;
-  }
-
-  // 4) "First goal/corner/card" → skadon kur ngjarja e parë ka ndodhur
-  if (isFirstEventMarket(name)) {
-    const totalGoals = Number(m?.homeScore ?? 0) + Number(m?.awayScore ?? 0);
-    const totalCorners = Number(m?.corners?.home ?? 0) + Number(m?.corners?.away ?? 0);
-    const totalCards = Number(m?.cards?.home ?? 0) + Number(m?.cards?.away ?? 0);
-
-    if (/\bgoal|scorer\b/i.test(name) && totalGoals > 0) return true;
-    if (/\bcorner\b/i.test(name) && totalCorners > 0) return true;
-    if (/\b(card|yellow|red|booking)\b/i.test(name) && totalCards > 0) return true;
-  }
-
-  // 5) Market-et e pjesës së dytë → skadojnë vetëm kur ndeshja mbaroi
-  if (secondHalfMarket) {
-    if (isMatchFinished(m)) return true;
-  }
-
   return false;
 }
 
-/**
- * A është outcome-i i disponueshëm për bast?
- * Kontrollon: ka odds valid, nuk është suspended.
- */
-export const isOutcomeAvailable = (o: any): boolean =>
-  !!o &&
-  typeof o.odds === 'number' &&
-  o.odds > 0 &&
-  o.suspended !== true;
+export const isOutcomeAvailable = (o: OutcomeLike): boolean =>
+  !!o && typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0 &&
+  o.suspended !== true && o.feedSuspended !== true &&
+  !['SUSPENDED', 'SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase());
 
-/**
- * A është market-i i suspenduar nga feed-i (përkohësisht)?
- */
-export const isMarketSuspended = (market: any, lockedMarkets?: Record<string, boolean>): boolean => {
-  if (!market) return false;
-  if (market.suspended === true) return true;
-  if (String(market.status ?? '').toUpperCase() === 'SUSPENDED') return true;
-  if (lockedMarkets && lockedMarkets[market.id] === true) return true;
-  return false;
+export const isMarketSuspended = (market: MarketLike, lockedMarkets?: Record<string, boolean>): boolean =>
+  !!market && (market.suspended === true ||
+    String(market.status ?? '').toUpperCase() === 'SUSPENDED' ||
+    (lockedMarkets?.[String((market as MarketLike & { id?: string }).id ?? '')] === true));
+
+const exactScore = (label: string): Score | null => {
+  const match = label.trim().match(/^(\d{1,2})\s*[-:]\s*(\d{1,2})$/);
+  return match ? { home: Number(match[1]), away: Number(match[2]) } : null;
 };
 
-/**
- * Filtri i plotë: a duhet shfaqur ky market?
+/** Remove only individually impossible outcomes of exact-score / exact-total
+ * markets. The *market* stays while some outcomes remain possible.
  */
+export function filterDecidedOutcomes<T extends OutcomeLike>(
+  outcomes: T[] = [], market: MarketLike = {}, match: MatchLike = {},
+): T[] {
+  if (!outcomes.length) return outcomes;
+  if (isMarketExpired(match, market)) return [];
+  if (!isLive(match)) return outcomes;
+
+  const name = norm(market.name);
+  const counts = observedCounter(match, market);
+  if (!counts) return outcomes;
+
+  // Some provider markets put multiple goal/corner/card lines inside one
+  // market instead of exposing each line in market.line. Prune the outcomes
+  // whose explicit "Over 0.5" / "Under 0.5" threshold is already passed.
+  if (isSimpleTotal(market) && totalLine(market) === null) {
+    const value = observedTotal(match, market);
+    if (value === null) return outcomes;
+    return outcomes.filter(o => {
+      const label = String(o.name ?? o.code ?? '');
+      const embedded = label.match(/\b(?:over|under)\s*\(?\s*(\d+(?:[.,]\d+)?)\s*\)?/i);
+      const threshold = embedded ? number(embedded[1]) : null;
+      return threshold === null || value <= threshold;
+    });
+  }
+
+  if (/\bcorrect score\b|\bexact score\b|\bscore exact\b/.test(name)) {
+    return outcomes.filter(o => {
+      const target = exactScore(String(o.name ?? o.code ?? ''));
+      return !target || (counts.home <= target.home && counts.away <= target.away);
+    });
+  }
+  if (/\b(?:exact(?:ly)?\s+(?:total\s+)?(?:number of )?(?:goals|corners|cards)|number of (?:goals|corners|cards))\b/.test(name)) {
+    const total = counts.home + counts.away;
+    return outcomes.filter(o => {
+      const target = number(String(o.code ?? o.name ?? ''));
+      return target === null || total <= target;
+    });
+  }
+  // For complex or provider-specific markets, lack of a proven outcome
+  // contract means we keep them rather than hide valid bets by guesswork.
+  return outcomes;
+}
+
 export function isMarketVisible(
-  m: any,
-  market: any,
+  match: MatchLike, market: MarketLike,
   lockedMarkets?: Record<string, boolean>,
 ): boolean {
-  if (!market) return false;
-  if (!market.outcomes?.length) return false;
-  if (isMarketExpired(m, market)) return false;
-  if (isMarketSuspended(market, lockedMarkets)) return false;
-  if (!market.outcomes.some(isOutcomeAvailable)) return false;
-  return true;
-}
-
-/* ------------------------------------------------------------------ */
-/* Filtrat e total-eve (goals / corners / cards)                       */
-/* ------------------------------------------------------------------ */
-
-/** A është total market (goals/corners/cards)? */
-const isTotalMarket = (market: any) => {
-  const type = String(market?.marketType ?? '').toUpperCase();
-  if (type === 'OVER_UNDER' || type === 'TOTALS' || type === 'CORNERS' || type === 'CARDS') return true;
-  const n = String(market?.name ?? '').toLowerCase();
-  return /total|over\/?under|under\/?over|goal line/i.test(n) &&
-    !/handicap|half time|ht\/?ft|correct score|1x2|winner|first|next|last|both teams/i.test(n);
-};
-
-const parseLineNum = (line?: string) => {
-  if (!line) return null;
-  const m = String(line).match(/-?\d+(?:\.\d+)?/);
-  return m ? Number(m[0]) : null;
-};
-
-const counterFor = (market: any, match: any) => {
-  const n = String(market?.name ?? '').toLowerCase();
-  const type = String(market?.marketType ?? '').toUpperCase();
-  if (type === 'CORNERS' || /corner|korner/.test(n)) return Number(match.corners?.home ?? 0) + Number(match.corners?.away ?? 0);
-  if (type === 'CARDS' || /card|booking|yellow|red|karton/.test(n)) return Number(match.cards?.home ?? 0) + Number(match.cards?.away ?? 0);
-  return Number(match.homeScore ?? 0) + Number(match.awayScore ?? 0);
-};
-
-/**
- * Hide a live total once the current count has already passed its line.
- * Handicap, correct score, BTTS, 1X2 nuk preken.
- */
-export function filterDecidedOutcomes(outcomes: any[] = [], market: any = {}, match: any = {}) {
-  if (!outcomes.length) return outcomes;
-  if (!isTotalMarket(market)) return outcomes;
-  const lineNum = parseLineNum(market?.line || market?.specifier);
-  if (lineNum == null) return outcomes;
-  const total = counterFor(market, match);
-  if (total > lineNum) return [];
-  return outcomes;
+  if (!market || !market.outcomes?.length) return false;
+  if (isMarketExpired(match, market) || isMarketSuspended(market, lockedMarkets)) return false;
+  return filterDecidedOutcomes(market.outcomes.filter(isOutcomeAvailable), market, match).length > 0;
 }

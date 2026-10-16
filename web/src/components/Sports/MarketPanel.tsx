@@ -163,11 +163,13 @@ export default function MarketPanel({ match }: { match: Match }) {
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets)) continue;
-      const available = (market.outcomes ?? []).filter(isOutcomeAvailable);
-      if (!filterDecidedOutcomes(available, market, match).length) continue;
+      const available = filterDecidedOutcomes(
+        (market.outcomes ?? []).filter(isOutcomeAvailable), market, match,
+      );
+      if (!available.length) continue;
 
       const cat = marketCategoryOf(market);
-      result[cat].push(market);
+      result[cat].push({ ...market, outcomes: available });
       c[cat]++;
     }
 
