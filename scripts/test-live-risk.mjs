@@ -3,6 +3,9 @@ import { config } from '../server/config.mjs';
 import {
   liveRiskReason, riskMinute, isFullTimeWinnerMarket, isLeaderWinChoice,
 } from '../server/live-risk.mjs';
+import {
+  DEFAULT_LIVE_RISK_SETTINGS, liveRiskSettings, setLiveRiskSettings, validateLiveRiskSettings,
+} from '../server/live-risk-settings.mjs';
 
 const now = Date.now();
 const match = (minute, home, away, options = {}) => ({
@@ -24,58 +27,63 @@ const result = (side, price, options = {}) => ({
 const check = (m, o) => liveRiskReason(m, o, now);
 
 assert.equal(isFullTimeWinnerMarket('Full Time Result', 'g6321'), true);
-assert.equal(isFullTimeWinnerMarket('Next Goal', '1x2'), false);
-assert.equal(isFullTimeWinnerMarket('Corners Result', '1x2'), false);
-assert.equal(isFullTimeWinnerMarket('Half Time Result', '1x2'), false);
-assert.equal(isFullTimeWinnerMarket('Correct Score', '1x2'), false);
-assert.equal(isLeaderWinChoice('1', 'Home', 'home'), true);
-assert.equal(isLeaderWinChoice('2', 'Away', 'home'), false);
-assert.equal(riskMinute(match(90, 1, 0), now), 90);
-
-// The user's 90th-minute 1.01 case: never accept a very short live price.
-assert.equal(check(match(90, 1, 0), result('1', 1.01)), 'ultra_low_late_price');
-assert.equal(check(match(90, 0, 1), result('2', 1.01)), 'ultra_low_late_price');
-assert.equal(check(match(90, 0, 0), result('X', 1.01)), 'ultra_low_late_price');
-
-// Two-goal lead from 75': suspend the leader if the price is <= 1.50.
-assert.equal(check(match(75, 2, 0), result('1', 1.50)), 'large_lead_low_price');
-assert.equal(check(match(75, 0, 2), result('2', 1.40)), 'large_lead_low_price');
-assert.equal(check(match(76, 2, 0), result('1', 1.51)), null);
-assert.equal(check(match(75, 2, 0), result('2', 1.40)), null);
-assert.equal(check(match(74, 2, 0), result('1', 1.40)), null);
-
-// Score narrows: the risk-only lock must reopen when no longer warranted.
-assert.equal(check(match(76, 2, 1), result('1', 1.40)), null);
-assert.equal(check(match(85, 2, 1), result('1', 1.10)), 'late_leader_low_price');
-assert.equal(check(match(85, 2, 1), result('1', 1.11)), null);
-assert.equal(check(match(86, 1, 2), result('2', 1.08)), 'late_leader_low_price');
-
-// Every market is protected against ultra-short prices at 85+.
-assert.equal(check(match(85, 1, 0), { marketName: 'Total Corners', outcomeKey: 'Over', price: 1.04 }), 'ultra_low_late_price');
-assert.equal(check(match(75, 2, 0), { marketName: 'Total Corners', outcomeKey: 'Over', price: 1.40 }), null);
-assert.equal(check(match(85, 2, 0), { marketName: 'Next Goal', outcomeKey: '1', price: 1.09 }), null);
-
-// No fake score: the win/lead rule needs a real provider score frame.
-assert.equal(check(match(75, 2, 0, { score_at: null }), result('1', 1.40)), null);
-assert.equal(check(match(90, 2, 0, { score_at: null }), result('1', 1.01)), 'ultra_low_late_price');
-assert.equal(check(match(90, 2, 0, { service: 'PREMATCH' }), result('1', 1.01)), null);
-assert.equal(check(match(90, 2, 0, { match_time_ms: null, live_minute: null }), result('1', 1.01)), null);
-
-// Explicit operator override can disable automation without touching provider locks.
-const enabled = config.liveRiskEnabled;
-config.liveRiskEnabled = false;
-try {
-  assert.equal(check(match(90, 2, 0), result('1', 1.01)), null);
-} finally {
-  config.liveRiskEnabled = enabled;
+for (const name of ['Next Goal','Corners Result','Half Time Result','Correct Score','Double Chance']) {
+  assert.equal(isFullTimeWinnerMarket(name, '1x2'), false);
 }
+assert.equal(isLeaderWinChoice('1','Home','home'),true);
+assert.equal(isLeaderWinChoice('2','Away','home'),false);
+assert.equal(riskMinute(match(60,0,3),now),60);
 
-assert.equal(check(match(90, 1, 0), result('1', 1.00)), 'ultra_low_late_price');
-const halfTime = match(45, 2, 0, {
-  phase: 'HT',
-  clock_at: new Date(now - 45 * 60000).toISOString(),
-});
-assert.equal(riskMinute(halfTime, now), 45, 'Do not drift the clock during halftime');
-assert.equal(check(halfTime, result('1', 1.01)), null);
+// Milan 0-3 at minute 60: block only the away leader priced <=1.60.
+assert.equal(check(match(59,0,3), result('2',1.50)),null);
+assert.equal(check(match(60,0,3), result('2',1.60)),'leader_low_odds');
+assert.equal(check(match(60,0,3), result('2',1.61)),null);
+assert.equal(check(match(60,0,3), result('1',1.60)),null);
+assert.equal(check(match(60,0,3), result('X',1.60)),null);
+assert.equal(check(match(60,2,0), result('1',1.50)),null);
+assert.equal(check(match(65,2,0), result('1',1.40)),'leader_low_odds');
+assert.equal(check(match(65,2,0), result('1',1.41)),null);
+assert.equal(check(match(70,2,0), result('1',1.60)),'leader_low_odds');
+assert.equal(check(match(70,2,0), result('1',1.61)),null);
+assert.equal(check(match(72,2,1), result('1',1.40)),null);
+assert.equal(check(match(85,1,0), result('1',1.10)),'low_live_odds');
 
-console.log('Live risk policy checks passed');
+// Across all markets, including X, corners, cards, and totals.
+for (const name of ['Full Time Result','Total Corners','Total Cards','Total Goals','Both Teams to Score']) {
+  assert.equal(check(match(60,0,0),{marketName:name,outcomeKey:'X',price:1.05}),'low_live_odds');
+  assert.equal(check(match(60,0,0),{marketName:name,outcomeKey:'X',price:1.06}),null);
+  assert.equal(check(match(70,0,0),{marketName:name,outcomeKey:'X',price:1.10}),'low_live_odds');
+  assert.equal(check(match(80,0,0),{marketName:name,outcomeKey:'X',price:1.20}),'low_live_odds');
+  assert.equal(check(match(80,0,0),{marketName:name,outcomeKey:'X',price:1.21}),null);
+}
+assert.equal(check(match(70,0,0,{service:'PREMATCH'}), result('X',1.05)),null);
+
+// Provider evidence is required for the leader rule.
+assert.equal(check(match(65,3,0,{score_at:null}),result('1',1.40)),null);
+assert.equal(check(match(60,3,0,{match_time_ms:null,live_minute:null}),result('1',1.40)),null);
+const halftime=match(45,2,0,{phase:'HT',clock_at:new Date(now-45*60000).toISOString()});
+assert.equal(riskMinute(halftime,now),45);
+
+// Both master and admin switches are reversible.
+const enabled=config.liveRiskEnabled;
+config.liveRiskEnabled=false;
+try {assert.equal(check(match(70,3,0),result('1',1.20)),null);}
+finally {config.liveRiskEnabled=enabled;}
+assert.equal(check(match(70,3,0),result('1',1.20)),'leader_low_odds');
+const saved=structuredClone(liveRiskSettings());
+try {
+  setLiveRiskSettings({...saved,enabled:false});
+  assert.equal(check(match(70,3,0),result('1',1.20)),null);
+  setLiveRiskSettings({...saved,lowOddsRules:[{minute:45,maxOdds:1.25}]});
+  assert.equal(check(match(46,0,0),result('X',1.25)),'low_live_odds');
+} finally {setLiveRiskSettings(saved);}
+
+// Admin validation: no malformed settings may reach the database.
+assert.equal(validateLiveRiskSettings(DEFAULT_LIVE_RISK_SETTINGS).limits.maxLiveStake,10000);
+for(const invalid of [
+  {...saved,leaderRules:[{minute:-1,goals:2,maxOdds:1.6}]},
+  {...saved,lowOddsRules:[{minute:70,maxOdds:1.1},{minute:70,maxOdds:1.2}]},
+  {...saved,limits:{...saved.limits,maxLiveStake:Infinity}},
+  {...saved,limits:{...saved.limits,maxMatchExposure:0}},
+]) assert.throws(()=>validateLiveRiskSettings(invalid),e=>e.status===400);
+console.log('Admin-configured live risk policy checks passed');
