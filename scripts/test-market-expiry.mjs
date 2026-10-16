@@ -48,6 +48,14 @@ closed(match(1,1),btts('1st Half Both Teams to Score'));
 open(match(1,1,{period:'2H',currentMinute:65}),btts('2nd Half Both Teams to Score'));
 open(match(1,1),{name:'1X2&BTTS',outcomes:[outcome('1&Yes'),outcome('X&No')]});
 
+// Alternate feed shape: several explicitly named totals in ONE market.
+const bundled = {name:'Total Goals',marketType:'OVER_UNDER',outcomes:[
+  outcome('Over 0.5'),outcome('Under 0.5'),outcome('Over 1.5'),
+  outcome('Under 1.5'),outcome('Over 2.5'),outcome('Under 2.5')
+]};
+assert.deepEqual(filterDecidedOutcomes(bundled.outcomes,bundled,match(2,0)).map(o=>o.name),
+  ['Over 2.5','Under 2.5']);
+
 // Corners/cards use their own stats, NOT goals.
 closed(match(0,0,{corners:{home:4,away:1}}), twoWay('Total Corners','3.5',{marketType:'CORNERS'}));
 open(match(0,0,{corners:{home:4,away:1}}), twoWay('Total Corners','5.5',{marketType:'CORNERS'}));
