@@ -113,7 +113,14 @@ export default function MatchDetail() {
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
   const { lockedMarkets } = useLiveFeed();
-  const liveMarketMatch = useMemo(() => match ? { ...match, ...(patch ?? {}) } : null, [match, patch]);
+  // The live clock pushes seconds every tick. Only facts relevant to market
+  // expiry should rebuild all market groups, not an unrelated second counter.
+  const liveMarketMatch = useMemo(
+    () => match ? { ...match, ...(patch ?? {}) } : null,
+    [match, patch?.status, patch?.period, patch?.currentMinute,
+      patch?.homeScore, patch?.awayScore, patch?.corners?.home, patch?.corners?.away,
+      patch?.cards?.home, patch?.cards?.away, patch?.isSuspended],
+  );
 
   useEffect(() => {
     if (!id) return;
