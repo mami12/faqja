@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutGrid, CircleUserRound, ReceiptText, MessagesSquare,
+  LayoutGrid, CircleUserRound, Receipt, MessagesSquare,
   Settings, LogOut, Wallet, X, Bell, Ticket,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -56,7 +56,7 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
             aria-label={`Kuponi: ${matchCount} ndeshje të zgjedhura`}
             title="Hap kuponin"
             className="relative flex h-11 w-10 items-center justify-center rounded hover:bg-[#2b446a]">
-            <ReceiptText size={25} strokeWidth={2.1}/>
+            <Receipt size={25} strokeWidth={2.1}/>
             <span aria-live="polite" className="absolute right-0 top-0 flex min-h-[19px] min-w-[19px] items-center justify-center rounded-full bg-[#e2a600] px-[3px] text-[11px] font-black leading-none text-white">
               {matchCount}
             </span>
