@@ -25,7 +25,7 @@ interface Props {
 }
 
 /** White outlined football, like the supplied compact sportsbook navigation. */
-function FootballIcon({ size = 25 }: { size?: number }) {
+export function FootballIcon({ size = 25 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
       <circle cx="16" cy="16" r="13.6" stroke="currentColor" strokeWidth="1.8"/>
