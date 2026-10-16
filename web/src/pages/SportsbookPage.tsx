@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Layout/Header';
-import SportsSidebar from '../components/Layout/SportsSidebar';
+import SportsSidebar, { FootballIcon } from '../components/Layout/SportsSidebar';
+import MobileSportsHeader from '../components/Layout/MobileSportsHeader';
 import BetslipSidebar from '../components/Layout/BetslipSidebar';
 import MatchList from '../components/Sports/MatchList';
 import MatchDetail from '../components/Sports/MatchDetail';
 import { LiveFeedProvider } from '../api/liveFeed';
 import { useBetslip } from '../context/BetslipContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ListOrdered, Ticket, X } from 'lucide-react';
+import { CalendarDays, Search, ListOrdered, Ticket, X } from 'lucide-react';
 import type { MatchViewMode } from '../components/Sports/MatchList';
 
 /**
@@ -33,6 +34,9 @@ export default function SportsbookPage() {
   // small screens: the leagues drawer and the betslip sheet
   const [navOpen, setNavOpen] = useState(false);
   const [betslipOpen, setBetslipOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (mobileSearchOpen) mobileSearchRef.current?.focus(); }, [mobileSearchOpen]);
 
   // both are overlays: opening a match closes them
   useEffect(() => {
@@ -126,13 +130,53 @@ export default function SportsbookPage() {
   return (
     <LiveFeedProvider>
       <div className="h-[100dvh] flex flex-col overflow-hidden bg-primary">
-        <Header onToggleNav={() => setNavOpen((v) => !v)} />
+        <div className="hidden md:block"><Header onToggleNav={() => setNavOpen(v => !v)}/></div>
+        <MobileSportsHeader
+          onOpenLeagues={() => {setBetslipOpen(false);setNavOpen(v => !v);}}
+          onOpenBetslip={() => {setNavOpen(false);setBetslipOpen(v => !v);}}
+        />
+        {/* Compact mobile shortcuts, as on the reference board. */}
+        <nav aria-label="Shkurtoret e sporteve" className="flex h-[63px] shrink-0 items-stretch border-b border-[#111a26] bg-[#0d1420] text-white md:hidden">
+          <button type="button" onClick={handleSelectAll} aria-pressed={viewMode === 'all' && !selectedSport && !selectedCategory && !selectedTournament}
+            className={`flex w-[66px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${viewMode === 'all' ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
+            <CalendarDays size={25} strokeWidth={2.4}/>
+            <span className="text-[10px] font-black leading-tight">TË GJITHA</span>
+          </button>
+          <button type="button" onClick={() => {setMobileSearchOpen(v => !v);if(id)navigate('/');}}
+            aria-pressed={mobileSearchOpen || !!searchTerm} aria-expanded={mobileSearchOpen}
+            className={`flex w-[65px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${mobileSearchOpen || searchTerm ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
+            <Search size={26} strokeWidth={3}/>
+            <span className="text-[10px] font-bold leading-tight">Kërko</span>
+          </button>
+          <button type="button" onClick={handleSelectLive} aria-pressed={isLiveOnly}
+            className={`flex w-[83px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${isLiveOnly ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
+            <span className="relative">
+              <FootballIcon size={25}/>
+              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">LIVE</span>
+            </span>
+            <span className="text-[10px] font-black leading-tight">FUTBOLL</span>
+          </button>
+          <div className="min-w-0 flex-1 bg-[#101925]" aria-hidden="true"/>
+        </nav>
+        {mobileSearchOpen && (
+          <form role="search" onSubmit={e => {e.preventDefault();mobileSearchRef.current?.blur();}}
+            className="flex shrink-0 items-center gap-2 border-b border-[#4b596c] bg-[#536073] p-2 md:hidden">
+            <Search size={19} className="shrink-0 text-white"/>
+            <input ref={mobileSearchRef} type="search" value={searchTerm}
+              onChange={e => handleSearchChange(e.target.value)}
+              placeholder="Kërko ndeshje ose kampionat" aria-label="Kërko ndeshje"
+              className="h-9 min-w-0 flex-1 border border-[#8593a7] bg-[#1b2533] px-2 text-sm text-white outline-none placeholder:text-[#aab7c6]"/>
+            <button type="button" className="p-1 text-white"
+              aria-label={searchTerm ? 'Pastro kërkimin' : 'Mbyll kërkimin'}
+              onClick={() => searchTerm ? handleSearchChange('') : setMobileSearchOpen(false)}><X size={19}/></button>
+          </form>
+        )}
 
         <div className="flex-1 flex overflow-hidden">
           {/* leagues: always there from lg up, a drawer below that */}
           <div className="hidden lg:flex">{sidebar}</div>
 
-          <div className="flex-1 overflow-y-auto bg-primary pb-16 lg:pb-0">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-primary pb-0 md:pb-16 xl:pb-0">
             {id ? (
               <MatchDetail />
             ) : (
@@ -156,7 +200,7 @@ export default function SportsbookPage() {
         </div>
 
         {/* small screens: modern bottom navigation dock */}
-        <div className="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary/95 backdrop-blur-sm border-t border-tertiary/80 flex items-stretch text-xs font-bold shadow-2xl pb-[env(safe-area-inset-bottom)]">
+        <div className="hidden md:flex xl:hidden fixed bottom-0 inset-x-0 z-30 bg-secondary/95 backdrop-blur-sm border-t border-tertiary/80 flex items-stretch text-xs font-bold shadow-2xl pb-[env(safe-area-inset-bottom)]">
           <button
             className={`flex-1 flex items-center justify-center gap-2 py-3.5 transition-all ${
               navOpen ? 'text-accent-yellow bg-primary/40' : 'text-text-secondary active:bg-tertiary/60'
