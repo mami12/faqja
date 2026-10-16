@@ -25,6 +25,8 @@ import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
+import { lockLiveRiskSettings } from './live-risk-store.mjs';
+import { assertLiveBetRisk } from './bet-risk.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 
 const MIN_STAKE = 100; // LEK
@@ -179,7 +181,7 @@ async function resolveBuilderSelection(selection, { matchId, templateId }) {
     matchId: String(matchId), marketKey: `BB:${templateId}`, line: '',
     outcomeKey: 'builder', outcomeName: template.name, marketName: 'Bet Builder',
     matchName: `${match.home} vs ${match.away}`, price,
-    builderLegs: lines.map(({ matchId: _matchId, price: _price, ...rest }) => ({
+    builderLegs: lines.map(({ matchId: _matchId, ...rest }) => ({
       ...rest, match_id: Number(matchId), market_key: rest.marketKey,
       outcome_key: rest.outcomeKey, outcome_name: rest.outcomeName,
       market_name: rest.marketName,
@@ -317,6 +319,10 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
         return getTicketWithLines(previous);
       }
     }
+    // Serialize risk/exposure calculations globally. This lock is shared
+    // across all players and is acquired BEFORE any ticket insertion.
+    const riskSettings = await lockLiveRiskSettings(client);
+    await assertLiveBetRisk(client, [{ stake: amount, payout, lines }], riskSettings);
     const balance = Number(locked.rows[0].balance);
     await assertPlayerCanBet(client, user.id, amount);
     if (balance - amount < 0) {
@@ -432,6 +438,10 @@ export async function placeColumns({ user, stake, columns, clientRequestId }) {
       await client.query('commit');
       return { tickets: await Promise.all(retry.map(getTicketWithLines)) };
     }
+    const riskSettings = await lockLiveRiskSettings(client);
+    await assertLiveBetRisk(client, resolved.map(lines => ({
+      stake: amount, payout: calculatePotentialPayout(amount, totalOddsForSelections(lines)), lines,
+    })), riskSettings);
     const balance = Number(locked.rows[0].balance);
     await assertPlayerCanBet(client, user.id, totalStake);
     if (balance < totalStake) throw badRequest('Bilanci nuk mjafton për të gjitha kolonat.');
