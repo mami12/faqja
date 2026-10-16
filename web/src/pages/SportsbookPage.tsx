@@ -9,6 +9,7 @@ import { LiveFeedProvider } from '../api/liveFeed';
 import { useBetslip } from '../context/BetslipContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ListOrdered, Ticket, X } from 'lucide-react';
+import type { MatchViewMode } from '../components/Sports/MatchList';
 
 /**
  * The board. Three columns on a desktop (leagues | matches | betslip); on a phone the two side
@@ -24,7 +25,11 @@ export default function SportsbookPage() {
   const [selectedTournament, setSelectedTournament] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSport, setSelectedSport] = useState<string>('');
-  const [isLiveOnly, setIsLiveOnly] = useState<boolean>(false);
+  // Shared by icon tabs, the board filters and the side search.
+  const [viewMode, setViewMode] = useState<MatchViewMode>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const isLiveOnly = viewMode === 'live';
+  const isFavoritesOnly = viewMode === 'favorites';
   // small screens: the leagues drawer and the betslip sheet
   const [navOpen, setNavOpen] = useState(false);
   const [betslipOpen, setBetslipOpen] = useState(false);
@@ -39,7 +44,7 @@ export default function SportsbookPage() {
     setSelectedTournament(tourId);
     setSelectedCategory('');
     setSelectedSport('');
-    setIsLiveOnly(false);
+    setViewMode('all');
     setNavOpen(false);
     // Navigate back to matches list if on match detail page
     if (id) navigate('/');
@@ -49,7 +54,7 @@ export default function SportsbookPage() {
     setSelectedCategory(catId);
     setSelectedTournament('');
     setSelectedSport('');
-    setIsLiveOnly(false);
+    setViewMode('all');
     setNavOpen(false);
     // Navigate back to matches list if on match detail page
     if (id) navigate('/');
@@ -59,7 +64,7 @@ export default function SportsbookPage() {
     setSelectedSport(sportId);
     setSelectedTournament('');
     setSelectedCategory('');
-    setIsLiveOnly(false);
+    setViewMode('all');
     setNavOpen(false);
     // Navigate back to matches list if on match detail page
     if (id) navigate('/');
@@ -69,7 +74,7 @@ export default function SportsbookPage() {
     setSelectedSport('');
     setSelectedCategory('');
     setSelectedTournament('');
-    setIsLiveOnly(false);
+    setViewMode('all');
     setNavOpen(false);
     // Navigate back to matches list if on match detail page
     if (id) navigate('/');
@@ -79,9 +84,23 @@ export default function SportsbookPage() {
     setSelectedSport('');
     setSelectedCategory('');
     setSelectedTournament('');
-    setIsLiveOnly(true);
+    setViewMode('live');
     setNavOpen(false);
     // Navigate back to matches list if on match detail page
+    if (id) navigate('/');
+  };
+
+  const handleSelectFavorites = () => {
+    setSelectedSport('');
+    setSelectedCategory('');
+    setSelectedTournament('');
+    setViewMode('favorites');
+    setNavOpen(false);
+    if (id) navigate('/');
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
     if (id) navigate('/');
   };
 
@@ -91,6 +110,11 @@ export default function SportsbookPage() {
       selectedCategoryId={selectedCategory}
       selectedSportId={selectedSport}
       isLiveOnly={isLiveOnly}
+      isFavoritesOnly={isFavoritesOnly}
+      searchTerm={searchTerm}
+      onSearchChange={handleSearchChange}
+      onSearchSubmit={() => setNavOpen(false)}
+      onSelectFavorites={handleSelectFavorites}
       onSelectTournament={handleSelectTournament}
       onSelectSport={handleSelectSport}
       onSelectCategory={handleSelectCategory}
@@ -117,6 +141,10 @@ export default function SportsbookPage() {
                 categoryId={selectedCategory}
                 sportId={selectedSport}
                 isLiveOnly={isLiveOnly}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                searchTerm={searchTerm}
+                onSearchChange={handleSearchChange}
               />
             )}
           </div>
@@ -173,7 +201,7 @@ export default function SportsbookPage() {
             <div className="relative h-full animate-in slide-in-from-left duration-250 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               {sidebar}
               <button
-                className="absolute top-3 right-3 p-2 rounded-full bg-primary/80 hover:bg-primary border border-tertiary/80 text-white shadow-lg transition"
+                className="absolute top-2 -right-11 p-2 rounded-full bg-primary/80 hover:bg-primary border border-tertiary/80 text-white shadow-lg transition"
                 onClick={() => setNavOpen(false)}
                 aria-label={t('common.cancel')}
               >

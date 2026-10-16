@@ -11,21 +11,25 @@ import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
+export type MatchViewMode = 'all' | 'live' | 'prematch' | 'favorites';
+
 interface Props {
   tournamentId?: string;
   categoryId?: string;
   sportId?: string;
   isLiveOnly?: boolean;
+  viewMode: MatchViewMode;
+  onViewModeChange: (mode: MatchViewMode) => void;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
 }
 
 type DateFilter = 'all' | 'today' | 'tomorrow';
 
-export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnly }: Props) {
+export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnly, viewMode, onViewModeChange, searchTerm, onSearchChange }: Props) {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [viewMode, setViewMode] = useState<'all' | 'live' | 'prematch' | 'favorites'>('all');
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
@@ -58,7 +62,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   const mainLeagueMatches = matches.filter(isMainFootballMatch);
   const searchFiltered = searchTerm.trim()
-    ? mainLeagueMatches.filter(m => {
+    ? matches.filter(m => {
         const search = searchTerm.toLowerCase();
         return (
           m.homeTeam?.toLowerCase().includes(search) ||
@@ -143,7 +147,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setViewMode(tab.id as any)}
+              onClick={() => onViewModeChange(tab.id as any)}
               className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 active:scale-95 ${
                 viewMode === tab.id
                   ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary font-black shadow-md shadow-accent-green/20'
@@ -295,27 +299,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
 
         <div className="space-y-3">
-          <div className="relative">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Search size={16} className="text-text-secondary" />
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder={t('common.search_matches')}
-              className="w-full rounded-md border border-white/10 bg-[#111823] py-2.5 pl-10 pr-9 text-xs text-white placeholder:text-text-secondary/70 focus:border-emerald-500/50 focus:outline-none sm:text-sm"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-text-secondary transition hover:text-white"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
           <div className="flex items-center gap-1.5 flex-wrap">
             <div className="mr-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
               <CalendarDays size={15} />
@@ -365,7 +348,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <input
               type="search"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => onSearchChange(e.target.value)}
               placeholder={t('common.search_matches')}
               aria-label={t('common.search_matches')}
               className="h-8 w-full min-w-0 border border-tertiary bg-primary py-1 pl-7 pr-2 text-[11px] text-white placeholder:text-text-muted focus:border-accent-yellow focus:outline-none"
@@ -392,7 +375,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <button
               type="button"
               key={tab.id}
-              onClick={() => setViewMode(tab.id as 'all' | 'live' | 'prematch' | 'favorites')}
+              onClick={() => onViewModeChange(tab.id as 'all' | 'live' | 'prematch' | 'favorites')}
               className={`flex min-w-0 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] font-semibold transition-colors ${viewMode === tab.id ? 'bg-[#424e60] text-accent-yellow' : 'bg-secondary text-slate-300 hover:text-white'}`}
             >
               {tab.label}
