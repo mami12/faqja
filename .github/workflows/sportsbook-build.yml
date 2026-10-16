@@ -10,6 +10,7 @@ on:
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-market-identity.mjs'
       - 'scripts/test-bet-builder.mjs'
+      - 'scripts/test-market-expiry.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/sportsbook-build.yml'
@@ -49,6 +50,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: node scripts/test-bet-builder.mjs
+      - name: Validate decided live-market visibility
+        run: node scripts/test-market-expiry.mjs
+      - name: Typecheck frontend
+        run: npm --prefix web run typecheck
       - name: Check backend syntax
         run: |
           node --check server/push-decode.mjs
