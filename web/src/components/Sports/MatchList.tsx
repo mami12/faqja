@@ -5,7 +5,7 @@ import { Match } from '../../types';
 import OddsButton from './OddsButton';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
-import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing } from 'lucide-react';
+import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing, Filter } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
 import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
@@ -30,6 +30,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [mobileDateOpen, setMobileDateOpen] = useState(false);
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
@@ -207,8 +208,48 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         ))}
       </div>
     );
+    // The tight mobile board mirrors the supplied sportsbook screenshot.
+    // Only the actual 1/X/2 outcomes are interactive; other markets live on
+    // the match detail page. OddsButton keeps all provider and risk locks.
+    const mobileRow = (
+      <div className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_repeat(3,53px)_38px] min-[400px]:grid-cols-[minmax(0,1fr)_repeat(3,58px)_42px] border-b border-[#111922] bg-[#242d3b] md:hidden">
+        <div className="relative flex min-w-0 items-stretch border-r border-[#111922]">
+          <button type="button" title={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+            aria-label={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+            onClick={() => toggleFavorite(String(m.id))}
+            className={`absolute bottom-1 left-1 z-[1] p-0.5 ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-[#748093]'}`}>
+            <Star size={12} fill={isFavorite(String(m.id)) ? 'currentColor' : 'none'}/>
+          </button>
+          <button type="button" onClick={() => navigate(`/match/${m.id}`)}
+            title={`${m.homeTeam} - ${m.awayTeam}`}
+            className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1 pl-6 pr-1.5 text-left text-[12px] leading-tight text-[#d3dce8] hover:bg-[#313d4f]">
+            <span className="flex min-w-0 items-center justify-between gap-1">
+              <span className="min-w-0 truncate">{m.homeTeam}</span>
+              {m.status === 'LIVE' && <span className="shrink-0 font-mono font-bold text-[#00c443]">{m.homeScore ?? 0}</span>}
+            </span>
+            <span className="flex min-w-0 items-center justify-between gap-1">
+              <span className="min-w-0 truncate">{m.awayTeam}</span>
+              {m.status === 'LIVE' && <span className="shrink-0 font-mono font-bold text-[#00c443]">{m.awayScore ?? 0}</span>}
+            </span>
+          </button>
+        </div>
+        {oneXtwo.map((outcome, i) => (
+          <div key={i} className="min-w-0 border-r border-[#111922] [&_button]:h-full [&_button]:min-h-[56px] [&_button]:w-full [&_button]:justify-center [&_button]:rounded-none [&_button]:px-0.5 [&_button]:text-center [&_button_span:first-child]:hidden [&_button_span:last-child]:text-[15px]">
+            {main && outcome ? <OddsButton match={m} market={main} outcome={outcome} showRawLabel/> :
+              <div className="flex h-full items-center justify-center text-sm text-slate-600">—</div>}
+          </div>
+        ))}
+        <button type="button" onClick={() => navigate(`/match/${m.id}`)}
+          title={t('sections.view_markets')} aria-label={`Tregjet e ndeshjes ${m.homeTeam} - ${m.awayTeam}`}
+          className="flex h-full items-center justify-center bg-[#293340] text-[#c6d0df] hover:bg-[#39485b]">
+          <ChevronRight size={26} strokeWidth={3}/>
+        </button>
+      </div>
+    );
     return (
-      <div key={m.id} className="border-b border-[#10151e] last:border-b-0 bg-[#262e3b] hover:bg-[#343f50] transition-colors">
+      <>
+        {mobileRow}
+        <div key={m.id} className="hidden border-b border-[#10151e] bg-[#262e3b] transition-colors hover:bg-[#343f50] md:block">
         <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="w-9 sm:w-11 shrink-0 text-center text-[9px] font-semibold text-text-secondary tabular-nums">
@@ -256,21 +297,48 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
         </div>
       </div>
+      </>
     );
   };
 
-  const renderCompetitionBoards = (items: any[]) => {
+  const renderCompetitionBoards = (items: any[], sectionTitle = 'Futboll') => {
     const groups = new Map<string, any[]>();
     items.forEach(m => {
       const key = [m.tournament?.category?.name, m.tournament?.name].filter(Boolean).join(' · ') || t('sections.league');
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(m);
     });
-    return Array.from(groups.entries()).map(([league, fixtures]) => (
-      <section key={league} className="overflow-hidden rounded-sm border border-[#10151e] bg-secondary">
-        <div className="flex items-center justify-between px-2 py-1 bg-[#445062] border-b border-[#10151e]">
-          <h3 className="text-xs font-bold text-white truncate">{league}</h3>
-          <span className="text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
+    return (
+      <>
+        <div className="grid h-[35px] grid-cols-[minmax(0,1fr)_repeat(3,53px)_38px] min-[400px]:grid-cols-[minmax(0,1fr)_repeat(3,58px)_42px] items-stretch border-b border-[#101a23] bg-[#285d31] text-[12px] text-[#e4f1e8] md:hidden">
+          <div className="flex min-w-0 items-center justify-between gap-1 border-r border-[#16281b] px-1.5">
+            <span className="truncate font-semibold">{sectionTitle}</span>
+            <span className="shrink-0 text-[#d2e5d5]">{items.length}</span>
+          </div>
+          <span className="flex items-center justify-center border-r border-[#16281b] font-semibold">1</span>
+          <span className="flex items-center justify-center border-r border-[#16281b] font-semibold">X</span>
+          <span className="flex items-center justify-center border-r border-[#16281b] font-semibold">2</span>
+          <button type="button" onClick={() => setMobileDateOpen(v => !v)}
+            aria-label="Filtro ndeshjet sipas datës" aria-expanded={mobileDateOpen}
+            className="flex items-center justify-center bg-[#33753c] hover:bg-[#448b4d]">
+            <Filter size={19} fill="#e7efe8"/>
+          </button>
+        </div>
+        {mobileDateOpen && (
+          <div className="flex gap-1 border-b border-[#151e28] bg-[#405067] px-2 py-2 md:hidden">
+            {(['all','today','tomorrow'] as DateFilter[]).map(value => (
+              <button type="button" key={value} onClick={() => setDateFilter(value)}
+                className={`flex-1 rounded-sm px-2 py-1 text-xs font-semibold ${dateFilter === value ? 'bg-[#e0ad27] text-[#152336]' : 'bg-[#273346] text-white'}`}>
+                {value === 'all' ? 'Të gjitha' : value === 'today' ? 'Sot' : 'Nesër'}
+              </button>
+            ))}
+          </div>
+        )}
+        {Array.from(groups.entries()).map(([league, fixtures]) => (
+      <section key={league} className="overflow-hidden rounded-none border border-[#10151e] bg-secondary md:rounded-sm">
+        <div className="flex items-center justify-between border-b border-[#10151e] bg-[#445062] px-2 py-1">
+          <h3 className="min-w-0 truncate text-xs font-medium text-[#e4ebf5]">{league.replace(' · ',' / ')}</h3>
+          <span className="shrink-0 text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
         </div>
         <div className="hidden lg:flex items-center gap-px px-2 py-1 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
           <span className="flex-1 min-w-0">Ndeshja</span>
@@ -278,14 +346,16 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="w-[128px] text-center">Over / Under</span>
           <span className="w-9 text-center">+</span>
         </div>
-        <div className="flex lg:hidden items-center bg-[#424e60] px-2 py-1 text-[10px] font-semibold text-slate-200">
+        <div className="hidden md:flex lg:hidden items-center bg-[#424e60] px-2 py-1 text-[10px] font-semibold text-slate-200">
           <span className="flex-1 min-w-0">Ndeshja</span>
           <span className="w-[126px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
           <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
         </div>
         {fixtures.map(renderMatchCard)}
       </section>
-    ));
+        ))}
+      </>
+    );
   };
 
   return (
@@ -340,51 +410,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         </div>
       </div>
 
-      {/* Compact two-row mobile search/date and match-status controls. */}
-      <div className="md:hidden w-full border-y border-tertiary bg-secondary">
-        <div className="flex items-center gap-1.5 border-b border-tertiary p-1.5">
-          <div className="relative min-w-0 flex-1">
-            <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary"/>
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={e => onSearchChange(e.target.value)}
-              placeholder={t('common.search_matches')}
-              aria-label={t('common.search_matches')}
-              className="h-8 w-full min-w-0 border border-tertiary bg-primary py-1 pl-7 pr-2 text-[11px] text-white placeholder:text-text-muted focus:border-accent-yellow focus:outline-none"
-            />
-          </div>
-          <select
-            aria-label="Filtro sipas datës"
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value as DateFilter)}
-            className="h-8 max-w-[105px] shrink-0 border border-tertiary bg-[#424e60] px-1.5 text-[11px] font-semibold text-white focus:border-accent-yellow focus:outline-none"
-          >
-            <option value="all">{t('dates.all')}</option>
-            <option value="today">{t('dates.today')}</option>
-            <option value="tomorrow">{t('dates.tomorrow')}</option>
-          </select>
-        </div>
-        <div className="flex min-w-0 items-center gap-px overflow-x-auto bg-tertiary">
-          {[
-            { id: 'all', label: t('sports.all'), count: pricedMatches.length },
-            { id: 'live', label: t('sports.live'), count: liveMatches.length },
-            { id: 'prematch', label: t('sports.prematch'), count: prematchMatches.length },
-            { id: 'favorites', label: '★', count: favoriteMatches.length },
-          ].map(tab => (
-            <button
-              type="button"
-              key={tab.id}
-              onClick={() => onViewModeChange(tab.id as 'all' | 'live' | 'prematch' | 'favorites')}
-              className={`flex min-w-0 flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2 py-2 text-[11px] font-semibold transition-colors ${viewMode === tab.id ? 'bg-[#424e60] text-accent-yellow' : 'bg-secondary text-slate-300 hover:text-white'}`}
-            >
-              {tab.label}
-              <span className="font-mono text-[10px] text-text-secondary">{tab.count}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {searchTerm && (
         <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}
@@ -431,7 +456,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {renderCompetitionBoards(liveMatches)}
+            {renderCompetitionBoards(liveMatches, 'Futboll Live')}
           </div>
         </div>
       )}
@@ -449,7 +474,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {renderCompetitionBoards(prematchMatches)}
+            {renderCompetitionBoards(prematchMatches, 'Futboll')}
           </div>
         </div>
       )}
@@ -459,7 +484,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <Star size={14} className="text-amber-400" /> Të Preferuarat
             <span className="text-text-secondary">{favoriteMatches.length}</span>
           </div>
-          {favoriteMatches.length ? renderCompetitionBoards(favoriteMatches) : (
+          {favoriteMatches.length ? renderCompetitionBoards(favoriteMatches, 'Favoritet') : (
             <div className="rounded-md border border-tertiary bg-secondary p-8 text-center text-xs text-text-secondary">
               Nuk ka ndeshje të preferuara.
             </div>
