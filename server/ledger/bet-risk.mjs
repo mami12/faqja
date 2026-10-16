@@ -68,7 +68,7 @@ export async function assertLiveBetRisk(client, columns, settings) {
     `select l.match_id, coalesce(sum(t.potential_payout),0) as pending
        from app_ticket_line l
        join app_ticket t on t.id=l.ticket_id
-      where t.status='PENDING' and l.match_id = any($1::bigint[])
+      where t.status='PENDING' and t.user_id is not null and l.match_id = any($1::bigint[])
       group by l.match_id`,
     [ids],
   );
