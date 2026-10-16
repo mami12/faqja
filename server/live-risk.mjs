@@ -6,6 +6,7 @@
  * Never use browser odds, browser score or client-provided IDs as authority.
  */
 import { config } from './config.mjs';
+import { liveRiskSettings } from './live-risk-settings.mjs';
 
 const num = (value) => {
   if (value === '' || value === null || value === undefined) return null;
@@ -50,21 +51,12 @@ export function isLeaderWinChoice(outcomeKey, outcomeName, leader) {
   return candidates.has(code) || candidates.has(label);
 }
 
-const setting = (key, defaultValue) => {
-  const value = num(config[key]);
-  return value !== null && value >= 0 ? value : defaultValue;
-};
-
 /**
- * Returns a reason string or null. One canonical decision for REST, websocket
- * locks, real bet placement and booking. The score must come from the live feed.
- *
- * - Any market at minute 85+ priced <=1.05: block ultra-short prices.
- * - Full-time leader at minute 75+, ahead by 2+ and priced <=1.50: block.
- * - Full-time leader at minute 85+, ahead by 1+ and priced <=1.10: block.
+ * All rules are driven by the persisted Admin policy. The most restrictive
+ * matching threshold wins; these are suspension heuristics, not certainty.
  */
-export function liveRiskReason(match, selection, now = Date.now()) {
-  if (config.liveRiskEnabled === false) return null;
+export function liveRiskReason(match, selection, now = Date.now(), settings = liveRiskSettings()) {
+  if (config.liveRiskEnabled === false || settings.enabled === false) return null;
   const service = String(match?.service ?? '').toUpperCase();
   const live = service === 'LIVE' || match?.live === true || match?.status === 'LIVE';
   if (!live) return null;
@@ -73,28 +65,29 @@ export function liveRiskReason(match, selection, now = Date.now()) {
 
   const minute = riskMinute(match, now);
   if (minute === null) return null;
-  const lateMinute = setting('liveRiskLateMinute', 85);
-  const ultraOdds = setting('liveRiskUltraOdds', 1.05);
-  if (minute >= lateMinute && price <= ultraOdds) return 'ultra_low_late_price';
 
+  // Every market: any ultra-short selection is blocked, including Draw, totals,
+  // corners, cards, combined providers and Bet Builder constituent legs.
+  if (settings.lowOddsRules.some(rule => minute >= rule.minute && price <= rule.maxOdds)) {
+    return 'low_live_odds';
+  }
+
+  // Only the leading team in ordinary FULL-TIME 1X2 is suspended. Draw and
+  // the trailing team's choice remain open unless another rule catches them.
   if (!isFullTimeWinnerMarket(selection?.marketName ?? selection?.market_name,
       selection?.marketKey ?? selection?.market_key)) return null;
 
   const scoreAt = match?.score_at ?? match?.scoreAt ?? null;
-  // A display fallback of 0-0 without an actual score frame must never decide a bet.
-  if (!scoreAt) return null;
+  if (!scoreAt) return null; // Never infer a score from a default 0-0 placeholder.
   const home = num(match?.home_score ?? match?.homeScore ?? match?.score?.home);
   const away = num(match?.away_score ?? match?.awayScore ?? match?.score?.away);
   if (home === null || away === null || home < 0 || away < 0 || home === away) return null;
   const lead = Math.abs(home - away);
   const leader = home > away ? 'home' : 'away';
   if (!isLeaderWinChoice(selection?.outcomeKey ?? selection?.outcome_key,
-    selection?.outcomeName ?? selection?.outcome_name, leader)) return null;
+      selection?.outcomeName ?? selection?.outcome_name, leader)) return null;
 
-  if (minute >= setting('liveRiskLeadMinute', 75) &&
-      lead >= setting('liveRiskLeadGoals', 2) &&
-      price <= setting('liveRiskLeadOdds', 1.50)) return 'large_lead_low_price';
-  if (minute >= lateMinute && lead >= 1 &&
-      price <= setting('liveRiskLateOdds', 1.10)) return 'late_leader_low_price';
-  return null;
+  return settings.leaderRules.some(rule =>
+    minute >= rule.minute && lead >= rule.goals && price <= rule.maxOdds
+  ) ? 'leader_low_odds' : null;
 }
