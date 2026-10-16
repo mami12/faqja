@@ -23,6 +23,8 @@ import { startPusher } from './pusher.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
 import { liveClock } from './minute.mjs';
 import { liveRiskReason, riskMinute } from './live-risk.mjs';
+import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
+import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 
 const app = express();
@@ -90,6 +92,7 @@ async function ensureLedgerSchema() {
   try {
     await initSchema();
     await initLedgerSchema(); // users / transactions / tickets (additive, create-only)
+    await refreshLiveRiskSettings({ initialize: true });
     await ensureDefaultAccounts();
     // admin overrides live in the database and are read through a snapshot: warm it now so a
     // restart does not silently drop a suspension or a pinned price until someone edits again
@@ -313,8 +316,14 @@ async function broadcastLiveRiskLocks(matchId, matchRow) {
   const previous = publishedRiskLocks.get(id) ?? new Set();
   const next = new Set();
   const minute = riskMinute(matchRow);
-  if (config.liveRiskEnabled && String(matchRow.service).toUpperCase() === 'LIVE' &&
-      minute !== null && minute >= Math.min(config.liveRiskLeadMinute, config.liveRiskLateMinute)) {
+  const policy = liveRiskSettings();
+  const firstRuleMinute = Math.min(
+    ...policy.leaderRules.map(rule => rule.minute),
+    ...policy.lowOddsRules.map(rule => rule.minute),
+  );
+  if (config.liveRiskEnabled && policy.enabled &&
+      String(matchRow.service).toUpperCase() === 'LIVE' &&
+      minute !== null && minute >= firstRuleMinute) {
     const odds = config.oddsStore === 'db'
       ? await getDbOddsForMatches([Number(matchId)])
       : oddsStore.getOddsForMatches([Number(matchId)]);
@@ -340,6 +349,16 @@ async function broadcastLiveRiskLocks(matchId, matchRow) {
   else publishedRiskLocks.delete(id);
   if (Object.keys(locks).length) io.emit('risk:locks', { matchId: id, locks });
 }
+
+// Admin edits (and changes made on another instance) immediately re-evaluate
+// already visible odds, including reversibly unlocking old risk-only locks.
+subscribeLiveRiskSettings(() => {
+  void (async () => {
+    if (!io) return;
+    const rows = await getMatches({ service: 'LIVE', limit: 2000 });
+    for (const row of rows) await broadcastLiveRiskLocks(row.match_id ?? row.id, row);
+  })().catch(e => console.error('[live risk] lock refresh failed:',e.message));
+});
 
 /* ------------------------------------------------------------ odds ingestion */
 
@@ -664,6 +683,13 @@ async function boot() {
   }
 
   await ensureLedgerSchema(); // the board does not need the ledger, so a failure here is not fatal
+  // DB remains authoritative when multiple instances serve the sportsbook.
+  // For betting, the policy is reread under the singleton row lock regardless.
+  const riskRefreshTimer = setInterval(() => {
+    if (ledgerReady) refreshLiveRiskSettings().catch(e =>
+      console.warn('[live risk] refresh failed:',e.message));
+  }, 10000);
+  riskRefreshTimer.unref?.();
 
   // settlement: every pass stores newly finished results, then closes any ticket whose
   // lines are all decided. Idempotent, so a missed pass is harmless - see runSettlement(),

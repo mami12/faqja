@@ -6,6 +6,7 @@ on:
       - 'web/**'
       - 'server/**'
       - 'scripts/test-live-risk.mjs'
+      - 'scripts/test-live-money-risk.mjs'
       - 'scripts/test-mixed-combos.mjs'
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-market-identity.mjs'
@@ -44,6 +45,10 @@ jobs:
         run: node scripts/test-market-identity.mjs
       - name: Validate server risk suspensions
         run: node scripts/test-live-risk.mjs
+      - name: Validate live financial risk limits
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: node scripts/test-live-money-risk.mjs
       - name: Validate mixed market contracts and settlement
         run: node scripts/test-mixed-combos.mjs
       - name: Validate universal builder contracts
@@ -59,6 +64,9 @@ jobs:
           node --check server/push-decode.mjs
           node --check server/collector.mjs
           node --check server/live-risk.mjs
+          node --check server/live-risk-settings.mjs
+          node --check server/ledger/live-risk-store.mjs
+          node --check server/ledger/bet-risk.mjs
           node --check server/index.mjs
           node --check server/ledger/bets.mjs
           node --check server/ledger/view.mjs

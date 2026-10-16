@@ -13,6 +13,8 @@ import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } f
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
 import { getPlayerControls, requestSelfExclusion, updatePlayerLimits } from './player-controls.mjs';
+import { refreshLiveRiskSettings, writeLiveRiskSettings } from './live-risk-store.mjs';
+import { DEFAULT_LIVE_RISK_SETTINGS } from '../live-risk-settings.mjs';
 
 export const ledgerRouter = express.Router();
 
@@ -119,6 +121,12 @@ ledgerRouter.post(
     return res.json(await requestSelfExclusion(req.user.id, req.body?.days));
   }),
 );
+
+/* ------------------------------------------------------- admin live risk configuration */
+ledgerRouter.get('/admin/live-risk', requireLedger, requireAuth, requireAdmin,
+  guard(async (req,res) => res.json({ settings: await refreshLiveRiskSettings(), defaults: DEFAULT_LIVE_RISK_SETTINGS })));
+ledgerRouter.put('/admin/live-risk', requireLedger, requireAuth, requireAdmin,
+  guard(async (req,res) => res.json(await writeLiveRiskSettings(req.body?.settings,req.user))));
 
 /* ------------------------------------------------------- universal bet builders */
 ledgerRouter.get('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,

@@ -47,6 +47,14 @@ create table if not exists app_player_controls (
 );
 create index if not exists app_player_controls_exclusion_idx on app_player_controls (self_excluded_until);
 
+-- The single locked row also serializes liability calculations across players.
+create table if not exists app_live_risk_settings (
+  id smallint primary key check (id = 1),
+  settings jsonb not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references app_user(id) on delete set null
+);
+
 create table if not exists app_admin_audit (
   id            bigserial primary key,
   actor_id      uuid references app_user(id) on delete set null,
