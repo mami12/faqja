@@ -116,7 +116,7 @@ const totalLine = (market: MarketLike): number | null => {
 
 const isSimpleTotal = (market: MarketLike): boolean => {
   const name = norm(market.name);
-  if (/bet builder|both teams|btts|correct|exact|result|winner|1x2|odd.?even|handicap|asian|next|last|first|race|score in|goal in|time of|&|\+/.test(name)) return false;
+  if (/bet builder|both teams|btts|correct|exact|result|winner|1x2|odd.?even|handicap|asian|next|last|race|score in|goal in|time of|&|\+|\b(?:first|1st)\s+(?:goal|corner|card|scorer)\b/.test(name)) return false;
   const o = market.outcomes ?? [];
   const hasOverUnder = o.some(item =>
     /^(?:over|under|o|u)(?:\b|$)/i.test(String(item.code ?? item.name ?? '').trim()));
@@ -151,9 +151,8 @@ const completedEvent = (m: MatchLike, market: MarketLike): boolean => {
     /\b(?:time of|minute of)\s+(?:the\s+)?first\s+goal\b/.test(name) ||
     /\b(?:first|1st)\s+(?:goal|corner|card)\s+(?:time|minute)\b/.test(name);
   const ordinal = name.match(/\b(?:2nd|second|3rd|third|4th|fourth|5th|fifth)\s+(goal|corner|card)\b/);
-  const race = name.match(/\brace\s+to\s+(\d+)\s*(goals?|corners?|cards?)?\b/);
+  const race = name.match(/\brace\s+to\s+(\d+)\s+(goals?|corners?|cards?)\b/);
   if (!first && !ordinal && !race) return false;
-  const family = /corner/.test(name) ? 'corners' : /\bcard|booking/.test(name) ? 'cards' : 'goals';
   const counts = observedCounter(m, market);
   if (!counts) return false;
   const total = counts.home + counts.away;
@@ -177,7 +176,7 @@ export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   if (!market) return false;
   if (isMatchFinished(m)) return true;
   if (!isLive(m)) return false;
-  if (isFirstHalf(market) && isSecondHalfOrLater(m)) return true;
+  if ((isFirstHalf(market) || isHTFTMarket(String(market.name ?? ''))) && isSecondHalfOrLater(m)) return true;
 
   if (completedEvent(m, market) || elapsedWindow(m, market)) return true;
 
