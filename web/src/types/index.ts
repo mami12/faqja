@@ -118,6 +118,8 @@ export interface TicketLine {
   outcomeName: string;
   /** Original provider code accompanying a saved ticket line. */
   outcomeCode?: string;
+  /** Provider line included in settled tickets and their printable receipts. */
+  marketLine?: string;
   marketName: string;
   matchName: string;
   oddsAtPlacement: number;
