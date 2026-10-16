@@ -75,6 +75,8 @@ export default function SportsbookPage() {
   };
 
   const handleSelectAll = () => {
+    setMobileSearchOpen(false);
+    setSearchTerm('');
     setSelectedSport('');
     setSelectedCategory('');
     setSelectedTournament('');
@@ -85,6 +87,8 @@ export default function SportsbookPage() {
   };
 
   const handleSelectLive = () => {
+    setMobileSearchOpen(false);
+    setSearchTerm('');
     setSelectedSport('');
     setSelectedCategory('');
     setSelectedTournament('');
@@ -142,7 +146,12 @@ export default function SportsbookPage() {
             <CalendarDays size={25} strokeWidth={2.4}/>
             <span className="text-[10px] font-black leading-tight">TË GJITHA</span>
           </button>
-          <button type="button" onClick={() => {setMobileSearchOpen(v => !v);if(id)navigate('/');}}
+          <button type="button" onClick={() => {
+              setMobileSearchOpen(v => !v);
+              setViewMode('all');
+              setSelectedSport(''); setSelectedCategory(''); setSelectedTournament('');
+              if (id) navigate('/');
+            }}
             aria-pressed={mobileSearchOpen || !!searchTerm} aria-expanded={mobileSearchOpen}
             className={`flex w-[65px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${mobileSearchOpen || searchTerm ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
             <Search size={26} strokeWidth={3}/>
