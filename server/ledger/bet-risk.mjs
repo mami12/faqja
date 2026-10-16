@@ -11,6 +11,26 @@ const fail = (message, code = 'LIVE_RISK_LIMIT') => {
   throw Object.assign(new Error(message), { status: 400, code });
 };
 
+/** Pure guards, shared by single and multi-column requests. */
+export function assertLiveMoneyLimits(liveStake, livePayout, limits) {
+  const { maxLiveStake, maxLivePayout } = limits;
+  if (maxLiveStake !== null && liveStake > maxLiveStake + 0.001) {
+    fail(`Shuma maksimale për bastet LIVE në këtë kupon është ${maxLiveStake} Lek.`);
+  }
+  if (maxLivePayout !== null && livePayout > maxLivePayout + 0.001) {
+    fail(`Pagesa e mundshme LIVE kalon kufirin ${maxLivePayout} Lek.`);
+  }
+}
+
+export function assertLiveMatchExposure(newLiability, pending, maxMatchExposure) {
+  if (maxMatchExposure === null) return;
+  for (const [matchId, additional] of newLiability) {
+    if ((pending.get(matchId) ?? 0) + additional > maxMatchExposure + 0.001) {
+      fail(`Kufiri i ekspozimit LIVE për ndeshjen ${matchId} është arritur.`, 'LIVE_MATCH_EXPOSURE');
+    }
+  }
+}
+
 export async function assertLiveBetRisk(client, columns, settings) {
   if (!settings.enabled) return;
   const liveMatches = new Map();
@@ -52,13 +72,8 @@ export async function assertLiveBetRisk(client, columns, settings) {
   }
 
   if (!newLiability.size) return;
-  const { maxLiveStake, maxLivePayout, maxMatchExposure } = settings.limits;
-  if (maxLiveStake !== null && liveStake > maxLiveStake + 0.001) {
-    fail(`Shuma maksimale për bastet LIVE në këtë kupon është ${maxLiveStake} Lek.`);
-  }
-  if (maxLivePayout !== null && livePayout > maxLivePayout + 0.001) {
-    fail(`Pagesa e mundshme LIVE kalon kufirin ${maxLivePayout} Lek.`);
-  }
+  assertLiveMoneyLimits(liveStake, livePayout, settings.limits);
+  const { maxMatchExposure } = settings.limits;
   if (maxMatchExposure === null) return;
 
   // The singleton settings row (FOR UPDATE) serializes this query with all
@@ -73,9 +88,5 @@ export async function assertLiveBetRisk(client, columns, settings) {
     [ids],
   );
   const pending = new Map(rows.map(row => [String(row.match_id),Number(row.pending)]));
-  for (const [matchId, additional] of newLiability) {
-    if ((pending.get(matchId) ?? 0) + additional > maxMatchExposure + 0.001) {
-      fail(`Kufiri i ekspozimit LIVE për ndeshjen ${matchId} është arritur.`, 'LIVE_MATCH_EXPOSURE');
-    }
-  }
+  assertLiveMatchExposure(newLiability, pending, maxMatchExposure);
 }
