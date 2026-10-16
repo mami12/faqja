@@ -12,6 +12,7 @@ on:
       - 'scripts/test-market-identity.mjs'
       - 'scripts/test-bet-builder.mjs'
       - 'scripts/test-market-expiry.mjs'
+      - 'scripts/test-mobile-betslip-badge.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/sportsbook-build.yml'
@@ -57,6 +58,8 @@ jobs:
         run: node scripts/test-bet-builder.mjs
       - name: Validate decided live-market visibility
         run: node scripts/test-market-expiry.mjs
+      - name: Validate mobile match-count badge
+        run: node scripts/test-mobile-betslip-badge.mjs
       - name: Typecheck frontend
         run: npm --prefix web run typecheck
       - name: Check backend syntax
