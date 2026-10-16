@@ -15,6 +15,7 @@ interface Props {
   isFavoritesOnly?: boolean;
   searchTerm: string;
   onSearchChange: (value: string) => void;
+  onSearchSubmit?: () => void;
   onSelectTournament: (id: string) => void;
   onSelectSport: (id: string) => void;
   onSelectCategory: (id: string) => void;
@@ -52,7 +53,7 @@ type SportItem = {
 
 export default function SportsSidebar({
   selectedTournamentId, selectedCategoryId, selectedSportId,
-  isLiveOnly, isFavoritesOnly, searchTerm, onSearchChange,
+  isLiveOnly, isFavoritesOnly, searchTerm, onSearchChange, onSearchSubmit,
   onSelectTournament, onSelectSport, onSelectCategory,
   onSelectAll, onSelectLive, onSelectFavorites,
 }: Props) {
@@ -111,7 +112,9 @@ export default function SportsSidebar({
         <div className="flex h-[34px] items-center gap-2 border border-[#8291a5] bg-[#1b2533] px-2 focus-within:border-[#dcae51]">
           <Search size={17} strokeWidth={2.7} className="shrink-0 text-[#d4dde7]" aria-hidden="true"/>
           <input id="sidebar-match-search" type="search" value={searchTerm}
-            onChange={e => onSearchChange(e.target.value)} placeholder="Kërko"
+            onChange={e => onSearchChange(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); onSearchSubmit?.(); } }}
+            placeholder="Kërko"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-white placeholder-[#78879a] outline-none [appearance:textfield] [&::-webkit-search-cancel-button]:hidden"
           />
           {searchTerm && (
@@ -168,7 +171,7 @@ export default function SportsSidebar({
                       <div key={categoryId} className="border-b border-[#101923] last:border-b-0">
                         <div className={`flex min-h-[29px] items-center text-[12px] transition-colors hover:bg-[#314154] ${selected ? 'bg-[#344759] text-white' : 'text-[#c3cfde]'}`}>
                           <button type="button" aria-label={`Filtro ${category.name}`}
-                            onClick={() => onSelectCategory(categoryId)}
+                            onClick={() => onSelectCategory(categoryId)} aria-pressed={selected}
                             className="flex h-[29px] shrink-0 items-center px-[6px]">
                             <span className={`flex h-[16px] w-[16px] items-center justify-center border border-[#a3b2c4] text-[11px] ${selected ? 'border-[#e3ad31] bg-[#e3ad31] text-[#17212d]' : ''}`}>
                               {selected ? '✓' : ''}
