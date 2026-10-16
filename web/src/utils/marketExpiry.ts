@@ -232,6 +232,20 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
   const counts = observedCounter(match, market);
   if (!counts) return outcomes;
 
+  // Some provider markets put multiple goal/corner/card lines inside one
+  // market instead of exposing each line in market.line. Prune the outcomes
+  // whose explicit "Over 0.5" / "Under 0.5" threshold is already passed.
+  if (isSimpleTotal(market) && totalLine(market) === null) {
+    const value = observedTotal(match, market);
+    if (value === null) return outcomes;
+    return outcomes.filter(o => {
+      const label = String(o.name ?? o.code ?? '');
+      const embedded = label.match(/\b(?:over|under)\s*\(?\s*(\d+(?:[.,]\d+)?)\s*\)?/i);
+      const threshold = embedded ? number(embedded[1]) : null;
+      return threshold === null || value <= threshold;
+    });
+  }
+
   if (/\bcorrect score\b|\bexact score\b|\bscore exact\b/.test(name)) {
     return outcomes.filter(o => {
       const target = exactScore(String(o.name ?? o.code ?? ''));
