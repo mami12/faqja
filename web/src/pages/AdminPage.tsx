@@ -4,13 +4,14 @@ import AdminDashboard from '../components/Admin/AdminDashboard';
 import UserManagement from '../components/Admin/UserManagement';
 import MatchControl from '../components/Admin/MatchControl';
 import BetBuilderManager from '../components/Admin/BetBuilderManager';
+import LiveRiskManager from '../components/Admin/LiveRiskManager';
 import TicketAudit from '../components/Admin/TicketAudit';
 import { useLanguage } from '../context/LanguageContext';
 import AdminAuditLog from '../components/Admin/AdminAuditLog';
 import TransactionHistoryPage from './TransactionHistoryPage';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'users' | 'matches' | 'builders' | 'tickets' | 'transactions' | 'audit';
+type AdminTab = 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -22,6 +23,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
       { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
       { id: 'builders', label: 'Bet Builder', description: 'Kombinime universale nga API', icon: Layers },
+      { id: 'risk', label: 'Live Risk Manager', description: 'Bllokime dhe kufij financiarë LIVE', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
     ],
   },
@@ -121,6 +123,7 @@ export default function AdminPage() {
             {tab === 'users' && <UserManagement />}
             {tab === 'matches' && <MatchControl />}
             {tab === 'builders' && <BetBuilderManager />}
+            {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
