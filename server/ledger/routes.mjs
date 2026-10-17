@@ -8,6 +8,7 @@ import express from 'express';
 import { authenticate, requireAuth, requireAdmin } from './auth.mjs';
 import * as ledger from './store.mjs';
 import * as bets from './bets.mjs';
+import * as betHistory from './bet-history.mjs';
 import * as builders from './bet-builders.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
@@ -54,7 +55,7 @@ const placementGuard = (fn) => guard(async (req, res, next) => {
       const count = Array.isArray(body.selections) ? body.selections.length :
         columns.reduce((sum, col) => sum + (Array.isArray(col) ? col.length : 0), 0);
       try {
-        await bets.recordRejectedBet({
+        await betHistory.recordRejectedBet({
           userId: req.user.id, requestId: body.clientRequestId,
           stake: body.stake, selectionCount: count, reason: e?.message,
         });
@@ -113,7 +114,7 @@ ledgerRouter.get(
   requireAuth,
   guard(async (req, res) => {
     if (req.user.role !== 'PLAYER') return res.status(403).json({ message: 'player only' });
-    res.json(await bets.listPlayerBetActivity({
+    res.json(await betHistory.listPlayerBetActivity({
       userId: req.user.id, status: req.query.status,
       from: req.query.from, to: req.query.to,
       limit: asLimit(req.query.limit, 200, 500),
