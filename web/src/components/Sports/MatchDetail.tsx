@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, TrendingUp, Trophy, Sparkles, Flame, Clock, Flag, 
+  ArrowLeft, Trophy, Sparkles, Flame, Clock, Flag, 
   ShieldAlert, ChevronDown, ChevronUp, Star, Bell, BellRing, 
   Search, X, Layers, Layers2
 } from 'lucide-react';
@@ -228,100 +228,82 @@ export default function MatchDetail() {
 
   return (
     <div className="mx-auto max-w-6xl px-1.5 py-2 sm:px-3 space-y-2">
-      {/* Top Navigation Bar & Action Icons */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-secondary px-3 py-2 text-xs font-bold text-text-secondary transition hover:border-emerald-500/40 hover:bg-card-hover hover:text-white active:scale-95 shadow-sm"
-        >
-          <ArrowLeft size={15} />
-          {t('common.back')}
-        </button>
-
-        {/* Favorite & Notification Actions */}
-        <div className="flex items-center gap-2">
-          {/* Favorite Toggle Button */}
-          <button
-            onClick={() => toggleFavorite(matchIdStr)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 shadow-sm ${
-              isFav 
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-amber-500/10' 
-                : 'bg-secondary text-text-secondary border-white/10 hover:text-white hover:bg-tertiary/60'
-            }`}
-            title={isFav ? "Hiq nga ndeshjet e preferuara" : "Shto në ndeshjet e preferuara"}
-          >
-            <Star size={14} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
-            <span className="hidden sm:inline">{isFav ? 'E Preferuar' : 'Prefero'}</span>
-          </button>
-
-          {/* Live Notification Toggle Button */}
-          <button
-            onClick={() => toggleAlert(matchIdStr)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 shadow-sm ${
-              isAlert 
-                ? 'bg-accent-green/20 text-accent-green border-accent-green/40 shadow-accent-green/10' 
-                : 'bg-secondary text-text-secondary border-white/10 hover:text-white hover:bg-tertiary/60'
-            }`}
-            title={isAlert ? "Njoftimet live aktive (Gol, Penallti, Kartona)" : "Aktivizo njoftimet live për këtë ndeshje"}
-          >
-            {isAlert ? <BellRing size={14} className="text-accent-green animate-pulse" /> : <Bell size={14} />}
-            <span className="hidden sm:inline">{isAlert ? 'Njoftime ON' : 'Njofto'}</span>
-          </button>
-
-          {/* Tournament pill */}
-          <div className="rounded-xl border border-white/10 bg-secondary/80 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary truncate max-w-[150px] sm:max-w-[220px]">
-            {live.tournament?.name || live.tournament?.category?.name || t('common.match')}
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Match Scoreboard Header */}
-      <div className="relative overflow-hidden rounded-sm border border-tertiary bg-secondary p-2.5 sm:p-3">
-        {isLive && (
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
-        )}
-
-        <div className="mb-3 flex items-center justify-between gap-2">
-          {isLive ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              {t('common.live')} {live.currentMinute || 0}'
-            </div>
-          ) : (
-            <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-text-secondary">
-              {formattedDate.toLocaleDateString([], { month: 'short', day: 'numeric' })} • {formattedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
-          )}
-
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
-            <Trophy size={12} />
-            {live.tournament?.name || t('common.match')}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center sm:gap-5">
-          <div className="text-right">
-            <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary/70">{t('sports.home')}</div>
-            <h1 className="text-sm font-black tracking-tight text-white sm:text-xl line-clamp-2">{live.homeTeam}</h1>
-          </div>
-
-          <div className="min-w-[80px] rounded-sm bg-primary/95 px-3 py-1.5 sm:min-w-[110px]">
-            <span className="font-mono text-lg font-black tracking-widest text-emerald-400 sm:text-2xl">
-              {isLive ? `${live.homeScore ?? 0} - ${live.awayScore ?? 0}` : t('common.vs')}
+      {/* A photographic, dynamic scoreboard: the image is only a background.
+          Scores and statistics always come from the live feed, never from the photo.
+          Photo: Peter Glaser, CC0 (Wikimedia Commons, 2017). */}
+      <section className="overflow-hidden rounded-sm border border-[#303d4b]" aria-label="Rezultati dhe statistikat e ndeshjes">
+        <div className="flex min-h-[36px] items-center justify-between gap-2 bg-[#414b5b] px-2.5 text-[#eaf0f9]">
+          <button type="button" onClick={() => navigate(-1)}
+            className="inline-flex min-w-0 items-center gap-2 py-2 text-left text-xs hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+            aria-label="Kthehu te lista e ndeshjeve">
+            <ArrowLeft size={15} className="shrink-0" />
+            <span className="truncate">
+              {[live.tournament?.category?.name, live.tournament?.name].filter(Boolean).join(' / ') || t('common.match')}
             </span>
-          </div>
-
-          <div className="text-left">
-            <div className="mb-0.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary/70">{t('sports.away')}</div>
-            <h1 className="text-sm font-black tracking-tight text-white sm:text-xl line-clamp-2">{live.awayTeam}</h1>
+          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => toggleFavorite(matchIdStr)}
+              aria-label={isFav ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+              aria-pressed={isFav} title={isFav ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+              className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
+              <Star size={15} className={isFav ? 'fill-amber-400 text-amber-400' : ''}/>
+            </button>
+            <button type="button" onClick={() => toggleAlert(matchIdStr)}
+              aria-label={isAlert ? 'Çaktivizo njoftimet LIVE' : 'Aktivizo njoftimet LIVE'}
+              aria-pressed={isAlert} title={isAlert ? 'Çaktivizo njoftimet LIVE' : 'Aktivizo njoftimet LIVE'}
+              className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
+              {isAlert ? <BellRing size={15} className="text-emerald-300" /> : <Bell size={15}/>}
+            </button>
+            <button type="button" onClick={() => navigate('/')} title="Mbyll ndeshjen"
+              aria-label="Mbyll ndeshjen dhe kthehu te ndeshjet"
+              className="rounded-sm p-1 text-slate-200 transition-colors hover:bg-white/10 hover:text-white">
+              <X size={17} strokeWidth={3}/>
+            </button>
           </div>
         </div>
-      </div>
+        <div className="relative isolate flex min-h-[151px] items-center overflow-hidden bg-[#336528] px-2 py-3 sm:min-h-[166px] sm:px-4">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -scale-x-100 bg-cover bg-center"
+            style={{
+              backgroundImage: 'url("https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Adidas_soccer_ball_on_a_grass_pitch_%28Unsplash%29.jpg/960px-Adidas_soccer_ball_on_a_grass_pitch_%28Unsplash%29.jpg")',
+              backgroundPosition: 'center 62%',
+              filter: 'saturate(1.35) brightness(1.08)',
+            }}/>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#10371d]/40 via-[#092a1a]/15 to-[#0f281d]/10" />
+          <div className="relative z-10 mx-auto w-full max-w-[570px] sm:ml-[13%] sm:mr-auto">
+            <div className="overflow-hidden rounded-[3px] border-[3px] border-[#a0a9a0]/75 bg-[#274431]/90 shadow-[0_2px_10px_rgba(0,0,0,0.55)]">
+              <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center bg-[#234a48] px-2 py-1 text-center text-[12px] text-white sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
+                <strong className="min-w-0 truncate text-left text-[11px] sm:text-[13px]">
+                  {isLive
+                    ? ('LIVE' + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
+                      (live.period ? ' ' + live.period : ''))
+                    : formattedDate.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' +
+                      formattedDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                </strong>
+                <span title="Gola" aria-label="Gola" role="img">⚽</span>
+                <span title="Kartonë gjithsej" aria-label="Kartonë gjithsej" role="img">🟨</span>
+                <span title="Kornera" aria-label="Kornera" role="img">🚩</span>
+              </div>
+              <div className="divide-y divide-white/10 text-xs sm:text-sm">
+                <div className="grid min-h-[27px] grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center px-2 text-center sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
+                  <strong className="min-w-0 truncate text-left text-white" title={live.homeTeam}>{live.homeTeam}</strong>
+                  <strong className="font-mono text-amber-300">{isLive || live.status === 'ENDED' ? (live.homeScore ?? '—') : '—'}</strong>
+                  <span className="font-mono text-white">{live.cards?.home ?? '—'}</span>
+                  <span className="font-mono text-white">{live.corners?.home ?? '—'}</span>
+                </div>
+                <div className="grid min-h-[27px] grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center px-2 text-center sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
+                  <strong className="min-w-0 truncate text-left text-white" title={live.awayTeam}>{live.awayTeam}</strong>
+                  <strong className="font-mono text-amber-300">{isLive || live.status === 'ENDED' ? (live.awayScore ?? '—') : '—'}</strong>
+                  <span className="font-mono text-white">{live.cards?.away ?? '—'}</span>
+                  <span className="font-mono text-white">{live.corners?.away ?? '—'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      {isLive && <PitchTracker matchId={live.id} homeTeam={live.homeTeam} awayTeam={live.awayTeam} />}
+      {/* Keep the expandable real event timeline; corners/cards now live in the photo scoreboard. */}
+      {isLive && <PitchTracker matchId={live.id} homeTeam={live.homeTeam} awayTeam={live.awayTeam} eventsOnly />}
 
       {/* Filter & Search Bar */}
       <div className="space-y-2">
