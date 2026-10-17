@@ -113,7 +113,13 @@ export default function Betslip() {
       setShowBookingModal(true);
       clearAll();
     } catch (e: any) {
-      alert(e.response?.data?.message || e.message || t('common.error'));
+      const detail = e.response?.data;
+      if (detail?.code === 'LIVE_RISK_SUSPENDED' || detail?.code === 'MARKET_DECIDED' ||
+          /pezulluar|përfunduar/i.test(String(detail?.message ?? ''))) {
+        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
+      } else {
+        alert(detail?.message || e.message || t('common.error'));
+      }
     }
   };
 
