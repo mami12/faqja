@@ -11,6 +11,7 @@ on:
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-market-identity.mjs'
       - 'scripts/test-bet-builder.mjs'
+      - 'scripts/test-settlement-results.mjs'
       - 'scripts/test-market-expiry.mjs'
       - 'scripts/test-mobile-betslip-badge.mjs'
       - 'package.json'
@@ -23,6 +24,7 @@ on:
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-mixed-combos.mjs'
       - 'scripts/test-bet-builder.mjs'
+      - 'scripts/test-settlement-results.mjs'
       - '.github/workflows/sportsbook-build.yml'
 
 jobs:
@@ -56,6 +58,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: node scripts/test-bet-builder.mjs
+      - name: Validate result settlement and player betting-history filters
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: node scripts/test-settlement-results.mjs
       - name: Validate decided live-market visibility
         run: node scripts/test-market-expiry.mjs
       - name: Validate mobile match-count badge
@@ -72,6 +78,9 @@ jobs:
           node --check server/ledger/bet-risk.mjs
           node --check server/index.mjs
           node --check server/ledger/bets.mjs
+          node --check server/ledger/results.mjs
+          node --check server/ledger/settler.mjs
+          node --check server/ledger/routes.mjs
           node --check server/ledger/decided-markets.mjs
           node --check server/ledger/view.mjs
       - name: Build Vite frontend
