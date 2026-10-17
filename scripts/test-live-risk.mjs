@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { config } from '../server/config.mjs';
 import {
   liveRiskReason, riskMinute, isFullTimeWinnerMarket, isLeaderWinChoice,
+  isRiskMarketCategory,
 } from '../server/live-risk.mjs';
 import {
   DEFAULT_LIVE_RISK_SETTINGS, liveRiskSettings, setLiveRiskSettings, validateLiveRiskSettings,
@@ -48,6 +49,43 @@ assert.equal(check(match(70,2,0), result('1',1.61)),null);
 assert.equal(check(match(72,2,1), result('1',1.40)),null);
 assert.equal(check(match(85,1,0), result('1',1.10)),'low_live_odds');
 
+// Full-market closure at minute 90: a 1-1 score must lock ALL 1/X/2,
+// even though 1 and 2 may have odds of 11.00+.
+for (const [side,price] of [['1',11],['X',1.05],['2',13]]) {
+  assert.equal(check(match(89,1,1),result(side,price)),side==='X' ? 'low_live_odds' : null);
+  assert.equal(check(match(90,1,1),result(side,price)),'market_closed');
+}
+assert.equal(check(match(90,2,1),result('2',12)),'market_closed',
+  'A late goal must not reopen 1X2 when the rule is ANY score');
+assert.equal(check(match(90,1,1),{marketName:'Total Corners',marketKey:'corners',price:11}),null);
+assert.equal(check(match(90,1,1),{marketName:'Double Chance',marketKey:'dc',price:11}),null);
+assert.equal(check(match(90,1,1,{service:'PREMATCH'}),result('1',11)),null);
+
+// Category matching must not close other, similarly named markets.
+for(const [name,key,category,expected] of [
+  ['Full Time Result','g6321','1X2',true],
+  ['Half Time Result','1x2','1X2',false],
+  ['Double Chance','dc','DOUBLE_CHANCE',true],
+  ['Both Teams To Score','btts','BTTS',true],
+  ['Total Goals','total','TOTAL_GOALS',true],
+  ['Total Corners','total','TOTAL_GOALS',false],
+  ['Total Cards','total','TOTAL_GOALS',false],
+  ['Next Goal','goals','TOTAL_GOALS',false],
+  ['Total Corners','corners','CORNERS',true],
+  ['Booking Points','cards','CARDS',true],
+]) assert.equal(isRiskMarketCategory(name,key,category),expected,`${name} as ${category}`);
+
+const customPolicy = {
+  ...structuredClone(DEFAULT_LIVE_RISK_SETTINGS),
+  marketClosureRules:[{minute:80,market:'1X2',score:'DRAW'}],
+};
+assert.equal(liveRiskReason(match(80,1,1),result('1',11),now,customPolicy),'market_closed');
+assert.equal(liveRiskReason(match(80,2,1),result('1',11),now,customPolicy),null);
+assert.equal(liveRiskReason(match(80,1,1,{score_at:null}),result('1',11),now,customPolicy),null);
+assert.equal(liveRiskReason(match(80,1,1),{marketName:'Total Goals',price:11},now,{
+  ...customPolicy,marketClosureRules:[{minute:80,market:'ALL',score:'ANY'}],
+}),'market_closed');
+
 // Across all markets, including X, corners, cards, and totals.
 for (const name of ['Full Time Result','Total Corners','Total Cards','Total Goals','Both Teams to Score']) {
   assert.equal(check(match(60,0,0),{marketName:name,outcomeKey:'X',price:1.05}),'low_live_odds');
@@ -80,8 +118,19 @@ try {
 
 // Admin validation: no malformed settings may reach the database.
 assert.equal(validateLiveRiskSettings(DEFAULT_LIVE_RISK_SETTINGS).limits.maxLiveStake,10000);
+assert.deepEqual(validateLiveRiskSettings({
+  ...DEFAULT_LIVE_RISK_SETTINGS,marketClosureRules:undefined,
+}).marketClosureRules,[{minute:90,market:'1X2',score:'ANY'}],
+'Old persisted settings must receive the new closure rule');
+assert.equal(validateLiveRiskSettings({
+  ...DEFAULT_LIVE_RISK_SETTINGS,marketClosureRules:[],
+}).marketClosureRules.length,0,'Admin may turn off every full-market rule');
 for(const invalid of [
   {...saved,leaderRules:[{minute:-1,goals:2,maxOdds:1.6}]},
+  {...saved,marketClosureRules:[{minute:130,market:'1X2',score:'ANY'}]},
+  {...saved,marketClosureRules:[{minute:90,market:'SOMETHING',score:'ANY'}]},
+  {...saved,marketClosureRules:[{minute:90,market:'1X2',score:'UNKNOWN'}]},
+  {...saved,marketClosureRules:[{minute:90,market:'1X2',score:'ANY'},{minute:90,market:'1X2',score:'ANY'}]},
   {...saved,lowOddsRules:[{minute:70,maxOdds:1.1},{minute:70,maxOdds:1.2}]},
   {...saved,limits:{...saved.limits,maxLiveStake:Infinity}},
   {...saved,limits:{...saved.limits,maxMatchExposure:0}},
