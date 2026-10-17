@@ -6,7 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useLiveFeed } from '../../api/liveFeed';
 import {
   isMarketVisible,
-  isOutcomeAvailable,
+  isOutcomeDisplayable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
 import { betBuilderGroup, marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
@@ -178,7 +178,7 @@ export default function MarketPanel({ match }: { match: Match }) {
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(match, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) continue;
       const available = filterDecidedOutcomes(
-        (market.outcomes ?? []).filter(isOutcomeAvailable), market, match,
+        (market.outcomes ?? []).filter(isOutcomeDisplayable), market, match,
       );
       if (!available.length) continue;
 
