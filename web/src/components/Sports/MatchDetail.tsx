@@ -13,7 +13,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch, useLiveFeed } from '../../api/liveFeed';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 
@@ -411,8 +411,27 @@ export default function MatchDetail() {
                     {group.markets.map(market => {
                       const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
                       if (!cleanOutcomes.length) return null;
+                      const builder = betBuilderGroup(market);
                       const line = marketLineValue(market);
-                      const showLine = group.markets.length > 1 || !!line;
+                      const showLine = !builder && (group.markets.length > 1 || !!line);
+                      if (builder) {
+                        // A real builder template, not an invented market. Keep
+                        // its original admin name and exact bettable outcome.
+                        return (
+                          <div key={market.id} className="flex min-h-[42px] items-stretch gap-px bg-tertiary/80">
+                            <div className="flex min-w-0 flex-1 items-center bg-[#414b5b] px-2 py-1.5">
+                              <span className="break-words text-[11px] font-semibold text-slate-100">
+                                {market.name.replace(/^Bet Builder:\s*/i, '')}
+                              </span>
+                            </div>
+                            <div className="flex min-w-0 flex-[1.4] flex-col bg-[#252e3b] [&_button]:min-h-[42px] [&_button]:w-full [&_button]:flex-1 [&_button]:rounded-none">
+                              {cleanOutcomes.map((outcome: any) => (
+                                <OddsButton key={outcome.id} match={live} market={market} outcome={outcome} isWide showRawLabel />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
                           {showLine && (

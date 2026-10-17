@@ -129,6 +129,44 @@ assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
 assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Over 9.5');
 assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'Draw');
 assert.equal(ui.marketCategoryLabel('corners', 'en'), 'Corners');
+
+// Synthetic Bet Builder offers are visually grouped by the market contracts,
+// not by admin naming, selection codes or prices. All distinct bets survive.
+const builder = (id, templateName, legsLabel, odds) => ({
+  id: 'BB|123|' + id + '|market',
+  name: 'Bet Builder: ' + templateName,
+  marketType: 'OTHER',
+  line: '',
+  outcomes: [{ id: 'BB|123|' + id, name: legsLabel, odds }],
+});
+const doubleChanceTotals = [
+  builder('1', 'X/2&P_2.5', 'DC X2 + TOTAL Under 2.5', 3.1),
+  builder('2', '1/2&L_2.5', 'DC 12 + TOTAL Over 2.5', 3.9),
+  builder('3', '1/X&P_3.5', 'TOTAL Under 3.5 + DC 1X', 4.2),
+];
+assert.equal(new Set(doubleChanceTotals.map(ui.marketGroupKey)).size, 1,
+  'all Double Chance + Total Goals options share one visual group');
+assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en'),
+  'Bet Builder: Double Chance + Total Goals');
+assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en', true),
+  'Bet Builder: X/2&P_2.5', 'individual template names remain unchanged');
+const bttsTotal = builder('4', 'G/G&+2.5', 'BTTS Yes + TOTAL Over 2.5', 2.4);
+const resultBtts = builder('5', '1&G/G', '1X2 1 + BTTS Yes', 4.4);
+const chanceBtts = builder('6', '1/X&G/G', 'DC 1X + BTTS Yes', 2.5);
+assert.equal(ui.marketDisplayTitle(bttsTotal, 'en'), 'Bet Builder: Both Teams to Score + Total Goals');
+assert.equal(ui.marketDisplayTitle(resultBtts, 'en'), 'Bet Builder: 1X2 + Both Teams to Score');
+assert.equal(new Set([doubleChanceTotals[0], bttsTotal, resultBtts, chanceBtts].map(ui.marketGroupKey)).size, 4,
+  'different types of combinations must never merge');
+assert.equal(doubleChanceTotals.map(x => x.outcomes[0].odds).join(','), '3.1,3.9,4.2',
+  'grouping must not modify odds');
+assert.equal(doubleChanceTotals.map(x => x.outcomes[0].id).join(','),
+  'BB|123|1,BB|123|2,BB|123|3', 'each individual bet stays selectable');
+const unknownBuilder = builder('7', 'Custom Rule', 'Unidentified outcome', 5);
+assert.equal(ui.betBuilderGroup(unknownBuilder), null,
+  'unknown templates must stay separate rather than be incorrectly grouped');
+assert.notEqual(ui.marketGroupKey(unknownBuilder), ui.marketGroupKey(doubleChanceTotals[0]));
+assert.notEqual(ui.marketGroupKey(mk('Result and total')), ui.marketGroupKey(doubleChanceTotals[0]),
+  'original upstream combined markets must not be merged with synthetic builders');
 assert.equal(ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g320')),
   ui.marketGroupKey(mk('Total Corners', '10.5', 0, 'CORNERS', 'g320')));
 assert.notEqual(ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g320')),
