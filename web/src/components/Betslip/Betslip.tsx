@@ -216,7 +216,7 @@ export default function Betslip() {
           </select>
           {selections.length > 0 && (
             <button type="button" onClick={clearAll} className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-rose-300">
-              <Trash2 size={12}/> {t('common.clear_all')}
+              <Trash2 size={12}/> Fshij Të Gjitha
             </button>
           )}
         </div>

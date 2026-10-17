@@ -137,9 +137,9 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   }
 
   const renderFilterBar = () => (
-    <div className="hidden md:block sticky top-0 z-10 border-y border-tertiary bg-secondary/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111823] p-1.5">
+    <div className="hidden md:block sticky top-0 z-10 border-y border-tertiary bg-secondary/95 backdrop-blur-sm xl:border-[#111922] xl:bg-[#252f3c]">
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5 xl:max-w-none xl:px-1 xl:py-1">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111823] p-1.5 xl:rounded-sm xl:border-[#405067] xl:bg-[#263141] xl:p-0.5">
           {[
             { id: 'all', label: t('sports.all'), count: pricedMatches.length },
             { id: 'live', label: t('sports.live'), count: liveMatches.length },
@@ -149,7 +149,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <button
               key={tab.id}
               onClick={() => onViewModeChange(tab.id as any)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 active:scale-95 ${
+              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 active:scale-95 xl:rounded-sm xl:px-2 xl:py-1 ${
                 viewMode === tab.id
                   ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary font-black shadow-md shadow-accent-green/20'
                   : 'border border-white/5 bg-[#26313e] text-text-secondary hover:border-white/10 hover:text-white'
@@ -264,7 +264,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     return (
       <>
         {mobileRow}
-        <div key={m.id} className="hidden border-b border-[#10151e] bg-[#262e3b] transition-colors hover:bg-[#343f50] md:block">
+        <div key={m.id} className="hidden border-b border-[#10151e] bg-[#262e3b] transition-colors hover:bg-[#343f50] md:block xl:bg-[#252d3a] xl:hover:bg-[#303d4f]">
         <div className="flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="w-9 sm:w-11 shrink-0 text-center text-[9px] font-semibold text-text-secondary tabular-nums">
@@ -325,6 +325,21 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     });
     return (
       <>
+        {/* Desktop table heading follows the compact dark/green reference layout. */}
+        <div className="hidden xl:flex h-[35px] items-stretch border-b border-[#14251b] bg-[#2b6137] text-[11px] font-semibold text-[#e7f3e9]">
+          <div className="flex min-w-0 flex-1 items-center border-r border-[#193f25] px-2">
+            {sectionTitle}
+          </div>
+          <div className="flex w-[147px] shrink-0 flex-col items-stretch justify-center border-r border-[#193f25]">
+            <span className="text-center leading-4">1x2</span>
+            <div className="grid grid-cols-3 text-center leading-4"><span>1</span><span>X</span><span>2</span></div>
+          </div>
+          <div className="flex w-[128px] shrink-0 flex-col items-stretch justify-center border-r border-[#193f25]">
+            <span className="text-center leading-4">TG_L/P</span>
+            <div className="grid grid-cols-2 text-center leading-4"><span>Lart</span><span>Poshtë</span></div>
+          </div>
+          <div className="flex w-9 shrink-0 items-center justify-center" title="Tregjet e tjera">+</div>
+        </div>
         <div className="grid h-[35px] grid-cols-[minmax(0,1fr)_repeat(3,53px)_38px] min-[400px]:grid-cols-[minmax(0,1fr)_repeat(3,58px)_42px] items-stretch border-b border-[#101a23] bg-[#285d31] text-[12px] text-[#e4f1e8] md:hidden">
           <div className="flex min-w-0 items-center justify-between gap-1 border-r border-[#16281b] px-1.5">
             <span className="truncate font-semibold">{sectionTitle}</span>
@@ -350,12 +365,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
         )}
         {Array.from(groups.entries()).map(([league, fixtures]) => (
-      <section key={league} className="overflow-hidden rounded-none border border-[#10151e] bg-secondary md:rounded-sm">
-        <div className="flex items-center justify-between border-b border-[#10151e] bg-[#445062] px-2 py-1">
+      <section key={league} className="overflow-hidden rounded-none border border-[#10151e] bg-secondary md:rounded-sm xl:rounded-none xl:bg-[#252d3a]">
+        <div className="flex items-center justify-between border-b border-[#10151e] bg-[#414a59] px-2 py-1">
           <h3 className="min-w-0 truncate text-xs font-medium text-[#e4ebf5]">{league.replace(' · ',' / ')}</h3>
           <span className="shrink-0 text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
         </div>
-        <div className="hidden lg:flex items-center gap-px px-2 py-1 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+        <div className="hidden lg:flex xl:hidden items-center gap-px px-2 py-1 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
           <span className="flex-1 min-w-0">Ndeshja</span>
           <span className="w-[147px] text-center">1X2</span>
           <span className="w-[128px] text-center">Over / Under</span>
@@ -374,12 +389,12 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   };
 
   return (
-    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-1 p-0 sm:p-2 md:space-y-3 md:p-4">
-      <div className="hidden md:block overflow-hidden rounded-sm border border-tertiary bg-secondary p-3 sm:p-4">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-1 p-0 sm:p-2 md:space-y-3 md:p-4 xl:max-w-none xl:space-y-1 xl:p-[5px]">
+      <div className="hidden md:block overflow-hidden rounded-sm border border-tertiary bg-secondary p-3 sm:p-4 xl:border-[#111922] xl:bg-[#263141] xl:p-2">
+        <div className="mb-4 flex items-center justify-between gap-3 xl:mb-1">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
-            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl">{t('common.live_betting_board')}</h2>
+            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl xl:mt-0 xl:text-sm">{t('common.live_betting_board')}</h2>
           </div>
         </div>
 
