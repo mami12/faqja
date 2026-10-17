@@ -78,6 +78,7 @@ jobs:
           node --check server/ledger/bet-risk.mjs
           node --check server/index.mjs
           node --check server/ledger/bets.mjs
+          node --check server/ledger/bet-history.mjs
           node --check server/ledger/results.mjs
           node --check server/ledger/settler.mjs
           node --check server/ledger/routes.mjs
