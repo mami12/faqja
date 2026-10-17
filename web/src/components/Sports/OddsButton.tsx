@@ -25,7 +25,12 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
   const providerSuspended = outcome.feedSuspended ??
     (outcome.status === 'SUSPENDED' && outcome.riskSuspended !== true);
   const autoSuspended = riskLockedOutcomes[outcome.id] ?? outcome.riskSuspended === true;
+  const builderLegLocked = (market.builderLegs ?? []).some(part =>
+    lockedMarkets[part.marketId] === true ||
+    lockedOutcomes[part.outcomeId] === true ||
+    riskLockedOutcomes[part.outcomeId] === true);
   const isSuspended =
+    builderLegLocked ||
     unidentifiedMixedOutcome ||
     providerSuspended ||
     autoSuspended ||
