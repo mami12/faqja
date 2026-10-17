@@ -41,7 +41,7 @@ export function isDecidedLiveMarket(match, market) {
   const name = norm(market?.name ?? market?.market_name);
   if (firstHalfContract(market) && firstHalfElapsed(match)) return true;
   // No guessing about half-specific or combined propositions.
-  if (/\b(?:first|1st|second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime|\b(?:player|corner|card|booking|next|last|first goal|race|handicap|asian|team total)\b|[&+]/.test(name) ||
+  if (/\b(?:first|1st|second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime|\b(?:players?|corners?|cards?|bookings?|next|last|first goal|race|handicap|asian|team total)\b|[&+]/.test(name) ||
       Number(market?.period ?? 0) !== 0) return false;
 
   if (/^(?:both teams to score|both teams score|both score|btts)(?:\s*[-(].*)?$/.test(name)) {
