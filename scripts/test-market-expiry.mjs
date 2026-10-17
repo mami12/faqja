@@ -56,6 +56,33 @@ const bundled = {name:'Total Goals',marketType:'OVER_UNDER',outcomes:[
 assert.deepEqual(filterDecidedOutcomes(bundled.outcomes,bundled,match(2,0)).map(o=>o.name),
   ['Over 2.5','Under 2.5']);
 
+// Synthetic Bet Builders also expire when ANY constituent has been decided.
+// They keep the provider's original price, but the completed contract is hidden.
+const builder = (name, label, links = []) => ({
+  id: 'BB|123|template|market', name: 'Bet Builder: ' + name,
+  status: 'ACTIVE', marketType: 'OTHER', builderLegs: links,
+  outcomes: [{ id: 'BB|123|template', name: label, odds: 4.5, status: 'ACTIVE' }],
+});
+const dcGoals = builder('X/2&P_2.5', 'DC X2 + TOTAL Under 2.5');
+open(match(2,0), dcGoals);
+closed(match(2,1), dcGoals);
+closed(match(3,0), builder('1/2&L_2.5', 'DC 12 + TOTAL Over 2.5'));
+open(match(1,0), builder('1&G/G', '1X2 1 + BTTS Yes'));
+closed(match(1,1), builder('1&G/G', '1X2 1 + BTTS Yes'));
+open(match(1,1), builder('1X2 only', '1X2 1 + DC 1X'));
+open({status:'PREMATCH',homeScore:3,awayScore:1},dcGoals);
+const bound = builder('X2+2.5', 'DC X2 + TOTAL Over 2.5',
+  [{marketId:'123|gTotal|2.5',outcomeId:'123|gTotal|2.5|Over'}]);
+open(match(0,0), bound);
+assert.equal(isMarketVisible(match(0,0), bound, {}, {}, {'123|gTotal|2.5|Over': true}),false,
+  'risk lock on an underlying price hides the builder immediately');
+assert.equal(isMarketVisible(match(0,0), bound, {'123|gTotal|2.5':true}),false,
+  'market-wide provider suspension hides the builder immediately');
+assert.equal(isMarketVisible(match(0,0), bound, {}, {'123|gTotal|2.5|Over':true}),false,
+  'provider price suspension hides the builder immediately');
+assert.equal(isMarketVisible(match(0,0), bound, {}, {}, {'123|gTotal|2.5|Over':false}),true,
+  'a reversible risk suspension must not permanently erase the builder');
+
 // Corners/cards use their own stats, NOT goals.
 closed(match(0,0,{corners:{home:4,away:1}}), twoWay('Total Corners','3.5',{marketType:'CORNERS'}));
 open(match(0,0,{corners:{home:4,away:1}}), twoWay('Total Corners','5.5',{marketType:'CORNERS'}));
