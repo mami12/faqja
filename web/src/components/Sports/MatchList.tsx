@@ -5,7 +5,7 @@ import { Match } from '../../types';
 import OddsButton from './OddsButton';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
-import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing, Filter } from 'lucide-react';
+import { ChevronRight, Star, Bell, BellRing, Filter } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
 import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
@@ -26,7 +26,7 @@ interface Props {
 
 type DateFilter = 'all' | 'today' | 'tomorrow';
 
-export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnly, viewMode, onViewModeChange, searchTerm, onSearchChange }: Props) {
+export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnly, viewMode, searchTerm, onSearchChange }: Props) {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -135,38 +135,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       </div>
     );
   }
-
-  const renderFilterBar = () => (
-    <div className="hidden md:block sticky top-0 z-10 border-y border-tertiary bg-secondary/95 backdrop-blur-sm xl:border-[#111922] xl:bg-[#252f3c]">
-      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-5 xl:max-w-none xl:px-1 xl:py-1">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#111823] p-1.5 xl:rounded-sm xl:border-[#405067] xl:bg-[#263141] xl:p-0.5">
-          {[
-            { id: 'all', label: t('sports.all'), count: pricedMatches.length },
-            { id: 'live', label: t('sports.live'), count: liveMatches.length },
-            { id: 'prematch', label: t('sports.prematch'), count: prematchMatches.length },
-            { id: 'favorites', label: '⭐ Të Preferuarat', count: favoriteMatches.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => onViewModeChange(tab.id as any)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all inline-flex items-center gap-1.5 active:scale-95 xl:rounded-sm xl:px-2 xl:py-1 ${
-                viewMode === tab.id
-                  ? 'bg-gradient-to-r from-emerald-600 to-accent-green text-primary font-black shadow-md shadow-accent-green/20'
-                  : 'border border-white/5 bg-[#26313e] text-text-secondary hover:border-white/10 hover:text-white'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                viewMode === tab.id ? 'bg-primary/30 text-primary' : 'bg-white/5 text-text-secondary'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 
   // Render a single compact odds board per competition. All odds still use the
   // existing OddsButton and its live-feed, suspension and betslip behavior.
@@ -390,56 +358,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   return (
     <div className="w-full min-w-0 max-w-7xl mx-auto space-y-1 p-0 sm:p-2 md:space-y-3 md:p-4 xl:max-w-none xl:space-y-1 xl:p-[5px]">
-      <div className="hidden md:block overflow-hidden rounded-sm border border-tertiary bg-secondary p-3 sm:p-4 xl:border-[#111922] xl:bg-[#263141] xl:p-2">
-        <div className="mb-4 flex items-center justify-between gap-3 xl:mb-1">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">{t('nav.sports')}</p>
-            <h2 className="mt-1 text-lg font-black tracking-tight text-white sm:text-xl xl:mt-0 xl:text-sm">{t('common.live_betting_board')}</h2>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="mr-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
-              <CalendarDays size={15} />
-              <span className="hidden sm:inline">{t('common.filter')}:</span>
-            </div>
-            <div className="flex items-center gap-1 rounded-md border border-white/10 bg-[#111823] p-1">
-              <button
-                onClick={() => setDateFilter('all')}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
-                  dateFilter === 'all'
-                    ? 'bg-emerald-400 text-[#102019] shadow-md shadow-emerald-500/15'
-                    : 'text-text-secondary hover:text-white'
-                }`}
-              >
-                {t('dates.all')}
-              </button>
-              <button
-                onClick={() => setDateFilter('today')}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
-                  dateFilter === 'today'
-                    ? 'bg-emerald-400 text-[#102019] shadow-md shadow-emerald-500/15'
-                    : 'text-text-secondary hover:text-white'
-                }`}
-              >
-                {t('dates.today')}
-              </button>
-              <button
-                onClick={() => setDateFilter('tomorrow')}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
-                  dateFilter === 'tomorrow'
-                    ? 'bg-emerald-400 text-[#102019] shadow-md shadow-emerald-500/15'
-                    : 'text-text-secondary hover:text-white'
-                }`}
-              >
-                {t('dates.tomorrow')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {searchTerm && (
         <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}
@@ -469,8 +387,6 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           {refreshing && <p className="text-xs text-text-secondary">{t('common.feed_refreshing_hint')}</p>}
         </div>
       )}
-
-      {renderFilterBar()}
 
       {((viewMode === 'all' || viewMode === 'live') && liveMatches.length > 0 && !tournamentId) && (
         <div className="space-y-3">
