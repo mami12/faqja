@@ -32,6 +32,7 @@ export default function Betslip() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]);
   const [stakeError, setStakeError] = useState('');
+  const [unavailableNotice, setUnavailableNotice] = useState('');
   // Keep the total field editable while typing; stake remains the per-column amount.
   const [totalStakeDraft, setTotalStakeDraft] = useState<string | null>(null);
   const placeBetClickLock = useRef(false);
@@ -65,6 +66,7 @@ export default function Betslip() {
       return;
     }
     setStakeError('');
+    setUnavailableNotice('');
     placeBetClickLock.current = true;
     try {
       const ticket = await placeBet(() => refreshUser());
@@ -84,6 +86,11 @@ export default function Betslip() {
           marketLine: foundSel?.marketLine,
           matchName: errData?.matchName || foundSel?.matchName || '',
         });
+      } else if (errData?.code === 'LIVE_RISK_SUSPENDED' ||
+                 errData?.code === 'MARKET_DECIDED' ||
+                 /pezulluar|përfunduar|nuk është më e disponueshme/i.test(String(errData?.message ?? ''))) {
+        // No blocking risk modal. The server still refuses invalid bets.
+        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
       } else {
         alert(errData?.message || e.message || t('common.error'));
       }
@@ -215,7 +222,7 @@ export default function Betslip() {
             ))}
           </select>
           {selections.length > 0 && (
-            <button type="button" onClick={clearAll} className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-rose-300">
+            <button type="button" onClick={() => { setUnavailableNotice(''); clearAll(); }} className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-rose-300">
               <Trash2 size={12}/> Fshij Të Gjitha
             </button>
           )}
@@ -272,7 +279,7 @@ export default function Betslip() {
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{s.odds.toFixed(2)}</strong>
-                    <button type="button" onClick={() => removeSelection(s.outcomeId)}
+                    <button type="button" onClick={() => { setUnavailableNotice(''); removeSelection(s.outcomeId); }}
                       title={t('betslip.remove_selection')} aria-label={t('betslip.remove_selection')}
                       className="p-0.5 text-text-secondary hover:text-rose-300"><X size={15}/></button>
                   </div>
@@ -354,6 +361,9 @@ export default function Betslip() {
                 </div>
               </div>
               {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
+              {unavailableNotice && (
+                <p role="status" className="text-[11px] text-slate-300">{unavailableNotice}</p>
+              )}
               <div className="grid grid-cols-4 gap-1">
                 {[100, 500, 1000, 5000].map(amount => (
                   <button type="button" key={amount} onClick={() => setStake(String(amount))}
