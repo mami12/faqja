@@ -10,7 +10,7 @@ const file = readFileSync(new URL('../web/src/utils/marketExpiry.ts', import.met
 const compiled = ts.transpileModule(file, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { isMarketExpired, filterDecidedOutcomes, isMarketVisible } =
+const { isMarketExpired, filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable, isOutcomeDisplayable } =
   await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 
 const outcome = (name, code = name, odds = 1.8) =>
@@ -82,6 +82,34 @@ assert.equal(isMarketVisible(match(0,0), bound, {}, {'123|gTotal|2.5|Over':true}
   'provider price suspension hides the builder immediately');
 assert.equal(isMarketVisible(match(0,0), bound, {}, {}, {'123|gTotal|2.5|Over':false}),true,
   'a reversible risk suspension must not permanently erase the builder');
+
+// Risk Management and provider locks display exactly like other suspended
+// prices: a disabled grey-lock button, not a missing market or fake "—" cell.
+const riskLockedPrice = { ...outcome('1'), status: 'SUSPENDED', riskSuspended: true };
+const providerLockedPrice = { ...outcome('X'), status: 'SUSPENDED', feedSuspended: true };
+const riskMarket = {
+  name: '1X2', marketType: '1X2', status: 'ACTIVE',
+  outcomes: [outcome('2'), riskLockedPrice, providerLockedPrice],
+};
+assert.equal(isOutcomeAvailable(riskLockedPrice), false);
+assert.equal(isOutcomeAvailable(providerLockedPrice), false);
+assert.equal(isOutcomeDisplayable(riskLockedPrice), true);
+assert.equal(isOutcomeDisplayable(providerLockedPrice), true);
+assert.equal(isMarketVisible(match(1,0), riskMarket), true);
+const onlyRiskLocked = { name: '1X2', status: 'ACTIVE', outcomes: [riskLockedPrice] };
+assert.equal(isMarketVisible(match(1,0), onlyRiskLocked), true,
+  'an entirely risk-locked market displays a grey lock rather than vanishing');
+assert.equal(isMarketVisible(match(1,0), {
+  name:'1X2',status:'ACTIVE',outcomes:[outcome('1')],
+}, {}, {}, {'1':true}), true,
+'Socket risk lock must not hide the market containing its selection');
+assert.equal(isMarketVisible(match(2,1),{
+  name:'Total',line:'2.5',marketType:'OVER_UNDER',outcomes:[providerLockedPrice],
+}),false,'a decided total still disappears even if provider locked it');
+assert.equal(isOutcomeDisplayable({...outcome('2'),status:'SETTLED'}),false);
+assert.equal(isOutcomeDisplayable({...outcome('2'),status:'VOID'}),false);
+assert.equal(isOutcomeDisplayable({...outcome('2'),odds:0}),false);
+assert.equal(isOutcomeDisplayable({...outcome('2'),odds:0,riskSuspended:true}),true);
 
 // Corners/cards use their own stats, NOT goals.
 closed(match(0,0,{corners:{home:4,away:1}}), twoWay('Total Corners','3.5',{marketType:'CORNERS'}));
