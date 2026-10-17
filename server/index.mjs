@@ -87,6 +87,9 @@ async function probeDb() {
 
 /** the ledger tables (users/tickets/results) are created on boot and retried until the database answers */
 let ledgerReady = false;
+let settleTimer = null;
+let settlementBusy = false;
+let lastUnresolvedCheck = 0;
 async function ensureLedgerSchema() {
   if (ledgerReady) return true;
   try {
@@ -99,6 +102,7 @@ async function ensureLedgerSchema() {
     await overrides.refresh(true);
     ledgerReady = true;
     console.log('[db] ledger schema ready');
+    armSettlement(); // Also starts after a late DB recovery, not just at boot.
   } catch (e) {
     console.error('[db] ledger schema not ready yet:', dbErrorHint(e.message));
     if (config.dbInitStrict) {
@@ -152,7 +156,8 @@ function broadcastFeedState() {
  * and to run once on wake, where it catches up on everything that ended while we were asleep.
  */
 async function runSettlement(why = 'periodic') {
-  if (!ledgerReady) return null;
+  if (!ledgerReady || settlementBusy) return null;
+  settlementBusy = true;
   try {
     const out = await settleAll();
     if (out.closed || why !== 'periodic') {
@@ -160,15 +165,30 @@ async function runSettlement(why = 'periodic') {
         `[settle] (${why}) captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`,
       );
     }
-    if (out.captured || out.matches) await voidUnresolved(72);
+    // A timed-out ticket without a final score must eventually be reviewed/
+    // refunded under the existing 72h safety rule even on quiet match days.
+    if (why !== 'periodic' || Date.now() - lastUnresolvedCheck >= 15 * 60 * 1000) {
+      lastUnresolvedCheck = Date.now();
+      const unresolved = await voidUnresolved(72);
+      if (unresolved.voided) console.log('[settle] stale lines voided:', unresolved.voided);
+    }
     return out;
   } catch (e) {
     console.error('[settle] pass failed:', e.message);
     return null;
+  } finally {
+    settlementBusy = false;
   }
 }
 
-let settleTimer = null;
+/** Start once after ledger creation OR database recovery. */
+function armSettlement() {
+  if (!ledgerReady || settleTimer) return;
+  void runSettlement('ledger ready');
+  const delay = Math.max(10000, Number(process.env.SETTLE_INTERVAL_MS) || 30000);
+  settleTimer = setInterval(() => void runSettlement('periodic'), delay);
+  settleTimer.unref?.();
+}
 
 const idle = createIdleMonitor({
   enabled: config.idleFeed,
@@ -692,16 +712,10 @@ async function boot() {
   }, 10000);
   riskRefreshTimer.unref?.();
 
-  // settlement: every pass stores newly finished results, then closes any ticket whose
-  // lines are all decided. Idempotent, so a missed pass is harmless - see runSettlement(),
-  // which also skips itself while the feed is stopped and catches up after a wake.
-  if (ledgerReady) {
-    runSettlement('boot');
-    settleTimer = setInterval(() => runSettlement('periodic'), Number(process.env.SETTLE_INTERVAL_MS ?? 30000));
-    settleTimer.unref?.();
-  } else {
-    console.warn('[settle] ledger not ready: no settlement until the database answers');
-  }
+  // The ledger-ready transition starts settlement, including when Postgres
+  // first becomes available after boot. Do not schedule duplicate timers.
+  armSettlement();
+  if (!ledgerReady) console.warn('[settle] waiting for ledger; will start automatically after DB recovery');
 
   collector = startCollector({ io });
 

@@ -202,7 +202,7 @@ export async function recalcTicket(ticketId) {
 
     await client.query(
       `update app_ticket set status = $2, potential_payout = $3, settled_at = now() where id = $1`,
-      [ticketId, status, payout || Number(ticket.potential_payout)],
+      [ticketId, status, payout],
     );
 
     if (payout > 0 && ticket.user_id) {
@@ -319,6 +319,15 @@ export async function settleAll() {
 }
 
 /**
+ * A stored match can remain retrievable long after the feed removed it.
+ * Retrieval by ID does not mean a finished/inactive match is still in play.
+ * Never void a genuinely active game merely because its clock is delayed.
+ */
+export const isStillOnBoard = (match) =>
+  !!match && match.active !== false &&
+  !['ended', 'finished', 'cancelled'].includes(String(match.status ?? '').toLowerCase());
+
+/**
  * Safety valve: a ticket older than `hours` whose match has no stored result and is no
  * longer on the board can never be judged, so its lines are voided and the stake returned.
  */
@@ -339,7 +348,7 @@ export async function voidUnresolved(hours = 72) {
   let voided = 0;
   for (const row of rows) {
     if (await getResult(row.match_id)) continue; // settleMatch will handle it
-    if (await getMatchById(row.match_id)) continue; // still on the board: give it time
+    if (isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
     await query(`update app_ticket_line set status = 'VOID' where id = $1 and status = 'PENDING'`, [row.id]);
     touched.add(row.ticket_id);
     voided++;

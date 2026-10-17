@@ -533,7 +533,7 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
 }
 
 /** attaches lines to ticket rows with one extra query (no N+1) */
-async function withLines(rows) {
+export async function withLines(rows) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const res = await query('select * from app_ticket_line where ticket_id = any($1::uuid[]) order by id', [ids]);
