@@ -78,6 +78,8 @@ export interface Market {
   line?: string;
   isBase?: boolean;
   period?: number;
+  /** Real price identities for the constituent legs of a synthetic Bet Builder. */
+  builderLegs?: { marketId: string; outcomeId: string }[];
 }
 
 export interface Outcome {
