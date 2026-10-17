@@ -11,7 +11,7 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch, useLiveFeed } from '../../api/liveFeed';
-import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
+import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
 import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
@@ -150,7 +150,7 @@ export default function MatchDetail() {
     return markets.flatMap(market => {
       if (!isMarketVisible(liveMarketMatch, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) return [];
       const outcomes = filterDecidedOutcomes(
-        (market.outcomes ?? []).filter(isOutcomeAvailable), market, liveMarketMatch,
+        (market.outcomes ?? []).filter(isOutcomeDisplayable), market, liveMarketMatch,
       );
       return outcomes.length ? [{ ...market, outcomes }] : [];
     });
