@@ -8,24 +8,24 @@
 import { query } from '../db.mjs';
 import { getMatches, getMatchById } from '../matches.mjs';
 
-/** true when the feed says the match is over (its own status, or the derived clock) */
-const isFinished = (row) => {
-  if (!row) return false;
+/**
+ * Do not settle bets from a made-up 0-0 or a kickoff timer. A final score
+ * requires a genuine LIVE match score observed from the provider (score_at)
+ * and either a definitive final feed phase or a match marked ended.
+ * The absence of evidence deliberately leaves the ticket pending for review.
+ */
+export const isFinished = (row) => {
+  if (!row || String(row.service ?? '').toUpperCase() !== 'LIVE') return false;
+  if (!row.score_at || row.home_score == null || row.away_score == null) return false;
+  const score = [Number(row.home_score), Number(row.away_score)];
+  if (!score.every(n => Number.isInteger(n) && n >= 0)) return false;
   const status = String(row.status ?? '').toLowerCase();
-  if (status === 'ended' || status === 'finished') return true;
   const feed = String(row.feed_status ?? '').toLowerCase();
-  if (/finish|ended|\bft\b|after (match|penalt)/.test(feed)) return true;
-  // If match started 110+ minutes ago and has both scores recorded, it is concluded
-  if (row.start_at) {
-    const startMs = new Date(row.start_at).getTime();
-    if (Date.now() - startMs > 110 * 60 * 1000 && row.home_score !== null && row.away_score !== null) {
-      return true;
-    }
-  }
-  return false;
+  return status === 'ended' || status === 'finished' ||
+    /finish|ended|\bft\b|after (match|penalt)/.test(feed);
 };
 
-const statNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+const statNum = (v) => (v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
 
 /** Safely take first-period scores only from a complete two-half breakdown.
  * With a single unlabeled period we cannot know whether it is a first-half score.
@@ -43,12 +43,50 @@ export function verifiedFirstHalf(periodsScore) {
   return { home: Number(home), away: Number(away) };
 }
 
+/**
+ * Eleven columns AND eleven parameters. The old nine-placeholder statement
+ * accidentally received eleven parameters once half-time scores were added;
+ * PostgreSQL refused every automatic result capture, leaving tickets PENDING.
+ *
+ * Preserve previously confirmed half scores when the next frame omits them.
+ */
+export const FINISHED_RESULT_INSERT = `
+  insert into app_match_result
+    (match_id, home_team, away_team, home_score, away_score,
+     corners_home, corners_away, cards_home, cards_away,
+     half_home_score, half_away_score)
+  values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+  on conflict (match_id) do update set
+    home_score = excluded.home_score,
+    away_score = excluded.away_score,
+    corners_home = coalesce(excluded.corners_home, app_match_result.corners_home),
+    corners_away = coalesce(excluded.corners_away, app_match_result.corners_away),
+    cards_home = coalesce(excluded.cards_home, app_match_result.cards_home),
+    cards_away = coalesce(excluded.cards_away, app_match_result.cards_away),
+    half_home_score = coalesce(excluded.half_home_score, app_match_result.half_home_score),
+    half_away_score = coalesce(excluded.half_away_score, app_match_result.half_away_score)
+  returning (xmax = 0) as inserted
+`;
+
+export function finishedResultParameters(row) {
+  const home = row.stats ? statNum(row.stats.home?.corners) : null;
+  const away = row.stats ? statNum(row.stats.away?.corners) : null;
+  const cards = side => {
+    const team = row.stats?.[side];
+    return team ? (statNum(team.yellow) ?? 0) + (statNum(team.red) ?? 0) : null;
+  };
+  const half = verifiedFirstHalf(row.periods_score);
+  return [row.match_id, row.home, row.away, Number(row.home_score), Number(row.away_score),
+    home, away, cards('home'), cards('away'), half?.home ?? null, half?.away ?? null];
+}
+
 /** copies every finished match with a known score into app_match_result (idempotent) */
 export async function captureFinishedMatches() {
   const rows = await getMatches({ includeEnded: true, limit: 2000 });
 
   // Specifically check matches from any currently pending ticket lines
-  const pendingLines = await query(`select distinct match_id from app_ticket_line where status = 'PENDING' limit 500`);
+  const pendingLines = await query(`select distinct match_id from app_ticket_line
+    where status = 'PENDING' order by match_id limit 2000`);
   const pendingMatchIds = new Set(pendingLines.rows.map((r) => Number(r.match_id)));
 
   const candidateMatches = [...rows];
@@ -66,30 +104,7 @@ export async function captureFinishedMatches() {
 
   let stored = 0;
   for (const row of finished) {
-    const home = row.stats ? statNum(row.stats.home?.corners) : null;
-    const away = row.stats ? statNum(row.stats.away?.corners) : null;
-    const homeCards = row.stats
-      ? (statNum(row.stats.home?.yellow) ?? 0) + (statNum(row.stats.home?.red) ?? 0)
-      : null;
-    const awayCards = row.stats
-      ? (statNum(row.stats.away?.yellow) ?? 0) + (statNum(row.stats.away?.red) ?? 0)
-      : null;
-
-    const half = verifiedFirstHalf(row.periods_score);
-    const res = await query(
-      `insert into app_match_result
-         (match_id, home_team, away_team, home_score, away_score, corners_home, corners_away, cards_home, cards_away)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       on conflict (match_id) do update set
-         home_score   = excluded.home_score,
-         away_score   = excluded.away_score,
-         corners_home = coalesce(excluded.corners_home, app_match_result.corners_home),
-         corners_away = coalesce(excluded.corners_away, app_match_result.corners_away),
-         cards_home   = coalesce(excluded.cards_home, app_match_result.cards_home),
-         cards_away   = coalesce(excluded.cards_away, app_match_result.cards_away)
-       returning (xmax = 0) as inserted`,
-      [row.match_id, row.home, row.away, row.home_score, row.away_score, home, away, homeCards, awayCards, half?.home ?? null, half?.away ?? null],
-    );
+    const res = await query(FINISHED_RESULT_INSERT, finishedResultParameters(row));
     if (res.rows[0]?.inserted) stored++;
   }
   return stored;
