@@ -8,6 +8,7 @@ interface Props {
   matchId: string;
   homeTeam: string;
   awayTeam: string;
+  eventsOnly?: boolean;
 }
 
 /**
@@ -15,14 +16,14 @@ interface Props {
  * The primary MatchDetail header already shows the teams, score and minute.
  * Do not duplicate that scoreboard here.
  */
-export default function PitchTracker({ matchId, homeTeam, awayTeam }: Props) {
+export default function PitchTracker({ matchId, homeTeam, awayTeam, eventsOnly = false }: Props) {
   const { t } = useLanguage();
   const patch = useLivePatch(matchId);
   const { matchEvents } = useLiveFeed();
   const [showEvents, setShowEvents] = useState(false);
 
-  const corners = patch?.corners;
-  const cards = patch?.cards;
+  const corners = eventsOnly ? null : patch?.corners;
+  const cards = eventsOnly ? null : patch?.cards;
   const events: MatchEvent[] = (matchEvents ?? []).filter(e => e.matchId === String(matchId));
 
   // Some providers send the same event more than once. Keep one line per actual occurrence.
