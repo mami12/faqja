@@ -202,7 +202,7 @@ export async function recalcTicket(ticketId) {
 
     await client.query(
       `update app_ticket set status = $2, potential_payout = $3, settled_at = now() where id = $1`,
-      [ticketId, status, payout || Number(ticket.potential_payout)],
+      [ticketId, status, payout],
     );
 
     if (payout > 0 && ticket.user_id) {
