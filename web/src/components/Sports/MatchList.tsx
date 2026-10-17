@@ -211,18 +211,33 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     // The tight mobile board mirrors the supplied sportsbook screenshot.
     // Only the actual 1/X/2 outcomes are interactive; other markets live on
     // the match detail page. OddsButton keeps all provider and risk locks.
+    const liveMinute = m.currentMinute == null ? '' : String(m.currentMinute).trim();
+    const startTime = m.startTime ? new Date(m.startTime) : null;
+    const scheduledTime = startTime && !Number.isNaN(startTime.getTime())
+      ? startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '—';
     const mobileRow = (
       <div className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_repeat(3,53px)_38px] min-[400px]:grid-cols-[minmax(0,1fr)_repeat(3,58px)_42px] border-b border-[#111922] bg-[#242d3b] md:hidden">
         <div className="relative flex min-w-0 items-stretch border-r border-[#111922]">
+          <div className="flex w-[39px] shrink-0 flex-col items-center justify-center border-r border-[#111922] px-0.5 text-center font-mono tabular-nums" aria-label={m.status === 'LIVE' ? `Minuta ${liveMinute || 'nuk dihet'}` : `Ora e ndeshjes ${scheduledTime}`}>
+            {m.status === 'LIVE' ? (
+              <>
+                <span className="text-[8px] font-bold leading-tight text-[#35cf68]">LIVE</span>
+                <span className="text-[11px] font-black leading-tight text-[#f0d06c]">{liveMinute ? `${liveMinute.replace(/['′]/g, '')}′` : '—'}</span>
+              </>
+            ) : (
+              <span className="text-[10px] font-semibold leading-tight text-[#cbd5e1]">{scheduledTime}</span>
+            )}
+          </div>
           <button type="button" title={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
             aria-label={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
             onClick={() => toggleFavorite(String(m.id))}
-            className={`absolute bottom-1 left-1 z-[1] p-0.5 ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-[#748093]'}`}>
+            className={`absolute bottom-1 left-[41px] z-[1] p-0.5 ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-[#748093]'}`}>
             <Star size={12} fill={isFavorite(String(m.id)) ? 'currentColor' : 'none'}/>
           </button>
           <button type="button" onClick={() => navigate(`/match/${m.id}`)}
             title={`${m.homeTeam} - ${m.awayTeam}`}
-            className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1 pl-6 pr-1.5 text-left text-[12px] leading-tight text-[#d3dce8] hover:bg-[#313d4f]">
+            className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1 pl-4 pr-1.5 text-left text-[12px] leading-tight text-[#d3dce8] hover:bg-[#313d4f]">
             <span className="flex min-w-0 items-center justify-between gap-1">
               <span className="min-w-0 truncate">{m.homeTeam}</span>
               {m.status === 'LIVE' && <span className="shrink-0 font-mono font-bold text-[#00c443]">{m.homeScore ?? 0}</span>}
