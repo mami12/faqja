@@ -343,7 +343,7 @@ export default function MatchControl() {
                               {mk.name}
                               {mk.status === 'SUSPENDED' && (
                                 <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black border border-amber-500/30">
-                                  Pezulluar
+                                  Treg i mbyllur
                                 </span>
                               )}
                             </span>
@@ -353,7 +353,7 @@ export default function MatchControl() {
                                 onClick={() => handleToggleMarketSuspend(mk.id, mk.status)}
                                 className="text-[11px] text-text-secondary hover:text-white font-semibold underline active:scale-95 transition"
                               >
-                                {mk.status === 'ACTIVE' ? 'Pezullo' : 'Aktivizo'}
+                                {mk.status === 'ACTIVE' ? 'Mbyll tregun' : 'Hap tregun'}
                               </button>
                             </div>
                           </div>
