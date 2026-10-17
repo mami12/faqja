@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { isFinished, FINISHED_RESULT_INSERT, finishedResultParameters, verifiedFirstHalf } from '../server/ledger/results.mjs';
 import { isStillOnBoard } from '../server/ledger/settler.mjs';
-import { playerBetStatuses } from '../server/ledger/bets.mjs';
+import { playerBetStatuses } from '../server/ledger/bet-history.mjs';
 import { LEDGER_SQL } from '../server/ledger/schema.mjs';
 
 const scoreAt = new Date().toISOString();
