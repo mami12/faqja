@@ -17,9 +17,9 @@ export const DEFAULT_LIVE_RISK_SETTINGS = Object.freeze({
     { minute: 80, maxOdds: 1.20 },
   ],
   // Suspend ALL outcomes in matching markets, regardless of price.
-  // At 90' and 1-1, 1/X/2 must all close, including high-odds 1 and 2.
+  // From 90' close 1/X/2 for every score, including high-odds 1 and 2.
   marketClosureRules: [
-    { minute: 90, market: '1X2', score: 'DRAW' },
+    { minute: 90, market: '1X2', score: 'ANY' },
   ],
   limits: {
     maxLiveStake: 10000,
