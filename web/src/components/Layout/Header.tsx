@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Globe, Wallet, LogOut, Shield, Users, Ticket, Zap, Receipt } from 'lucide-react';
+import { Menu, X, Globe, Wallet, LogOut, Shield, Users, Ticket, Receipt } from 'lucide-react';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -111,18 +111,11 @@ export default function Header({ onToggleNav }: Props) {
               <Menu size={18} />
             </button>
           )}
-          <div
-            className="group flex cursor-pointer items-center gap-2.5 py-1 select-none"
-            onClick={() => navigate('/')}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-300/20 bg-accent-green text-[#102019]  transition-transform group-hover:scale-105">
-              <Zap size={18} className="fill-current" />
-            </div>
-            <div className="hidden min-[380px]:block">
-              <div className="text-[13px] font-black uppercase leading-none tracking-[0.12em] text-white">Faqja</div>
-              <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-300">Sport</div>
-            </div>
-          </div>
+          <button type="button" onClick={() => navigate('/')}
+            aria-label="Faqja kryesore"
+            className="rounded-sm px-2 py-1 text-lg font-black tracking-[0.25em] text-white transition-colors hover:text-emerald-300">
+            ....
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
