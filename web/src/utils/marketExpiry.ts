@@ -228,9 +228,21 @@ export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   return false;
 }
 
+/** A price may stay on screen as a grey lock even when it cannot be bet on.
+ * Keep this separate from isOutcomeAvailable, which means actually tradable.
+ * Settled/void outcomes and empty unquoted offers are not visible.
+ */
+export const isOutcomeDisplayable = (o: OutcomeLike): boolean => {
+  if (!o || ['SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase())) return false;
+  const hasPrice = typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0;
+  const locked = o.suspended === true || o.feedSuspended === true || o.riskSuspended === true ||
+    String(o.status ?? '').toUpperCase() === 'SUSPENDED';
+  return hasPrice || locked;
+};
+
 export const isOutcomeAvailable = (o: OutcomeLike): boolean =>
   !!o && typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0 &&
-  o.suspended !== true && o.feedSuspended !== true &&
+  o.suspended !== true && o.feedSuspended !== true && o.riskSuspended !== true &&
   !['SUSPENDED', 'SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase());
 
 export const isMarketSuspended = (
@@ -307,5 +319,7 @@ export function isMarketVisible(
   if (!market || !market.outcomes?.length) return false;
   if (isMarketExpired(match, market) ||
       isMarketSuspended(market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) return false;
-  return filterDecidedOutcomes(market.outcomes.filter(isOutcomeAvailable), market, match).length > 0;
+  // Suspended selections remain visible with the same grey lock icon as the
+  // provider-suspended prices. Finished/decided contracts still disappear.
+  return filterDecidedOutcomes(market.outcomes.filter(isOutcomeDisplayable), market, match).length > 0;
 }
