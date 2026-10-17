@@ -16,7 +16,7 @@ type MarketLike = {
 };
 type OutcomeLike = {
   id?: string; name?: string; code?: string; odds?: number;
-  status?: string; suspended?: boolean; feedSuspended?: boolean;
+  status?: string; suspended?: boolean; feedSuspended?: boolean; riskSuspended?: boolean;
 };
 type MatchLike = {
   status?: string; period?: string | null; currentMinute?: number;
