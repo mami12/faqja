@@ -92,7 +92,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
       disabled={isSuspended}
       className={`group relative flex items-center ${scoringTimeLabel ? 'flex-col justify-center gap-1 py-2.5 text-center' : 'justify-between gap-2'} rounded-sm border-0 px-2 py-2 text-left transition-colors duration-150 select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-green focus-visible:outline-offset-[-2px] ${flashClass} ${
         isSuspended
-          ? 'cursor-not-allowed bg-primary/30 opacity-50'
+          ? '!bg-[#29313d] cursor-not-allowed !text-slate-400 opacity-85'
           : isSelected
           ? '!bg-[#347d48] hover:!bg-[#3b9354] text-white ring-2 ring-inset ring-[#f2c04f] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)]'
           : 'bg-primary/40 text-text-primary hover:bg-tertiary/60 active:bg-tertiary/80'
@@ -102,16 +102,16 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
         className={`text-[11px] font-semibold transition-colors sm:text-xs leading-snug ${
           scoringTimeLabel ? 'break-words whitespace-normal line-clamp-3' : isWide || label.length > 10 ? 'break-words line-clamp-2' : 'truncate'
         } ${
-          isSelected ? 'text-white font-extrabold' : 'text-text-secondary group-hover:text-slate-200'
+          isSuspended ? 'text-slate-400' : isSelected ? 'text-white font-extrabold' : 'text-text-secondary group-hover:text-slate-200'
         }`}
         title={label}
       >
         {label}
       </span>
       <span className={`shrink-0 font-mono text-xs font-black tabular-nums sm:text-sm ${
-        isSuspended ? 'text-text-secondary' : isSelected ? 'text-white' : 'text-accent-yellow group-hover:text-accent-yellow sm:text-text-primary'
+        isSuspended ? 'text-slate-400' : isSelected ? 'text-white' : 'text-accent-yellow group-hover:text-accent-yellow sm:text-text-primary'
       }`}>
-        {isSuspended ? <Lock size={12} className="inline text-text-secondary" /> : currentOdds !== null && currentOdds !== undefined ? currentOdds.toFixed(2) : '-'}
+        {isSuspended ? <Lock size={14} strokeWidth={2.3} className="inline text-slate-400" aria-label="Koeficient i pezulluar" /> : currentOdds !== null && currentOdds !== undefined ? currentOdds.toFixed(2) : '-'}
       </span>
     </button>
   );
