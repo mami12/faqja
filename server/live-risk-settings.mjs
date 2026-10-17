@@ -16,6 +16,11 @@ export const DEFAULT_LIVE_RISK_SETTINGS = Object.freeze({
     { minute: 70, maxOdds: 1.10 },
     { minute: 80, maxOdds: 1.20 },
   ],
+  // Suspend ALL outcomes in matching markets, regardless of price.
+  // At 90' and 1-1, 1/X/2 must all close, including high-odds 1 and 2.
+  marketClosureRules: [
+    { minute: 90, market: '1X2', score: 'DRAW' },
+  ],
   limits: {
     maxLiveStake: 10000,
     maxLivePayout: 100000,
@@ -42,8 +47,12 @@ export function validateLiveRiskSettings(value) {
   const fail = message => { throw Object.assign(new Error(message), { status: 400 }); };
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('Konfigurim i pavlefshëm i riskut.');
   if (typeof value.enabled !== 'boolean') fail('Aktivizimi duhet të jetë Po ose Jo.');
+  const closureInput = value.marketClosureRules === undefined
+    ? DEFAULT_LIVE_RISK_SETTINGS.marketClosureRules : value.marketClosureRules;
   if (!Array.isArray(value.leaderRules) || !Array.isArray(value.lowOddsRules) ||
-      value.leaderRules.length > 12 || value.lowOddsRules.length > 12) {
+      !Array.isArray(closureInput) ||
+      value.leaderRules.length > 12 || value.lowOddsRules.length > 12 ||
+      closureInput.length > 12) {
     fail('Maksimumi 12 rregulla për çdo kategori.');
   }
   const valueIn = (raw,min,max,label,integer=false) => {
@@ -66,6 +75,21 @@ export function validateLiveRiskSettings(value) {
       maxOdds: valueIn(r.maxOdds,1.01,100,`Koeficienti i kuotës ${i+1}`),
     };
   });
+  const allowedMarkets = new Set(['1X2','DOUBLE_CHANCE','BTTS','TOTAL_GOALS','CORNERS','CARDS','ALL']);
+  const allowedScores = new Set(['ANY','DRAW','LEADING']);
+  const marketClosureRules = closureInput.map((r,i) => {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) fail('Rregull i pavlefshëm për mbylljen e tregut.');
+    if (!allowedMarkets.has(r.market)) fail(`Treg i panjohur në rregullin ${i+1}.`);
+    if (!allowedScores.has(r.score)) fail(`Kusht rezultati i panjohur në rregullin ${i+1}.`);
+    return {
+      minute: valueIn(r.minute,0,120,`Minuta e mbylljes ${i+1}`,true),
+      market: r.market,
+      score: r.score,
+    };
+  });
+  if (new Set(marketClosureRules.map(r => `${r.minute}:${r.market}:${r.score}`)).size !== marketClosureRules.length) {
+    fail('Nuk lejohen rregulla identike për mbylljen e tregut.');
+  }
   if (new Set(leaderRules.map(r => `${r.minute}:${r.goals}`)).size !== leaderRules.length ||
       new Set(lowOddsRules.map(r => r.minute)).size !== lowOddsRules.length) {
     fail('Nuk lejohen rregulla të përsëritura me të njëjtin kusht.');
@@ -80,7 +104,7 @@ export function validateLiveRiskSettings(value) {
       caps.maxLivePayout < caps.maxLiveStake) {
     fail('Pagesa maksimale nuk mund të jetë më e vogël se shuma maksimale.');
   }
-  return { enabled:value.enabled, leaderRules, lowOddsRules, limits:caps };
+  return { enabled:value.enabled, leaderRules, lowOddsRules, marketClosureRules, limits:caps };
 }
 
 export function setLiveRiskSettings(value) {
