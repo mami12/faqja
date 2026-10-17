@@ -4,6 +4,7 @@
  * Never use the synthetic price as authority when a ticket is placed.
  */
 import { query } from '../db.mjs';
+import { isDecidedLiveMarket } from './decided-markets.mjs';
 
 const CONTRACTS = {
   '1X2': ['1', 'X', '2'],
@@ -76,7 +77,7 @@ function matchesMarket(market, kind, line) {
 }
 
 export function findLeg(match, leg) {
-  const markets = (match.markets ?? []).filter(m => m.status === 'ACTIVE' && matchesMarket(m,leg.market,leg.line));
+  const markets = (match.markets ?? []).filter(m => m.status === 'ACTIVE' && !isDecidedLiveMarket(match,m) && matchesMarket(m,leg.market,leg.line));
   for (const market of markets) {
     const outcome = (market.outcomes ?? []).find(o =>
       o.status === 'ACTIVE' && Number.isFinite(Number(o.odds)) && Number(o.odds) > 1 &&
@@ -100,6 +101,8 @@ export async function decorateMatches(matches) {
   for (const match of matches) {
     if (match.isSuspended || match.status === 'ENDED' || match.status === 'CANCELLED') continue;
     for (const template of templates) {
+      // Every constituent must still be open; an already-completed goal line
+      // cannot stay sellable through the synthetic Bet Builder market.
       const resolved = template.legs.map(leg => findLeg(match,leg));
       if (resolved.some(r => !r)) continue;
       const price = resolved.reduce((p,r) => p * Number(r.outcome.odds),1);
@@ -109,7 +112,13 @@ export async function decorateMatches(matches) {
       match.markets.push({
         id: `BB|${match.id}|${template.id}|market`,
         matchId: match.id, marketType: 'OTHER', name: `Bet Builder: ${template.name}`,
-        status: 'ACTIVE', sortOrder: 9000, line: '', outcomes: [{
+        status: 'ACTIVE', sortOrder: 9000, line: '',
+        // Real constituent IDs let the browser respond to immediate socket
+        // suspensions, even before the next REST refresh.
+        builderLegs: resolved.map(part => ({
+          marketId: part.market.id, outcomeId: part.outcome.id,
+        })),
+        outcomes: [{
           id, marketId: `BB|${match.id}|${template.id}|market`,
           name: template.legs.map(l => l.market + ' ' + l.outcome + (l.line ? ' ' + l.line : '')).join(' + '),
           odds: Number(price.toFixed(4)), status: 'ACTIVE',

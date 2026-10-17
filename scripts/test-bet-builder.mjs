@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { findLeg, builderId, parseBuilderId } from '../server/ledger/bet-builders.mjs';
 import { gradeLine } from '../server/ledger/settler.mjs';
+import { isDecidedLiveMarket } from '../server/ledger/decided-markets.mjs';
 
 const market = (name, type, line, outcome, code, odds) => ({
   id: name, name, marketType: type, line, status: 'ACTIVE',
@@ -17,6 +18,31 @@ assert.ok(found.every(Boolean));
 assert.equal(Number(found.reduce((p,l)=>p*l.outcome.odds,1).toFixed(4)),10.3871);
 assert.equal(findLeg(match,{market:'TOTAL',outcome:'Over',line:'3.5'}),null);
 assert.ok(findLeg(match,{market:'TOTAL',outcome:'Over',line:'2.5'}));
+// Underlying total is ACTIVE from a stale feed, but three goals have already
+// decided the 2.5 line. No synthetic Bet Builder may keep offering it.
+const late = {...match,status:'LIVE',homeScore:2,awayScore:1};
+assert.equal(findLeg(late,{market:'TOTAL',outcome:'Over',line:'2.5'}),null);
+assert.ok(findLeg({...late,homeScore:2,awayScore:0},{market:'TOTAL',outcome:'Over',line:'2.5'}));
+assert.ok(findLeg(late,{market:'1X2',outcome:'1',line:''}), '1X2 leader is not final mid-match');
+const bothScored = {...match,status:'LIVE',homeScore:1,awayScore:1};
+assert.equal(findLeg(bothScored,{market:'BTTS',outcome:'Yes',line:''}),null);
+assert.ok(findLeg({...bothScored,awayScore:0},{market:'BTTS',outcome:'Yes',line:''}));
+const riskSuspended = structuredClone(match);
+riskSuspended.markets[2].outcomes[0].status='SUSPENDED';
+assert.equal(findLeg(riskSuspended,{market:'TOTAL',outcome:'Over',line:'2.5'}),null);
+assert.equal(findLeg({...riskSuspended,markets:riskSuspended.markets.map(m=>({...m,status:'SUSPENDED'}))},
+ {market:'TOTAL',outcome:'Over',line:'2.5'}),null);
+// Use feed evidence before blocking a normal placement: absent raw score_at
+// must not turn placeholder scores into confirmed completed markets.
+const raw = {service:'LIVE',home_score:2,away_score:1,score_at:new Date().toISOString()};
+assert.equal(isDecidedLiveMarket(raw,{name:'Total',line:'2.5'}),true);
+assert.equal(isDecidedLiveMarket({...raw,score_at:null},{name:'Total',line:'2.5'}),false);
+assert.equal(isDecidedLiveMarket(raw,{name:'Total Corners',line:'2.5'}),false);
+assert.equal(isDecidedLiveMarket(raw,{name:'Total',line:'3.5'}),false);
+assert.equal(isDecidedLiveMarket(raw,{name:'1X2',line:''}),false);
+assert.equal(isDecidedLiveMarket({...raw,away_score:1},{name:'Both Teams To Score',line:''}),true);
+assert.equal(isDecidedLiveMarket({...raw,away_score:0},{name:'Both Teams To Score',line:''}),false);
+assert.equal(isDecidedLiveMarket({...raw,service:'PREMATCH'},{name:'Total',line:'2.5'}),false);
 const id=builderId('123','11111111-1111-4111-8111-111111111111');
 assert.deepEqual(parseBuilderId(id),{matchId:'123',templateId:'11111111-1111-4111-8111-111111111111'});
 assert.equal(parseBuilderId('123|1X2||1'),null);

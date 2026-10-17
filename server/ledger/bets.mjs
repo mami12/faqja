@@ -20,6 +20,7 @@ import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
 import { parseBuilderId, findLeg, listTemplates } from './bet-builders.mjs';
+import { isDecidedLiveMarket } from './decided-markets.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
@@ -65,6 +66,12 @@ async function resolveSelection(selection) {
     (o) => o.market_key === parsed.marketKey && String(o.line ?? '') === String(parsed.line ?? '') && o.outcome_key === parsed.outcomeKey,
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
+  // Never accept an expired contract even if a stale client still shows it.
+  if (isDecidedLiveMarket(match, { name: row.market_name, line: row.line })) {
+    const err = badRequest('Ky treg ka përfunduar dhe nuk pranon më baste.');
+    err.code = 'MARKET_DECIDED';
+    throw err;
+  }
   if (row.suspended === true) throw badRequest('Kjo kuotë është pezulluar për momentin.');
 
   const comboParser = isResultTotalMarket(row.market_name) ? parseResultTotal

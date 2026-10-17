@@ -11,6 +11,8 @@ type MarketLike = {
   name?: string; line?: string; specifier?: string; marketType?: string;
   period?: number; status?: string; suspended?: boolean;
   outcomes?: OutcomeLike[];
+  /** Actual underlying prices in a synthetic Bet Builder. */
+  builderLegs?: { marketId: string; outcomeId: string }[];
 };
 type OutcomeLike = {
   id?: string; name?: string; code?: string; odds?: number;
@@ -172,10 +174,33 @@ const elapsedWindow = (m: MatchLike, market: MarketLike): boolean => {
   return !!limit && minute !== null && minute > Number(limit[1]);
 };
 
+/**
+ * The synthetic offer has no direct goal line: read its verified leg labels.
+ * Once any leg has irreversibly completed (e.g. Total 2.5 at three goals,
+ * BTTS after both teams score), the whole builder offer closes.
+ */
+const builderCompleted = (m: MatchLike, market: MarketLike): boolean => {
+  if (!isLive(m) || !/^bet builder:/i.test(String(market.name ?? ''))) return false;
+  const legs = market.outcomes ?? [];
+  if (legs.length !== 1 || !String(legs[0].id ?? '').startsWith('BB|')) return false;
+  const score = scoreOf(m.homeScore, m.awayScore);
+  if (!score) return false;
+  const parts = String(legs[0].name ?? '').split(/\s+\+\s+/);
+  return parts.some(part => {
+    const total = part.match(/^TOTAL\s+(?:Over|Under)\s+(\d+(?:[.,]\d+)?)$/i);
+    if (total) {
+      const line = number(total[1]);
+      return line !== null && score.home + score.away > line;
+    }
+    return /^BTTS\s+(?:Yes|No)$/i.test(part) && score.home > 0 && score.away > 0;
+  });
+};
+
 export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   if (!market) return false;
   if (isMatchFinished(m)) return true;
   if (!isLive(m)) return false;
+  if (builderCompleted(m, market)) return true;
   if ((isFirstHalf(market) || isHTFTMarket(String(market.name ?? ''))) && isSecondHalfOrLater(m)) return true;
 
   if (completedEvent(m, market) || elapsedWindow(m, market)) return true;
@@ -208,10 +233,19 @@ export const isOutcomeAvailable = (o: OutcomeLike): boolean =>
   o.suspended !== true && o.feedSuspended !== true &&
   !['SUSPENDED', 'SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase());
 
-export const isMarketSuspended = (market: MarketLike, lockedMarkets?: Record<string, boolean>): boolean =>
+export const isMarketSuspended = (
+  market: MarketLike,
+  lockedMarkets?: Record<string, boolean>,
+  lockedOutcomes?: Record<string, boolean>,
+  riskLockedOutcomes?: Record<string, boolean>,
+): boolean =>
   !!market && (market.suspended === true ||
     String(market.status ?? '').toUpperCase() === 'SUSPENDED' ||
-    (lockedMarkets?.[String((market as MarketLike & { id?: string }).id ?? '')] === true));
+    lockedMarkets?.[String((market as MarketLike & { id?: string }).id ?? '')] === true ||
+    (market.builderLegs ?? []).some(part =>
+      lockedMarkets?.[part.marketId] === true ||
+      lockedOutcomes?.[part.outcomeId] === true ||
+      riskLockedOutcomes?.[part.outcomeId] === true));
 
 const exactScore = (label: string): Score | null => {
   const match = label.trim().match(/^(\d{1,2})\s*[-:]\s*(\d{1,2})$/);
@@ -267,8 +301,11 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
 export function isMarketVisible(
   match: MatchLike, market: MarketLike,
   lockedMarkets?: Record<string, boolean>,
+  lockedOutcomes?: Record<string, boolean>,
+  riskLockedOutcomes?: Record<string, boolean>,
 ): boolean {
   if (!market || !market.outcomes?.length) return false;
-  if (isMarketExpired(match, market) || isMarketSuspended(market, lockedMarkets)) return false;
+  if (isMarketExpired(match, market) ||
+      isMarketSuspended(market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) return false;
   return filterDecidedOutcomes(market.outcomes.filter(isOutcomeAvailable), market, match).length > 0;
 }

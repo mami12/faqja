@@ -159,7 +159,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
 
 export default function MarketPanel({ match }: { match: Match }) {
   const { t, lang } = useLanguage();
-  const { lockedMarkets } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes } = useLiveFeed();
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [marketSearch, setMarketSearch] = useState('');
 
@@ -176,7 +176,7 @@ export default function MarketPanel({ match }: { match: Match }) {
       if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
-      if (!isMarketVisible(match, market, lockedMarkets)) continue;
+      if (!isMarketVisible(match, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) continue;
       const available = filterDecidedOutcomes(
         (market.outcomes ?? []).filter(isOutcomeAvailable), market, match,
       );
@@ -197,7 +197,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [match, lockedMarkets, marketSearch, lang]);
+  }, [match, lockedMarkets, lockedOutcomes, riskLockedOutcomes, marketSearch, lang]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
