@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Globe, Wallet, LogOut, Shield, Users, Ticket, Receipt } from 'lucide-react';
+import { Menu, X, Globe, LogOut, Shield, Users, Ticket, Receipt } from 'lucide-react';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -140,16 +140,13 @@ export default function Header({ onToggleNav }: Props) {
                 {links}
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300/20 bg-[#0b1018] px-2.5 py-1.5 sm:px-3">
-                <Wallet size={14} className="shrink-0 text-amber-300" />
-                <div className="flex flex-col text-left">
-                  <span className="hidden text-[9px] font-bold uppercase tracking-[0.12em] text-text-secondary/80 sm:inline">
-                    {user.username || t('admin.balance')}
-                  </span>
-                  <span className="text-xs font-extrabold tabular-nums text-amber-300 sm:text-sm">
-                    {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-200/80">Lëk</span>
-                  </span>
-                </div>
+              <div className="flex flex-col items-end text-right leading-tight" aria-label="Llogaria dhe balanca">
+                <span className="max-w-[120px] truncate text-[10px] font-semibold text-slate-200 sm:max-w-[180px] sm:text-xs">
+                  {user.username || t('admin.balance')}
+                </span>
+                <span className="whitespace-nowrap text-xs font-extrabold tabular-nums text-amber-300 sm:text-sm">
+                  {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-200/80">Lek</span>
+                </span>
               </div>
 
               <button
