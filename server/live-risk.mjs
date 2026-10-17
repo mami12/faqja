@@ -52,6 +52,45 @@ export function isLeaderWinChoice(outcomeKey, outcomeName, leader) {
 }
 
 /**
+ * Deliberately narrow market classification. A full-market closure must not
+ * accidentally lock a similarly named but unrelated provider market.
+ */
+export function isRiskMarketCategory(marketName, marketKey, category) {
+  if (category === 'ALL') return true;
+  if (category === '1X2') return isFullTimeWinnerMarket(marketName, marketKey);
+  const name = String(marketName ?? '').toLowerCase().trim();
+  const key = String(marketKey ?? '').toLowerCase().trim();
+  if (category === 'DOUBLE_CHANCE') return /\bdouble\s*chance\b|\b1x\s*\/\s*x2\b|\bdouble\s*result\b/i.test(name);
+  if (category === 'BTTS') return /\bboth\s*teams?\s*(?:to\s*)?score\b|\bbtts\b|\bboth\s*score\b/i.test(name);
+  if (category === 'CORNERS') return /\bcorners?\b/i.test(name);
+  if (category === 'CARDS') return /\bcards?\b|\bbookings?\b/i.test(name);
+  if (category === 'TOTAL_GOALS') {
+    if (/\bcorners?|cards?|bookings?|player|scorer|team\s*total\b/i.test(name)) return false;
+    return /\btotal\s*(?:goals?)?\b|\bgoals?\s*total\b|\bover\s*\/\s*under\b|\bunder\s*\/\s*over\b|\bgoals?\s*over\b/i.test(name) ||
+      (/^(?:over_under|total_goals)$/i.test(key) && !name);
+  }
+  return false;
+}
+
+export function marketClosureReason(match, selection, minute, settings) {
+  const rules = settings.marketClosureRules ?? [];
+  if (!rules.length) return null;
+  const scoreAt = match?.score_at ?? match?.scoreAt ?? null;
+  const home = num(match?.home_score ?? match?.homeScore ?? match?.score?.home);
+  const away = num(match?.away_score ?? match?.awayScore ?? match?.score?.away);
+  const hasScore = Boolean(scoreAt) && home !== null && away !== null && home >= 0 && away >= 0;
+  for (const rule of rules) {
+    if (minute < rule.minute) continue;
+    if (rule.score !== 'ANY' && !hasScore) continue;
+    if (rule.score === 'DRAW' && home !== away) continue;
+    if (rule.score === 'LEADING' && home === away) continue;
+    if (isRiskMarketCategory(selection?.marketName ?? selection?.market_name,
+        selection?.marketKey ?? selection?.market_key, rule.market)) return 'market_closed';
+  }
+  return null;
+}
+
+/**
  * All rules are driven by the persisted Admin policy. The most restrictive
  * matching threshold wins; these are suspension heuristics, not certainty.
  */
@@ -60,11 +99,16 @@ export function liveRiskReason(match, selection, now = Date.now(), settings = li
   const service = String(match?.service ?? '').toUpperCase();
   const live = service === 'LIVE' || match?.live === true || match?.status === 'LIVE';
   if (!live) return null;
-  const price = num(selection?.price ?? selection?.odds);
-  if (price === null || price <= 0) return null;
-
   const minute = riskMinute(match, now);
   if (minute === null) return null;
+
+  // Entire market suspension comes first: high-priced outcomes must not slip
+  // through just because the old low-odds rules only caught the draw.
+  const closed = marketClosureReason(match, selection, minute, settings);
+  if (closed) return closed;
+
+  const price = num(selection?.price ?? selection?.odds);
+  if (price === null || price <= 0) return null;
 
   // Every market: any ultra-short selection is blocked, including Draw, totals,
   // corners, cards, combined providers and Bet Builder constituent legs.
