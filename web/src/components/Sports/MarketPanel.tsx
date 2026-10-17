@@ -9,7 +9,7 @@ import {
   isOutcomeAvailable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { betBuilderGroup, marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory } from '../../utils/marketCatalog';
 
 /* ------------------------------------------------------------------ */
@@ -118,6 +118,20 @@ function GroupCard({ group, match, title }: GroupCardProps) {
         {group.markets.map(market => {
           const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes), market, match);
           if (!outcomes.length) return null;
+          if (betBuilderGroup(market)) {
+            return (
+              <div key={market.id} className="flex min-h-[42px] items-stretch gap-px bg-tertiary/80">
+                <div className="flex min-w-0 flex-1 items-center bg-[#424d60] px-2 py-1.5 text-[11px] font-semibold text-slate-100">
+                  <span className="break-words">{market.name.replace(/^Bet Builder:\s*/i, '')}</span>
+                </div>
+                <div className="flex min-w-0 flex-[1.4] flex-col bg-[#252e3b] [&_button]:min-h-[42px] [&_button]:w-full [&_button]:flex-1 [&_button]:rounded-none">
+                  {outcomes.map(outcome => (
+                    <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} isWide showRawLabel />
+                  ))}
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
