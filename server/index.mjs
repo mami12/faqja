@@ -320,6 +320,7 @@ async function broadcastLiveRiskLocks(matchId, matchRow) {
   const firstRuleMinute = Math.min(
     ...policy.leaderRules.map(rule => rule.minute),
     ...policy.lowOddsRules.map(rule => rule.minute),
+    ...(policy.marketClosureRules ?? []).map(rule => rule.minute),
   );
   if (config.liveRiskEnabled && policy.enabled &&
       String(matchRow.service).toUpperCase() === 'LIVE' &&

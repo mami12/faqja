@@ -23,7 +23,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
       { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
       { id: 'builders', label: 'Bet Builder', description: 'Kombinime universale nga API', icon: Layers },
-      { id: 'risk', label: 'Live Risk Manager', description: 'Bllokime dhe kufij financiarë LIVE', icon: ShieldAlert },
+      { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve LIVE', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
     ],
   },

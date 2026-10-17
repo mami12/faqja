@@ -61,7 +61,7 @@ export async function assertLiveBetRisk(client, columns, settings) {
           outcomeKey: leg.outcome_key ?? leg.outcomeKey,
           price: leg.price,
         }, Date.now(), settings);
-        if (reason) fail('Një zgjedhje është bllokuar nga Live Risk Manager.', 'LIVE_RISK_SUSPENDED');
+        if (reason) fail('Një zgjedhje është bllokuar nga menaxhimi i rrezikut.', 'LIVE_RISK_SUSPENDED');
       }
       newLiability.set(id,(newLiability.get(id) ?? 0) + column.payout);
     }
