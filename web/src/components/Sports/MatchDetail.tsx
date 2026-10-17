@@ -112,7 +112,7 @@ export default function MatchDetail() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
-  const { lockedMarkets } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes } = useLiveFeed();
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
@@ -148,13 +148,13 @@ export default function MatchDetail() {
   const filteredMarkets = useMemo(() => {
     if (!liveMarketMatch) return [];
     return markets.flatMap(market => {
-      if (!isMarketVisible(liveMarketMatch, market, lockedMarkets)) return [];
+      if (!isMarketVisible(liveMarketMatch, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) return [];
       const outcomes = filterDecidedOutcomes(
         (market.outcomes ?? []).filter(isOutcomeAvailable), market, liveMarketMatch,
       );
       return outcomes.length ? [{ ...market, outcomes }] : [];
     });
-  }, [markets, liveMarketMatch, lockedMarkets]);
+  }, [markets, liveMarketMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes]);
 
   const allGrouped = useMemo(() => groupMarkets(filteredMarkets, lang), [filteredMarkets, lang]);
 
