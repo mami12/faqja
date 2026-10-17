@@ -106,6 +106,24 @@ create unique index if not exists app_ticket_user_request_uidx
 create index if not exists app_ticket_user_idx   on app_ticket (user_id, placed_at desc);
 create index if not exists app_ticket_status_idx on app_ticket (status);
 
+-- Rejected placement attempts are not tickets: no balance movement occurs.
+-- Saved separately so "Refuzuarat" shows real server refusals, not fabricated
+-- LOST/CANCELLED tickets. The optional idempotency ID prevents duplicate logs.
+create table if not exists app_bet_rejection (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references app_user(id) on delete cascade,
+  client_request_id uuid,
+  stake             numeric(14,2),
+  selection_count   int not null default 0,
+  reason            text not null,
+  created_at        timestamptz not null default now()
+);
+create index if not exists app_bet_rejection_user_date_idx
+  on app_bet_rejection (user_id, created_at desc);
+create unique index if not exists app_bet_rejection_idempotency_idx
+  on app_bet_rejection (user_id, client_request_id)
+  where client_request_id is not null;
+
 -- Atomic, idempotent multi-column bets: all tickets and the wallet debit commit together.
 create table if not exists app_ticket_batch (
   user_id uuid not null references app_user(id) on delete cascade,
