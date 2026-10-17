@@ -38,6 +38,34 @@ const guard = (fn) => (req, res, next) =>
     if (e?.matchName) body.matchName = e.matchName;
     res.status(status).json(body);
   });
+/**
+ * Only a definite 4xx rejection from a bet-placement handler is logged.
+ * Never log server errors as rejected bets, and never affect the wallet.
+ * Auditing must not replace the original betting error if the DB write fails.
+ */
+const placementGuard = (fn) => guard(async (req, res, next) => {
+  try {
+    return await fn(req, res, next);
+  } catch (e) {
+    const code = Number(e?.status);
+    if (code >= 400 && code < 500 && req.user?.id && req.user?.role === 'PLAYER') {
+      const body = req.body ?? {};
+      const columns = Array.isArray(body.columns) ? body.columns : [];
+      const count = Array.isArray(body.selections) ? body.selections.length :
+        columns.reduce((sum, col) => sum + (Array.isArray(col) ? col.length : 0), 0);
+      try {
+        await bets.recordRejectedBet({
+          userId: req.user.id, requestId: body.clientRequestId,
+          stake: body.stake, selectionCount: count, reason: e?.message,
+        });
+      } catch (auditError) {
+        console.warn('[bet rejection audit] write failed:', auditError?.message);
+      }
+    }
+    throw e;
+  }
+});
+
 const asLimit = (v, def, max) => Math.min(Math.max(1, Number(v) || def), max);
 
 /**
@@ -76,6 +104,21 @@ ledgerRouter.get(
     to: req.query.to,
     limit: asLimit(req.query.limit, 100, 500),
   }))),
+);
+
+/** Player's actual ticket statuses and separately audited rejected attempts. */
+ledgerRouter.get(
+  '/me/bets',
+  requireLedger,
+  requireAuth,
+  guard(async (req, res) => {
+    if (req.user.role !== 'PLAYER') return res.status(403).json({ message: 'player only' });
+    res.json(await bets.listPlayerBetActivity({
+      userId: req.user.id, status: req.query.status,
+      from: req.query.from, to: req.query.to,
+      limit: asLimit(req.query.limit, 200, 500),
+    }));
+  }),
 );
 
 ledgerRouter.get(
@@ -143,7 +186,7 @@ ledgerRouter.post(
   '/bets/place',
   requireLedger,
   requireAuth,
-  guard(async (req, res) => {
+  placementGuard(async (req, res) => {
     const { stake, selections, ticketType, type, systemType, clientRequestId } = req.body ?? {};
     const ticket = await bets.placeBet({
       user: req.user,
@@ -158,7 +201,7 @@ ledgerRouter.post(
 );
 
 /** Multiple ordinary columns: one atomic wallet transaction. */
-ledgerRouter.post('/bets/place-columns', requireLedger, requireAuth, guard(async (req, res) => {
+ledgerRouter.post('/bets/place-columns', requireLedger, requireAuth, placementGuard(async (req, res) => {
   res.json(await bets.placeColumns({
     user: req.user,
     stake: req.body?.stake,
