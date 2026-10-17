@@ -32,7 +32,23 @@ export default function Betslip() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]);
   const [stakeError, setStakeError] = useState('');
+  // Keep the total field editable while typing; stake remains the per-column amount.
+  const [totalStakeDraft, setTotalStakeDraft] = useState<string | null>(null);
   const placeBetClickLock = useRef(false);
+  const hasMultipleColumns = columns.length > 1;
+  const totalStake = (Number(stake) || 0) * (hasMultipleColumns ? columns.length : 1);
+
+  const changeTotalStake = (value: string) => {
+    setTotalStakeDraft(value);
+    if (!value) {
+      setStake('');
+      return;
+    }
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    // Server accepts amounts with at most two decimals, per column.
+    setStake((Math.round((amount / columns.length) * 100) / 100).toFixed(2));
+  };
 
   // Ticket search state
   const [ticketSearch, setTicketSearch] = useState('');
@@ -308,14 +324,33 @@ export default function Betslip() {
                   </select>
                 </label>
               )}
+              {hasMultipleColumns && (
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <label htmlFor="betslip-total-stake" className="shrink-0 text-slate-300">Shuma Totale:</label>
+                  <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
+                    <input id="betslip-total-stake" type="number" min={columns.length * 100} step="0.01"
+                      value={totalStakeDraft ?? totalStake.toFixed(2)}
+                      onChange={e => changeTotalStake(e.target.value)}
+                      onBlur={() => setTotalStakeDraft(null)}
+                      className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
+                    />
+                    <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3 text-xs">
-                <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">{columns.length > 1 ? 'Shuma për kolonë' : t('betslip.stake')}:</label>
-                <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
-                  <input id="betslip-stake" type="number" min="100" step="1" value={stake}
-                    onChange={e => setStake(e.target.value)}
-                    className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
-                  />
-                  <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
+                <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">
+                  {hasMultipleColumns ? 'Shuma Për Kolonë' : t('betslip.stake')}:
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {hasMultipleColumns && <span className="shrink-0 font-mono text-slate-300">{columns.length} ×</span>}
+                  <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
+                    <input id="betslip-stake" type="number" min="100" step="0.01" value={stake}
+                      onChange={e => { setTotalStakeDraft(null); setStake(e.target.value); }}
+                      className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
+                    />
+                    <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
+                  </div>
                 </div>
               </div>
               {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
@@ -327,12 +362,6 @@ export default function Betslip() {
                   </button>
                 ))}
               </div>
-              {columns.length > 1 && (
-                <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
-                  <span className="text-slate-300">Shuma totale ({columns.length} kolona):</span>
-                  <strong className="font-mono font-bold text-white">{(Number(stake || 0) * columns.length).toFixed(2)} Lëk</strong>
-                </div>
-              )}
               <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
                 <span className="text-slate-300">{t('betslip.potential_payout')}:</span>
                 <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{potentialPayout.toFixed(2)} Lëk</strong>
