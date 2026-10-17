@@ -104,7 +104,7 @@ assert.equal(isMarketVisible(match(1,0), {
 }, {}, {}, {'1':true}), true,
 'Socket risk lock must not hide the market containing its selection');
 assert.equal(isMarketVisible(match(2,1),{
-  name:'Total',line:'2.5',marketType:'OVER_UNDER',outcomes:[providerLockedPrice],
+  name:'Total',line:'2.5',marketType:'OVER_UNDER',outcomes:[{...outcome('Over'),status:'SUSPENDED',feedSuspended:true}],
 }),false,'a decided total still disappears even if provider locked it');
 assert.equal(isOutcomeDisplayable({...outcome('2'),status:'SETTLED'}),false);
 assert.equal(isOutcomeDisplayable({...outcome('2'),status:'VOID'}),false);
