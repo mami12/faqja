@@ -6,7 +6,7 @@ import OddsButton from './OddsButton';
 import { useLiveFeed } from '../../api/liveFeed';
 import { useNavigate } from 'react-router-dom';
 import { Radio, ChevronRight, Clock, Shield, Search, CalendarDays, Star, Bell, BellRing, Filter } from 'lucide-react';
-import { filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable } from '../../utils/marketExpiry';
+import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
 import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
@@ -173,7 +173,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const renderMatchCard = (raw: any) => {
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
     const markets: any[] = m.markets ?? [];
-    const visible = (mk: any) => !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets, lockedOutcomes, riskLockedOutcomes) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeAvailable), mk, m).length > 0;
+    const visible = (mk: any) => !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets, lockedOutcomes, riskLockedOutcomes) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeDisplayable), mk, m).length > 0;
     const findMarket = (pattern: RegExp, type?: string) =>
       markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) &&
         (type && mk.marketType === type || pattern.test(String(mk.name ?? ''))));
@@ -183,7 +183,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     const find = (mk: any, names: string[]) => (mk?.outcomes ?? []).find((o: any) => {
       const name = String(o.name ?? '').trim().toLowerCase();
       const code = String(o.code ?? o.key ?? '').trim().toLowerCase();
-      return isOutcomeAvailable(o) && filterDecidedOutcomes([o], mk, m).length > 0 && (names.includes(name) || names.includes(code) || names.some(n => n.length > 2 && (name.startsWith(n + ' ') || name.startsWith(n + ' ('))));
+      return isOutcomeDisplayable(o) && filterDecidedOutcomes([o], mk, m).length > 0 && (names.includes(name) || names.includes(code) || names.some(n => n.length > 2 && (name.startsWith(n + ' ') || name.startsWith(n + ' ('))));
     }) ?? null;
     const oneXtwo = [
       find(main, ['1', 'home', 'w1', 'h', String(m.homeTeam ?? '').toLowerCase()]),
