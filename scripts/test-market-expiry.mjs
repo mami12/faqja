@@ -105,7 +105,8 @@ const totalBtts = providerCombo('Total and both teams to score',[
 open(match(2,0),totalBtts);
 closed(match(1,1),totalBtts);
 const resultBtts = providerCombo('Result and both teams to score',[
-  'Home And Yes','Draw And No','Away And Yes'
+  'Home And Yes','Draw And No','Away And Yes',
+  'Lyon And Both To Score','Lyon To Nil', 'Both Teams Not To Score And Draw',
 ]);
 open(match(2,0),resultBtts);
 closed(match(1,1),resultBtts);
