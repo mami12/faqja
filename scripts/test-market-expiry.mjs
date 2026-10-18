@@ -120,7 +120,7 @@ const unrelatedCombo = providerCombo('Result and Total', ['Home And Over 3.5']);
 open(match(2,1),unrelatedCombo);
 open({status:'PREMATCH', homeScore:4, awayScore:2},resultTotal);
 const halfResult = providerCombo('1st Half Result and Total',['Home And Over 2.5']);
-open(match(3,0,{period:'2H',currentMinute:65}),halfResult);
+closed(match(3,0,{period:'2H',currentMinute:65}),halfResult);
 // Unknown provider labels must not be suppressed using only the match score.
 const unknownCombo = providerCombo('Other Market',['Option A','Option B']);
 open(match(4,4),unknownCombo);
