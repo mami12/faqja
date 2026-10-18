@@ -78,7 +78,7 @@ function outcomeName(key, fallback, marketType, marketName) {
   return fb || String(key ?? '');
 }
 
-const CLIENT_STATUS = (m) => (m.live ? 'LIVE' : m.status === 'ended' ? 'ENDED' : 'PREMATCH');
+const CLIENT_STATUS = (m) => (m.status === 'ended' ? 'ENDED' : m.live ? 'LIVE' : 'PREMATCH');
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -183,6 +183,8 @@ export function toClientMatch(m) {
     homeScore: num(m.score?.home) ?? 0,
     awayScore: num(m.score?.away) ?? 0,
     currentMinute: num(m.minute) ?? 0,
+    // Preserve feed-score evidence so synthetic combos cannot rely on placeholders.
+    scoreAt: m.scoreAt ?? null,
     period: m.phase ?? m.feedStatus ?? null,
     isSuspended: m.suspended === true || matchOverride?.suspended === true,
     isSimulated: false,
