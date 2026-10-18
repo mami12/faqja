@@ -18,7 +18,8 @@ function currentScore(match) {
   if (service !== 'LIVE' && match?.live !== true) return null;
   // Raw match rows carry score_at. A missing timestamp means a default
   // 0-0 placeholder, not confirmed feed evidence.
-  if ('score_at' in (match ?? {}) && !match.score_at) return null;
+  if (('score_at' in (match ?? {}) && !match.score_at) ||
+      ('scoreAt' in (match ?? {}) && !match.scoreAt)) return null;
   const h = safeNumber(match?.home_score ?? match?.homeScore ?? match?.score?.home);
   const a = safeNumber(match?.away_score ?? match?.awayScore ?? match?.score?.away);
   return h === null || a === null ? null : { home: h, away: a };
@@ -54,4 +55,56 @@ export function isDecidedLiveMarket(match, market) {
   const line = safeNumber(rawLine !== '' && rawLine != null ? rawLine : suffix?.[1]);
   // In a whole-goal line, exactly 2 goals at 2.0 is not necessarily final.
   return line !== null && score.home + score.away > line;
+}
+
+/**
+ * A mixed price is not sellable as soon as ANY non-reversible constituent
+ * (the total threshold or the both-teams-score condition) is completed.
+ * Do not settle the 1X2/DC winner before full time, and do not infer unknown
+ * provider contracts. This protects placement even from stale browser tabs.
+ */
+export function isDecidedLiveOutcome(match, market) {
+  const score = currentScore(match);
+  if (!score) return false;
+  if (isDecidedLiveMarket(match, market)) return true;
+  const name = norm(market?.name ?? market?.market_name);
+  if (Number(market?.period ?? 0) !== 0 ||
+      /\b(?:first|1st|second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime/.test(name)) return false;
+
+  const rawName = String(market?.outcomeName ?? market?.outcome_name ?? '').trim();
+  const rawCode = String(market?.outcomeCode ?? market?.outcome_key ?? '').trim();
+  const labels = [rawName, rawCode].filter(Boolean);
+  const all = labels.join(' | ').toLowerCase();
+  const namedCombo = /^bet builder\s*:/.test(name) ||
+    /\b(?:result|1\s*x\s*2|double chance|total|goals|btts|both teams)\b.*\b(?:and|with)\b.*\b(?:result|total|goals|both teams|btts|score)\b/.test(name) ||
+    /\b(?:result|1x2|double chance|total|btts)\s*[&+]\s*(?:total|btts|goals|result|1x2|both)/.test(name);
+  const explicitLegs = /\b(?:1x2|dc|btts|total)\s+\S+\s+\+\s+(?:1x2|dc|btts|total)\b/i.test(rawName) ||
+    /\b(?:g\/g|n\/g)\s*[&+]\s*(?:p_|l_|[+-]?\d)/i.test(rawName) ||
+    /\b(?:1\/x|x\/2|1\/2|[12x])\s*&\s*(?:g\/g|n\/g|p_|l_)/i.test(rawName);
+  if (!namedCombo && !explicitLegs) return false;
+
+  const totals = [];
+  for (const label of labels) {
+    for (const m of label.matchAll(/\b(?:over|under)\s*(\d+(?:[.,]\d+)?)\b/gi)) {
+      const threshold = safeNumber(m[1]);
+      if (threshold !== null) totals.push(threshold);
+    }
+    if (explicitLegs) {
+      for (const m of label.matchAll(/(?:[&+]\s*)(?:p_|l_|\+|-)?\s*(\d+[.,]\d+)\b/gi)) {
+        const threshold = safeNumber(m[1]);
+        if (threshold !== null) totals.push(threshold);
+      }
+    }
+  }
+  if (!totals.length && /\b(?:total|goals)\b/.test(name) &&
+      /\b(?:over|under)\b/i.test(all)) {
+    const threshold = safeNumber(market?.line ?? market?.specifier);
+    if (threshold !== null) totals.push(threshold);
+  }
+  if (totals.some(threshold => score.home + score.away > threshold)) return true;
+
+  const bttsLeg = /\bbtts\s+(?:yes|no)\b|\b(?:g\/g|n\/g)\b/i.test(all) ||
+    (/\b(?:btts|both teams(?: to)? score)\b/.test(name) &&
+     /\b(?:yes|no|gg|ng)\b/i.test(all));
+  return bttsLeg && score.home > 0 && score.away > 0;
 }
