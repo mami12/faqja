@@ -48,6 +48,8 @@ export interface Match {
   startTime: string;
   homeScore?: number;
   awayScore?: number;
+  /** Timestamp of provider-confirmed score, null if score is only a placeholder. */
+  scoreAt?: string | null;
   currentMinute?: number;
   isSuspended: boolean;
   isSimulated?: boolean;
