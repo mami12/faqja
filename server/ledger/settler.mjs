@@ -37,6 +37,7 @@ function classify(marketName = '') {
   if (/corner/.test(s)) return 'CORNERS';
   if (/\bcards?\b|booking|yellow|red/.test(s)) return 'CARDS';
   if (/both teams to score|\bbtts\b/.test(s)) return 'BTTS';
+  if (isFirstHalfLine(s) && /\b(?:result|winner|1x2)\b/.test(s)) return '1X2';
   if (/double chance/.test(s)) return 'DC';
   if (/handicap|fora|asian/.test(s)) return 'HANDICAP';
   if (/full time result|1 ?x ?2|match result|winner|moneyline/.test(s)) return '1X2';
@@ -354,9 +355,18 @@ export async function settleAll() {
  * Retrieval by ID does not mean a finished/inactive match is still in play.
  * Never void a genuinely active game merely because its clock is delayed.
  */
-export const isStillOnBoard = (match) =>
-  !!match && match.active !== false &&
-  !['ended', 'finished', 'cancelled'].includes(String(match.status ?? '').toLowerCase());
+export const isStillOnBoard = (match, at = Date.now()) => {
+  if (!match || match.active === false ||
+      ['ended', 'finished', 'cancelled'].includes(String(match.status ?? '').toLowerCase())) return false;
+  const kickoff = match.start_at ?? match.startAt;
+  const startedAt = kickoff ? new Date(kickoff).getTime() : NaN;
+  // An old provider row can remain active forever after an abandoned socket
+  // subscription. After a *full day* beyond scheduled kickoff it is not a
+  // credible in-progress football match, even if the API retained LIVE status.
+  // This only matters after the ticket's separate 72h timeout has elapsed.
+  if (Number.isFinite(startedAt) && at - startedAt > 24 * 60 * 60 * 1000) return false;
+  return true;
+};
 
 /**
  * Safety valve: a ticket older than `hours` whose match has no stored result and is no
