@@ -56,6 +56,10 @@ assert.equal(isDecidedLiveOutcome({...raw,home_score:1,away_score:1},
   selection('Result and both teams to score','Home And No')),true);
 assert.equal(isDecidedLiveOutcome({...raw,home_score:2,away_score:0},
   selection('Result and both teams to score','Home And No')),false);
+for (const name of ['Lyon And Both To Score','Lyon To Nil','Both Teams Not To Score And Draw']) {
+  assert.equal(isDecidedLiveOutcome({...raw,home_score:1,away_score:1},
+    selection('Result and both teams to score',name)),true,name);
+}
 assert.equal(isDecidedLiveOutcome(raw,selection('Double Chance & Total','X/2&P_2.5')),true);
 assert.equal(isDecidedLiveOutcome({...raw,home_score:2,away_score:0},
   selection('Double Chance & Total','X/2&P_2.5')),false);
