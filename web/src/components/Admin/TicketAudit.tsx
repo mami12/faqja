@@ -4,6 +4,30 @@ import { ChevronDown, ChevronUp, Ticket as TicketIcon, CheckCircle2, XCircle, Cl
 import { useLanguage } from '../../context/LanguageContext';
 import { formatTicketSelection, translateTicketStatus, translateTicketType } from '../../utils/sportsbookLabels';
 
+type PendingFixture = {
+  matchId: string;
+  matchName: string;
+  pendingLines: number;
+  pendingTickets: number;
+  oldestTicketAt: string;
+  ageHours: number | null;
+  kickoff: string | null;
+  finalScore: string | null;
+  reason: 'MISSING_MARKET_STATS' | 'RESULT_STORED' | 'FINAL_FRAME_NOT_ARCHIVED' |
+    'NO_FINAL_FEED_SIGNAL' | 'FINAL_RESULT_MISSING';
+  marketNames: string[];
+  feedStatus: string | null;
+  feedScoreAt: string | null;
+};
+
+const reasonText: Record<PendingFixture['reason'], string> = {
+  MISSING_MARKET_STATS: 'Rezultati final ekziston; mungojnë statistika të tregut (HT, korne, kartona ose early payout)',
+  RESULT_STORED: 'Rezultati final ekziston; kërkohet rillogaritje',
+  FINAL_FRAME_NOT_ARCHIVED: 'U pa sinjal final, por rezultati nuk është arkivuar',
+  NO_FINAL_FEED_SIGNAL: 'Në pritje të sinjalit përfundimtar nga furnizuesi',
+  FINAL_RESULT_MISSING: 'Ndeshja nuk ka rezultat final të verifikuar; duhet verifikim manual',
+};
+
 export default function TicketAudit() {
   const { t: translate } = useLanguage();
   const [tickets, setTickets] = useState<any[]>([]);
@@ -13,6 +37,9 @@ export default function TicketAudit() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'WON' | 'LOST' | 'REVERTED'>('ALL');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [settling, setSettling] = useState(false);
+  const [pendingFixtures, setPendingFixtures] = useState<PendingFixture[]>([]);
+  const [pendingError, setPendingError] = useState('');
+  const [settlementMessage, setSettlementMessage] = useState('');
 
   const fetchTickets = async () => {
     try {
@@ -26,17 +53,33 @@ export default function TicketAudit() {
     }
   };
 
+  const fetchPendingFixtures = async () => {
+    try {
+      setPendingError('');
+      const response = await apiClient.get('/admin/settlement/pending', { params: { limit: 100 } });
+      setPendingFixtures(response.data.pending ?? []);
+    } catch (e: any) {
+      setPendingError(e.response?.data?.message || 'Nuk u ngarkuan ndeshjet në pritje.');
+    }
+  };
+
   const handleTriggerSettlement = async () => {
     try {
       setSettling(true);
-      await apiClient.post('/admin/settlement');
-      await fetchTickets();
-      alert('Përfundimi dhe llogaritja e skedinave u krye me sukses!');
+      const response = await apiClient.post('/admin/settlement');
+      await Promise.all([fetchTickets(), fetchPendingFixtures()]);
+      const result = response.data?.lastPass ?? {};
+      setSettlementMessage(result.closed > 0
+        ? result.closed + ' bileta u mbyllën me rezultate të verifikuara.'
+        : 'Nuk u mbyll asnjë biletë. Disa ndeshje ende nuk kanë rezultat final të verifikuar.');
     } catch (e: any) {
       try {
-        await apiClient.get('/admin/settlement');
-        await fetchTickets();
-        alert('Përfundimi dhe llogaritja e skedinave u krye me sukses!');
+        const response = await apiClient.get('/admin/settlement');
+        await Promise.all([fetchTickets(), fetchPendingFixtures()]);
+        const result = response.data?.lastPass ?? {};
+        setSettlementMessage(result.closed > 0
+          ? result.closed + ' bileta u mbyllën me rezultate të verifikuara.'
+          : 'Nuk u mbyll asnjë biletë. Kontrollo ndeshjet në pritje më poshtë.');
       } catch (err: any) {
         alert(err.response?.data?.error || err.message || 'Dështoi llogaritja e skedinave');
       }
@@ -50,7 +93,7 @@ export default function TicketAudit() {
     try {
       const res = await apiClient.post(`/admin/tickets/${ticketId}/revert`);
       alert(translate('tickets.ticket_reverted').replace('{amount}', res.data.refunded.toFixed(2)));
-      fetchTickets();
+      void Promise.all([fetchTickets(), fetchPendingFixtures()]);
     } catch (e: any) {
       alert(e.response?.data?.error || translate('tickets.revert_failed'));
     }
@@ -63,7 +106,8 @@ export default function TicketAudit() {
   };
 
   useEffect(() => {
-    fetchTickets();
+    void fetchTickets();
+    void fetchPendingFixtures();
   }, []);
 
   const filteredTickets = tickets.filter(t => {
@@ -102,7 +146,7 @@ export default function TicketAudit() {
             <span>{settling ? 'Duke llogaritur...' : 'Llogarit Skedinat Tani'}</span>
           </button>
           <button 
-            onClick={fetchTickets}
+            onClick={() => { void fetchTickets(); void fetchPendingFixtures(); }}
             className="flex items-center gap-2 px-3.5 py-2 bg-tertiary/80 hover:bg-tertiary text-white rounded-xl text-xs sm:text-sm font-bold transition active:scale-95"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin text-accent-green' : ''} />
@@ -110,6 +154,50 @@ export default function TicketAudit() {
           </button>
         </div>
       </div>
+
+      {settlementMessage && (
+        <p role="status" className="border border-tertiary bg-secondary px-3 py-2 text-xs text-amber-200">
+          {settlementMessage}
+        </p>
+      )}
+      {/* Administrative diagnostics, keyed by the REAL upstream match ID,
+          not by potentially repeated team names or the public ticket prefix. */}
+      <section aria-label="Kontrolli i ndeshjeve në pritje" className="border border-tertiary bg-secondary p-3 sm:p-4 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-white">Ndeshje me bileta në pritje</h3>
+          <span className="text-[11px] text-slate-300">{pendingFixtures.length} ndeshje</span>
+        </div>
+        <p className="text-[11px] text-text-secondary">
+          Ndeshjet mbyllen vetëm me rezultat përfundimtar të konfirmuar.
+          Në mungesë të rezultatit, pas 72 orësh zbatohet kontrolli i rimbursimit sipas rregullave ekzistuese.
+        </p>
+        {pendingError && <p role="alert" className="text-xs text-rose-300">{pendingError}</p>}
+        {!pendingError && pendingFixtures.length === 0 && (
+          <p className="text-xs text-slate-300">Nuk ka ndeshje të palogaritshme në listën e kontrollit.</p>
+        )}
+        <div className="max-h-64 overflow-auto divide-y divide-tertiary/70">
+          {pendingFixtures.map(item => (
+            <div key={item.matchId} className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-white">{item.matchName}</div>
+                <div className="text-[10px] text-slate-400">
+                  Match ID: {item.matchId} · {item.pendingTickets} bileta / {item.pendingLines} zgjedhje
+                  {item.ageHours !== null ? ' · Më e vjetra ' + item.ageHours + ' orë' : ''}
+                </div>
+                <div className="mt-1 text-[11px] text-amber-200">{reasonText[item.reason]}</div>
+                {item.marketNames?.length > 0 && (
+                  <div className="mt-0.5 text-[10px] text-slate-400">{item.marketNames.join(', ')}</div>
+                )}
+              </div>
+              {item.finalScore && (
+                <span className="shrink-0 font-bold tabular-nums text-emerald-300">
+                  FT {item.finalScore}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Search & Status Filters */}
       <div className="bg-secondary p-3 sm:p-4 rounded-2xl border border-tertiary space-y-3 shadow-md">
