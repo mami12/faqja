@@ -200,7 +200,10 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
   if (!score) return false;
   // 1H/2H require period-specific evidence; full-time score cannot grade them.
   const marketName = norm(market.name);
-  if (isFirstHalf(market) || isSecondHalf(market) || isHTFTMarket(marketName)) return false;
+  if (isSecondHalf(market) || isHTFTMarket(marketName)) return false;
+  // Current aggregate score is valid for 1H contracts ONLY while still
+  // in the first half; 1H contracts disappear entirely at halftime.
+  if (isFirstHalf(market) && isSecondHalfOrLater(m)) return false;
 
   const rawName = String(outcome.name ?? '').trim();
   const rawCode = String(outcome.code ?? '').trim();
