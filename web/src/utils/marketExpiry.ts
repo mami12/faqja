@@ -245,6 +245,7 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
   if (totalLines.some(line => total > line)) return true;
 
   const bttsLeg = /\bbtts\s+(?:yes|no)\b|\b(?:g\/g|n\/g)\b/i.test(names) ||
+    /\b(?:both (?:teams? )?(?:not )?to score|both (?:teams? )?to score|to nil)\b/i.test(names) ||
     (/\b(?:btts|both teams(?: to)? score)\b/.test(marketName) &&
      /\b(?:yes|no|gg|ng)\b/i.test(names));
   return bttsLeg && score.home > 0 && score.away > 0;
