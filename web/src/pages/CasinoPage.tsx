@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Coins, Play, RotateCcw, Square, Sparkles } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
+import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
 import { useAuth } from '../context/AuthContext';
 import {
   BET_OPTIONS, GAMES, freshState, newSession, playDemoRound, readDemoStorage,
   type CasinoDemoState, type CasinoGame, type GameId,
 } from './casinoEngine';
+
+function OriginalReelSymbol({ game, symbol }: { game: CasinoGame; symbol: string }) {
+  const index = game.symbols.indexOf(symbol);
+  const art: SpriteArt | undefined = index >= 0 ? ORIGINAL_SYMBOLS[game.id]?.[index] : undefined;
+  if (!art) return <span className="text-[min(7vw,48px)] sm:text-[50px]">{symbol}</span>;
+  if (!art.rect) return <img src={casinoAssetUrl(art.src)} alt={symbol} draggable={false} className="h-[86%] w-[86%] object-contain" />;
+  const { x, y, w, h, atlasW, atlasH } = art.rect;
+  return <div role="img" aria-label={symbol} className="h-full w-full"
+    style={{
+      backgroundImage: 'url("' + casinoAssetUrl(art.src) + '")',
+      backgroundSize: (atlasW / w * 100) + '% ' + (atlasH / h * 100) + '%',
+      backgroundPosition: (x / Math.max(1, atlasW - w) * 100) + '% ' + (y / Math.max(1, atlasH - h) * 100) + '%',
+      backgroundRepeat: 'no-repeat',
+    }}
+  />;
+}
 
 const creditsFormat = (value: number) => value.toLocaleString('sq-AL', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -105,12 +123,21 @@ export default function CasinoPage() {
               {GAMES.map(item => (
                 <button key={item.id} type="button" onClick={() => openGame(item.id)}
                   className="group min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#192433] text-left transition hover:-translate-y-0.5 hover:border-amber-400/60 hover:shadow-xl">
-                  <div className="relative flex h-32 items-center justify-center sm:h-40"
+                  <div className="relative flex h-32 items-center justify-center overflow-hidden sm:h-40"
                     style={{ background: 'radial-gradient(circle at 50% 40%, ' + item.colors[0] + ', ' + item.colors[1] + ')' }}>
-                    <span className="text-[64px] drop-shadow-2xl transition-transform group-hover:scale-110 sm:text-[78px]" role="img" aria-label={item.title}>
-                      {item.icon}
+                    <img src={casinoAssetUrl(ORIGINAL_BACKGROUNDS[item.id])}
+                      alt="" loading="lazy" draggable={false}
+                      className="absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-300 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                    {ORIGINAL_LOGOS[item.id] && (
+                      <img src={casinoAssetUrl(ORIGINAL_LOGOS[item.id]!)} alt=""
+                        loading="lazy" draggable={false}
+                        className="relative z-10 max-h-24 max-w-[85%] object-contain drop-shadow-[0_3px_9px_rgba(0,0,0,.95)] sm:max-h-32" />
+                    )}
+                    <span className="absolute bottom-2 left-3 right-10 truncate text-sm font-extrabold text-white drop-shadow-md">
+                      {ORIGINAL_LOGOS[item.id] ? '' : item.title}
                     </span>
-                    <span className="absolute bottom-2 right-2 rounded-full bg-black/50 p-2 text-amber-300"><Play size={17} fill="currentColor" /></span>
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/60 p-2 text-amber-300"><Play size={17} fill="currentColor" /></span>
                   </div>
                   <div className="p-3">
                     <p className="truncate text-sm font-bold sm:text-base">{item.title}</p>
@@ -123,10 +150,19 @@ export default function CasinoPage() {
         ) : session && (
           <div className="mx-auto max-w-5xl">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl sm:p-6"
-              style={{ background: 'radial-gradient(ellipse at 50% 0%, ' + game.colors[0] + ' 0%, ' + game.colors[1] + ' 68%)' }}>
+              style={{
+                backgroundColor: game.colors[1],
+                backgroundImage: 'linear-gradient(to bottom, rgba(0,0,0,.22), rgba(0,0,0,.70)), url("' + casinoAssetUrl(ORIGINAL_BACKGROUNDS[game.id]) + '")',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}>
               <div className="mb-3 text-center">
-                <div className="text-3xl drop-shadow-xl" role="img" aria-label={game.title}>{game.icon}</div>
-                <div className="text-lg font-black uppercase tracking-wider text-amber-200 sm:text-2xl">{game.title}</div>
+                {ORIGINAL_LOGOS[game.id] ? (
+                  <img src={casinoAssetUrl(ORIGINAL_LOGOS[game.id]!)} alt={game.title}
+                    className="mx-auto mb-1 max-h-[95px] max-w-[85%] object-contain drop-shadow-[0_4px_14px_rgba(0,0,0,.95)]" />
+                ) : (
+                  <div className="text-lg font-black uppercase tracking-wider text-amber-200 drop-shadow-lg sm:text-2xl">{game.title}</div>
+                )}
                 <div className="text-xs text-white/70">{game.subtitle}</div>
               </div>
 
@@ -148,7 +184,7 @@ export default function CasinoPage() {
                             (spinAnimation ? ' animate-[pulse_.24s_ease-out]' : '')
                           }
                           aria-label={'Rreshti ' + (r + 1) + ', kolona ' + (c + 1) + ': ' + symbol}>
-                          <span className="drop-shadow-md">{locked ? '🪙' : symbol}</span>
+                          {locked ? <span className="text-3xl">🪙</span> : <OriginalReelSymbol game={game} symbol={symbol} />}
                         </div>
                       );
                     })
@@ -213,7 +249,7 @@ export default function CasinoPage() {
               {GAMES.filter(item => item.id !== game.id).map(item => (
                 <button key={item.id} type="button" onClick={() => openGame(item.id)}
                   className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs hover:border-amber-400/50">
-                  {item.icon} {item.title}
+                  {item.title}
                 </button>
               ))}
             </div>
