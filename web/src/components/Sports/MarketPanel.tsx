@@ -163,7 +163,7 @@ export default function MarketPanel({ match }: { match: Match }) {
   // Apply pushed goal/period changes immediately, without waiting for REST.
   const patch = livePatches[String(match.id)];
   const liveMatch = useMemo(() => ({ ...match, ...(patch ?? {}) }), [
-    match, patch?.status, patch?.period, patch?.homeScore, patch?.awayScore,
+    match, patch?.status, patch?.period, patch?.currentMinute, patch?.homeScore, patch?.awayScore,
     patch?.corners?.home, patch?.corners?.away, patch?.cards?.home, patch?.cards?.away,
   ]);
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
