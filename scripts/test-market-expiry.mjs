@@ -46,7 +46,7 @@ open(match(2,0),btts());
 open(match(0,0),btts());
 closed(match(1,1),btts('1st Half Both Teams to Score'));
 open(match(1,1,{period:'2H',currentMinute:65}),btts('2nd Half Both Teams to Score'));
-open(match(1,1),{name:'1X2&BTTS',outcomes:[outcome('1&Yes'),outcome('X&No')]});
+closed(match(1,1),{name:'1X2&BTTS',outcomes:[outcome('1&Yes'),outcome('X&No')]});
 
 // Alternate feed shape: several explicitly named totals in ONE market.
 const bundled = {name:'Total Goals',marketType:'OVER_UNDER',outcomes:[
@@ -121,6 +121,8 @@ open(match(2,1),unrelatedCombo);
 open({status:'PREMATCH', homeScore:4, awayScore:2},resultTotal);
 const halfResult = providerCombo('1st Half Result and Total',['Home And Over 2.5']);
 closed(match(3,0,{period:'2H',currentMinute:65}),halfResult);
+closed(match(3,0,{period:'1H',currentMinute:37}),halfResult);
+open(match(2,0,{period:'1H',currentMinute:29}),halfResult);
 // Unknown provider labels must not be suppressed using only the match score.
 const unknownCombo = providerCombo('Other Market',['Option A','Option B']);
 open(match(4,4),unknownCombo);
