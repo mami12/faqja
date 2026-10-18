@@ -11,7 +11,7 @@ import * as ledger from './store.mjs';
 import * as bets from './bets.mjs';
 import * as overrides from './overrides.mjs';
 import { settleMatch, settleAll } from './settler.mjs';
-import { recentResults, storeResult } from './results.mjs';
+import { recentResults, storeResult, pendingSettlementReview } from './results.mjs';
 import { query } from '../db.mjs';
 import { getMatches as getMatchRows } from '../matches.mjs';
 import { withOdds } from '../collector.mjs';
@@ -558,6 +558,15 @@ adminRouter.get(
 );
 
 /* --------------------------------------------------------------- settlement */
+
+/** Read-only queue of actual pending fixture IDs and missing final evidence. */
+adminRouter.get(
+  '/admin/settlement/pending',
+  ...admin,
+  guard(async (req, res) => {
+    res.json({ pending: await pendingSettlementReview(req.query.limit) });
+  }),
+);
 
 /** stored results plus a settlement pass (safe: idempotent) */
 const runSettlementHandler = guard(async (_req, res) => {

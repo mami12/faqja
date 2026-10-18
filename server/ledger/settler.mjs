@@ -37,6 +37,7 @@ function classify(marketName = '') {
   if (/corner/.test(s)) return 'CORNERS';
   if (/\bcards?\b|booking|yellow|red/.test(s)) return 'CARDS';
   if (/both teams to score|\bbtts\b/.test(s)) return 'BTTS';
+  if (isFirstHalfLine(s) && /\b(?:result|winner|1x2)\b/.test(s)) return '1X2';
   if (/double chance/.test(s)) return 'DC';
   if (/handicap|fora|asian/.test(s)) return 'HANDICAP';
   if (/full time result|1 ?x ?2|match result|winner|moneyline/.test(s)) return '1X2';
@@ -44,7 +45,29 @@ function classify(marketName = '') {
   return 'OTHER';
 }
 
-const num = (v) => (Number.isFinite(Number(String(v).replace(',', '.'))) ? Number(String(v).replace(',', '.')) : null);
+const num = (v) => (v != null && v !== '' && Number.isFinite(Number(String(v).replace(',', '.'))) ? Number(String(v).replace(',', '.')) : null);
+const isFirstHalfLine = (marketName = '') =>
+  /\b(?:first|1st)\s*half\b|\b1h\b|\bhalf.?time\b|^ht(?:\s|$)/i.test(marketName) &&
+  !/halftime\s*\/?\s*fulltime|ht\s*\/\s*ft/i.test(marketName);
+const isSecondHalfLine = (marketName = '') =>
+  /\b(?:second|2nd)\s*half\b|\b2h\b/i.test(marketName);
+
+/** A known final score is not enough to grade first-half/corner/card props.
+ * Keep those lines pending for more authoritative feed evidence instead of
+ * inventing a win/loss or immediately refunding a valid winning proposition.
+ */
+export function hasRequiredSettlementEvidence(line, result) {
+  if (!result) return false;
+  if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
+  const marketName = String(line.market_name ?? '');
+  if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
+  const family = classify(marketName);
+  if (family === 'CORNERS' && (result.corners_home == null || result.corners_away == null)) return false;
+  if (family === 'CARDS' && (result.cards_home == null || result.cards_away == null)) return false;
+  // Early-payout promotions depend on event history, not only the final score.
+  if (/early\s*payout/i.test(marketName)) return false;
+  return true;
+}
 
 /**
  * 'WON' | 'LOST' | 'VOID' for one stored line against a stored result.
@@ -58,8 +81,13 @@ export function gradeLine(line, result) {
     if (statuses.includes('LOST')) return 'LOST';
     return statuses.every(s => s === 'WON') ? 'WON' : 'VOID';
   }
-  const home = Number(result.home_score);
-  const away = Number(result.away_score);
+  // 1H totals and BTTS cannot be graded from the full-time score. Their
+  // original ticket contract is snapshotted in market_name.
+  if (!hasRequiredSettlementEvidence(line, result)) return 'VOID';
+  if (isSecondHalfLine(line.market_name)) return 'VOID'; // no 2H score snapshot
+  const half = isFirstHalfLine(line.market_name);
+  const home = Number(half ? result.half_home_score : result.home_score);
+  const away = Number(half ? result.half_away_score : result.away_score);
   const totalGoals = home + away;
   const homeWin = home > away;
   const awayWin = away > home;
@@ -286,9 +314,12 @@ export async function settleMatch(matchId) {
   if (!lines.length) return { matchId: String(matchId), settled: 0 };
 
   const tickets = new Set();
+  let graded = 0;
   for (const line of lines) {
+    if (!hasRequiredSettlementEvidence(line, result)) continue;
     const status = gradeLine(line, result);
-    await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
+    const updated = await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
+    if (updated.rowCount > 0) graded++;
     tickets.add(line.ticket_id);
   }
 
@@ -298,8 +329,18 @@ export async function settleMatch(matchId) {
     if (done) closed.push(done);
   }
 
-  await query('update app_match_result set settled_at = now() where match_id = $1', [Number(matchId)]);
-  return { matchId: String(matchId), settled: lines.length, tickets: closed };
+  // Keep accepting later provider corner/card/HT statistics until every
+  // selection is gradeable. Premature settled_at blocked archival refreshes.
+  if (graded === lines.length) {
+    await query(
+      `update app_match_result set settled_at = now()
+        where match_id = $1 and not exists
+          (select 1 from app_ticket_line
+            where match_id = $1 and status = 'PENDING')`,
+      [Number(matchId)],
+    );
+  }
+  return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
 /** one pass: store newly finished results, then settle everything that can be settled */
@@ -308,7 +349,10 @@ export async function settleAll() {
   const ids = await unsettledMatchIds();
 
   const results = [];
-  for (const id of ids) results.push(await settleMatch(id));
+  for (const id of ids) {
+    try { results.push(await settleMatch(id)); }
+    catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
+  }
 
   return {
     captured,
@@ -323,9 +367,18 @@ export async function settleAll() {
  * Retrieval by ID does not mean a finished/inactive match is still in play.
  * Never void a genuinely active game merely because its clock is delayed.
  */
-export const isStillOnBoard = (match) =>
-  !!match && match.active !== false &&
-  !['ended', 'finished', 'cancelled'].includes(String(match.status ?? '').toLowerCase());
+export const isStillOnBoard = (match, at = Date.now()) => {
+  if (!match || match.active === false ||
+      ['ended', 'finished', 'cancelled'].includes(String(match.status ?? '').toLowerCase())) return false;
+  const kickoff = match.start_at ?? match.startAt;
+  const startedAt = kickoff ? new Date(kickoff).getTime() : NaN;
+  // An old provider row can remain active forever after an abandoned socket
+  // subscription. After a *full day* beyond scheduled kickoff it is not a
+  // credible in-progress football match, even if the API retained LIVE status.
+  // This only matters after the ticket's separate 72h timeout has elapsed.
+  if (Number.isFinite(startedAt) && at - startedAt > 24 * 60 * 60 * 1000) return false;
+  return true;
+};
 
 /**
  * Safety valve: a ticket older than `hours` whose match has no stored result and is no
@@ -334,7 +387,7 @@ export const isStillOnBoard = (match) =>
 export async function voidUnresolved(hours = 72) {
   const rows = (
     await query(
-      `select l.id, l.ticket_id, l.match_id
+      `select l.*
          from app_ticket_line l
          join app_ticket t on t.id = l.ticket_id
         where l.status = 'PENDING'
@@ -345,12 +398,18 @@ export async function voidUnresolved(hours = 72) {
   ).rows;
 
   const touched = new Set();
+  const touchedMatches = new Set();
   let voided = 0;
   for (const row of rows) {
-    if (await getResult(row.match_id)) continue; // settleMatch will handle it
-    if (isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
+    const result = await getResult(row.match_id);
+    // With a final result but missing HT/corner/card evidence, hold the
+    // line until this existing 72h window, then return it as VOID. Otherwise
+    // the old unconditional "if (result) continue" trapped it indefinitely.
+    if (result && hasRequiredSettlementEvidence(row, result)) continue;
+    if (!result && isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
     await query(`update app_ticket_line set status = 'VOID' where id = $1 and status = 'PENDING'`, [row.id]);
     touched.add(row.ticket_id);
+    touchedMatches.add(row.match_id);
     voided++;
   }
 
@@ -359,6 +418,14 @@ export async function voidUnresolved(hours = 72) {
     const done = await recalcTicket(ticketId);
     if (done) closed.push(done);
   }
-
+  for (const matchId of touchedMatches) {
+    await query(
+      `update app_match_result set settled_at = coalesce(settled_at,now())
+        where match_id = $1 and not exists
+          (select 1 from app_ticket_line
+            where match_id = $1 and status = 'PENDING')`,
+      [Number(matchId)],
+    );
+  }
   return { voided, closed };
 }

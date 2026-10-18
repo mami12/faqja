@@ -19,10 +19,10 @@ export const isFinished = (row) => {
   if (!row.score_at || row.home_score == null || row.away_score == null) return false;
   const score = [Number(row.home_score), Number(row.away_score)];
   if (!score.every(n => Number.isInteger(n) && n >= 0)) return false;
-  const status = String(row.status ?? '').toLowerCase();
-  const feed = String(row.feed_status ?? '').toLowerCase();
-  return status === 'ended' || status === 'finished' ||
-    /finish|ended|\bft\b|after (match|penalt)/.test(feed);
+  // Collector expiry and kickoff extrapolation also set status='ended'!
+  // Only a provider-delivered FT signal proves the final score.
+  const feed = String(row.feed_status ?? '').trim().toLowerCase();
+  return /^(?:ft|full.?time|finished|ended|after (?:match|penalt(?:y|ies)))(?:\b|$)/.test(feed);
 };
 
 const statNum = (v) => (v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -65,22 +65,49 @@ export const FINISHED_RESULT_INSERT = `
     cards_away = coalesce(excluded.cards_away, app_match_result.cards_away),
     half_home_score = coalesce(excluded.half_home_score, app_match_result.half_home_score),
     half_away_score = coalesce(excluded.half_away_score, app_match_result.half_away_score)
+  -- A verified admin correction or already-settled result must not be
+  -- overwritten by a later stale or conflicting provider frame.
+  where app_match_result.source = 'FEED' and app_match_result.settled_at is null
   returning (xmax = 0) as inserted
 `;
 
 export function finishedResultParameters(row) {
-  const home = row.stats ? statNum(row.stats.home?.corners) : null;
-  const away = row.stats ? statNum(row.stats.away?.corners) : null;
-  const cards = side => {
-    const team = row.stats?.[side];
-    return team ? (statNum(team.yellow) ?? 0) + (statNum(team.red) ?? 0) : null;
+  // The push feed stores stats under its competitor IDs, e.g.
+  // { "87150": {corners:3}, "87155": {corners:4} }, NOT under
+  // stats.home/stats.away. Failing to map this made corner/card tickets
+  // VOID or eternally pending even when full-time stats were available.
+  const stats = row.stats ?? {};
+  const homeId = row.raw?.homeTeam?.id ?? row.raw?.competitors?.[0]?.id;
+  const awayId = row.raw?.awayTeam?.id ?? row.raw?.competitors?.[1]?.id;
+  const homeTeam = (homeId != null ? stats[String(homeId)] : null) ?? stats.home ?? null;
+  const awayTeam = (awayId != null ? stats[String(awayId)] : null) ?? stats.away ?? null;
+  const home = homeTeam ? statNum(homeTeam.corners) : null;
+  const away = awayTeam ? statNum(awayTeam.corners) : null;
+  const cards = team => {
+    if (!team) return null;
+    const yellow = statNum(team.yellow);
+    const red = statNum(team.red);
+    return yellow === null && red === null ? null : (yellow ?? 0) + (red ?? 0);
   };
   const half = verifiedFirstHalf(row.periods_score);
   return [row.match_id, row.home, row.away, Number(row.home_score), Number(row.away_score),
-    home, away, cards('home'), cards('away'), half?.home ?? null, half?.away ?? null];
+    home, away, cards(homeTeam), cards(awayTeam), half?.home ?? null, half?.away ?? null];
 }
 
-/** copies every finished match with a known score into app_match_result (idempotent) */
+/**
+ * Persist the verified FT snapshot immediately, before the volatile LIVE match
+ * map is discarded or the server restarts. The regular settlement pass can
+ * later grade tickets against this durable score without relying on the feed.
+ * Returns {recorded, inserted}, including no-op for unconfirmed scores.
+ */
+export async function archiveFinishedMatch(row) {
+  if (!isFinished(row)) return { recorded: false, inserted: false };
+  const result = await query(FINISHED_RESULT_INSERT, finishedResultParameters(row));
+  const inserted = result.rows[0]?.inserted === true;
+  return { recorded: result.rowCount > 0, inserted };
+}
+
+/** copies every verified FT result into the durable result table (idempotent) */
 export async function captureFinishedMatches() {
   const rows = await getMatches({ includeEnded: true, limit: 2000 });
 
@@ -104,8 +131,14 @@ export async function captureFinishedMatches() {
 
   let stored = 0;
   for (const row of finished) {
-    const res = await query(FINISHED_RESULT_INSERT, finishedResultParameters(row));
-    if (res.rows[0]?.inserted) stored++;
+    try {
+      const result = await archiveFinishedMatch(row);
+      if (result.inserted) stored++;
+    } catch (e) {
+      // A single malformed feed record may not block settlement of hundreds
+      // of unrelated football fixtures already saved to the ledger.
+      console.error('[settle] result archive failed for match', row.match_id, e.message);
+    }
   }
   return stored;
 }
@@ -118,11 +151,12 @@ export async function getResult(matchId) {
 /** manual result (admin "settle" button): stores the score the admin entered */
 export async function storeResult(matchId, homeScore, awayScore, { homeTeam = null, awayTeam = null } = {}) {
   await query(
-    `insert into app_match_result (match_id, home_team, away_team, home_score, away_score)
-     values ($1, $2, $3, $4, $5)
+    `insert into app_match_result (match_id, home_team, away_team, home_score, away_score, source)
+     values ($1, $2, $3, $4, $5, 'ADMIN')
      on conflict (match_id) do update set
        home_score = excluded.home_score,
        away_score = excluded.away_score,
+       source = 'ADMIN',
        home_team  = coalesce(excluded.home_team, app_match_result.home_team),
        away_team  = coalesce(excluded.away_team, app_match_result.away_team)`,
     [Number(matchId), homeTeam, awayTeam, Number(homeScore), Number(awayScore)],
@@ -144,6 +178,70 @@ export async function recentResults(limit = 50) {
     [Math.min(Number(limit) || 50, 200)],
   );
   return res.rows;
+}
+
+/**
+ * Administrator-only review queue: why tickets cannot yet be graded.
+ * The short ticket codes users see are prefixes of UUIDs; we join on the
+ * stored provider match IDs, not on fuzzy team names or user-supplied scores.
+ */
+export async function pendingSettlementReview(limit = 100) {
+  const max = Math.min(300, Math.max(1, Math.trunc(Number(limit) || 100)));
+  const { rows } = await query(
+    `select l.match_id,
+            min(l.match_name) as match_name,
+            count(*)::int as pending_lines,
+            count(distinct l.ticket_id)::int as pending_tickets,
+            min(t.placed_at) as oldest_ticket_at,
+            array_agg(distinct l.market_name) as market_names
+       from app_ticket_line l
+       join app_ticket t on t.id = l.ticket_id
+      where t.status = 'PENDING' and l.status = 'PENDING'
+      group by l.match_id
+      order by min(t.placed_at) asc
+      limit $1`,
+    [max],
+  );
+  if (!rows.length) return [];
+
+  const recorded = await resultsFor(rows.map(r => Number(r.match_id)));
+  return Promise.all(rows.map(async row => {
+    const stored = recorded.get(String(row.match_id));
+    const current = await getMatchById(Number(row.match_id));
+    const kickoff = current?.start_at ? new Date(current.start_at).toISOString() : null;
+    const timestamp = new Date(row.oldest_ticket_at).getTime();
+    const ageHours = Number.isFinite(timestamp) ? Math.max(0, Math.round((Date.now() - timestamp) / 3600000)) : null;
+    const finalScore = stored ? `${stored.home_score}-${stored.away_score}` : null;
+    const marketNames = row.market_names ?? [];
+    const incompleteStats = !!stored && marketNames.some(name =>
+      (/\b(?:first|1st)\s*half\b/i.test(name) &&
+        (stored.half_home_score == null || stored.half_away_score == null)) ||
+      (/\bcorners?\b/i.test(name) && (stored.corners_home == null || stored.corners_away == null)) ||
+      (/\bcards?\b|booking/i.test(name) && (stored.cards_home == null || stored.cards_away == null)) ||
+      /early\s*payout/i.test(name));
+    const reason = stored
+      ? (incompleteStats ? 'MISSING_MARKET_STATS' : 'RESULT_STORED')
+      : current && isFinished(current) ? 'FINAL_FRAME_NOT_ARCHIVED'
+      : current?.active && isStillCurrentFixture(current) ? 'NO_FINAL_FEED_SIGNAL'
+      : 'FINAL_RESULT_MISSING';
+    return {
+      matchId: String(row.match_id), matchName: row.match_name,
+      pendingLines: Number(row.pending_lines), pendingTickets: Number(row.pending_tickets),
+      oldestTicketAt: row.oldest_ticket_at, ageHours,
+      kickoff, finalScore, reason,
+      marketNames,
+      feedStatus: current?.feed_status ?? null,
+      feedScoreAt: current?.score_at ?? null,
+    };
+  }));
+}
+
+/** A fixture seen recently and not already beyond a day past kickoff. */
+function isStillCurrentFixture(match) {
+  if (match.active === false || /^(?:ended|finished|cancelled)$/i.test(String(match.status ?? ''))) return false;
+  if (!match.start_at) return true;
+  const kickoff = new Date(match.start_at).getTime();
+  return !Number.isFinite(kickoff) || Date.now() - kickoff <= 24 * 3600000;
 }
 
 /** results that still have unsettled lines (the settler's work queue) */
