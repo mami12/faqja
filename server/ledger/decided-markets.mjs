@@ -105,6 +105,7 @@ export function isDecidedLiveOutcome(match, market) {
   if (totals.some(threshold => score.home + score.away > threshold)) return true;
 
   const bttsLeg = /\bbtts\s+(?:yes|no)\b|\b(?:g\/g|n\/g)\b/i.test(all) ||
+    /\b(?:both (?:teams? )?(?:not )?to score|both (?:teams? )?to score|to nil)\b/i.test(all) ||
     (/\b(?:btts|both teams(?: to)? score)\b/.test(name) &&
      /\b(?:yes|no|gg|ng)\b/i.test(all));
   return bttsLeg && score.home > 0 && score.away > 0;
