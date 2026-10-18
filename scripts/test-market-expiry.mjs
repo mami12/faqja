@@ -10,7 +10,7 @@ const file = readFileSync(new URL('../web/src/utils/marketExpiry.ts', import.met
 const compiled = ts.transpileModule(file, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const { isMarketExpired, filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable, isOutcomeDisplayable } =
+const { isMarketExpired, filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable, isOutcomeDisplayable, isCompletedCombinationOutcome } =
   await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 
 const outcome = (name, code = name, odds = 1.8) =>
@@ -82,6 +82,50 @@ assert.equal(isMarketVisible(match(0,0), bound, {}, {'123|gTotal|2.5|Over':true}
   'provider price suspension hides the builder immediately');
 assert.equal(isMarketVisible(match(0,0), bound, {}, {}, {'123|gTotal|2.5|Over':false}),true,
   'a reversible risk suspension must not permanently erase the builder');
+
+// Provider-defined combos also need per-OUTCOME live expiry. These were
+// previously left fully open even after Total 2.5 or BTTS was decided.
+const providerCombo = (name, labels) => ({
+  name, marketType:'OTHER', status:'ACTIVE', period:0,
+  outcomes: labels.map((label, i)=>({id:'combo'+i, name:label, code:label, odds:2.5, status:'ACTIVE'})),
+});
+const resultTotal = providerCombo('Result and Total', [
+  'Home And Over 2.5','Draw And Under 2.5',
+  'Away And Over 3.5','Draw And Under 3.5',
+]);
+assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(2,1)).map(o=>o.name),
+  ['Away And Over 3.5','Draw And Under 3.5'],
+  '2.5 result-and-goals outcomes disappear at 3 total goals, while 3.5 remains');
+assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(3,1)),[],
+  'every settled line disappears at four goals');
+closed(match(3,1),resultTotal);
+const totalBtts = providerCombo('Total and both teams to score',[
+  'Over 2.5 And Yes','Under 2.5 And No'
+]);
+open(match(2,0),totalBtts);
+closed(match(1,1),totalBtts);
+const resultBtts = providerCombo('Result and both teams to score',[
+  'Home And Yes','Draw And No','Away And Yes'
+]);
+open(match(2,0),resultBtts);
+closed(match(1,1),resultBtts);
+const compactBtts = providerCombo('1X2 & BTTS',['2&G/G','X&N/G']);
+closed(match(1,1),compactBtts);
+const compactGoal = providerCombo('Double Chance & Total', ['X/2&P_2.5','1/X&L_2.5']);
+open(match(2,0),compactGoal);
+closed(match(2,1),compactGoal);
+const compactBoth = providerCombo('G/G & Total',['G/G&+2.5','G/G&P_2.5']);
+closed(match(1,1),compactBoth); // BTTS is settled even below the 2.5 goal line
+const unrelatedCombo = providerCombo('Result and Total', ['Home And Over 3.5']);
+open(match(2,1),unrelatedCombo);
+open({status:'PREMATCH', homeScore:4, awayScore:2},resultTotal);
+const halfResult = providerCombo('1st Half Result and Total',['Home And Over 2.5']);
+open(match(3,0,{period:'2H',currentMinute:65}),halfResult);
+// Unknown provider labels must not be suppressed using only the match score.
+const unknownCombo = providerCombo('Other Market',['Option A','Option B']);
+open(match(4,4),unknownCombo);
+assert.equal(isCompletedCombinationOutcome(match(1,1),resultBtts,resultBtts.outcomes[0]),true);
+assert.equal(isCompletedCombinationOutcome(match(2,0),resultBtts,resultBtts.outcomes[0]),false);
 
 // Risk Management and provider locks display exactly like other suspended
 // prices: a disabled grey-lock button, not a missing market or fake "—" cell.
