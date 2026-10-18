@@ -44,7 +44,29 @@ function classify(marketName = '') {
   return 'OTHER';
 }
 
-const num = (v) => (Number.isFinite(Number(String(v).replace(',', '.'))) ? Number(String(v).replace(',', '.')) : null);
+const num = (v) => (v != null && v !== '' && Number.isFinite(Number(String(v).replace(',', '.'))) ? Number(String(v).replace(',', '.')) : null);
+const isFirstHalfLine = (marketName = '') =>
+  /\b(?:first|1st)\s*half\b|\b1h\b|\bhalf.?time\b|^ht(?:\s|$)/i.test(marketName) &&
+  !/halftime\s*\/?\s*fulltime|ht\s*\/\s*ft/i.test(marketName);
+const isSecondHalfLine = (marketName = '') =>
+  /\b(?:second|2nd)\s*half\b|\b2h\b/i.test(marketName);
+
+/** A known final score is not enough to grade first-half/corner/card props.
+ * Keep those lines pending for more authoritative feed evidence instead of
+ * inventing a win/loss or immediately refunding a valid winning proposition.
+ */
+export function hasRequiredSettlementEvidence(line, result) {
+  if (!result) return false;
+  if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
+  const marketName = String(line.market_name ?? '');
+  if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
+  const family = classify(marketName);
+  if (family === 'CORNERS' && (result.corners_home == null || result.corners_away == null)) return false;
+  if (family === 'CARDS' && (result.cards_home == null || result.cards_away == null)) return false;
+  // Early-payout promotions depend on event history, not only the final score.
+  if (/early\s*payout/i.test(marketName)) return false;
+  return true;
+}
 
 /**
  * 'WON' | 'LOST' | 'VOID' for one stored line against a stored result.
@@ -58,8 +80,13 @@ export function gradeLine(line, result) {
     if (statuses.includes('LOST')) return 'LOST';
     return statuses.every(s => s === 'WON') ? 'WON' : 'VOID';
   }
-  const home = Number(result.home_score);
-  const away = Number(result.away_score);
+  // 1H totals and BTTS cannot be graded from the full-time score. Their
+  // original ticket contract is snapshotted in market_name.
+  if (!hasRequiredSettlementEvidence(line, result)) return 'VOID';
+  if (isSecondHalfLine(line.market_name)) return 'VOID'; // no 2H score snapshot
+  const half = isFirstHalfLine(line.market_name);
+  const home = Number(half ? result.half_home_score : result.home_score);
+  const away = Number(half ? result.half_away_score : result.away_score);
   const totalGoals = home + away;
   const homeWin = home > away;
   const awayWin = away > home;
@@ -287,6 +314,7 @@ export async function settleMatch(matchId) {
 
   const tickets = new Set();
   for (const line of lines) {
+    if (!hasRequiredSettlementEvidence(line, result)) continue;
     const status = gradeLine(line, result);
     await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
     tickets.add(line.ticket_id);
@@ -308,7 +336,10 @@ export async function settleAll() {
   const ids = await unsettledMatchIds();
 
   const results = [];
-  for (const id of ids) results.push(await settleMatch(id));
+  for (const id of ids) {
+    try { results.push(await settleMatch(id)); }
+    catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
+  }
 
   return {
     captured,
@@ -334,7 +365,7 @@ export const isStillOnBoard = (match) =>
 export async function voidUnresolved(hours = 72) {
   const rows = (
     await query(
-      `select l.id, l.ticket_id, l.match_id
+      `select l.*
          from app_ticket_line l
          join app_ticket t on t.id = l.ticket_id
         where l.status = 'PENDING'
@@ -347,8 +378,12 @@ export async function voidUnresolved(hours = 72) {
   const touched = new Set();
   let voided = 0;
   for (const row of rows) {
-    if (await getResult(row.match_id)) continue; // settleMatch will handle it
-    if (isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
+    const result = await getResult(row.match_id);
+    // With a final result but missing HT/corner/card evidence, hold the
+    // line until this existing 72h window, then return it as VOID. Otherwise
+    // the old unconditional "if (result) continue" trapped it indefinitely.
+    if (result && hasRequiredSettlementEvidence(row, result)) continue;
+    if (!result && isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
     await query(`update app_ticket_line set status = 'VOID' where id = $1 and status = 'PENDING'`, [row.id]);
     touched.add(row.ticket_id);
     voided++;
