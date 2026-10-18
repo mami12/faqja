@@ -169,6 +169,70 @@ export async function recentResults(limit = 50) {
   return res.rows;
 }
 
+/**
+ * Administrator-only review queue: why tickets cannot yet be graded.
+ * The short ticket codes users see are prefixes of UUIDs; we join on the
+ * stored provider match IDs, not on fuzzy team names or user-supplied scores.
+ */
+export async function pendingSettlementReview(limit = 100) {
+  const max = Math.min(300, Math.max(1, Math.trunc(Number(limit) || 100)));
+  const { rows } = await query(
+    `select l.match_id,
+            min(l.match_name) as match_name,
+            count(*)::int as pending_lines,
+            count(distinct l.ticket_id)::int as pending_tickets,
+            min(t.placed_at) as oldest_ticket_at,
+            array_agg(distinct l.market_name) as market_names
+       from app_ticket_line l
+       join app_ticket t on t.id = l.ticket_id
+      where t.status = 'PENDING' and l.status = 'PENDING'
+      group by l.match_id
+      order by min(t.placed_at) asc
+      limit $1`,
+    [max],
+  );
+  if (!rows.length) return [];
+
+  const recorded = await resultsFor(rows.map(r => Number(r.match_id)));
+  return Promise.all(rows.map(async row => {
+    const stored = recorded.get(String(row.match_id));
+    const current = await getMatchById(Number(row.match_id));
+    const kickoff = current?.start_at ? new Date(current.start_at).toISOString() : null;
+    const timestamp = new Date(row.oldest_ticket_at).getTime();
+    const ageHours = Number.isFinite(timestamp) ? Math.max(0, Math.round((Date.now() - timestamp) / 3600000)) : null;
+    const finalScore = stored ? `${stored.home_score}-${stored.away_score}` : null;
+    const marketNames = row.market_names ?? [];
+    const incompleteStats = !!stored && marketNames.some(name =>
+      (/\b(?:first|1st)\s*half\b/i.test(name) &&
+        (stored.half_home_score == null || stored.half_away_score == null)) ||
+      (/\bcorners?\b/i.test(name) && (stored.corners_home == null || stored.corners_away == null)) ||
+      (/\bcards?\b|booking/i.test(name) && (stored.cards_home == null || stored.cards_away == null)) ||
+      /early\s*payout/i.test(name));
+    const reason = stored
+      ? (incompleteStats ? 'MISSING_MARKET_STATS' : 'RESULT_STORED')
+      : current && isFinished(current) ? 'FINAL_FRAME_NOT_ARCHIVED'
+      : current?.active && isStillCurrentFixture(current) ? 'NO_FINAL_FEED_SIGNAL'
+      : 'FINAL_RESULT_MISSING';
+    return {
+      matchId: String(row.match_id), matchName: row.match_name,
+      pendingLines: Number(row.pending_lines), pendingTickets: Number(row.pending_tickets),
+      oldestTicketAt: row.oldest_ticket_at, ageHours,
+      kickoff, finalScore, reason,
+      marketNames,
+      feedStatus: current?.feed_status ?? null,
+      feedScoreAt: current?.score_at ?? null,
+    };
+  }));
+}
+
+/** A fixture seen recently and not already beyond a day past kickoff. */
+function isStillCurrentFixture(match) {
+  if (match.active === false || /^(?:ended|finished|cancelled)$/i.test(String(match.status ?? ''))) return false;
+  if (!match.start_at) return true;
+  const kickoff = new Date(match.start_at).getTime();
+  return !Number.isFinite(kickoff) || Date.now() - kickoff <= 24 * 3600000;
+}
+
 /** results that still have unsettled lines (the settler's work queue) */
 export async function unsettledMatchIds() {
   const res = await query(
