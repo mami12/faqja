@@ -68,8 +68,9 @@ export function isDecidedLiveOutcome(match, market) {
   if (!score) return false;
   if (isDecidedLiveMarket(match, market)) return true;
   const name = norm(market?.name ?? market?.market_name);
-  if (Number(market?.period ?? 0) !== 0 ||
-      /\b(?:first|1st|second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime/.test(name)) return false;
+  if (Number(market?.period ?? 0) === 2 ||
+      /\b(?:second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime/.test(name)) return false;
+  if (firstHalfContract(market) && firstHalfElapsed(match)) return false;
 
   const rawName = String(market?.outcomeName ?? market?.outcome_name ?? '').trim();
   const rawCode = String(market?.outcomeCode ?? market?.outcome_key ?? '').trim();
