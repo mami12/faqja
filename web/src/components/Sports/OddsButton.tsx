@@ -6,6 +6,7 @@ import { Lock } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
 import { marketSelectionLabel } from '../../utils/marketCatalog';
+import { isMarketExpired, isCompletedCombinationOutcome } from '../../utils/marketExpiry';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
 
@@ -30,6 +31,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     lockedOutcomes[part.outcomeId] === true ||
     riskLockedOutcomes[part.outcomeId] === true);
   const isSuspended =
+    isMarketExpired(match, market) || isCompletedCombinationOutcome(match, market, outcome) ||
     builderLegLocked ||
     unidentifiedMixedOutcome ||
     providerSuspended ||
