@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { findLeg, builderId, parseBuilderId } from '../server/ledger/bet-builders.mjs';
 import { gradeLine } from '../server/ledger/settler.mjs';
-import { isDecidedLiveMarket } from '../server/ledger/decided-markets.mjs';
+import { isDecidedLiveMarket, isDecidedLiveOutcome } from '../server/ledger/decided-markets.mjs';
 
 const market = (name, type, line, outcome, code, odds) => ({
   id: name, name, marketType: type, line, status: 'ACTIVE',
@@ -43,6 +43,46 @@ assert.equal(isDecidedLiveMarket(raw,{name:'1X2',line:''}),false);
 assert.equal(isDecidedLiveMarket({...raw,away_score:1},{name:'Both Teams To Score',line:''}),true);
 assert.equal(isDecidedLiveMarket({...raw,away_score:0},{name:'Both Teams To Score',line:''}),false);
 assert.equal(isDecidedLiveMarket({...raw,service:'PREMATCH'},{name:'Total',line:'2.5'}),false);
+// Apply the same completed-contract rule to REAL provider combos at the
+// placement boundary, not just to React filtering.
+const selection = (marketName, outcomeName, line = '') => ({
+  name: marketName, outcome_name: outcomeName, line, period:0,
+});
+assert.equal(isDecidedLiveOutcome(raw,selection('Result and Total','Draw And Under 2.5')),true);
+assert.equal(isDecidedLiveOutcome(raw,selection('Result and Total','Home And Over 2.5')),true);
+assert.equal(isDecidedLiveOutcome(raw,selection('Result and Total','Home And Over 3.5')),false);
+assert.equal(isDecidedLiveOutcome(raw,selection('Total and both teams to score','Over 2.5 And Yes')),true);
+assert.equal(isDecidedLiveOutcome({...raw,home_score:1,away_score:1},
+  selection('Result and both teams to score','Home And No')),true);
+assert.equal(isDecidedLiveOutcome({...raw,home_score:2,away_score:0},
+  selection('Result and both teams to score','Home And No')),false);
+for (const name of ['Lyon And Both To Score','Lyon To Nil','Both Teams Not To Score And Draw']) {
+  assert.equal(isDecidedLiveOutcome({...raw,home_score:1,away_score:1},
+    selection('Result and both teams to score',name)),true,name);
+}
+assert.equal(isDecidedLiveOutcome(raw,selection('Double Chance & Total','X/2&P_2.5')),true);
+assert.equal(isDecidedLiveOutcome({...raw,home_score:2,away_score:0},
+  selection('Double Chance & Total','X/2&P_2.5')),false);
+assert.equal(isDecidedLiveOutcome({...raw,home_score:1,away_score:1},
+  selection('1X2 & BTTS','2&G/G')),true);
+assert.equal(isDecidedLiveOutcome(raw,selection('G/G & Total','G/G&+2.5')),true);
+assert.equal(isDecidedLiveOutcome({...raw,score_at:null},selection('Result and Total','Draw And Under 2.5')),false,
+  'a score placeholder cannot void player choices');
+assert.equal(isDecidedLiveOutcome({...raw,service:'PREMATCH'},selection('Result and Total','Home And Over 2.5')),false);
+assert.equal(isDecidedLiveOutcome(raw,selection('Result and Total','Unknown selection')),false);
+assert.equal(isDecidedLiveOutcome(raw,selection('1X2','1')),false);
+assert.equal(isDecidedLiveOutcome(raw,selection('Total Corners','Over 2.5','2.5')),false);
+assert.equal(isDecidedLiveOutcome({...raw,phase:'1H'},
+  {...selection('1st Half Result and Total','Home And Over 2.5'), period:1}),true);
+assert.equal(isDecidedLiveOutcome({...raw,phase:'1H',home_score:2,away_score:0},
+  {...selection('1st Half Result and Total','Home And Over 2.5'), period:1}),false);
+assert.equal(isDecidedLiveOutcome({...raw,service:'LIVE'},selection('Bet Builder: DC and Total',
+ 'DC X2 + TOTAL Under 2.5')),true);
+const projected = {...late, scoreAt: null};
+assert.ok(findLeg(projected,{market:'TOTAL',outcome:'Over',line:'2.5'}),
+  'without provider-confirmed score, frontend synthetic quotes are not hidden by an inferred score');
+assert.equal(findLeg({...projected,scoreAt:raw.score_at},{market:'TOTAL',outcome:'Over',line:'2.5'}),null);
+
 const id=builderId('123','11111111-1111-4111-8111-111111111111');
 assert.deepEqual(parseBuilderId(id),{matchId:'123',templateId:'11111111-1111-4111-8111-111111111111'});
 assert.equal(parseBuilderId('123|1X2||1'),null);

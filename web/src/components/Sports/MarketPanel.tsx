@@ -159,7 +159,13 @@ function GroupCard({ group, match, title }: GroupCardProps) {
 
 export default function MarketPanel({ match }: { match: Match }) {
   const { t, lang } = useLanguage();
-  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, livePatches } = useLiveFeed();
+  // Apply pushed goal/period changes immediately, without waiting for REST.
+  const patch = livePatches[String(match.id)];
+  const liveMatch = useMemo(() => ({ ...match, ...(patch ?? {}) }), [
+    match, patch?.status, patch?.period, patch?.currentMinute, patch?.homeScore, patch?.awayScore,
+    patch?.corners?.home, patch?.corners?.away, patch?.cards?.home, patch?.cards?.away,
+  ]);
   const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all');
   const [marketSearch, setMarketSearch] = useState('');
 
@@ -176,9 +182,9 @@ export default function MarketPanel({ match }: { match: Match }) {
       if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
-      if (!isMarketVisible(match, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) continue;
+      if (!isMarketVisible(liveMatch, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) continue;
       const available = filterDecidedOutcomes(
-        (market.outcomes ?? []).filter(isOutcomeDisplayable), market, match,
+        (market.outcomes ?? []).filter(isOutcomeDisplayable), market, liveMatch,
       );
       if (!available.length) continue;
 
@@ -197,7 +203,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [match, lockedMarkets, lockedOutcomes, riskLockedOutcomes, marketSearch, lang]);
+  }, [liveMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, marketSearch, lang]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
@@ -331,7 +337,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                     <MarketCard
                       key={market.id}
                       market={market}
-                      match={match}
+                      match={liveMatch}
                       title={title}
                     />
                   );
@@ -342,7 +348,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   <GroupCard
                     key={marketGroupKey(group.markets[0])}
                     group={group}
-                    match={match}
+                    match={liveMatch}
                     title={baseTitle}
                   />
                 );

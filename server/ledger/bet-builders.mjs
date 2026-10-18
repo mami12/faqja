@@ -4,7 +4,7 @@
  * Never use the synthetic price as authority when a ticket is placed.
  */
 import { query } from '../db.mjs';
-import { isDecidedLiveMarket } from './decided-markets.mjs';
+import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs';
 
 const CONTRACTS = {
   '1X2': ['1', 'X', '2'],
@@ -80,7 +80,12 @@ export function findLeg(match, leg) {
   const markets = (match.markets ?? []).filter(m => m.status === 'ACTIVE' && !isDecidedLiveMarket(match,m) && matchesMarket(m,leg.market,leg.line));
   for (const market of markets) {
     const outcome = (market.outcomes ?? []).find(o =>
-      o.status === 'ACTIVE' && Number.isFinite(Number(o.odds)) && Number(o.odds) > 1 &&
+      o.status === 'ACTIVE' &&
+      !isDecidedLiveOutcome(match, {
+        name: market.name, line: market.line, period: market.period,
+        outcomeName: o.name, outcomeCode: o.code,
+      }) &&
+      Number.isFinite(Number(o.odds)) && Number(o.odds) > 1 &&
       [String(o.code ?? ''),String(o.name ?? '')].some(s => s.toLowerCase() === leg.outcome.toLowerCase()));
     if (outcome) return { market, outcome };
   }
