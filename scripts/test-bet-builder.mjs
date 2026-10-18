@@ -68,6 +68,10 @@ assert.equal(isDecidedLiveOutcome({...raw,service:'PREMATCH'},selection('Result 
 assert.equal(isDecidedLiveOutcome(raw,selection('Result and Total','Unknown selection')),false);
 assert.equal(isDecidedLiveOutcome(raw,selection('1X2','1')),false);
 assert.equal(isDecidedLiveOutcome(raw,selection('Total Corners','Over 2.5','2.5')),false);
+assert.equal(isDecidedLiveOutcome({...raw,phase:'1H'},
+  {...selection('1st Half Result and Total','Home And Over 2.5'), period:1}),true);
+assert.equal(isDecidedLiveOutcome({...raw,phase:'1H',home_score:2,away_score:0},
+  {...selection('1st Half Result and Total','Home And Over 2.5'), period:1}),false);
 assert.equal(isDecidedLiveOutcome({...raw,service:'LIVE'},selection('Bet Builder: DC and Total',
  'DC X2 + TOTAL Under 2.5')),true);
 const projected = {...late, scoreAt: null};
