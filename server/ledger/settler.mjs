@@ -314,10 +314,12 @@ export async function settleMatch(matchId) {
   if (!lines.length) return { matchId: String(matchId), settled: 0 };
 
   const tickets = new Set();
+  let graded = 0;
   for (const line of lines) {
     if (!hasRequiredSettlementEvidence(line, result)) continue;
     const status = gradeLine(line, result);
-    await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
+    const updated = await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
+    if (updated.rowCount > 0) graded++;
     tickets.add(line.ticket_id);
   }
 
@@ -327,8 +329,18 @@ export async function settleMatch(matchId) {
     if (done) closed.push(done);
   }
 
-  await query('update app_match_result set settled_at = now() where match_id = $1', [Number(matchId)]);
-  return { matchId: String(matchId), settled: lines.length, tickets: closed };
+  // Keep accepting later provider corner/card/HT statistics until every
+  // selection is gradeable. Premature settled_at blocked archival refreshes.
+  if (graded === lines.length) {
+    await query(
+      `update app_match_result set settled_at = now()
+        where match_id = $1 and not exists
+          (select 1 from app_ticket_line
+            where match_id = $1 and status = 'PENDING')`,
+      [Number(matchId)],
+    );
+  }
+  return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
 /** one pass: store newly finished results, then settle everything that can be settled */
@@ -386,6 +398,7 @@ export async function voidUnresolved(hours = 72) {
   ).rows;
 
   const touched = new Set();
+  const touchedMatches = new Set();
   let voided = 0;
   for (const row of rows) {
     const result = await getResult(row.match_id);
@@ -396,6 +409,7 @@ export async function voidUnresolved(hours = 72) {
     if (!result && isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
     await query(`update app_ticket_line set status = 'VOID' where id = $1 and status = 'PENDING'`, [row.id]);
     touched.add(row.ticket_id);
+    touchedMatches.add(row.match_id);
     voided++;
   }
 
@@ -404,6 +418,14 @@ export async function voidUnresolved(hours = 72) {
     const done = await recalcTicket(ticketId);
     if (done) closed.push(done);
   }
-
+  for (const matchId of touchedMatches) {
+    await query(
+      `update app_match_result set settled_at = coalesce(settled_at,now())
+        where match_id = $1 and not exists
+          (select 1 from app_ticket_line
+            where match_id = $1 and status = 'PENDING')`,
+      [Number(matchId)],
+    );
+  }
   return { voided, closed };
 }
