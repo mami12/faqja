@@ -72,15 +72,26 @@ export const FINISHED_RESULT_INSERT = `
 `;
 
 export function finishedResultParameters(row) {
-  const home = row.stats ? statNum(row.stats.home?.corners) : null;
-  const away = row.stats ? statNum(row.stats.away?.corners) : null;
-  const cards = side => {
-    const team = row.stats?.[side];
-    return team ? (statNum(team.yellow) ?? 0) + (statNum(team.red) ?? 0) : null;
+  // The push feed stores stats under its competitor IDs, e.g.
+  // { "87150": {corners:3}, "87155": {corners:4} }, NOT under
+  // stats.home/stats.away. Failing to map this made corner/card tickets
+  // VOID or eternally pending even when full-time stats were available.
+  const stats = row.stats ?? {};
+  const homeId = row.raw?.homeTeam?.id ?? row.raw?.competitors?.[0]?.id;
+  const awayId = row.raw?.awayTeam?.id ?? row.raw?.competitors?.[1]?.id;
+  const homeTeam = (homeId != null ? stats[String(homeId)] : null) ?? stats.home ?? null;
+  const awayTeam = (awayId != null ? stats[String(awayId)] : null) ?? stats.away ?? null;
+  const home = homeTeam ? statNum(homeTeam.corners) : null;
+  const away = awayTeam ? statNum(awayTeam.corners) : null;
+  const cards = team => {
+    if (!team) return null;
+    const yellow = statNum(team.yellow);
+    const red = statNum(team.red);
+    return yellow === null && red === null ? null : (yellow ?? 0) + (red ?? 0);
   };
   const half = verifiedFirstHalf(row.periods_score);
   return [row.match_id, row.home, row.away, Number(row.home_score), Number(row.away_score),
-    home, away, cards('home'), cards('away'), half?.home ?? null, half?.away ?? null];
+    home, away, cards(homeTeam), cards(awayTeam), half?.home ?? null, half?.away ?? null];
 }
 
 /**
