@@ -179,22 +179,77 @@ const elapsedWindow = (m: MatchLike, market: MarketLike): boolean => {
  * Once any leg has irreversibly completed (e.g. Total 2.5 at three goals,
  * BTTS after both teams score), the whole builder offer closes.
  */
-const builderCompleted = (m: MatchLike, market: MarketLike): boolean => {
-  if (!isLive(m) || !/^bet builder:/i.test(String(market.name ?? ''))) return false;
-  const legs = market.outcomes ?? [];
-  if (legs.length !== 1 || !String(legs[0].id ?? '').startsWith('BB|')) return false;
+/**
+ * A combo market can still have a valid 1X2/Double Chance leg even though
+ * another leg is already settled. Such an offer must stop accepting new bets.
+ * Only decode explicitly named contract families; unknown provider outcomes
+ * remain visible rather than guessing what they mean.
+ *
+ * Recognized provider labels:
+ *   Result and Total       -> "Draw And Under 2.5"
+ *   Total and BTTS         -> "Over 2.5 And Yes"
+ *   Result and BTTS        -> "Home And Yes", "X/GG"
+ *   DC and Total           -> "X/2&P_2.5", "1/X&L_2.5"
+ *   Result and BTTS        -> "2&G/G"
+ *   BTTS and Total         -> "G/G&+2.5"
+ * Synthetic builders use "DC X2 + TOTAL Under 2.5" etc.
+ */
+export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, outcome: OutcomeLike): boolean {
+  if (!isLive(m)) return false;
   const score = scoreOf(m.homeScore, m.awayScore);
   if (!score) return false;
-  const parts = String(legs[0].name ?? '').split(/\s+\+\s+/);
-  return parts.some(part => {
-    const total = part.match(/^TOTAL\s+(?:Over|Under)\s+(\d+(?:[.,]\d+)?)$/i);
-    if (total) {
-      const line = number(total[1]);
-      return line !== null && score.home + score.away > line;
+  // 1H/2H require period-specific evidence; full-time score cannot grade them.
+  const marketName = norm(market.name);
+  if (isFirstHalf(market) || isSecondHalf(market) || isHTFTMarket(marketName)) return false;
+
+  const rawName = String(outcome.name ?? '').trim();
+  const rawCode = String(outcome.code ?? '').trim();
+  const labels = [rawName, rawCode].filter(Boolean);
+  const names = labels.join(' | ').toLowerCase();
+
+  const marketIsCombo =
+    /^bet builder\s*:/.test(marketName) ||
+    /\b(?:result|1\s*x\s*2|double chance|total|goals|btts|both teams)\b.*\b(?:and|with)\b.*\b(?:result|total|goals|both teams|btts|score)\b/.test(marketName) ||
+    /\b(?:result|1x2|double chance|total|btts)\s*[&+]\s*(?:total|btts|goals|result|1x2|both)/.test(marketName);
+  const explicitLegs = /\b(?:1x2|dc|btts|total)\s+\S+\s+\+\s+(?:1x2|dc|btts|total)\b/i.test(rawName) ||
+    /\b(?:g\/g|n\/g)\s*[&+]\s*(?:p_|l_|[+-]?\d)/i.test(rawName) ||
+    /\b(?:1\/x|x\/2|1\/2|[12x])\s*&\s*(?:g\/g|n\/g|p_|l_)/i.test(rawName);
+  if (!marketIsCombo && !explicitLegs) return false;
+
+  const total = score.home + score.away;
+  const totalLines: number[] = [];
+  for (const text of labels) {
+    for (const match of text.matchAll(/\b(?:over|under)\s*(\d+(?:[.,]\d+)?)\b/gi)) {
+      const line = number(match[1]);
+      if (line !== null) totalLines.push(line);
     }
-    return /^BTTS\s+(?:Yes|No)$/i.test(part) && score.home > 0 && score.away > 0;
-  });
+    // Provider's compact P_2.5/L_2.5 and +2.5 notation. Only present
+    // on validated multi-leg labels, never on arbitrary score names.
+    if (explicitLegs) {
+      for (const match of text.matchAll(/(?:[&+]\s*)(?:p_|l_|\+|-)?\s*(\d+[.,]\d+)\b/gi)) {
+        const line = number(match[1]);
+        if (line !== null) totalLines.push(line);
+      }
+    }
+  }
+  // Some provider markets keep the line in market.line and only "Over"
+  // in the outcome label. Never take the line of an unrelated market.
+  if (totalLines.length === 0 && /\b(?:total|goals)\b/.test(marketName) &&
+      /\b(?:over|under)\b/i.test(names)) {
+    const line = totalLine(market);
+    if (line !== null) totalLines.push(line);
+  }
+  if (totalLines.some(line => total > line)) return true;
+
+  const bttsLeg = /\bbtts\s+(?:yes|no)\b|\b(?:g\/g|n\/g)\b/i.test(names) ||
+    (/\b(?:btts|both teams(?: to)? score)\b/.test(marketName) &&
+     /\b(?:yes|no|gg|ng)\b/i.test(names));
+  return bttsLeg && score.home > 0 && score.away > 0;
 };
+
+const builderCompleted = (m: MatchLike, market: MarketLike): boolean =>
+  /^bet builder\s*:/i.test(String(market.name ?? '')) &&
+  (market.outcomes ?? []).some(outcome => isCompletedCombinationOutcome(m, market, outcome));
 
 export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   if (!market) return false;
@@ -273,6 +328,11 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
   if (!outcomes.length) return outcomes;
   if (isMarketExpired(match, market)) return [];
   if (!isLive(match)) return outcomes;
+
+  // A provider combo may contain many outcomes with *different* contracts
+  // and thresholds. Remove just those whose goal/BTTS leg has settled.
+  outcomes = outcomes.filter(o => !isCompletedCombinationOutcome(match, market, o));
+  if (!outcomes.length) return [];
 
   const name = norm(market.name);
   const counts = observedCounter(match, market);
