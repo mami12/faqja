@@ -12,6 +12,7 @@ import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
 import { adminRouter } from './ledger/admin.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
+import { isFinished, archiveFinishedMatch } from './ledger/results.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
   getSubscriptionIds, getFeedFreshness, matchStats, boostMatch,
@@ -90,6 +91,8 @@ let ledgerReady = false;
 let settleTimer = null;
 let settlementBusy = false;
 let lastUnresolvedCheck = 0;
+// De-duplicate repeated full-time frames after durable result persistence.
+const archivedTerminalMatches = new Set();
 async function ensureLedgerSchema() {
   if (ledgerReady) return true;
   try {
@@ -165,18 +168,22 @@ async function runSettlement(why = 'periodic') {
         `[settle] (${why}) captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`,
       );
     }
-    // A timed-out ticket without a final score must eventually be reviewed/
-    // refunded under the existing 72h safety rule even on quiet match days.
-    if (why !== 'periodic' || Date.now() - lastUnresolvedCheck >= 15 * 60 * 1000) {
-      lastUnresolvedCheck = Date.now();
-      const unresolved = await voidUnresolved(72);
-      if (unresolved.voided) console.log('[settle] stale lines voided:', unresolved.voided);
-    }
     return out;
   } catch (e) {
     console.error('[settle] pass failed:', e.message);
     return null;
   } finally {
+    // Even when finished-result capture fails (bad feed row / DB hiccup),
+    // old unresolvable tickets must still reach the separate 72h review.
+    if (why !== 'periodic' || Date.now() - lastUnresolvedCheck >= 15 * 60 * 1000) {
+      lastUnresolvedCheck = Date.now();
+      try {
+        const unresolved = await voidUnresolved(72);
+        if (unresolved.voided) console.log('[settle] unresolved lines voided:', unresolved.voided);
+      } catch (error) {
+        console.error('[settle] unresolved review failed:', error.message);
+      }
+    }
     settlementBusy = false;
   }
 }
@@ -439,6 +446,19 @@ async function applyInfoFromFeed(info) {
 
   const updated = await applyMatchInfo(enriched);
   if (updated) {
+    // Save a *feed-confirmed* FT result at the moment it arrives. Without this
+    // write, the next deploy/idle expiry can erase the only stored score and
+    // leave ticket lines PENDING indefinitely.
+    if (ledgerReady && !archivedTerminalMatches.has(String(updated.match_id)) && isFinished(updated)) {
+      try {
+        await archiveFinishedMatch(updated);
+        archivedTerminalMatches.add(String(updated.match_id));
+        void runSettlement('provider final score');
+      } catch (e) {
+        // A later FT frame or the 30s periodic pass will retry.
+        console.error('[settle] failed to preserve provider FT match', updated.match_id, e.message);
+      }
+    }
     io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
     await broadcastLiveRiskLocks(info.matchId, updated);
   }
