@@ -8,6 +8,7 @@ import AdminPage from './pages/AdminPage';
 import ManagerPage from './pages/ManagerPage';
 import MyBetsPage from './pages/MyBetsPage';
 import TransactionHistoryPage from './pages/TransactionHistoryPage';
+import CasinoPage from './pages/CasinoPage';
 
 const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false, allowAnyRole = false }: { children: JSX.Element, requireAdmin?: boolean, requireManager?: boolean, allowAnyRole?: boolean }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -44,6 +45,8 @@ const AppRoutes = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<ProtectedRoute><SportsbookPage /></ProtectedRoute>} />
       <Route path="/match/:id" element={<ProtectedRoute><SportsbookPage /></ProtectedRoute>} />
+      <Route path="/casino" element={<ProtectedRoute allowAnyRole><CasinoPage /></ProtectedRoute>} />
+      <Route path="/casino/:gameId" element={<ProtectedRoute allowAnyRole><CasinoPage /></ProtectedRoute>} />
       <Route path="/my-bets" element={<ProtectedRoute><MyBetsPage /></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute allowAnyRole><TransactionHistoryPage /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminPage /></ProtectedRoute>} />

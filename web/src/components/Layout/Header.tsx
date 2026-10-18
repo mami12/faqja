@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Globe, LogOut, Shield, Users, Ticket, Receipt } from 'lucide-react';
+import { Menu, X, Globe, LogOut, Shield, Users, Ticket, Receipt, Coins } from 'lucide-react';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -30,6 +30,11 @@ export default function Header({ onToggleNav }: Props) {
 
   const links = (
     <>
+      <button type="button" onClick={() => go('/casino')}
+        className={'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ' +
+          (location.pathname.startsWith('/casino') ? 'bg-amber-400/15 text-amber-300' : 'text-text-secondary hover:bg-tertiary/60 hover:text-white')}>
+        <Coins size={14} /> <span>Kazino</span>
+      </button>
       {user?.role === 'ADMIN' && (
         <button
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${

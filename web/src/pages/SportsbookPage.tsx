@@ -166,6 +166,11 @@ export default function SportsbookPage() {
             <span className="text-[10px] font-black leading-tight">FUTBOLL</span>
           </button>
           <div className="min-w-0 flex-1 bg-[#101925]" aria-hidden="true"/>
+          <button type="button" onClick={() => navigate('/casino')}
+            className="flex w-[75px] shrink-0 flex-col items-center justify-center gap-1 border-b-[3px] border-amber-500 pt-1 text-amber-300 transition-colors hover:bg-[#263141]">
+            <span className="text-[25px] leading-7" aria-hidden="true">🎰</span>
+            <span className="text-[10px] font-black leading-tight">KAZINO</span>
+          </button>
         </nav>
         {mobileSearchOpen && (
           <form role="search" onSubmit={e => {e.preventDefault();mobileSearchRef.current?.blur();}}
