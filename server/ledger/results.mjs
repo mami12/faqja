@@ -19,10 +19,10 @@ export const isFinished = (row) => {
   if (!row.score_at || row.home_score == null || row.away_score == null) return false;
   const score = [Number(row.home_score), Number(row.away_score)];
   if (!score.every(n => Number.isInteger(n) && n >= 0)) return false;
-  const status = String(row.status ?? '').toLowerCase();
-  const feed = String(row.feed_status ?? '').toLowerCase();
-  return status === 'ended' || status === 'finished' ||
-    /finish|ended|\bft\b|after (match|penalt)/.test(feed);
+  // Collector expiry and kickoff extrapolation also set status='ended'!
+  // Only a provider-delivered FT signal proves the final score.
+  const feed = String(row.feed_status ?? '').trim().toLowerCase();
+  return /^(?:ft|full.?time|finished|ended|after (?:match|penalt(?:y|ies)))(?:\b|$)/.test(feed);
 };
 
 const statNum = (v) => (v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -65,6 +65,9 @@ export const FINISHED_RESULT_INSERT = `
     cards_away = coalesce(excluded.cards_away, app_match_result.cards_away),
     half_home_score = coalesce(excluded.half_home_score, app_match_result.half_home_score),
     half_away_score = coalesce(excluded.half_away_score, app_match_result.half_away_score)
+  -- A verified admin correction or already-settled result must not be
+  -- overwritten by a later stale or conflicting provider frame.
+  where app_match_result.source = 'FEED' and app_match_result.settled_at is null
   returning (xmax = 0) as inserted
 `;
 
@@ -80,7 +83,20 @@ export function finishedResultParameters(row) {
     home, away, cards('home'), cards('away'), half?.home ?? null, half?.away ?? null];
 }
 
-/** copies every finished match with a known score into app_match_result (idempotent) */
+/**
+ * Persist the verified FT snapshot immediately, before the volatile LIVE match
+ * map is discarded or the server restarts. The regular settlement pass can
+ * later grade tickets against this durable score without relying on the feed.
+ * Returns {recorded, inserted}, including no-op for unconfirmed scores.
+ */
+export async function archiveFinishedMatch(row) {
+  if (!isFinished(row)) return { recorded: false, inserted: false };
+  const result = await query(FINISHED_RESULT_INSERT, finishedResultParameters(row));
+  const inserted = result.rows[0]?.inserted === true;
+  return { recorded: result.rowCount > 0, inserted };
+}
+
+/** copies every verified FT result into the durable result table (idempotent) */
 export async function captureFinishedMatches() {
   const rows = await getMatches({ includeEnded: true, limit: 2000 });
 
@@ -104,8 +120,14 @@ export async function captureFinishedMatches() {
 
   let stored = 0;
   for (const row of finished) {
-    const res = await query(FINISHED_RESULT_INSERT, finishedResultParameters(row));
-    if (res.rows[0]?.inserted) stored++;
+    try {
+      const result = await archiveFinishedMatch(row);
+      if (result.inserted) stored++;
+    } catch (e) {
+      // A single malformed feed record may not block settlement of hundreds
+      // of unrelated football fixtures already saved to the ledger.
+      console.error('[settle] result archive failed for match', row.match_id, e.message);
+    }
   }
   return stored;
 }
@@ -118,11 +140,12 @@ export async function getResult(matchId) {
 /** manual result (admin "settle" button): stores the score the admin entered */
 export async function storeResult(matchId, homeScore, awayScore, { homeTeam = null, awayTeam = null } = {}) {
   await query(
-    `insert into app_match_result (match_id, home_team, away_team, home_score, away_score)
-     values ($1, $2, $3, $4, $5)
+    `insert into app_match_result (match_id, home_team, away_team, home_score, away_score, source)
+     values ($1, $2, $3, $4, $5, 'ADMIN')
      on conflict (match_id) do update set
        home_score = excluded.home_score,
        away_score = excluded.away_score,
+       source = 'ADMIN',
        home_team  = coalesce(excluded.home_team, app_match_result.home_team),
        away_team  = coalesce(excluded.away_team, app_match_result.away_team)`,
     [Number(matchId), homeTeam, awayTeam, Number(homeScore), Number(awayScore)],
