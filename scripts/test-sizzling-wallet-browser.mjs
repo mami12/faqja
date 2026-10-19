@@ -118,6 +118,26 @@ try{
   const out=join(root,'tmp/sizzling-wallet-browser');
   await mkdir(out,{recursive:true});
   await page.screenshot({path:join(out,'wallet-loading.png')});
+  // The previous smoke test stopped at the loader and never clicked Start.
+  // Press the original PIXI canvas button and capture the actual POST payload.
+  const canvasBox=await page.$eval('#slotCanvas',el=>{
+    const r=el.getBoundingClientRect();
+    return {x:r.left,y:r.top,width:r.width,height:r.height};
+  });
+  const clickPositions=[[0.72,0.82],[0.72,0.9],[0.72,0.96],[0.83,0.88]];
+  const clicks=[];
+  for(const [fx,fy] of clickPositions){
+    const x=canvasBox.x+canvasBox.width*fx;
+    const y=canvasBox.y+canvasBox.height*fy;
+    clicks.push({fx,fy,x,y});
+    await page.mouse.click(x,y);
+    await new Promise(resolve=>setTimeout(resolve,1800));
+    if(api.some(entry=>/\\"action\\"\\s*:\\s*\\"spin\\"/.test(entry.request||'')))break;
+  }
+  await page.screenshot({path:join(out,'wallet-after-start.png')});
+  console.log('WALLET PIXI START CLICKS:',JSON.stringify(clicks));
+  console.log('WALLET PIXI START API:',JSON.stringify(api));
+
   console.log('WALLET PIXI STATE:',JSON.stringify(state));
   console.log('WALLET PIXI API:',JSON.stringify(api));
   console.log('WALLET PIXI ERRORS:',JSON.stringify(jsErrors.slice(0,15)));
@@ -130,6 +150,10 @@ try{
   assert.deepEqual(jsErrors,[],'Wallet Pixi game threw an error');
   assert.ok(loaded,
     'Real-wallet Pixi preloader never finished. State: '+JSON.stringify(state));
+  const attemptedSpin=api.find(entry=>/\\"action\\"\\s*:\\s*\\"spin\\"/.test(entry.request||''));
+  assert.ok(attemptedSpin,'Original Start button did not submit a spin. Clicks: '+JSON.stringify(clicks));
+  assert.equal(attemptedSpin.status,200,
+    'Original Start spin failed: '+JSON.stringify(attemptedSpin));
   console.log('Wallet Pixi fully loaded past 29%');
 }finally{
   await browser?.close();
