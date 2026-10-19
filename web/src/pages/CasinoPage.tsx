@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
 import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
+import SizzlingHotGame from './SizzlingHotGame';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -80,6 +81,23 @@ export default function CasinoPage() {
     setAuto(false);
     setDemo(previous => ({ ...previous, credits: 1000 }));
   };
+
+  // Sizzling Hot Deluxe has its own 10-payline reel engine and controls.
+  // The generic casino demo cannot represent those payline rules/animations.
+  if (game?.id === 'sizzling') {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-[#0b1018] text-white">
+        <Header />
+        <main className="mx-auto w-full max-w-[1320px] flex-1 px-2 pb-10 pt-3 sm:px-5">
+          <button type="button" onClick={() => navigate('/casino')}
+            className="mb-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-[#1c2733] px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
+            <ArrowLeft size={16} /> Kthehu te Kazino
+          </button>
+          <SizzlingHotGame />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#0b1018] text-white">
