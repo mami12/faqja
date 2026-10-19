@@ -29,7 +29,8 @@ const playerSQL = [
   'left join lateral (select coalesce(sum(t.stake),0) as turnover,',
   "coalesce(sum(t.stake) filter(where t.status='PENDING'),0) as pending,",
   "coalesce(sum(t.stake) filter(where t.status in ('WON','LOST')),0) as stake,",
-  "coalesce(sum(t.potential_payout) filter(where t.status='WON'),0) as payout,",
+  'coalesce(sum((select coalesce(sum(tx.amount),0) from app_transaction tx ' +
+  "where tx.user_id=u.id and tx.reference_id=t.id and tx.type=\'BET_WON\')) filter(where t.status=\'WON\'),0) as payout,",
   "count(*) filter(where t.status in ('WON','LOST')) as cnt",
   'from app_ticket t where t.user_id=u.id',
   'and ($3::timestamptz is null or t.placed_at >= $3)',
