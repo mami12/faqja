@@ -67,6 +67,12 @@ try {
     '<script src="./libs/assembler.js" onload="assembler.startDOMLoading()"></script>' +
     '</head><body attach-element="./body.html"></body></html>';
   await writeFile(join(output, 'index.html'), page);
+  // Same original media, animation, Pixi/Spine and sound. Only the server URL
+  // changes; financial outcomes are supplied by the authenticated ledger.
+  const realConfig = { ...config, sessionToken: 'wallet-session',
+    playURL: '/app/api/casino/sizzlinghotdeluxe/real/play' };
+  const realPage = page.replace(JSON.stringify(config), JSON.stringify(realConfig));
+  await writeFile(join(output, 'index-real.html'), realPage);
   const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
   for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig_hd.json',
     'data/paytableConfig-hd.json', 'data/audioConfig.json']) {
