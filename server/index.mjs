@@ -30,6 +30,7 @@ import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './id
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
+import {createSizzlingRealRouter, casinoSessionRouter} from './casino/sizzling-real.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -627,9 +628,14 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
   next();
 });
 
-// Restore the original standalone Sizzling Hot Deluxe demo protocol.
-// Its 100,000 play credits are stored only in a cookie-scoped session.
-// Never call wallet/transaction settlement routes from this game.
+// Sizzling Hot Deluxe — REAL player wallet (sportsbook balance).
+// The original Pixi client posts to /real/play with the HttpOnly casino session
+// cookie issued by POST /app/api/casino/session; every spin settles against the
+// same ledger used by sports bets. Mounted BEFORE the demo router.
+app.use('/app/api/casino/sizzlinghotdeluxe/real', createSizzlingRealRouter());
+app.use('/app/api', casinoSessionRouter);
+
+// Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
 
 // Keep staff settings/finance history, but disable the old wallet spin API.
@@ -640,12 +646,9 @@ app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
 if (existsSync(webDist)) {
-  // The former wallet-only cabinet URL now returns to the same demo game.
-  app.get('/app/casino-original/sizzling/index-real.html', (_req,res) =>
-    res.redirect(302, '/app/casino-original/sizzling/index.html'));
-  // Serve the original demo entry directly, including old bookmarks.
-  // Serve original game files without SPA fallback. If an asset is missing,
-  // return a real 404 instead of React's index.html with a misleading 200.
+  // Serve the original game files (demo entry index.html AND real-wallet entry
+  // index-real.html) without SPA fallback. If an asset is missing, return a
+  // real 404 instead of React's index.html with a misleading 200.
   // The entry/assembler must never be cached across Railway deployments.
   app.use('/app/casino-original/sizzling',
     express.static(path.join(webDist,'casino-original/sizzling'),{

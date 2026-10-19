@@ -5,14 +5,19 @@ import {
   REELS, paylines, paytable, gradeGrid, randomGrid, symbolMatrix, createSizzlingDemoRouter,
 } from '../server/casino/sizzling-demo.mjs';
 
-// Production must route the embedded game to the DEMO backend, not to
-// the sportsbook wallet or a redirect back to the casino page.
+// Production plays Sizzling Hot Deluxe with the player's real wallet: the
+// real endpoint must be mounted BEFORE the demo router, the HttpOnly session
+// router must exist, and the casino page must embed CasinoOriginalWallet
+// (never the demo iframe, never a redirect to the demo entry).
 const production=readFileSync(new URL('../server/index.mjs',import.meta.url),'utf8');
 const casinoPage=readFileSync(new URL('../web/src/pages/CasinoPage.tsx',import.meta.url),'utf8');
+assert.match(production,/app\.use\('\/app\/api\/casino\/sizzlinghotdeluxe\/real', createSizzlingRealRouter\(\)\)/);
+assert.match(production,/app\.use\('\/app\/api', casinoSessionRouter\)/);
+assert.match(production,/import \{createSizzlingRealRouter, casinoSessionRouter\} from '\.\/casino\/sizzling-real\.mjs'/);
 assert.match(production,/app\.use\('\/app\/api\/casino\/sizzlinghotdeluxe',createSizzlingDemoRouter\(\)\)/);
 assert.doesNotMatch(production,/redirect\(302, '\/app\/casino\/sizzling'\)/);
-assert.match(casinoPage,/src="\/app\/casino-original\/sizzling\/index\.html"/);
-assert.doesNotMatch(casinoPage,/CasinoOriginalWallet/);
+assert.match(casinoPage,/CasinoOriginalWallet/);
+assert.doesNotMatch(casinoPage,/src="\/app\/casino-original\/sizzling\/index\.html"/);
 
 assert.equal(REELS.length, 5);
 assert.ok(REELS.every(reel => reel.length === 75), 'each Goldsvet Sizzling strip has 75 stops');

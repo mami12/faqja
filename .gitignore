@@ -7,3 +7,6 @@ node_modules/
 # the React app: dependencies live at the repo root, the build output is served by the backend
 web/node_modules/
 web/dist/
+
+# original Novomatic client is fetched at build time by scripts/sync-original-sizzling.mjs
+web/public/casino-original/
