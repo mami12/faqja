@@ -6,7 +6,7 @@ import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
 import { apiClient } from '../api/client';
 import CasinoFullscreen from '../components/Layout/CasinoFullscreen';
-import CasinoRealSizzling from './CasinoRealSizzling';
+import CasinoOriginalWallet from './CasinoOriginalWallet';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -102,7 +102,7 @@ export default function CasinoPage() {
             <ArrowLeft size={16} /> Kthehu te Kazino
           </button>
           <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
-            {realMoneyAvailable && user?.role === 'PLAYER' ? <CasinoRealSizzling/> : (
+            {realMoneyAvailable && user?.role === 'PLAYER' ? <CasinoOriginalWallet/> : (
               <CasinoFullscreen>
                 <iframe title="Sizzling Hot Deluxe · klienti origjinal"
                   src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
