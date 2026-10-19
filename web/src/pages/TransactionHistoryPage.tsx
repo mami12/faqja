@@ -28,6 +28,8 @@ const TYPE_LABELS: Record<string, string> = {
   DEPOSIT: 'Depozitim',
   WITHDRAWAL: 'Tërheqje',
   BET_PLACED: 'Bast i vendosur',
+  CASINO_SPIN: 'Rrotullim kazinoje',
+  CASINO_WIN: 'Fitim kazinoje',
   BET_WON: 'Bast fitues',
   BET_REFUND: 'Rimbursim basti',
   TICKET_REVERT: 'Anulim bilete',
