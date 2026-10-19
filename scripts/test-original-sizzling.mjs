@@ -6,7 +6,7 @@ import express from 'express';
 import puppeteer from 'puppeteer';
 import { sizzlingDemoRouter } from '../server/sizzling-demo.mjs';
 
-const root=resolve(fileURLToPath(new URL('..',import.meta.url)),'..');
+const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
 const app=express();
 app.use('/app/api/casino/sizzling',sizzlingDemoRouter);
 app.use('/app',express.static(join(root,'web/dist')));
