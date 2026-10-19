@@ -532,26 +532,474 @@
 
         // 5 Classic Novomatic Sizzling Hot Paylines (row index 0=top, 1=mid, 2=bot)
         const PAYLINES = [
-            [1, 1, 1, 1, 1], // Line 1: Center
-            [0, 0, 0, 0, 0], // Line 2: Top
-            [2, 2, 2, 2, 2], // Line 3: Bottom
-            [0, 1, 2, 1, 0], // Line 4: V-shape
-            [2, 1, 0, 1, 2]  // Line 5: Inverted V
+                  [
+                            1,
+                            1,
+                            1,
+                            1,
+                            1
+                  ],
+                  [
+                            0,
+                            0,
+                            0,
+                            0,
+                            0
+                  ],
+                  [
+                            2,
+                            2,
+                            2,
+                            2,
+                            2
+                  ],
+                  [
+                            1,
+                            1,
+                            0,
+                            1,
+                            1
+                  ],
+                  [
+                            0,
+                            1,
+                            2,
+                            1,
+                            0
+                  ],
+                  [
+                            2,
+                            1,
+                            0,
+                            1,
+                            2
+                  ],
+                  [
+                            1,
+                            0,
+                            1,
+                            0,
+                            1
+                  ],
+                  [
+                            1,
+                            2,
+                            1,
+                            2,
+                            1
+                  ],
+                  [
+                            0,
+                            0,
+                            1,
+                            2,
+                            2
+                  ],
+                  [
+                            2,
+                            2,
+                            1,
+                            0,
+                            0
+                  ],
+                  [
+                            2,
+                            1,
+                            0,
+                            1,
+                            1
+                  ],
+                  [
+                            2,
+                            1,
+                            0,
+                            0,
+                            0
+                  ],
+                  [
+                            0,
+                            1,
+                            2,
+                            2,
+                            2
+                  ],
+                  [
+                            0,
+                            1,
+                            2,
+                            1,
+                            1
+                  ],
+                  [
+                            0,
+                            1,
+                            0,
+                            1,
+                            0
+                  ],
+                  [
+                            2,
+                            1,
+                            2,
+                            1,
+                            2
+                  ],
+                  [
+                            0,
+                            0,
+                            1,
+                            1,
+                            1
+                  ],
+                  [
+                            2,
+                            2,
+                            1,
+                            1,
+                            1
+                  ],
+                  [
+                            2,
+                            2,
+                            2,
+                            1,
+                            0
+                  ],
+                  [
+                            0,
+                            0,
+                            0,
+                            1,
+                            2
+                  ]
         ];
 
-        // Reel Strip Configurations (Authentic weighted strips)
+        // Exact source: Goldsvet casino/app/Games/Sizzling777WD/reels.txt
         const REEL_STRIPS = [
-            [1, 2, 3, 4, 1, 5, 2, 6, 7, 1, 3, 2, 8, 4, 1, 2, 3, 7, 6, 2],
-            [2, 3, 1, 4, 5, 1, 7, 2, 6, 3, 1, 8, 2, 4, 1, 3, 2, 6, 7, 1],
-            [3, 1, 2, 4, 6, 1, 5, 7, 2, 1, 3, 8, 4, 2, 1, 6, 3, 2, 7, 1],
-            [1, 4, 2, 3, 7, 1, 6, 2, 5, 3, 1, 8, 4, 2, 1, 7, 3, 6, 2, 1],
-            [2, 1, 3, 4, 6, 7, 1, 2, 5, 3, 1, 8, 2, 4, 1, 6, 7, 3, 2, 1]
+                  [
+                            2,
+                            4,
+                            1,
+                            3,
+                            1,
+                            2,
+                            5,
+                            4,
+                            8,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            8,
+                            6,
+                            3,
+                            7,
+                            5,
+                            3,
+                            1,
+                            5,
+                            3,
+                            6,
+                            1,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            8,
+                            7,
+                            2,
+                            4,
+                            2,
+                            6,
+                            4,
+                            2,
+                            1,
+                            6,
+                            4,
+                            1,
+                            8,
+                            2,
+                            5,
+                            1,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            3
+                  ],
+                  [
+                            2,
+                            4,
+                            1,
+                            3,
+                            1,
+                            2,
+                            5,
+                            4,
+                            8,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            8,
+                            6,
+                            3,
+                            7,
+                            5,
+                            3,
+                            1,
+                            5,
+                            3,
+                            6,
+                            1,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            8,
+                            7,
+                            2,
+                            4,
+                            2,
+                            6,
+                            4,
+                            2,
+                            1,
+                            6,
+                            4,
+                            1,
+                            8,
+                            2,
+                            5,
+                            1,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            3
+                  ],
+                  [
+                            2,
+                            4,
+                            1,
+                            3,
+                            1,
+                            2,
+                            5,
+                            4,
+                            8,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            8,
+                            6,
+                            3,
+                            7,
+                            5,
+                            3,
+                            1,
+                            5,
+                            3,
+                            6,
+                            1,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            8,
+                            7,
+                            2,
+                            4,
+                            2,
+                            6,
+                            4,
+                            2,
+                            1,
+                            6,
+                            4,
+                            1,
+                            8,
+                            2,
+                            5,
+                            1,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            3
+                  ],
+                  [
+                            2,
+                            4,
+                            1,
+                            3,
+                            1,
+                            2,
+                            5,
+                            4,
+                            8,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            8,
+                            6,
+                            3,
+                            7,
+                            5,
+                            3,
+                            1,
+                            5,
+                            3,
+                            6,
+                            1,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            8,
+                            7,
+                            2,
+                            4,
+                            2,
+                            6,
+                            4,
+                            2,
+                            1,
+                            6,
+                            4,
+                            1,
+                            8,
+                            2,
+                            5,
+                            1,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            3
+                  ],
+                  [
+                            2,
+                            4,
+                            1,
+                            3,
+                            1,
+                            2,
+                            5,
+                            4,
+                            8,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            8,
+                            6,
+                            3,
+                            7,
+                            5,
+                            3,
+                            1,
+                            5,
+                            3,
+                            6,
+                            1,
+                            2,
+                            5,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            8,
+                            7,
+                            2,
+                            4,
+                            2,
+                            6,
+                            4,
+                            2,
+                            1,
+                            6,
+                            4,
+                            1,
+                            8,
+                            2,
+                            5,
+                            1,
+                            4,
+                            2,
+                            7,
+                            6,
+                            3,
+                            7,
+                            2,
+                            3
+                  ]
         ];
 
         // Game State
-        const BET_STEPS = [1, 2, 5, 10, 20, 50, 100, 200];
-        let betIndex = 2; // Default 5.00
-        let balance = parseFloat(localStorage.getItem('sizzling_balance') || '1000.00');
+        const BET_STEPS = [10, 20, 40, 60, 80, 100, 5000];
+        let betIndex = 4; // Default 80 demo credits, like the supplied machine screenshot
+        const DEMO_BALANCE_KEY = 'sizzling777-deluxe-demo-balance-v3';
+        const existingCredits = Number(localStorage.getItem(DEMO_BALANCE_KEY));
+        let balance = Number.isFinite(existingCredits) && existingCredits >= 0 && existingCredits <= 1e9
+            ? existingCredits : 100000;
         let isSpinning = false;
         let isAuto = false;
         let reelStops = [0, 0, 0, 0, 0];
@@ -580,7 +1028,7 @@
         function updateDisplays() {
             dispBalance.innerText = balance.toFixed(2);
             dispBet.innerText = BET_STEPS[betIndex].toFixed(2);
-            localStorage.setItem('sizzling_balance', balance);
+            localStorage.setItem(DEMO_BALANCE_KEY, balance);
         }
 
         // Build Paytable Modal
@@ -648,9 +1096,9 @@
             if (isSpinning) return;
             const currentBet = BET_STEPS[betIndex];
             if (balance < currentBet) {
-                alert('Not enough credits! Balance has been replenished with 1000.00 credits.');
-                balance = 1000.00;
-                updateDisplays();
+                isAuto = false;
+                btnAuto.style.background = '';
+                document.getElementById('status-text').textContent = 'KREDITE TË PAMJAFTUESHME · RIMBUSH DEMO';
                 return;
             }
 
@@ -764,7 +1212,7 @@
             btnSpin.classList.remove('spinning');
             btnSpin.disabled = false;
 
-            const lineBet = BET_STEPS[betIndex] / 5.0;
+            const lineBet = BET_STEPS[betIndex] / PAYLINES.length;
             let totalWin = 0;
             const winningLines = [];
 
@@ -814,7 +1262,7 @@
                 }
             }
             if (scatterCount >= 3) {
-                const scatterMult = SYMBOL_MAP[5].pay[scatterCount] || 0;
+                const scatterMult = SYMBOL_MAP[5].pay[Math.min(5, scatterCount)] || 0;
                 const scatterWin = scatterMult * BET_STEPS[betIndex];
                 totalWin += scatterWin;
                 winningLines.push({
