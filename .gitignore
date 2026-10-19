@@ -10,3 +10,5 @@ web/dist/
 
 # original Novomatic client is fetched at build time by scripts/sync-original-sizzling.mjs
 web/public/casino-original/
+# test artifacts
+tmp/

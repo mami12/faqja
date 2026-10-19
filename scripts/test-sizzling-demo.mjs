@@ -22,7 +22,7 @@ assert.doesNotMatch(casinoPage,/src="\/app\/casino-original\/sizzling\/index\.ht
 assert.equal(REELS.length, 5);
 assert.ok(REELS.every(reel => reel.length === 75), 'each Goldsvet Sizzling strip has 75 stops');
 assert.equal(paylines.length, 5);
-assert.equal(paytable[7][2], 5, 'cherry pays on two adjacent symbols');
+assert.equal(paytable[7][2], 2, 'cherry pays 2 on two adjacent symbols (original table)');
 assert.equal(paytable[1][5], 5000, 'five 7s pay correctly');
 assert.equal(paytable[0][3], 2, '3+ scatters pay with total stake');
 
