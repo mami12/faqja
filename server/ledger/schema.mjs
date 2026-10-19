@@ -194,4 +194,31 @@ create table if not exists app_feed_override (
   updated_at  timestamptz not null default now(),
   primary key (kind, ref)
 );
+
+
+create table if not exists app_casino_round (
+ id uuid primary key default gen_random_uuid(),
+ user_id uuid not null references app_user(id) on delete restrict,
+ client_request_id uuid not null,
+ game_id text not null,
+ game_version text not null,
+ bet numeric(14,2) not null check (bet > 0),
+ denomination numeric(14,2) not null check (denomination > 0),
+ lines int not null check (lines > 0),
+ stake numeric(14,2) not null check (stake > 0),
+ payout numeric(14,2) not null check (payout >= 0),
+ balance_after numeric(14,2) not null,
+ result jsonb not null,
+ created_at timestamptz not null default now(),
+ unique(user_id,client_request_id)
+);
+create index if not exists app_casino_round_user_date_idx on app_casino_round(user_id,created_at desc);
+create table if not exists app_casino_settings (
+ id smallint primary key check (id=1),
+ enabled boolean not null default false,
+ profile text not null default 'SIZZLING_STANDARD_V1',
+ updated_by uuid references app_user(id) on delete set null,
+ updated_at timestamptz not null default now()
+);
+insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 `;
