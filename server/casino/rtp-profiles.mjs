@@ -8,9 +8,9 @@ import { randomInt } from 'node:crypto';
 import { REELS, paytable, paylines } from './sizzling-demo.mjs';
 
 export const RTP_PROFILES = Object.freeze([
-  { id: 'SIZZLING_STANDARD_V1', label: 'Standard demo', symbolWeight: 1 },
-  { id: 'SIZZLING_CALM_V1', label: 'Conservative demo', symbolWeight: 0 },
-  { id: 'SIZZLING_BONUS_V1', label: 'Bonus demo', symbolWeight: 3 },
+  { id: 'SIZZLING_STANDARD_V1', label: 'Standard (versioni 1)', boost: 38 },
+  { id: 'SIZZLING_CALM_V1', label: 'RTP më i ulët (versioni 1)', boost: 43 },
+  { id: 'SIZZLING_BONUS_V1', label: 'RTP më i lartë (versioni 1)', boost: 33 },
 ]);
 export const profileById = id => RTP_PROFILES.find(x => x.id === id) || null;
 const normalize = x => {
@@ -18,17 +18,17 @@ const normalize = x => {
   if (!profile) throw new Error('Unknown casino RTP profile: ' + x);
   return profile;
 };
-function stopWeights(reel, profile) {
-  // Fixed public selection rules; no bankroll, player, or session influence.
-  // For non-standard profiles, upweight or downweight a particular 7 stop.
-  // The exact math is included in each profile's published theoretical RTP.
-  return reel.map((symbol, i) => profile.symbolWeight === 1 ? 1
-    : symbol === 1 ? profile.symbolWeight : 1);
+function stopWeights(reel, profile, reelIndex) {
+  // Each reel favors a DIFFERENT fixed symbol. These weights are global and
+  // immutable; they cannot depend on player balance, bets or session outcome.
+  // The exact expectation is calculated from the weights and original paytable.
+  const preferredSymbol = [1,2,3,4,5][reelIndex];
+  return reel.map(symbol => symbol===preferredSymbol ? profile.boost : 1);
 }
 function reelModel(profileId) {
   const profile = normalize(profileId);
-  return REELS.map(reel => {
-    const weights = stopWeights(reel, profile);
+  return REELS.map((reel,reelIndex) => {
+    const weights = stopWeights(reel, profile, reelIndex);
     const total = weights.reduce((a, b) => a + b, 0);
     const symbols = Array.from({length:3}, () => Array(8).fill(0));
     const scatter = Array(4).fill(0);
