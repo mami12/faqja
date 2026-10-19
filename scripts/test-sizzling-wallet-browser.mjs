@@ -68,7 +68,7 @@ try{
     const response=await init.json();
     return {session:session.status,init:init.status,
       balance:response.balance?.after,gameUrl:payload.gameUrl};
-  },'Bearer '+token);
+  },token);
   assert.equal(preflight.session,200);
   assert.equal(preflight.init,200,'session cookie did not cross to Pixi wallet API');
   assert.equal(preflight.balance,10000,'wallet must use sportsbook balance');
