@@ -1,0 +1,193 @@
+/* Deluxe cabinet skin drawn against the user's SIZZLING 777 screenshot.
+   The 20 paylines and reel data remain Goldsvet PHP-derived, credits are demo. */
+:root{color-scheme:dark}
+html,body{background:#200006!important}
+body{display:flex;align-items:center;justify-content:center;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+#game-wrapper{
+ --gold:#d7a440;
+ width:100%!important;height:100%!important;max-width:1100px!important;max-height:750px!important;
+ min-height:0;position:relative;display:flex;flex-direction:column;
+ isolation:isolate;border:0!important;border-radius:0!important;overflow:hidden;
+ background:
+  radial-gradient(ellipse 75% 65% at 110% 18%,#bd0057 0%,transparent 67%),
+  radial-gradient(ellipse 80% 65% at -15% 94%,#ff7518 0%,transparent 60%),
+  radial-gradient(ellipse 70% 52% at 36% 8%,#e72532 0%,transparent 68%),
+  linear-gradient(120deg,#850008 0%,#c21826 45%,#a90058 80%,#670043 100%)!important;
+ box-shadow:inset 0 0 70px #510010,0 0 30px #0008!important
+}
+#game-wrapper::before{
+ content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.85;
+ background-image:
+ radial-gradient(ellipse 2px 11px at 4% 7%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 9px 1px at 4% 7%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 2px 12px at 29% 5%,#ffd7c8 0%,transparent 100%),
+ radial-gradient(ellipse 12px 1px at 29% 5%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 1px 9px at 68% 12%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 10px 1px at 68% 12%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 2px 10px at 87% 4%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 12px 1px at 87% 4%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 1px 10px at 21% 44%,#eecbdc 0%,transparent 100%),
+ radial-gradient(ellipse 10px 1px at 21% 44%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 1px 10px at 76% 56%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 10px 1px at 76% 56%,#fff 0%,transparent 100%),
+ radial-gradient(ellipse 2px 10px at 11% 80%,#ffd1d8 0%,transparent 100%),
+ radial-gradient(ellipse 10px 1px at 11% 80%,#ffd1d8 0%,transparent 100%);
+ animation:deluxeTwinkle 3.4s ease-in-out infinite alternate
+}
+#game-wrapper::after{
+ content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.23;
+ background:repeating-conic-gradient(from 5deg at 56% 51%,#fb2a5a 0 9deg,transparent 9deg 20deg);
+ mix-blend-mode:screen
+}
+@keyframes deluxeTwinkle{from{opacity:.25}to{opacity:.95}}
+@keyframes deluxePulse{0%,100%{filter:brightness(1);transform:scale(1)}50%{filter:brightness(1.17);transform:scale(1.035)}}
+@keyframes deluxeReelGlow{0%,100%{box-shadow:0 0 5px #fdd335 inset}50%{box-shadow:0 0 19px #ff3b30,0 0 10px #ffd760 inset}}
+#header-bar{
+ z-index:3!important;position:relative!important;flex:0 0 clamp(68px,16%,110px)!important;
+ width:100%;min-height:55px!important;height:auto!important;
+ display:flex!important;justify-content:center!important;align-items:flex-start!important;
+ padding:0!important;margin:0!important;background:transparent!important;
+ border:0!important;box-shadow:none!important
+}
+#logo-area{position:relative;display:flex;align-items:center;justify-content:center;
+ width:min(67%,650px);height:100%;z-index:2;filter:drop-shadow(0 3px 1px #150007)}
+#brand-main{
+ font-size:clamp(34px,8.9vw,94px);font-weight:1000;font-style:italic;letter-spacing:-.085em;
+ white-space:nowrap;line-height:.8;text-transform:uppercase;
+ background:linear-gradient(175deg,#fffbbb 3%,#ffe275 16%,#db6a16 37%,#ffcf60 43%,#9a0f2e 62%,#cf174b 69%,#193ca7 77%,#0b114b 93%);
+ background-clip:text;-webkit-background-clip:text;color:transparent;
+ -webkit-text-stroke:1.3px #6f160c;text-shadow:2px 2px 1px #1a0717b0;
+ transform:skewX(-5deg);
+}
+#brand-777{position:absolute;bottom:0;left:43%;line-height:1;z-index:2;
+ font-weight:1000;font-style:italic;font-size:clamp(24px,5vw,53px);
+ color:#f7a01e;-webkit-text-stroke:2px #5e0b0a;
+ text-shadow:-2px 2px #8c2716,2px 3px #2136a1,0 5px 2px #fff4a4;
+ transform:rotate(-5deg)}
+#brand-deluxe{position:absolute;bottom:8%;right:-10%;font-size:clamp(12px,2.9vw,27px);
+ font-weight:1000;line-height:1;color:#ffcb66;-webkit-text-stroke:1.2px #6a0007;
+ text-shadow:0 2px 1px #d31800,0 4px #250009;letter-spacing:-.06em}
+#btn-exit{position:absolute;left:1.6%;top:7px;width:38px;height:38px;padding:0;border-radius:50%;
+ border:1px solid #9f6d57;background:#340324cc;font-size:22px;z-index:6;color:#ffeac6}
+#btn-exit:hover{border-color:#fff0a5;filter:brightness(1.4)}
+#payline-left,#payline-right{position:absolute;z-index:5;top:17.4%;bottom:14%;
+ width:7%;min-width:25px;display:grid;grid-template-rows:repeat(10,minmax(0,1fr));
+ align-items:center;justify-items:center;pointer-events:none}
+#payline-left{left:1.8%}#payline-right{right:1.8%}
+.line-star{pointer-events:auto;display:flex;justify-content:center;align-items:center;
+ position:relative;width:100%;height:100%;padding:0;background:none;border:0;cursor:pointer;
+ color:var(--star-color);font-size:clamp(17px,3.1vw,30px);line-height:1;
+ -webkit-text-stroke:1.4px #f8d66d;
+ text-shadow:0 2px #6e0009,1px 0 #38131c,0 0 6px #ffd06d}
+.line-star:hover,.line-star[aria-pressed=true]{filter:brightness(1.3) drop-shadow(0 0 4px #fff);transform:scale(1.18)}
+.line-star.winning{animation:deluxePulse .58s infinite}
+#reels-container{
+ position:relative!important;z-index:2!important;flex:1 1 auto!important;min-height:0!important;
+ display:flex!important;overflow:hidden!important;
+ margin:0 9.2% 0!important;padding:0!important;
+ border:4px ridge #bc912d!important;border-radius:3px!important;
+ background:linear-gradient(100deg,#290006,#390009 42%,#230111 75%,#3c052c)!important;
+ box-shadow:0 0 0 2px #4e0709,0 0 0 4px #e5bb5e,inset 0 0 32px #100006!important
+}
+#reels-container::after{content:"";pointer-events:none;position:absolute;z-index:3;inset:0;
+ background:linear-gradient(180deg,#0007 0%,transparent 13%,transparent 87%,#0007 100%);}
+.reel-col{min-height:0!important;flex:1 1 20%!important;overflow:hidden!important;
+ background:radial-gradient(ellipse at 50% 50%,#51051e 0%,#30000b 52%,#1a0618 100%);
+ border-right:4px ridge #b88e39!important;position:relative!important}
+.reel-col:last-of-type{border-right:0!important}
+.reel-col::before{content:"";position:absolute;inset:0;
+ background:linear-gradient(105deg,transparent 65%,#8f205320 75%,transparent 90%);pointer-events:none;z-index:1}
+.reel-strip{will-change:transform}
+.symbol-cell{height:33.333%;display:flex!important;align-items:center;justify-content:center;overflow:visible}
+.symbol-cell img{width:93%!important;height:88%!important;max-width:170px;max-height:160px;
+ object-fit:contain;filter:drop-shadow(0 4px 4px #000b)!important}
+.symbol-cell.win-highlight img{filter:drop-shadow(0 0 13px #ffe43b) drop-shadow(0 0 15px #ee3014)!important}
+#payline-canvas{z-index:5!important}
+#win-banner{z-index:7;max-width:90%;pointer-events:none!important}
+#dashboard{position:relative!important;flex:0 0 clamp(74px,14%,98px)!important;height:auto!important;
+ z-index:6!important;display:grid!important;
+ grid-template-columns:minmax(112px,21%) minmax(0,1fr) minmax(86px,15%);
+ grid-template-rows:36px minmax(29px,1fr);gap:4px!important;
+ align-items:center!important;padding:5px 1.4%!important;margin:0!important;
+ border-top:3px solid #c6a16a!important;
+ background:linear-gradient(180deg,#5a144d 0%,#301339 36%,#26032f 100%)!important;
+ box-shadow:inset 0 4px 7px #e1aa6d44!important}
+#balance-panel{grid-area:1/1;display:flex;align-items:center;gap:5px;min-width:0;
+ border:2px ridge #91663e;border-radius:6px;background:#13020c;padding:3px 5px;height:30px}
+#balance-icon{color:#ffe04b;font-size:19px}
+#balance-panel .value{font-size:clamp(11px,1.8vw,16px);font-weight:bold;color:#ffe64d;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+#status-text{grid-area:1/2;align-self:stretch;margin:1px 2px;display:flex;align-items:center;
+ justify-content:center;background:#16030c;border:2px ridge #7a3140;border-radius:3px;
+ color:#ffe471;font-size:clamp(10px,1.7vw,15px);font-weight:800;text-shadow:0 0 2px #c97609;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+#quick-actions{grid-area:2/1;display:flex;gap:3px;height:100%;align-items:center}
+#quick-actions .btn-game{flex:1 1 20%;min-width:0;max-width:40px;height:100%;min-height:26px;
+ padding:2px!important;font-size:17px;border-radius:3px!important;
+ background:linear-gradient(#872d72,#391044)!important;border:2px ridge #c19c70!important;
+ box-shadow:inset 0 1px #f9c0ee77,0 1px 1px #09000a!important}
+#quick-actions .btn-game[aria-pressed=true]{color:#ffe866;border-color:#ffe866!important}
+#bet-controls{grid-area:2/2;display:flex;min-width:0;align-items:center;gap:2px;height:100%}
+#bet-controls .bet-chip{height:100%;flex:1 1 0;min-width:0;padding:0 1px;
+ background:linear-gradient(180deg,#e52b28 0%,#aa0419 48%,#f86b29 100%);
+ border:1.5px ridge #f3bd72;border-radius:2px;color:#fff6d1;font-size:clamp(8px,1.5vw,14px);
+ font-weight:900;cursor:pointer;text-shadow:0 1px #7b0204}
+#bet-controls .bet-chip[aria-pressed=true]{background:linear-gradient(#a6bb04,#388627 85%);
+ border-color:#e7db61;color:#fffbc8;box-shadow:0 0 7px #b2ee41}
+#bet-controls .bet-chip:disabled{opacity:.5;cursor:wait}
+#bet-controls .chip-arrow{flex:0 0 clamp(20px,3vw,31px);border-radius:50%;font-size:17px}
+#bet-controls .chip-max{font-size:clamp(8px,1.3vw,13px)}
+#btn-spin{position:absolute!important;right:3%!important;top:clamp(-22px,-3.7vw,-12px)!important;
+ width:clamp(66px,10.5vw,104px)!important;height:clamp(66px,10.5vw,104px)!important;
+ min-width:0!important;padding:0!important;border-radius:50%!important;
+ background:radial-gradient(circle at 37% 30%,#fff6ab 2%,#ffae37 22%,#ff6c18 48%,#a92300 75%)!important;
+ border:6px ridge #dfb44e!important;color:#fff2d5!important;font-weight:1000;
+ font-size:clamp(25px,5vw,48px)!important;line-height:1;
+ -webkit-text-stroke:1px #fff3bf;text-shadow:0 2px 3px #971500;
+ box-shadow:0 0 0 4px #2c173d,0 0 15px #f89029!important;z-index:8!important}
+#btn-spin .spin-glyph{display:inline-block;line-height:1}
+#btn-spin:hover:not(:disabled){filter:brightness(1.17)}
+#btn-spin.spinning .spin-glyph{animation:deluxeSpin .6s linear infinite}
+@keyframes deluxeSpin{to{transform:rotate(360deg)}}
+#btn-auto{position:absolute!important;right:1.4%;bottom:5px;width:35px;height:33px;
+ padding:1px!important;min-height:0!important;font-size:16px;
+ border:2px ridge #d09c63!important;background:linear-gradient(#d95120,#741126)!important}
+#btn-auto[aria-pressed=true]{background:linear-gradient(#3fce6e,#006945)!important}
+#game-wrapper .paytable-overlay{z-index:20!important;top:12%!important;height:76%!important;
+ background:#17010feb!important;border:4px ridge #caa44b;padding:12px;overflow:auto}
+.paytable-overlay h2{font-size:18px}
+.paytable-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+.pay-item{min-width:0!important;background:#32091add!important}
+.pay-item img{width:48px!important;height:48px!important}
+#floating-win{position:absolute;bottom:16%;left:50%;transform:translateX(-50%);
+ z-index:6;pointer-events:none;color:#ffec79;text-shadow:0 0 8px #a30017;font-size:20px;font-weight:1000}
+#demo-note{position:absolute;right:0;top:0;padding:2px 7px;color:#fff9b7;font-size:10px;
+ background:#21001088;border-radius:0 0 0 5px;z-index:7}
+@media(max-width:650px){
+ #header-bar{flex-basis:clamp(54px,14%,74px)!important}
+ #brand-main{font-size:clamp(31px,9vw,55px)}
+ #brand-deluxe{right:-13%;font-size:clamp(10px,2.8vw,17px)}
+ #btn-exit{width:28px;height:28px;font-size:16px}
+ #reels-container{margin:0 8% 0!important;border-width:2px!important}
+ .reel-col{border-right-width:2px!important}
+ #payline-left,#payline-right{width:7%;min-width:19px;top:14.5%;bottom:17%}
+ #payline-left{left:.5%}#payline-right{right:.5%}
+ .line-star{font-size:clamp(14px,3.6vw,22px);-webkit-text-stroke:.8px #f3c762}
+ #dashboard{flex-basis:clamp(92px,22%,111px)!important;
+   grid-template-columns:34% minmax(0,1fr) 54px;grid-template-rows:34px 45px;gap:3px;padding:5px 6px!important}
+ #balance-panel{padding:1px 3px}
+ #balance-icon{font-size:13px}#balance-panel .value{font-size:11px}
+ #status-text{font-size:10px;text-align:center}
+ #quick-actions .btn-game{font-size:13px;max-width:none}
+ #bet-controls{overflow-x:auto;scrollbar-width:none}
+ #bet-controls .bet-chip{flex:0 0 29px;font-size:9px}
+ #bet-controls .chip-arrow{flex-basis:23px}
+ #btn-spin{right:5px!important;top:12px!important;width:54px!important;height:54px!important;
+  border-width:4px!important;font-size:27px!important}
+ #btn-auto{right:15px;bottom:1px;width:28px;height:23px;font-size:12px}
+ .paytable-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ #demo-note{font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){
+ #game-wrapper::before,#btn-spin.spinning .spin-glyph,.line-star.winning{animation:none}
+}
