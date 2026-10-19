@@ -74,6 +74,24 @@ try {
   const realPage = page.replace(JSON.stringify(config), JSON.stringify(realConfig));
   await writeFile(join(output, 'index-real.html'), realPage);
   const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
+  // The upstream archive can have a manifest referencing files that were
+  // never committed. Detect all of them at build time, not at 29% in Railway.
+  const missing = [];
+  for (const [logical, hashed] of Object.entries(manifest)) {
+    if (typeof hashed !== 'string') continue;
+    try {
+      const info = await stat(join(output, hashed));
+      if (!info.isFile()) missing.push(logical + ' -> ' + hashed);
+    } catch (error) {
+      if (error.code === 'ENOENT') missing.push(logical + ' -> ' + hashed);
+      else throw error;
+    }
+  }
+  if (missing.length) throw new Error(
+    'Original Sizzling source archive is incomplete: ' + missing.length +
+    ' manifest resources are absent. Missing files:\\n' + missing.join('\\n') +
+    '\\nRestore original files in mami12/New-folder before publishing.'
+  );
   for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig_hd.json',
     'data/paytableConfig-hd.json', 'data/audioConfig.json']) {
     const resolvedAsset = join(output, manifest[asset] ?? asset);
