@@ -1,8 +1,18 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import express from 'express';
 import {
   REELS, paylines, paytable, gradeGrid, randomGrid, symbolMatrix, createSizzlingDemoRouter,
 } from '../server/casino/sizzling-demo.mjs';
+
+// Production must route the embedded game to the DEMO backend, not to
+// the sportsbook wallet or a redirect back to the casino page.
+const production=readFileSync(new URL('../server/index.mjs',import.meta.url),'utf8');
+const casinoPage=readFileSync(new URL('../web/src/pages/CasinoPage.tsx',import.meta.url),'utf8');
+assert.match(production,/app\.use\('\/app\/api\/casino\/sizzlinghotdeluxe',createSizzlingDemoRouter\(\)\)/);
+assert.doesNotMatch(production,/redirect\(302, '\/app\/casino\/sizzling'\)/);
+assert.match(casinoPage,/src="\/app\/casino-original\/sizzling\/index\.html"/);
+assert.doesNotMatch(casinoPage,/CasinoOriginalWallet/);
 
 assert.equal(REELS.length, 5);
 assert.ok(REELS.every(reel => reel.length === 75), 'each Goldsvet Sizzling strip has 75 stops');
@@ -80,6 +90,34 @@ try {
   assert.ok(await other.headers.get('set-cookie'),'anonymous session must have own cookie');
   const bad=await post({action:'spin',bet:-5,lines:5,denomination:1,request_id:'4'});
   assert.equal(bad.status,400);
+
+  // A winning demo spin must offer the ORIGINAL red/black Gamble action.
+  // Use the browser protocol and isolated cookie, never the sports wallet.
+  let winning=null;
+  let nextRequestId=5;
+  for(let attempt=0;attempt<600;attempt++){
+    const round=await post({action:'spin',bet:1,lines:5,denomination:1,
+      request_id:String(nextRequestId++)});
+    assert.equal(round.status,200);
+    if(Number(round.body.spin.wins.total)>0){winning=round.body;break;}
+  }
+  assert.ok(winning,'Expected at least one winning demo spin in 600 attempts');
+  assert.ok(winning.available_actions.includes('gamble'),'Demo wins must enable Gamble');
+  assert.ok(Number(winning.spin.wins.total)>0,'Winning symbols must show positive winnings');
+  const initialPending=Number(winning.spin.wins.total);
+  const gamble=await post({action:'get_double',request_id:String(nextRequestId++)});
+  assert.equal(gamble.status,200);
+  assert.ok(gamble.body.available_actions.includes('set_double'));
+  assert.equal(Number(gamble.body.gamble.bet),initialPending);
+  const balanceBefore=gamble.body.balance.after;
+  const gambleChoice=await post({action:'set_double',choice:0,request_id:String(nextRequestId++)});
+  assert.equal(gambleChoice.status,200);
+  assert.ok(['win','lose'].includes(gambleChoice.body.gamble.status));
+  assert.equal(Number(gambleChoice.body.balance.after),
+    Number((balanceBefore+(gambleChoice.body.gamble.status==='win'?initialPending:-initialPending)).toFixed(2)));
+  const collectedGamble=await post({action:'collect',request_id:String(nextRequestId++)});
+  assert.equal(collectedGamble.status,200);
+  assert.deepEqual(collectedGamble.body.available_actions,['spin']);
   const status=await fetch('http://127.0.0.1:'+server.address().port+
     '/app/api/casino/sizzlinghotdeluxe/status');
   assert.equal((await status.json()).realMoney,false);

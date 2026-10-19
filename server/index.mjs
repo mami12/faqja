@@ -29,7 +29,7 @@ import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
-import {createSizzlingRealRouter,casinoSessionRouter} from './casino/sizzling-real.mjs';
+import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -627,11 +627,12 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
   next();
 });
 
-// The public casino has only Sizzling backed by the sportsbook ledger.
-// The isolated demo router still exists solely for offline automated tests.
-app.use('/app/api/casino/sizzlinghotdeluxe/real',createSizzlingRealRouter());
-app.use('/app/api',casinoSessionRouter);
+// Restore the original standalone Sizzling Hot Deluxe demo protocol.
+// Its 100,000 play credits are stored only in a cookie-scoped session.
+// Never call wallet/transaction settlement routes from this game.
+app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
 
+// Keep staff settings/finance history, but disable the old wallet spin API.
 app.use('/app/api', casinoWalletRouter);
 app.use('/app/api', casinoFinanceRouter);
 app.use('/app/api', adminRouter);
@@ -639,9 +640,10 @@ app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
 if (existsSync(webDist)) {
-  // An old bookmark must never open a play-money version beside the sports wallet.
-  app.get('/app/casino-original/sizzling/index.html', (_req,res) =>
-    res.redirect(302, '/app/casino/sizzling'));
+  // The former wallet-only cabinet URL now returns to the same demo game.
+  app.get('/app/casino-original/sizzling/index-real.html', (_req,res) =>
+    res.redirect(302, '/app/casino-original/sizzling/index.html'));
+  // Serve the original demo entry directly, including old bookmarks.
   // Serve original game files without SPA fallback. If an asset is missing,
   // return a real 404 instead of React's index.html with a misleading 200.
   // The entry/assembler must never be cached across Railway deployments.
@@ -649,7 +651,7 @@ if (existsSync(webDist)) {
     express.static(path.join(webDist,'casino-original/sizzling'),{
       fallthrough:false,
       setHeaders:(res,file)=>{
-        if(/(?:index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
+        if(/(?:index|index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
           res.setHeader('Cache-Control','no-store, max-age=0');
       },
     }));
