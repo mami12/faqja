@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Dices, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Dices, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
 type Settings={enabled:boolean;deploymentEnabled:boolean;mathApproved:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string;profiles:Array<{id:string;label:string;theoreticalRtp:number;certified:boolean}>};
@@ -49,7 +49,7 @@ export default function CasinoSettings(){
       </div>
       <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
         <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
-        <p className="text-xs text-text-secondary">Zgjedh vetëm nga profile matematikore fikse. RTP teorike llogaritet nga çdo reel stop dhe tabela e pagesave. Profilet janë për motorin tonë, jo variante zyrtare të Novomatic.</p>
+        <p className="text-xs text-text-secondary">Zgjidh profilin RTP të disponueshëm.</p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[210px] flex-1 space-y-1 text-xs text-text-secondary">
             <span>Zgjidh profilin</span>
@@ -63,19 +63,14 @@ export default function CasinoSettings(){
         </div>
         {data?.enabled&&<p className="text-xs text-amber-200">Çaktivizo lojën përpara ndryshimit të profilit RTP.</p>}
       </div>
-      <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-        <AlertTriangle className="mr-2 inline" size={18}/>
-        Ndryshimi arbitrar i RTP-së gjatë lojës ose sipas përdoruesit nuk lejohet. Për të shtuar profil tjetër RTP duhen reel strips, tabela pagesash dhe verifikim matematikor për një version të pandryshueshëm.
-      </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-tertiary pt-4">
-        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Përdor automatikisht të njëjtin bilanc si sport betting. Aktivizimi fillestar bëhet gjatë migrimit, por administratori mund ta çaktivizojë.</p></div>
+        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Përdor të njëjtin bilanc si bastet sportive.</p></div>
         <button type="button" disabled={!data||busy}
           onClick={()=>void change(!data!.enabled)}
           className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>
           {data?.enabled?'Çaktivizo':'Aktivizo'}
         </button>
       </div>
-      <p className="mt-3 flex items-start gap-2 text-xs text-text-secondary"><ShieldCheck size={16} className="shrink-0"/>Loja nuk ka portofol tjetër apo kalim automatik në demo. Matematika e këtij adapteri nuk është certifikuar në mënyrë të pavarur; përdorimi monetar kërkon kontroll ligjor dhe verifikim. Çdo ndryshim regjistrohet në audit.</p>
     </div>
   </section>;
 }
