@@ -642,6 +642,17 @@ if (existsSync(webDist)) {
   // An old bookmark must never open a play-money version beside the sports wallet.
   app.get('/app/casino-original/sizzling/index.html', (_req,res) =>
     res.redirect(302, '/app/casino/sizzling'));
+  // Serve original game files without SPA fallback. If an asset is missing,
+  // return a real 404 instead of React's index.html with a misleading 200.
+  // The entry/assembler must never be cached across Railway deployments.
+  app.use('/app/casino-original/sizzling',
+    express.static(path.join(webDist,'casino-original/sizzling'),{
+      fallthrough:false,
+      setHeaders:(res,file)=>{
+        if(/(?:index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
+          res.setHeader('Cache-Control','no-store, max-age=0');
+      },
+    }));
   app.use('/app', express.static(webDist));
   // deep links (/app/login, /app/admin, ...) fall through to the SPA shell
   app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
