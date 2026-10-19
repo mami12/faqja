@@ -1,39 +1,26 @@
-# Sport + Kazino: portofoli, raportet dhe RTP
+# Sizzling Hot Deluxe: integrim me faqen sportive
 
-## Implementuar
+## Faqja e kazinosë
+Ka vetëm **Sizzling Hot Deluxe**. Rrugët `/casino` dhe `/casino/sizzling` shfaqin klientin origjinal Pixi/Spine/Howler të kopjuar gjatë build-it nga `mami12/New-folder`, commit-i i fiksuar në `scripts/sync-original-sizzling.mjs`. Grafikat, animacionet, logoja, audio dhe kontrolli origjinal i basteve/5 linjave mbeten pjesë e lojës. Nuk shfaqen tetë lojërat e tjera apo motorë me emoji.
 
-- Bilanci i përbashkët në PostgreSQL: app_user.balance dhe app_transaction. Gjithë lëvizjet bëhen brenda një transaksioni atomik.
-- Historik i përhershëm i raundeve: app_casino_round me UUID idempotence, rezultat, lojë, datë, bast, pagesë dhe bilanc pas lojës.
-- Fitimi/humbja e çdo lojtari ndahet sipas sportit dhe kazinosë. Përdoruesi, admini dhe menaxheri kanë filtrat e tyre. Depozitat/transfertat nuk llogariten si fitime nga loja.
-- Admini sheh gjithë llogaritë. Menaxheri sheh vetëm përdoruesit e tij dhe transaksionet përkatëse. Lojtarët me histori financiare nuk mund të fshihen dhe të humbasin auditimin.
-- Sizzling Hot Deluxe: klienti origjinal Pixi/Spine/Howler mbetet me figurat, animacionet e audiot nga New-folder; gjatë build-it përgatiten index.html (demo) dhe index-real.html (wallet). API-ja origjinale JSON për init/spin/collect ruhet, por në real mode spin përdor rezultatet e serverit dhe të njëjtin bilanc si sporti. Gamble/double është i bllokuar në real mode.
-- Tetë lojërat e tjera përdorin imazhet lokale ekzistuese dhe motorin e tyre të personalizuar në server. Ai nuk është matematikë zyrtare e ofruesve. Free spins dhe hold/respin llogariten dhe paguhen brenda një raundi.
-- RTP për Sizzling: admini zgjedh mes tri profileve të pandryshueshme; probabilitetet e stop-eve janë versionuar dhe RTP teorike llogaritet në mënyrë analitike. Nuk lejohet personalizimi sipas lojtarit. Për të ndërruar profilin, loja me fonde duhet çaktivizuar; çdo ndryshim hyn në audit log. Statistikat e RTP të vëzhguar vijnë nga raundet e kryera.
-- Mobile: butoni Fullscreen kërkon landscape me ScreenOrientation.lock kur lejohet. Në iOS/embedded browsers përdoret rrotullim vizual CSS, pasi browser-i mund të mos lejojë rotacion fizik. Responsive për desktop dhe mobile.
+- `/app/casino-original/sizzling/index.html`: demo, pa para reale, me API lokale `/app/api/casino/sizzlinghotdeluxe/play` që mbështet init/spin/collect/gamble.
+- `/app/casino-original/sizzling/index-real.html`: i njëjti klient vizual, por me API `/app/api/casino/sizzlinghotdeluxe/real/play`, që dërgon spin te portofoli i përbashkët PostgreSQL. Për real-money `gamble/double` është i çaktivizuar.
+- Fullscreen në desktop dhe mobile kërkon `screen.orientation.lock('landscape')` ku mbështetet, dhe CSS fallback për iOS e browser-a të kufizuar. Rrotullimi fizik nuk garantohet në çdo pajisje.
 
-## API
+## Portofoli dhe financat
+Bilanci i sportit/kazinosë është `app_user.balance`. Çdo spin ruhet me UUID unik për shmangien e debitimeve të dyfishta, rezultatin e motorit në server, bastin, pagesën, profilin matematikor, bilancin pas raundit dhe referencat në `app_transaction`. Fitimi/humbja e menaxherit për lojtarët e vet regjistrohet në të njëjtin transaksion të databazës.
 
-- POST /app/api/casino/session: krijon cookie të shkurtër, HttpOnly, SameSite=Strict për klientin original Pixi, pas autentikimit Bearer.
-- POST /app/api/casino/sizzlinghotdeluxe/real/play: protokolli origjinal init/spin/collect me portofol real; kërkesat e përsëritura nuk bëjnë debit të ri.
-- POST /app/api/casino/game/:gameId/spin: 8 lojërat e tjera me RNG në server dhe idempotence.
-- POST /app/api/casino/spin: adapter alternativ JSON për Sizzling.
-- GET /app/api/casino/status: statusi i portofolit dhe profilet.
-- GET /app/api/admin/casino/finance dhe /manager/casino/finance: përdoruesit, totalet, transaksionet, raundet, me userId/from/to.
-- GET/PATCH /app/api/admin/casino/settings: administrator, audit.
-- PATCH /app/api/admin/casino/profile: zgjedh profili matematikor i Sizzling, vetëm kur është i çaktivizuar.
+Paneli admin/menaxher shfaq sportin dhe kazinonë të ndara, bilancin, fitime/humbjet dhe transaksionet e secilit përdorues, me filtrat e datës. Historiku i raundeve Sizzling tregon bastin, fitimin dhe bilancin pas secilit spin. Nuk fshihet llogari që ka histori financiare.
 
-## Kontrolli financiar dhe kufizimet
+## RTP
+Paneli admin shfaq RTP teorike të llogaritur nga tabela e pagesave dhe probabilitetet e reel stop-eve si dhe RTP të vëzhguar nga raundet. Profilet matematike të këtij adapteri janë të përhershme/versionuara, globale dhe me audit. Nuk lejohet ndryshim profili gjatë lojës aktive apo individualisht për lojtarin.
 
-CASINO_REAL_MONEY_ENABLED dhe CASINO_MATH_APPROVED duhet të jenë të dy true **pas** miratimit dhe validimit të pavarur, dhe admini duhet ta aktivizojë konfigurimin e app_casino_settings. Default: OFF.
+**Matematika e adapterit nuk është matematika e certifikuar e prodhuesit Novomatic.** Demo është funksionale si demonstrim. Modaliteti monetar është OFF sipas konfigurimit fillestar dhe kërkon dy flamujt `CASINO_REAL_MONEY_ENABLED=true` dhe `CASINO_MATH_APPROVED=true`, aktivizim të audituar, licencim, të drejta për asetet dhe kontrolle të jashtme.
 
-Kodit nuk i është dhënë licencë automatike ose certifikim për kazino me para reale. Profilet e Sizzling janë matematika e adapterit të këtij projekti, jo RTP zyrtare Novomatic. Motori i tetë lojërave nuk është i certifikuar nga ofruesit. Përpara prodhimit kërkohet konfirmim i të drejtave të aseteve, verifikim i jashtëm i matematikës RNG/RTP, audit i pagesave, testim i ngarkesës dhe konfirmim ligjor. Mos i aktivizo flamujt pa këto.
-
-## Verifikimi
-
-- node scripts/test-casino-math.mjs teston 3 profile RTP dhe 8 motorët.
-- Node --check për wallet, finance, transactions, RNG dhe API Pixi.
-- Testimi në PostgreSQL të veçuar (casino-ledger job) teston fondet e lojtarit, menaxherit, idempotence, raportet dhe vetëpërjashtimin.
-- Build verifikon gjithashtu index-real.html, klientin original dhe asetet e tij.
-- Landscape/fullscreen duhet verifikuar në telefona fizikë, sepse browser-at ndryshojnë në lejet e tyre.
-
-Ky dokument përshkruan kodin e integrimit, jo autorizim për përdorim monetar.
+## Testet
+- `node scripts/test-sizzling-demo.mjs`: protokolli/linjat dhe fitimet e demo-s.
+- `node scripts/test-casino-math.mjs`: probabilitetet e Sizzling dhe profilet RTP.
+- `node scripts/test-casino-art.mjs`: vetëm Sizzling dhe asetet e tij.
+- `node scripts/verify-original-sizzling.mjs`: sigurohet se klienti, image atlases, animacionet dhe audio janë në build.
+- `node scripts/test-sizzling-browser.mjs`: Pixi ngarkohet dhe dërgon init/spin nga canvas.
+- `node scripts/test-casino-ledger.mjs`: PostgreSQL i përkohshëm në CI, idempotenca, bilanci i lojtarit e menaxherit dhe kufizimet.
