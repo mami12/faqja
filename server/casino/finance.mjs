@@ -71,6 +71,7 @@ export async function generateCasinoFinanceReport({managerId=null,userId=null,fr
     'casinoStake','casinoPayout','casinoNet','casinoSpins','net'];
   const totals=Object.fromEntries(keys.map(key=>[key,money(players.reduce((sum,p)=>sum+p[key],0))]));
   let transactions=[];
+  let rounds=[];
   // A manager cannot obtain another manager's history: scope is established above.
   if(userId && players.length){
     const tx=await query([
@@ -81,8 +82,13 @@ export async function generateCasinoFinanceReport({managerId=null,userId=null,fr
       'order by created_at desc limit 300',
     ].join(' '),[userId,since,until]);
     transactions=tx.rows.map(r=>({...r,amount:Number(r.amount),balanceAfter:Number(r.balanceAfter)}));
+    const gameRows=await query(
+      'select id,game_id as "gameId",game_version as "gameVersion",stake,payout,balance_after as "balanceAfter",created_at as "createdAt" from app_casino_round where user_id=$1 and ($2::timestamptz is null or created_at >= $2) and ($3::timestamptz is null or created_at <= $3) order by created_at desc limit 300',
+      [userId,since,until]);
+    rounds=gameRows.rows.map(r=>({...r,stake:Number(r.stake),payout:Number(r.payout),
+      balanceAfter:Number(r.balanceAfter),net:money(Number(r.payout)-Number(r.stake))}));
   }
-  return {players,totals,transactions,truncated:players.length===2000};
+  return {players,totals,transactions,rounds,truncated:players.length===2000};
 }
 async function report(req,res){
   if(req.user.role==='MANAGER' && req.path.startsWith('/admin/')) throw bad(403,'Administrator only');
