@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
 import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
-import SizzlingHotGame from './SizzlingHotGame';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -93,7 +92,18 @@ export default function CasinoPage() {
             className="mb-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-[#1c2733] px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
             <ArrowLeft size={16} /> Kthehu te Kazino
           </button>
-          <SizzlingHotGame />
+          <div className="mx-auto w-full max-w-[1060px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
+            <iframe
+              title="Goldsvet Sizzling 777 Deluxe"
+              src={import.meta.env.BASE_URL + 'casino-goldsvet/sizzling/index.html'}
+              className="block h-[min(82vh,820px)] min-h-[520px] w-full border-0"
+              allow="autoplay; fullscreen"
+              allowFullScreen
+            />
+            <p className="px-3 py-2 text-xs text-slate-400">
+              Goldsvet Sizzling 777 Deluxe · Demo me kredite virtuale · Pa lidhje me bilancin sportiv
+            </p>
+          </div>
         </main>
       </div>
     );
