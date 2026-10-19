@@ -22,7 +22,7 @@ export default function CasinoFullscreen({children}:{children:ReactNode}){
     const update=()=>{
       const portrait=window.innerHeight>window.innerWidth;
       // A visual fallback for mobile browsers that deny ScreenOrientation.lock().
-      setRotate(pseudo&&portrait);
+      setRotate(portrait);
     };
     window.addEventListener('resize',update);
     return()=>window.removeEventListener('resize',update);
@@ -52,7 +52,7 @@ export default function CasinoFullscreen({children}:{children:ReactNode}){
     }catch{/* orientation lock requires supported mobile browser */}
     setPseudo(!native);
     setExpanded(true);
-    setRotate(!locked&&!native&&window.innerHeight>window.innerWidth);
+    setRotate(!locked&&window.innerHeight>window.innerWidth);
   };
   return <div ref={root} className={
     'relative overflow-hidden bg-black '+(expanded?'casino-game-expanded ':'')+
