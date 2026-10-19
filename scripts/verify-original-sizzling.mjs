@@ -11,7 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = join(root, 'web/public/casino-original/sizzling');
 const output = join(root, 'web/dist/casino-original/sizzling');
 const needed = [
-  'index.html', 'head.html', 'body.html', 'manifest.json',
+  'index.html', 'index-real.html', 'head.html', 'body.html', 'manifest.json',
   'libs/assembler.js', 'libs/pixi-e5441a5223.min.js',
   'libs/pixi-spine-885fb1e4b2.min.js',
   'libs/howler-e0747d16e3.core.min.js',
@@ -38,7 +38,10 @@ for (const dir of [source, output]) {
     'Original game must post to same-origin Node demo API');
   assert.doesNotMatch(entry, /agame-nvm\.ampxy2\.com/,
     'No upstream live casino endpoint allowed');
-  const manifest = JSON.parse(readFileSync(join(dir,'manifest.json'),'utf8'));
+  const real = readFileSync(join(dir,'index-real.html'),'utf8');
+  assert.match(real, /casino\/sizzlinghotdeluxe\/real\/play/, 'Wallet client must reach authenticated same-origin server');
+  assert.match(real, /<head attach-element="\.\/head\.html">/, 'Wallet client must keep original assembler');
+    const manifest = JSON.parse(readFileSync(join(dir,'manifest.json'),'utf8'));
   for (const key of ['images/logo.png', 'data/reelsetConfig_hd.json',
     'data/paytableConfig-hd.json','data/audioConfig.json',
     'images/lines_deluxe_hd.png','images/reelset_0-hd.webp']) {
