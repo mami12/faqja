@@ -1,55 +1,80 @@
 /**
- * Copies the unmodified Novomatic browser client from mami12/New-folder into the
- * sportsbook's same-origin Vite public directory. No substitute slot engine.
- * The upstream demo/session endpoint is external and may reject expired tokens.
+ * Install the actual Novomatic Pixi/Spine/Howler browser client from
+ * mami12/New-folder/Sizzling Hot Deluxe. It is NOT the simplified Goldsvet
+ * Sizzling777WD HTML slot. Game assets are pinned to an exact source commit.
+ *
+ * The original assembler requires attach-element ON the head and body tags;
+ * inlining those files or moving the config before <head> breaks initialization.
+ * The original, opaque upstream transport/signature script is deliberately not
+ * included. The local, same-origin play endpoint supports the documented JSON
+ * demo protocol and does not debit user wallets.
  */
-import { mkdir, mkdtemp, readFile, writeFile, cp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, cp, rm, readdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const root = resolve(import.meta.dirname, '..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'web/public/casino-original/sizzling');
+const sourceSha = '507f7fdb7aee883f0d78cef0b02d6c4358462c69';
 const scratch = await mkdtemp(join(tmpdir(), 'sizzling-original-'));
 try {
-  const archive = join(scratch, 'source.tar.gz');
-  const response = await fetch('https://codeload.github.com/mami12/New-folder/tar.gz/refs/heads/main');
-  if (!response.ok) throw new Error('Cannot download original game assets: HTTP ' + response.status);
+  const sourceArchive = 'https://codeload.github.com/mami12/New-folder/tar.gz/' + sourceSha;
+  const response = await fetch(sourceArchive, { signal: AbortSignal.timeout(120000) });
+  if (!response.ok) throw new Error('Cannot fetch original Sizzling client: HTTP ' + response.status);
+  const archive = join(scratch, 'client.tar.gz');
   await writeFile(archive, Buffer.from(await response.arrayBuffer()));
   const unpack = spawnSync('tar', ['-xzf', archive, '-C', scratch], { encoding: 'utf8' });
-  if (unpack.status !== 0) throw new Error('tar failed: ' + unpack.stderr);
-  const source = join(scratch, 'New-folder-main/Sizzling Hot Deluxe');
+  if (unpack.status !== 0) throw new Error('Cannot extract Sizzling browser client: ' + unpack.stderr);
+  const archiveRoots = (await readdir(scratch, { withFileTypes: true })).filter(x => x.isDirectory());
+  if (archiveRoots.length !== 1) throw new Error('Unexpected source archive layout');
+  const source = join(scratch, archiveRoots[0].name, 'Sizzling Hot Deluxe');
   await mkdir(output, { recursive: true });
-  for (const folder of ['scripts', 'libs', 'styles', 'images', 'audio', 'animations', 'data']) {
+  const dirs = ['scripts', 'libs', 'styles', 'images', 'audio', 'animations', 'data'];
+  for (const folder of dirs) {
     await cp(join(source, folder), join(output, folder), { recursive: true, force: true });
   }
   for (const file of ['manifest.json', 'manifest-7976fbc9075178.json']) {
     await cp(join(source, file), join(output, file));
   }
-  // Original head and body, with the original engine scripts, Pixi runtime,
-  // animations, sound files and hashed manifest. Only resource base paths change.
-  const head = (await readFile(join(source, 'head.html'), 'utf8'))
-    .replaceAll('{$game_path}', './');
-  const body = await readFile(join(source, 'body.html'), 'utf8');
-  const sourceEntry = await readFile(join(source, 'sizzlinghotdeluxe.html'), 'utf8');
-  const configMatch = sourceEntry.match(/window\.clientConfig\s*=\s*\{[\s\S]*?\};/);
-  // Keep the upstream configuration if present, including its original demo URL.
-  // Never silently replace it with a locally fabricated outcome service.
-  const config = (configMatch?.[0] ?? '').replace(/\"resourcesBasePath\"\s*:\s*\"[^\"]+\"/, '\"resourcesBasePath\": \"./\"');
-  const inlineScripts = [...sourceEntry.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-    .map(match => '<script>' + match[1] + '</script>')
-    .filter(tag => !tag.includes('window.clientConfig ='))
-    .join('\n');
-  const html = '<!doctype html><html><head>' + inlineScripts + head +
-    '<base href="./"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}</style>' +
-    '<script>' + config + '</script></head><body>' + body + '</body></html>';
-  await cp(join(source, 'libs/assembler.js'), join(output, 'libs/assembler.js'));
-  // The original loader expects assembler.startDOMLoading() to fetch head/body.
-  // Here head/body are already inlined, so start the original assembler locally.
-  const bootstrap = '<script src="./libs/assembler.js" onload="assembler.startDOMLoading()"></script>';
-  await writeFile(join(output, 'index.html'), html.replaceAll('{$game_path}', './').replace('</head>', bootstrap + '</head>'));
-
-  console.log('Original Sizzling Hot Deluxe browser engine copied to ' + output);
+  // Preserve real head/body and Pixi/Spine loader; avoid missing icon 404s.
+  const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
+  const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
+  await writeFile(join(output, 'head.html'), head);
+  await cp(join(source, 'body.html'), join(output, 'body.html'));
+  const config = {
+    sessionToken: 'local-demo',
+    resourcesBasePath: './',
+    displayTime: false,
+    displayCurrency: false,
+    doRedirect: false,
+    language: 'en',
+    playURL: '/app/api/casino/sizzlinghotdeluxe/play',
+    exitURL: '',
+    depositURL: '',
+    debug: false,
+    sentryURL: null,
+    sentryEnv: null,
+    logoURL: null,
+  };
+  // Required: attach-element on actual head/body nodes. The assembler will
+  // GET head.html and body.html, replace {$game_path}, and start the real game.
+  const page = '<!doctype html><html><head attach-element="./head.html">' +
+    '<meta charset="utf-8"><title>Sizzling Hot Deluxe</title>' +
+    '<script>window.clientConfig=' + JSON.stringify(config) + ';</script>' +
+    '<script src="./libs/assembler.js" onload="assembler.startDOMLoading()"></script>' +
+    '</head><body attach-element="./body.html"></body></html>';
+  await writeFile(join(output, 'index.html'), page);
+  const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
+  for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig.json',
+    'data/paytableConfig.json', 'data/audioConfig.json']) {
+    const resolvedAsset = join(output, manifest[asset] ?? asset);
+    const info = await stat(resolvedAsset);
+    if (!info.isFile() || info.size < 10) throw new Error('Missing original game asset: ' + asset);
+  }
+  console.log('[sizzling-original] Pixi/Spine/Howler client synchronized (' +
+    sourceSha.slice(0, 12) + '), ' + dirs.join(', ') + ', local demo playURL');
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }
