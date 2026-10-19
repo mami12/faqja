@@ -7,7 +7,6 @@ import Header from '../components/Layout/Header';
 import { apiClient } from '../api/client';
 import CasinoFullscreen from '../components/Layout/CasinoFullscreen';
 import CasinoRealSizzling from './CasinoRealSizzling';
-import SizzlingHotGame from './SizzlingHotGame';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -104,12 +103,17 @@ export default function CasinoPage() {
           </button>
           <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
             {realMoneyAvailable ? <CasinoRealSizzling/> : (
-              <CasinoFullscreen><SizzlingHotGame/></CasinoFullscreen>
+              <CasinoFullscreen>
+                <iframe title="Sizzling Hot Deluxe · klienti origjinal"
+                  src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
+                  className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
+                  allow="autoplay; fullscreen" allowFullScreen/>
+              </CasinoFullscreen>
             )}
             <p className="px-3 py-3 text-xs text-slate-400">
               {realMoneyAvailable
                 ? 'Bilanci i kazinosë dhe sportit është i përbashkët. Spin-et ruhen në databazë.'
-                : 'Kredite DEMO, jo fondet e sportit. Klienti origjinal i plotë mungon nga ky repository; demonstrimi përdor asetet lokale.'}
+                : 'Kredite DEMO, jo fondet e sportit. Klienti origjinal i plotë përgatitet nga scripts/sync-original-sizzling.mjs gjatë build-it; kreditë janë vetëm demo.'}
             </p>
           </div>
         </main>
