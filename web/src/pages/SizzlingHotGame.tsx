@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize, Minimize, Music2, Volume2, VolumeX } from 'lucide-react';
 import { casinoAssetUrl, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
 import type { SpriteArt } from './casinoOriginalArt';
+import { useAuth } from '../context/AuthContext';
 
 const SYMBOLS = ['7','cherry','lemon','orange','grapes','watermelon','bell','star'];
 const PATHS = [
@@ -39,7 +40,15 @@ function calculate(grid:Grid,lines:number,unit:number){
 const round=(v:number)=>Math.round(v*100)/100;
 const fmt=(v:number)=>v.toFixed(2);
 export default function SizzlingHotGame(){
- const [credits,setCredits]=useState(1000);
+ const {user}=useAuth();
+ const storageKey='sizzling-deluxe-demo:'+String(user?.id??'guest');
+ const [credits,setCredits]=useState(()=>{
+   try{
+     const stored=localStorage.getItem(storageKey);
+     const value=stored===null?1000:Number(stored);
+     return Number.isFinite(value)&&value>=0&&value<=1000000?value:1000;
+   }catch{return 1000;}
+ });
  const [lines,setLines]=useState(5);
  const [unit,setUnit]=useState(.2);
  const [grid,setGrid]=useState<Grid>(generate);
@@ -52,8 +61,11 @@ export default function SizzlingHotGame(){
  const [music,setMusic]=useState(false);
  const [full,setFull]=useState(false);
  const [message,setMessage]=useState('VENDOS BASTIN');
- const [frame,setFrame]=useState(0);
+ const [stopped,setStopped]=useState<boolean[]>([true,true,true,true,true]);
+ const [showLines,setShowLines]=useState(true);
+ const [spins,setSpins]=useState(0);
  const area=useRef<HTMLDivElement>(null);
+ const stoppedRef=useRef<boolean[]>([true,true,true,true,true]);
  const audio=useRef<AudioContext|null>(null);
  const timers=useRef<number[]>([]);
  const autoRef=useRef(false);
@@ -63,8 +75,11 @@ export default function SizzlingHotGame(){
  const unitRef=useRef(unit);
  const mounted=useRef(true);
  const musicTimer=useRef<number|null>(null);
+ const rollingRef=useRef<number|null>(null);
+ const soundRef=useRef(sound);
+ soundRef.current=sound;
  const tone=useCallback((frequency:number,duration=.08,volume=.025)=>{
-  if(!sound)return;
+  if(!soundRef.current)return;
   try{
    const Ctx=window.AudioContext;
    if(!Ctx)return;
@@ -76,10 +91,13 @@ export default function SizzlingHotGame(){
    gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+duration);
    osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+duration);
   }catch{/* audio unavailable */}
- },[sound]);
+ },[]);
  useEffect(()=>{linesRef.current=lines;},[lines]);
  useEffect(()=>{unitRef.current=unit;},[unit]);
  useEffect(()=>{creditsRef.current=credits;},[credits]);
+ useEffect(()=>{
+   try{localStorage.setItem(storageKey,String(credits));}catch{/* storage unavailable */}
+ },[credits,storageKey]);
  useEffect(()=>{autoRef.current=auto;},[auto]);
  useEffect(()=>{
   const onFull=()=>setFull(!!document.fullscreenElement);
@@ -93,12 +111,29 @@ export default function SizzlingHotGame(){
   musicTimer.current=window.setInterval(()=>{tone(sequence[note++%sequence.length],.19,.012);},280);
   return()=>{if(musicTimer.current!==null)window.clearInterval(musicTimer.current);};
  },[music,tone]);
- useEffect(()=>()=>{mounted.current=false;timers.current.forEach(window.clearTimeout);if(audio.current)void audio.current.close();},[]);
- const later=(fn:()=>void,ms:number)=>{const id=window.setTimeout(fn,ms);timers.current.push(id);};
+ useEffect(()=>()=>{mounted.current=false;timers.current.forEach(window.clearTimeout);if(rollingRef.current!==null)window.clearInterval(rollingRef.current);if(audio.current)void audio.current.close();},[]);
+ useEffect(()=>{
+   if(!spinning)return;
+   rollingRef.current=window.setInterval(()=>{
+     setGrid(prev=>prev.map(row=>row.map((id,col)=>
+       stoppedRef.current[col]?id:Math.floor(Math.random()*SYMBOLS.length))));
+   },65);
+   return()=>{if(rollingRef.current!==null)window.clearInterval(rollingRef.current);rollingRef.current=null;};
+ },[spinning]);
+ const later=(fn:()=>void,ms:number)=>{
+   const id=window.setTimeout(()=>{
+     timers.current=timers.current.filter(item=>item!==id);
+     fn();
+   },ms);
+   timers.current.push(id);
+ };
  const start=useCallback(()=>{
   const stake=round(linesRef.current*unitRef.current);
   if(spinRef.current||creditsRef.current+1e-6<stake){setAuto(false);autoRef.current=false;return;}
+  stoppedRef.current=[false,false,false,false,false];
+  setStopped([...stoppedRef.current]);
   spinRef.current=true;setSpinning(true);setWinning([]);setPaid([]);setWin(0);setMessage('DUKE RROTULLUAR...');
+  setSpins(v=>v+1);
   creditsRef.current=round(creditsRef.current-stake);setCredits(creditsRef.current);
   const final=generate();
   tone(420,.1);
@@ -106,12 +141,16 @@ export default function SizzlingHotGame(){
    later(()=>{
     if(!mounted.current)return;
     setGrid(prev=>prev.map((row,r)=>row.map((symbol,c)=>c===col?final[r][c]:symbol)));
+    stoppedRef.current[col]=true;
+    setStopped([...stoppedRef.current]);
     tone(270+col*60,.065);
-   },600+col*190);
+   },780+col*245);
   }
   later(()=>{
    if(!mounted.current)return;
    const result=calculate(final,linesRef.current,unitRef.current);
+   stoppedRef.current=[true,true,true,true,true];
+   setStopped([...stoppedRef.current]);
    setGrid(final);setWinning(result.cells);setPaid(result.paid);setWin(result.total);
    creditsRef.current=round(creditsRef.current+result.total);setCredits(creditsRef.current);
    setMessage(result.total>0?'FITOVE '+fmt(result.total):'VENDOS BASTIN');
@@ -121,10 +160,20 @@ export default function SizzlingHotGame(){
     if(creditsRef.current>=round(linesRef.current*unitRef.current))later(()=>{if(mounted.current&&autoRef.current)startRef.current();},600);
     else{autoRef.current=false;setAuto(false);}
    }
-  },1680);
+  },2080);
  },[tone]);
  const startRef=useRef(start);startRef.current=start;
- const toggleAuto=()=>{if(autoRef.current){autoRef.current=false;setAuto(false);}else{autoRef.current=true;setAuto(true);if(!spinRef.current)start();}};
+ const toggleAuto=()=>{
+   if(autoRef.current){autoRef.current=false;setAuto(false);return;}
+   if(creditsRef.current+1e-6<round(linesRef.current*unitRef.current))return;
+   autoRef.current=true;setAuto(true);
+   if(!spinRef.current)start();
+ };
+ useEffect(()=>{
+   const pause=()=>{if(document.hidden){autoRef.current=false;setAuto(false);}};
+   document.addEventListener('visibilitychange',pause);
+   return()=>document.removeEventListener('visibilitychange',pause);
+ },[]);
  const adjustLines=(step:number)=>{if(!spinning)setLines(v=>Math.min(10,Math.max(1,v+step)));};
  const options=[.1,.2,.5,1,2,5];
  const adjustUnit=(step:number)=>{if(!spinning)setUnit(v=>options[Math.min(options.length-1,Math.max(0,options.indexOf(v)+step))]);};
