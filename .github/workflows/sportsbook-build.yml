@@ -99,6 +99,8 @@ jobs:
         run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math
         run: node scripts/test-sizzling-demo.mjs
+      - name: Verify Sizzling mobile loading and bet controls
+        run: node scripts/test-sizzling-controls.mjs
       - name: Browser-smoke test original Sizzling Pixi client
         run: node scripts/test-sizzling-browser.mjs
       - name: Preserve Sizzling original screenshots
