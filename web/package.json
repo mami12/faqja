@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node ../scripts/sync-goldsvet-sizzling.mjs && vite",
-    "build": "node ../scripts/sync-goldsvet-sizzling.mjs && vite build && node ../scripts/verify-goldsvet-sizzling.mjs",
+    "build": "node ../scripts/sync-goldsvet-sizzling.mjs && node ../scripts/sync-s777d-original.mjs && vite build && node ../scripts/verify-goldsvet-sizzling.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
