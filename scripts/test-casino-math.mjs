@@ -2,7 +2,16 @@ import assert from 'node:assert/strict';
 import {theoreticalRtp,publicRtpProfiles,randomProfileGrid} from '../server/casino/rtp-profiles.mjs';
 import {gradeGrid} from '../server/casino/sizzling-demo.mjs';
 
-const profiles=publicRtpProfiles();
+const allProfiles=publicRtpProfiles();
+const profiles=allProfiles.filter(profile=>!profile.id.startsWith('SCHOOL_RTP_'));
+const simulations=allProfiles.filter(profile=>profile.id.startsWith('SCHOOL_RTP_'));
+assert.equal(simulations.length,101);
+for(let rtp=0;rtp<=100;rtp++){
+  const profile=simulations.find(profile=>profile.id==='SCHOOL_RTP_'+rtp);
+  assert.ok(profile);
+  assert.equal(profile.theoreticalRtp,rtp);
+  assert.equal(theoreticalRtp(profile.id),rtp);
+}
 assert.equal(profiles.length,3);
 for(const profile of profiles){
   assert.ok(profile.theoreticalRtp>0&&profile.theoreticalRtp<100,

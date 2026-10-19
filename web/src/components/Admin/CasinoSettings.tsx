@@ -39,19 +39,16 @@ export default function CasinoSettings(){
     {error&&<p role="alert" className="rounded-lg border border-rose-500/50 bg-rose-500/10 p-3 text-rose-200">{error}</p>}
     <div className="rounded-xl border border-tertiary bg-secondary p-4 sm:p-6">
       <div className="flex flex-wrap items-start gap-3"><Dices className="text-amber-300"/><div>
-        <h3 className="font-bold text-white">Sizzling Hot Deluxe</h3><p className="text-xs text-text-secondary">Profili matematikor: {data?.profile||'...'}</p>
+        <h3 className="font-bold text-white">Sizzling Hot Deluxe</h3>
       </div></div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP teorike</p><p className="mt-1 font-bold text-white">{data?.theoreticalRtp==null?'Pa verifikim':data.theoreticalRtp+'%'}</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP i vëzhguar</p><p className="mt-1 font-bold text-white">{totals?.casinoStake ? (100*totals.casinoPayout/totals.casinoStake).toFixed(2)+"%" : "Pa spins"}</p><p className="text-[10px] text-text-secondary">Nga {totals?.casinoSpins||0} spins (nuk është RTP teorike)</p></div>
-        <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Certifikimi</p><p className="mt-1 font-bold text-amber-300">{data?.certified?'I verifikuar':'Nuk është certifikuar'}</p></div>
-        <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Modaliteti</p><p className="mt-1 font-bold text-white">{data?.realMoneyAvailable?'Bilanci i sportit aktiv':'Bilanci i sportit i çaktivizuar'}</p></div>
       </div>
       <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
-        <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
-        <p className="text-xs text-text-secondary">Simulim shkollor me kredite virtuale.</p>
+        <h4 className="font-bold text-white">RTP</h4>
         <label className="block space-y-2 text-sm text-white">
-          <span>RTP i simulimit: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').slice(-1)[0] : Math.round(data?.theoreticalRtp ?? 0)}%</span>
+          <span>RTP: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').slice(-1)[0] : Math.round(data?.theoreticalRtp ?? 0)}%</span>
           <input aria-label="RTP nga 0 deri në 100" type="range" min="0" max="100" step="1"
             className="w-full accent-amber-400" disabled={busy}
             value={selectedProfile.startsWith('SCHOOL_RTP_') ? Number(selectedProfile.split('_').slice(-1)[0]) : Math.round(data?.theoreticalRtp ?? 0)}
@@ -62,7 +59,7 @@ export default function CasinoSettings(){
             <span>Zgjidh profilin</span>
             <select value={selectedProfile} onChange={e=>setSelectedProfile(e.target.value)}
               disabled={busy} className="block min-h-11 w-full rounded-lg border border-tertiary bg-secondary px-3 text-white">
-              {(data?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.label} · {p.theoreticalRtp.toFixed(2)}% RTP</option>)}
+              {(data?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.theoreticalRtp.toFixed(2)}% RTP</option>)}
             </select>
           </label>
           <button type="button" disabled={busy||!selectedProfile||selectedProfile===data?.profile}
@@ -81,4 +78,3 @@ export default function CasinoSettings(){
     </div>
   </section>;
 }
-
