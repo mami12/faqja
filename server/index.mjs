@@ -31,6 +31,7 @@ import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
 import {createSizzlingRealRouter, casinoSessionRouter} from './casino/sizzling-real.mjs';
+import {createBookOfRaDemoRouter, createBookOfRaRealRouter, casinoBookOfRaSessionRouter} from './casino/bookofra.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -633,10 +634,13 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
 // cookie issued by POST /app/api/casino/session; every spin settles against the
 // same ledger used by sports bets. Mounted BEFORE the demo router.
 app.use('/app/api/casino/sizzlinghotdeluxe/real', createSizzlingRealRouter());
+app.use('/app/api/casino/bookofra/real', createBookOfRaRealRouter());
 app.use('/app/api', casinoSessionRouter);
+app.use('/app/api', casinoBookOfRaSessionRouter);
 
 // Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
+app.use('/app/api/casino/bookofra',createBookOfRaDemoRouter());
 
 // Keep staff settings/finance history, but disable the old wallet spin API.
 app.use('/app/api', casinoWalletRouter);
@@ -650,6 +654,14 @@ if (existsSync(webDist)) {
   // index-real.html) without SPA fallback. If an asset is missing, return a
   // real 404 instead of React's index.html with a misleading 200.
   // The entry/assembler must never be cached across Railway deployments.
+  app.use('/app/casino-original/bookofra',
+    express.static(path.join(webDist,'casino-original/bookofra'),{
+      fallthrough:false,
+      setHeaders:(res,file)=>{
+        if(/(?:index|index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
+          res.setHeader('Cache-Control','no-store, max-age=0');
+      },
+    }));
   app.use('/app/casino-original/sizzling',
     express.static(path.join(webDist,'casino-original/sizzling'),{
       fallthrough:false,

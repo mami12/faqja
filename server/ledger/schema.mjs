@@ -245,6 +245,17 @@ create table if not exists app_casino_settings (
  wallet_rollout_applied boolean not null default false
 );
 alter table app_casino_settings add column if not exists wallet_rollout_applied boolean not null default false;
+create table if not exists app_casino_freespin_state (
+  user_id uuid primary key references app_user(id) on delete cascade,
+  round_id uuid not null references app_casino_round(id) on delete cascade,
+  left_spins integer not null,
+  done_spins integer not null default 0,
+  mud integer not null,
+  bet numeric(14,2) not null,
+  lines integer not null,
+  updated_at timestamptz not null default now()
+);
+
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.
