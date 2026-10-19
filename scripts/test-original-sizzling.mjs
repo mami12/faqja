@@ -41,7 +41,11 @@ try{
   ]});
   const page=await browser.newPage();
   await page.setViewport({width:1000,height:650});
-  const errors=[],failed=[];
+  const errors=[],failed=[],gameRequests=[];
+  page.on('request',request=>{
+    if(request.url().includes('/app/api/casino/sizzling/play'))
+      gameRequests.push({method:request.method(),body:request.postData()?.slice(0,260)});
+  });
   page.on('pageerror',error=>errors.push(error.message));
   page.on('response',response=>{
     if(response.status()>=400&&!response.url().includes('favicon'))failed.push(
@@ -66,6 +70,8 @@ try{
   console.log('Original Sizzling browser state:',JSON.stringify(state));
   console.log('Original Sizzling browser failures:',JSON.stringify(failed.slice(0,20)));
   console.log('Original Sizzling browser errors:',JSON.stringify(errors.slice(0,20)));
+  console.log('Original Sizzling browser game requests:',JSON.stringify(gameRequests.slice(0,6)));
+  assert.ok(gameRequests.length>=1,'The Pixi game must call the same-origin demo protocol');
   assert.ok(state.canvas,'original Pixi canvas missing');
   assert.ok(state.scripts.some(s=>s.includes('bundle-')),'original game bundle not loaded');
   assert.ok(state.width>0&&state.height>0,'original engine did not initialize canvas');
