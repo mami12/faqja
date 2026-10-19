@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0,viewport-fit=cover,maximum-scale=1.0,user-scalable=no">
+<title>Sizzling 777 Deluxe · Goldsvet</title>
+<link rel="stylesheet" href="./s777d/style.css">
+<style>
+* {box-sizing:border-box}
+html,body {height:100%;width:100%;margin:0;overflow:hidden;background:#000}
+#game-root {position:relative;width:100%;height:100%;overflow:hidden}
+#engine-status {position:absolute;left:8px;bottom:8px;background:#111e;color:#ddd;font:12px/1.4 sans-serif;padding:6px 8px;max-width:95%;pointer-events:none}
+#engine-status[data-ready="yes"]{display:none}
+</style>
+<script>
+window.__s777dDiagnostics={startedAt:Date.now(),messages:[],errors:[]};
+window.addEventListener('error',event=>{
+  window.__s777dDiagnostics.errors.push(String(event.message||event.error||'script error'));
+});
+window.addEventListener('unhandledrejection',event=>{
+  window.__s777dDiagnostics.errors.push(String(event.reason));
+});
+window.addEventListener('load',()=>{window.__s777dDiagnostics.pageLoadedAt=Date.now()});
+</script>
+</head>
+<body>
+<div id="game-root">
+<div id="engine-status" role="status">Sizzling 777 Deluxe po ngarkohet...</div>
+</div>
+<script src="./s777d/s777d.nocache.js"></script>
+<script>
+(function(){
+  var attempts=0;
+  var status=document.getElementById('engine-status');
+  var ticker=setInterval(function(){
+    attempts++;
+    var canvas=document.querySelector('canvas');
+    var game=document.querySelector('body > div:not(#game-root), #game-root canvas');
+    if(canvas||game){
+      status.dataset.ready='yes';
+      window.__s777dDiagnostics.renderedAt=Date.now();
+      clearInterval(ticker);
+    }else if(attempts>=45){
+      clearInterval(ticker);
+      status.textContent='Motori origjinal nuk u hap. Kontrollo skedarët dhe sesionin e lojës.';
+      window.__s777dDiagnostics.timedOut=true;
+    }
+  },1000);
+})();
+</script>
+</body>
+</html>
