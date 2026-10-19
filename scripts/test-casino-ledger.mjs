@@ -15,14 +15,22 @@ import {placeCasinoSpin} from '../server/casino/transactions.mjs';
 import {generateCasinoFinanceReport} from '../server/casino/finance.mjs';
 const round=x=>Number(Number(x).toFixed(2));
 if(!process.env.DATABASE_URL?.includes('/casino_test'))throw new Error('Run only against a disposable casino_test database');
-if(process.env.CASINO_REAL_MONEY_ENABLED!=='true'||process.env.CASINO_MATH_APPROVED!=='true')
-  throw new Error('Set both guarded test flags');
 try{
+  // A new or migrated database should make Sizzling available to the sports
+  // wallet without requiring environment variables on Railway.
   await initLedgerSchema();
+  let activation=await query('select enabled,wallet_rollout_applied from app_casino_settings where id=1');
+  assert.equal(activation.rows[0].enabled,true,'the sports wallet should be available after first deployment');
+  assert.equal(activation.rows[0].wallet_rollout_applied,true,'the migration must run once');
+  // An explicit admin shutdown must remain in force after a server restart.
+  await query('update app_casino_settings set enabled=false where id=1');
+  await initLedgerSchema();
+  activation=await query('select enabled from app_casino_settings where id=1');
+  assert.equal(activation.rows[0].enabled,false,'admin shutdown must not be reversed');
+  await query('update app_casino_settings set enabled=true where id=1');
   const manager=await createUser({username:'m'+randomUUID(),passwordHash:'unused',role:'MANAGER',balance:10000});
   const other=await createUser({username:'m'+randomUUID(),passwordHash:'unused',role:'MANAGER',balance:10000});
   const player=await createUser({username:'p'+randomUUID(),passwordHash:'unused',role:'PLAYER',balance:10000,managerId:manager.id});
-  await query('update app_casino_settings set enabled=true where id=1');
   const requestId=randomUUID();
   const a=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:1,lines:5});
   const b=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:1,lines:5});

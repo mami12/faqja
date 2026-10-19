@@ -10,12 +10,9 @@ import {randomProfileGrid,profileById} from './rtp-profiles.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
-const enabled=()=>process.env.CASINO_REAL_MONEY_ENABLED==='true'
-  &&process.env.CASINO_MATH_APPROVED==='true';
-export function isCasinoDeploymentApproved(){return enabled();}
-
+// The shared sportsbook ledger is the only source of money. An explicit
+// admin OFF switch (app_casino_settings.enabled) remains authoritative.
 export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5}){
-  if(!enabled())throw fault(403,'Monetary casino mode is not approved for deployment');
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(requestId)))
     throw fault(400,'Unique UUID required');
   bet=Number(bet);denomination=Number(denomination);lines=Number(lines);

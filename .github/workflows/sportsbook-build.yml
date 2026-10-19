@@ -136,6 +136,4 @@ jobs:
       - name: Verify real casino and sportsbook wallet transactions in disposable PostgreSQL
         env:
           DATABASE_URL: postgresql://casino:test@localhost:5432/casino_test
-          CASINO_REAL_MONEY_ENABLED: 'true'
-          CASINO_MATH_APPROVED: 'true'
         run: node scripts/test-casino-ledger.mjs

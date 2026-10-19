@@ -11,7 +11,7 @@ import {requireAuth} from '../ledger/auth.mjs';
 import {getUserById,isLedgerReady} from '../ledger/store.mjs';
 import {query} from '../db.mjs';
 import {decodeRequest,initResponse,basicResponse} from './sizzling-demo.mjs';
-import {placeCasinoSpin,isCasinoDeploymentApproved} from './transactions.mjs';
+import {placeCasinoSpin} from './transactions.mjs';
 
 const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -26,9 +26,6 @@ function uuidFromId(nonce,requestId){
   h[6]=(h[6]&0x0f)|0x40;h[8]=(h[8]&0x3f)|0x80;
   const a=h.toString('hex').slice(0,32);
   return [a.slice(0,8),a.slice(8,12),a.slice(12,16),a.slice(16,20),a.slice(20)].join('-');
-}
-function gate(){
-  if(!isCasinoDeploymentApproved())throw fault(403,'CASINO_DEPLOYMENT_NOT_APPROVED');
 }
 async function ensureAdminEnabled(){
   const {rows}=await query('select enabled from app_casino_settings where id=1');
@@ -61,7 +58,6 @@ export function createSizzlingRealRouter(){
   router.post('/play',raw({type:()=>true,limit:'128kb'}),async(req,res)=>{
     res.set('Cache-Control','no-store');
     try{
-      gate();
       if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
       if(req.headers.origin){
         const origin=new URL(req.headers.origin);
@@ -104,7 +100,6 @@ export function createSizzlingRealRouter(){
 export const casinoSessionRouter=Router();
 casinoSessionRouter.post('/casino/session',requireAuth,async(req,res)=>{
   try{
-    gate();
     if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
     if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
     await ensureAdminEnabled();

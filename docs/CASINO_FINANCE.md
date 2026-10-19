@@ -15,7 +15,7 @@ Paneli admin/menaxher shfaq sportin dhe kazinonë të ndara, bilancin, fitime/hu
 ## RTP
 Paneli admin shfaq RTP teorike të llogaritur nga tabela e pagesave dhe probabilitetet e reel stop-eve si dhe RTP të vëzhguar nga raundet. Profilet matematike të këtij adapteri janë të përhershme/versionuara, globale dhe me audit. Nuk lejohet ndryshim profili gjatë lojës aktive apo individualisht për lojtarin.
 
-**Matematika e adapterit nuk është matematika e certifikuar e prodhuesit Novomatic.** Në faqen publike nuk përdoret më asnjë portofol demo. Kur modaliteti monetar është OFF, loja tregon mesazh çaktivizimi dhe nuk bën kalim te demo. Modaliteti monetar është OFF sipas konfigurimit fillestar dhe kërkon dy flamujt `CASINO_REAL_MONEY_ENABLED=true` dhe `CASINO_MATH_APPROVED=true`, aktivizim të audituar, licencim, të drejta për asetet dhe kontrolle të jashtme.
+**Matematika e adapterit nuk është matematika e certifikuar e prodhuesit Novomatic.** Në faqen publike nuk përdoret më asnjë portofol demo. Kur modaliteti monetar është OFF, loja tregon mesazh çaktivizimi dhe nuk bën kalim te demo. Pas përditësimit të skemës së databazës, porta e Sizzling aktivizohet një herë për portofolin e sportit. Administratori mund ta çaktivizojë ose riaktivizojë pa ndryshuar environment variables. Motori mbetet adapter jo i certifikuar; për përdorimin komercial duhen autorizimet, të drejtat dhe verifikimet përkatëse.
 
 ## Testet
 - `node scripts/test-sizzling-demo.mjs`: protokolli/linjat dhe fitimet e demo-s.
@@ -29,4 +29,9 @@ Paneli admin shfaq RTP teorike të llogaritur nga tabela e pagesave dhe probabil
 
 Në `/casino` dhe `/casino/sizzling`, React kërkon `GET /app/api/casino/status` dhe pastaj `POST /app/api/casino/session`. Nëse aktivizimi është i pamundur, shfaqet një mesazh dhe **nuk ngarkohet demo**. Klienti origjinal Pixi përdor vetëm endpoint-in e autentikuar `/app/api/casino/sizzlinghotdeluxe/real/play`. Serveri lexon bilancin nga `app_user.balance`, të njëjtën fushë që lexon `/app/api/auth/me` për sportin. Për çdo spin, bën lëvizjet e bastit dhe të fitimit në `app_transaction` dhe rifreskon `app_user.balance`. Sporti dhe kazinoja nuk kanë portofola apo depozita të ndara.
 
-Në deploy operatori duhet të konfigurojë `CASINO_REAL_MONEY_ENABLED=true` dhe `CASINO_MATH_APPROVED=true` vetëm pasi të ketë kryer vlerësimet përkatëse, e pastaj të aktivizojë lojën në panelin admin. Këto janë **kontrolle aktivizimi**, jo certifikata. Nuk ndryshohen automatikisht nga kodi.
+Deploy i commit-it të ri zbaton një migrim vetëm një herë që aktivizon hyrjen e portofolit të përbashkët dhe heq varësinë nga `CASINO_REAL_MONEY_ENABLED` dhe `CASINO_MATH_APPROVED`. Pas migrimit, zgjedhja e administratorit (Aktivizo/Çaktivizo) ruhet në PostgreSQL në çdo restart. **Ky ndryshim teknik nuk dëshmon certifikim, licencë ose të drejtë përdorimi të motorit Novomatic.**
+
+
+## Zgjidhja e mesazhit 'Operatori nuk e ka aktivizuar ende'
+
+Në versionin e kaluar tri porta bllokonin hyrjen: dy environment variables dhe `app_casino_settings.enabled=false`. Versioni i ri përdor vetëm autorizimin e lojtarit dhe gjendjen e administrimit në databazë. Migrimi `wallet_rollout_applied` e aktivizon një herë, pa modifikuar `app_user.balance` apo transaksionet. Nëse administratori e çaktivizon më vonë, një restart nuk e riaktivizon. Kontrolloni `/health` në Railway dhe identifikohuni si lojtar (rol PLAYER, status ACTIVE) për të testuar klientin Pixi. Deployment automatik kërkon që Railway të jetë lidhur me branch `main` dhe të ketë `DATABASE_URL` funksionale.
