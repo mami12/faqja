@@ -51,10 +51,10 @@ export default function CasinoSettings(){
         <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
         <p className="text-xs text-text-secondary">Simulim shkollor me kredite virtuale.</p>
         <label className="block space-y-2 text-sm text-white">
-          <span>RTP i simulimit: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').at(-1) : Math.round(data?.theoreticalRtp ?? 0)}%</span>
+          <span>RTP i simulimit: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').slice(-1)[0] : Math.round(data?.theoreticalRtp ?? 0)}%</span>
           <input aria-label="RTP nga 0 deri në 100" type="range" min="0" max="100" step="1"
             className="w-full accent-amber-400" disabled={busy}
-            value={selectedProfile.startsWith('SCHOOL_RTP_') ? Number(selectedProfile.split('_').at(-1)) : Math.round(data?.theoreticalRtp ?? 0)}
+            value={selectedProfile.startsWith('SCHOOL_RTP_') ? Number(selectedProfile.split('_').slice(-1)[0]) : Math.round(data?.theoreticalRtp ?? 0)}
             onChange={e=>setSelectedProfile('SCHOOL_RTP_'+e.target.value)} />
         </label>
         <div className="flex flex-wrap items-end gap-3">
@@ -81,3 +81,4 @@ export default function CasinoSettings(){
     </div>
   </section>;
 }
+
