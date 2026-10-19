@@ -94,3 +94,10 @@ jobs:
         run: node scripts/test-sizzling-demo.mjs
       - name: Browser-smoke test original Sizzling Pixi client
         run: node scripts/test-sizzling-browser.mjs
+      - name: Preserve Sizzling original screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sizzling-original-browser
+          path: tmp/sizzling-browser-check/*.png
+          if-no-files-found: ignore
