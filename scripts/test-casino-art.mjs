@@ -66,55 +66,23 @@ assert.ok(!pageSource.includes('>🪙</span>'), 'Hold-and-respin has emoji fallb
 assert.ok(pageSource.includes('<OriginalReelSymbol'), 'Reels not connected to original atlas renderer');
 
 
-// The requested Goldsvet client, not the substitute React slot, must be
-// mounted inside the sportsbook route. The build synchronizes its PNG sprites.
-const goldsvet = read('web/public/casino-goldsvet/sizzling/index.html');
-const syncScript = read('scripts/sync-goldsvet-sizzling.mjs');
-const webPackage = JSON.parse(read('web/package.json'));
-assert.ok(pageSource.includes("game?.id === 'sizzling'"), 'dedicated Sizzling route missing');
-assert.ok(pageSource.includes('casino-goldsvet/sizzling/index.html'), 'Goldsvet iframe not mounted');
-assert.ok(!pageSource.includes('<SizzlingHotGame />'), 'substitute React game still mounted');
-assert.ok(goldsvet.includes('const PAYLINES'), 'Goldsvet paylines missing');
-assert.ok(goldsvet.includes('const REEL_STRIPS'), 'Goldsvet reel strips missing');
-assert.ok(goldsvet.includes('class SoundEngine'), 'Goldsvet sound engine missing');
-assert.ok(goldsvet.includes('animateReel('), 'Goldsvet reel animations missing');
-assert.ok(goldsvet.includes('images/'), 'Goldsvet symbol image paths missing');
-for (const name of ['cherry','lemon','orange','plum','star','grapes','watermelon','seven']) {
-  assert.ok(syncScript.includes(name+'.png'), name+': missing original sprite download');
-}
-assert.ok(webPackage.scripts.build.includes('sync-goldsvet-sizzling.mjs'),
-  'Vite build must fetch original Goldsvet sprites');
-assert.ok(syncScript.includes('fileURLToPath(import.meta.url)'),
-  'Goldsvet asset path must be anchored to script directory');
-assert.ok(!syncScript.includes("resolve('web/public"),
-  'Never create web/web/public when npm runs with cwd=web');
-assert.ok(webPackage.scripts.dev.includes('sync-goldsvet-sizzling.mjs'),
-  'Vite dev server must also have the Goldsvet sprites');
-assert.ok(webPackage.scripts.build.includes('verify-goldsvet-sizzling.mjs'),
-  'Do not ship a build unless real PNG and OGG assets are present in web/dist');
-assert.ok(goldsvet.includes('id="btn-music"'), 'music control missing');
-assert.ok(goldsvet.includes('background_fs-8da5d6c953.ogg'),
-  'original Sizzling music loop missing');
-assert.ok(goldsvet.includes('reelset_reel_stop-5bd4b48edb.ogg'),
-  'original reel stop effect missing');
-assert.ok(goldsvet.includes('reelset_moving-2da16a7a33.ogg'),
-  'original reel movement effect missing');
-assert.ok(goldsvet.includes('class SoundEngine'),'Goldsvet sound engine replaced');
-assert.ok(goldsvet.includes('href="./retro.css"'), 'original-style cabinet CSS missing');
-const cabinetStyle=read('web/public/casino-goldsvet/sizzling/retro.css');
-assert.ok(cabinetStyle.includes('.reel-stage'),'wide graphical reel cabinet missing');
-assert.ok(cabinetStyle.includes('.line-star'),'winning payline star markers missing');
-assert.ok(cabinetStyle.includes('.btn-spin:after'),'orange spin wheel visual missing');
-assert.ok(goldsvet.includes('id="cabinet-status"'),'win-status window missing');
-assert.ok(goldsvet.includes('class="btn-game chip"'),'bet denomination controls missing');
-assert.ok(goldsvet.includes("button.dataset.bet"),'bet denomination handlers missing');
-assert.ok(goldsvet.includes("button.dataset.line"),'payline preview handlers missing');
-assert.ok(goldsvet.includes("function animateReel"),'original Goldsvet spin animation replaced');
-const inlineScripts=[...goldsvet.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
-assert.ok(inlineScripts.length > 0, 'Goldsvet client script missing');
-inlineScripts.forEach((match,index) =>
-  assert.doesNotThrow(()=>new vm.Script(match[1],{filename:'goldsvet-inline-'+index+'.js'}),
-    'Goldsvet embedded script must be valid JavaScript'));
+// The original Pixi/Spine/Howler client, NOT Goldsvet's standalone HTML
+// imitation, is the one mounted at /casino/sizzling.
+const originalSync=read('scripts/sync-original-sizzling.mjs');
+const webPackage=JSON.parse(read('web/package.json'));
+assert.ok(pageSource.includes("game?.id === 'sizzling'"),'sizzling route missing');
+assert.ok(pageSource.includes('casino-original/sizzling/index.html'), 'original iframe not mounted');
+assert.ok(!pageSource.includes('casino-goldsvet/sizzling/index.html'), 'imitation still routed');
+assert.ok(originalSync.includes('<head attach-element="./head.html">'),
+  'Original assembler requires attach-element on head');
+assert.ok(originalSync.includes('<body attach-element="./body.html">'),
+  'Original assembler requires attach-element on body');
+assert.ok(originalSync.includes('casino/sizzlinghotdeluxe/play'),
+  'Original client must call same-origin demo API');
+assert.ok(!originalSync.includes("inlineScripts"),'Never inline obfuscated upstream scripts');
+assert.ok(webPackage.scripts.build.includes('sync-original-sizzling.mjs'));
+assert.ok(webPackage.scripts.build.includes('verify-original-sizzling.mjs'));
+assert.ok(webPackage.scripts.dev.includes('sync-original-sizzling.mjs'));
 
 console.log('Casino graphics: 9 games, 8 original sprite slots each, ' + imageCount +
   ' checked local image references.');
