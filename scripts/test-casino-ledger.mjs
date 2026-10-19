@@ -128,6 +128,47 @@ try{
     const collect=await play({action:'collect',request_id:'2'});
     assert.equal(collect.status,200);
     assert.equal(collect.body.balance.after,after.balance,'collect must not pay twice');
+
+    // Deterministic fixture for a winning spin: confirm that Gamble uses the
+    // shared wallet, pays just the delta, and survives duplicate HTTP retries.
+    await query('update app_casino_gamble_state set pending=15,step=0,player_card=null where user_id=$1',
+      [player.id]);
+    const walletBeforeGamble=await getUserById(player.id);
+    const managerBeforeGamble=await getUserById(manager.id);
+    const offer=await play({action:'get_double',request_id:'3'});
+    assert.equal(offer.status,200);
+    assert.equal(offer.body.gamble.bet,15);
+    assert.ok(offer.body.available_actions.includes('set_double'));
+    assert.equal(offer.body.balance.after,walletBeforeGamble.balance);
+    const offerRetry=await play({action:'get_double',request_id:'3'});
+    assert.deepEqual(offerRetry.body,offer.body,'Gamble offer retries must not change the card');
+    const gambleReq={action:'set_double',request_id:'4',choice:0};
+    const gamble=await play(gambleReq);
+    assert.equal(gamble.status,200);
+    const dealer=gamble.body.gamble.history.items[1];
+    const won=['hearts','diamonds'].includes(dealer.suit);
+    assert.equal(gamble.body.gamble.status,won?'win':'lose');
+    assert.equal(gamble.body.gamble.bet,won?30:0);
+    const gambleAfter=await getUserById(player.id);
+    assert.equal(gambleAfter.balance,round(walletBeforeGamble.balance+(won?15:-15)),
+      'Gamble must update the shared sportsbook balance by exactly one pending win');
+    assert.equal((await getUserById(manager.id)).balance,
+      round(managerBeforeGamble.balance+(won?-15:15)));
+    const retry=await play(gambleReq);
+    assert.deepEqual(retry.body,gamble.body,'Repeated gamble must replay the original deal');
+    assert.equal((await getUserById(player.id)).balance,gambleAfter.balance);
+    const gamblingEntries=await query(
+      "select count(*)::int as count from app_transaction where user_id=$1 and type in ('CASINO_GAMBLE_WIN','CASINO_GAMBLE_LOSS')",
+      [player.id]);
+    assert.equal(gamblingEntries.rows[0].count,1,'One gamble can settle only once');
+    const cashout=await play({action:'collect',request_id:'5'});
+    assert.equal(cashout.status,200);
+    assert.equal(cashout.body.balance.after,gambleAfter.balance);
+    assert.deepEqual((await play({action:'collect',request_id:'5'})).body,cashout.body);
+    const unavailable=await play({action:'get_double',request_id:'6'});
+    assert.equal(unavailable.status,200);
+    assert.equal(unavailable.body.error?.message,'NOTHING_TO_GAMBLE');
+    assert.equal((await getUserById(player.id)).balance,gambleAfter.balance);
     const me=await fetch(origin+'/app/api/auth/me',{headers:{Authorization:'Bearer '+token}});
     assert.equal((await me.json()).balance,after.balance,'same sports auth/me balance after Pixi spin');
   }finally{
