@@ -62,6 +62,7 @@ try {
   // GET head.html and body.html, replace {$game_path}, and start the real game.
   const page = '<!doctype html><html><head attach-element="./head.html">' +
     '<meta charset="utf-8"><title>Sizzling Hot Deluxe</title>' +
+    '<link rel="icon" type="image/png" href="./images/logo-0328a8ad8c.png">' +
     '<script>window.clientConfig=' + JSON.stringify(config) + ';</script>' +
     '<script src="./libs/assembler.js" onload="assembler.startDOMLoading()"></script>' +
     '</head><body attach-element="./body.html"></body></html>';
