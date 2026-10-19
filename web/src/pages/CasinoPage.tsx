@@ -102,7 +102,7 @@ export default function CasinoPage() {
             <ArrowLeft size={16} /> Kthehu te Kazino
           </button>
           <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
-            {realMoneyAvailable ? <CasinoRealSizzling/> : (
+            {realMoneyAvailable && user?.role === 'PLAYER' ? <CasinoRealSizzling/> : (
               <CasinoFullscreen>
                 <iframe title="Sizzling Hot Deluxe · klienti origjinal"
                   src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
@@ -111,7 +111,7 @@ export default function CasinoPage() {
               </CasinoFullscreen>
             )}
             <p className="px-3 py-3 text-xs text-slate-400">
-              {realMoneyAvailable
+              {realMoneyAvailable && user?.role === 'PLAYER'
                 ? 'Bilanci i kazinosë dhe sportit është i përbashkët. Spin-et ruhen në databazë.'
                 : 'Kredite DEMO, jo fondet e sportit. Klienti origjinal i plotë përgatitet nga scripts/sync-original-sizzling.mjs gjatë build-it; kreditë janë vetëm demo.'}
             </p>
