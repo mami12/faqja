@@ -89,3 +89,5 @@ jobs:
           node --check server/ledger/view.mjs
       - name: Build Vite frontend
         run: npm run build:web
+      - name: Browser-smoke test Goldsvet graphics, music and spin
+        run: node scripts/test-goldsvet-browser.mjs
