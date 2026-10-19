@@ -12,6 +12,8 @@ import {fileURLToPath} from 'node:url';
 import {resolve,dirname,join} from 'node:path';
 import {mkdir} from 'node:fs/promises';
 import {config} from '../server/config.mjs';
+import {casinoSessionRouter} from '../server/casino/sizzling-real.mjs';
+import {casinoWalletRouter} from '../server/casino/wallet.mjs';
 import {query,closePool} from '../server/db.mjs';
 import {initLedgerSchema,createUser} from '../server/ledger/store.mjs';
 import {createSizzlingRealRouter} from '../server/casino/sizzling-real.mjs';
@@ -22,7 +24,11 @@ assert.ok(process.env.DATABASE_URL?.includes('/casino_test'),
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const app=express();
 app.use(express.json());
+
+app.get('/app/wallet-test',(_req,res)=>res.type('html').send('<!doctype html><html><body>preflight</body></html>'));
 app.use('/app/api/casino/sizzlinghotdeluxe/real',createSizzlingRealRouter());
+app.use('/app/api',casinoSessionRouter);
+app.use('/app/api',casinoWalletRouter);
 app.use('/app',express.static(join(root,'web/dist')));
 let browser,server;
 try{
@@ -45,10 +51,28 @@ try{
   const token=jwt.sign({
     sub:player.id,jti:randomUUID(),kind:'casino-pixi-wallet',
   },config.jwtSecret,{expiresIn:'1h'});
-  await page.setCookie({
-    name:'casino_pixi_wallet_session',value:token,domain:'127.0.0.1',
-    path:'/app/api/casino/sizzlinghotdeluxe/real',httpOnly:true,sameSite:'Strict',
-  });
+  // Exercise the same HTTP session+cookie handoff as the React component.
+  await page.goto(origin+'/app/wallet-test');
+  const preflight=await page.evaluate(async bearer=>{
+    const session=await fetch('/app/api/casino/session',{
+      method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json'},
+      credentials:'same-origin',body:'{}',
+    });
+    const payload=await session.json();
+    if(!session.ok||!payload.ready)throw new Error('Session '+session.status+': '+JSON.stringify(payload));
+    const form=new FormData();
+    form.append('data',JSON.stringify({action:'init',request_id:'0'}));
+    const init=await fetch('/app/api/casino/sizzlinghotdeluxe/real/play',{
+      method:'POST',body:form,credentials:'same-origin',
+    });
+    const response=await init.json();
+    return {session:session.status,init:init.status,
+      balance:response.balance?.after,gameUrl:payload.gameUrl};
+  },'Bearer '+token);
+  assert.equal(preflight.session,200);
+  assert.equal(preflight.init,200,'session cookie did not cross to Pixi wallet API');
+  assert.equal(preflight.balance,10000,'wallet must use sportsbook balance');
+  console.log('WALLET SESSION PREFLIGHT:',JSON.stringify(preflight));
   const jsErrors=[],consoleErrors=[],badHttp=[],failedRequests=[],api=[];
   page.on('pageerror',e=>jsErrors.push(e.stack||e.message));
   page.on('console',msg=>{
