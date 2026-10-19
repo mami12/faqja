@@ -143,3 +143,5 @@
 }
 .casino-game-expanded iframe,
 .casino-game-pseudo iframe { height: 100dvh !important; min-height: 0 !important; width: 100% !important; }
+
+.casino-game-rotated iframe { height: 100vw !important; min-height: 0 !important; max-height: 100vw !important; }
