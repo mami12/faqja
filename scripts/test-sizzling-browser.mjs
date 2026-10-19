@@ -30,9 +30,12 @@ try {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 1 });
-  const jsErrors = [], badAssets = [], posts = [];
+  const jsErrors = [], badAssets = [], posts = [], browserConsole = [];
   const rootUrl = 'http://127.0.0.1:' + server.address().port;
   page.on('pageerror', error => jsErrors.push(error.message));
+  page.on('console', event => {
+    if (['error','warning','warn'].includes(event.type())) browserConsole.push(event.type()+': '+event.text());
+  });
   page.on('response', response => {
     const url = response.url();
     if (response.status() >= 400 && url.startsWith(rootUrl + '/app/casino-original/sizzling/')) {
@@ -50,7 +53,7 @@ try {
     return !!canvas && canvas.width > 100 && canvas.height > 100;
   }, { timeout:60000 });
   await page.waitForFunction(() => document.querySelector('#preloaderContainer')?.style.display === 'none' ||
-    !!document.querySelector('.app-container:not(.loading)'), { timeout:60000 }).catch(() => {});
+    !!document.querySelector('.app-container:not(.loading)'), { timeout:2500 }).catch(() => {});
   await new Promise(ok=>setTimeout(ok,3500));
   const visible = await page.evaluate(() => {
     const canvas = document.querySelector('#slotCanvas');
@@ -61,7 +64,14 @@ try {
       game: !!document.getElementById('container'),
       pixi: typeof window.PIXI,
       howler: typeof window.Howler,
-      preloader:document.querySelector('#preloaderContainer')?.style.display,
+      preloader:document.querySelector('#preloaderContainer')?.outerHTML.slice(0,250),
+      preloaderStyle:document.querySelector('#preloaderContainer') ? {
+        display:getComputedStyle(document.querySelector('#preloaderContainer')).display,
+        visibility:getComputedStyle(document.querySelector('#preloaderContainer')).visibility,
+        opacity:getComputedStyle(document.querySelector('#preloaderContainer')).opacity,
+      } : null,
+      text: document.body.innerText.slice(0,500),
+      canvases: document.querySelectorAll('canvas').length,
     };
   });
   assert.equal(visible.head,false,'assembler must load head.html');
@@ -84,12 +94,20 @@ try {
     const r=canvas.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height};
   });
   // Desktop reference cabinet SPIN center ≈83% across, 94% down.
-  await page.mouse.click(bounds.x+bounds.w*.83, bounds.y+bounds.h*.94);
+  console.log('Canvas bounds:',bounds);
+  const points=[[.83,.94],[.83,.91],[.84,.86],[.84,.96],[.82,.80]];
+  for(const [x,y] of points){
+    await page.mouse.click(bounds.x+bounds.w*x,bounds.y+bounds.h*y);
+    await new Promise(ok=>setTimeout(ok,350));
+    if(posts.length>=2)break;
+  }
   await new Promise(ok=>setTimeout(ok,1800));
   await page.screenshot({path:join(artifacts,'sizzling-after-spin.png')});
   console.log('Pixi runtime:',JSON.stringify(visible));
   console.log('Casino protocol calls:',posts.map(p=>({code:p.code, body:p.request.slice(0,120)})));
+  console.log('Browser warnings:',browserConsole.slice(-20));
   console.log('Browser screenshots captured at',artifacts);
+  assert.ok(posts.length>=2, 'Canvas clicks must trigger a real spin protocol request');
   assert.deepEqual(jsErrors,[],'Original browser client must not throw JS errors');
   console.log('Original Pixi Sizzling: client initialized, same-origin API called, assets loaded, canvas rendered');
 } finally {
