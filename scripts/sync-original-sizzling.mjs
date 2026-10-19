@@ -42,7 +42,43 @@ try {
   const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
   const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
   await writeFile(join(output, 'head.html'), head);
-  await cp(join(source, 'body.html'), join(output, 'body.html'));
+  // Original mobile components were not shipped in this archive. Force the
+  // existing desktop Pixi component tree on narrow touch screens instead.
+  // The canvas remains responsive via CSS scaling; no substitute art/math.
+  const bodySource = await readFile(join(source, 'body.html'), 'utf8');
+  await writeFile(join(output, 'body.html'), bodySource);
+  const responsive = `<style>
+html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#000}
+#slotCanvas {display:block;max-width:100%;max-height:100%;touch-action:manipulation}
+@media (max-width:700px) { .app-container {width:100vw!important;height:100dvh!important} }
+</style>
+<script>
+(function(){
+  // Device detection in the old client selects missing componentsMobile.json.
+  // Advertise desktop layout before game scripts run, then scale its canvas.
+  var root=document.documentElement;
+  root.classList.add('desktop');
+  root.classList.remove('mobile');
+  function resize(){
+    var canvas=document.getElementById('slotCanvas');
+    if(!canvas)return;
+    var box=canvas.parentElement;
+    if(!box)return;
+    box.style.width='100vw';
+    box.style.height='100dvh';
+    box.style.display='flex';
+    box.style.alignItems='center';
+    box.style.justifyContent='center';
+    canvas.style.width='100%';
+    canvas.style.height='100%';
+    canvas.style.objectFit='contain';
+  }
+  window.addEventListener('resize',resize);
+  document.addEventListener('DOMContentLoaded',resize);
+  setInterval(resize,1200);
+})();
+</script>`;
+  await writeFile(join(output,'responsive-desktop.html'),responsive);
   const config = {
     sessionToken: 'local-demo',
     resourcesBasePath: './',
