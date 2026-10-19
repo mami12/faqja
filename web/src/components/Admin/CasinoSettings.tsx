@@ -23,7 +23,7 @@ export default function CasinoSettings(){
     finally{setBusy(false);}
   };
   const updateProfile=async()=>{
-    if(!data||!selectedProfile||selectedProfile===data.profile)return;
+    if(!data||!selectedProfile||selectedProfile===data?.profile)return;
     setBusy(true);setError('');
     try{
       const res=await apiClient.patch<Settings>('/admin/casino/profile',{profile:selectedProfile});
