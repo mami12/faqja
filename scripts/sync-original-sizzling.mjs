@@ -111,58 +111,16 @@ html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!i
   const realPage = page.replace(JSON.stringify(config), JSON.stringify(realConfig));
   await writeFile(join(output, 'index-real.html'), realPage);
   const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
-  // Repair missing desktop assets systematically. The source archive omits
-  // several SD variants while shipping the matching original HD atlases.
-  // A previous patch repaired only symbol animations and left the loader
-  // blocked on other absent resources at 99%.
-  const desktopAliases = {
-    'images/bg_0.json': 'images/bg_0-hd.json',
-    'images/bg_0.webp': 'images/bg_0-hd.webp',
-    'images/reelset_0.json': 'images/reelset_0-hd.json',
-    'images/reelset_0.webp': 'images/reelset_0-hd.webp',
-    'images/popup.json': 'images/popup-hd.json',
-    'images/popup.webp': 'images/popup-hd.webp',
-    'data/reelsetConfig.json': 'data/reelsetConfig_hd.json',
-    'data/reelsetResources.json': 'data/reelsetResources-hd.json',
-    'data/linesConfig.json': 'data/linesConfig_hd.json',
-    'data/linesDeluxeResources.json': 'data/linesDeluxeResources_hd.json',
-    'data/popupConfig.json': 'data/popupConfig-hd.json',
-    'images/lines_deluxe.json': 'images/lines_deluxe_hd.json',
-    'images/lines_deluxe.png': 'images/lines_deluxe_hd.png',
-    'images/paytable_hd.png': 'images/paytable_hd.webp',
-    'images/ui_desktop_deluxe_en.png': 'images/ui_desktop_deluxe_en.webp',
-    'images/gamble_desktop_en.png': 'images/gamble_desktop_en.webp',
-    'images/shifter_0.png': 'images/shifter_0.webp',
-  };
-  for (let symbol = 0; symbol <= 7; symbol++)
-    desktopAliases['animations/' + symbol + '_symbol.json'] =
-      'animations/' + symbol + '_symbol-hd.json';
-  for (const [logical, replacement] of Object.entries(desktopAliases)) {
-    const existing = manifest[logical];
-    if (existing && await stat(join(output, existing)).then(x=>x.isFile()).catch(()=>false))
-      continue;
-    const replacementFile = manifest[replacement];
-    if (!replacementFile) throw new Error('No manifest replacement for ' + logical);
-    const info = await stat(join(output, replacementFile));
-    if (!info.isFile() || info.size < 10)
-      throw new Error('Missing original desktop replacement for ' + logical);
-    manifest[logical] = replacementFile;
-  }
-  // The archive's HD atlases reference absent JPG/PNG textures in meta.image.
-  // Use the actually shipped original WebP texture for each atlas.
-  for (const [logical, file] of Object.entries(manifest)) {
-    if (!logical.startsWith('images/') || !logical.endsWith('.json')) continue;
-    if (!await stat(join(output, file)).then(x=>x.isFile()).catch(()=>false)) continue;
-    const atlas = JSON.parse(await readFile(join(output, file), 'utf8'));
-    if (!atlas.meta?.image) continue;
-    const texture = atlas.meta.image;
-    const base = texture.replace(/\.(?:jpg|jpeg|png|webp)$/i, '');
-    const originalTexture = 'images/' + base + '.webp';
-    const resolvedTexture = manifest[originalTexture];
-    if (resolvedTexture && await stat(join(output, resolvedTexture)).then(x=>x.isFile()).catch(()=>false)) {
-      atlas.meta.image = base + '.webp';
-      await writeFile(join(output, file), JSON.stringify(atlas));
-    }
+  // The archived desktop reelset resource references SD Spine filenames, but
+  // only HD Spine animations were committed. Point the original resource names
+  // at the existing HD JSON rather than serving missing files (99% stall).
+  for (let symbol = 0; symbol <= 7; symbol++) {
+    const normal = 'animations/' + symbol + '_symbol.json';
+    const hd = 'animations/' + symbol + '_symbol-hd.json';
+    const hdFile = manifest[hd];
+    if (!hdFile) throw new Error('Missing original HD Spine manifest entry: ' + hd);
+    await stat(join(output, hdFile));
+    manifest[normal] = hdFile;
   }
   await writeFile(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   await writeFile(join(output, 'manifest-7976fbc9075178.json'), JSON.stringify(manifest, null, 2));
