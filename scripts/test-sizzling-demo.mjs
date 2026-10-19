@@ -71,6 +71,43 @@ try {
   const collected=await post({action:'collect',request_id:'3'});
   assert.equal(collected.status,200);
   assert.deepEqual(collected.body.available_actions,['spin']);
+  // Regression: the visible demo cabinet uses actual paytable winnings,
+  // and both original red/black Gamble actions work with demo credits.
+  // Keep spinning until a natural win so the test exercises live reel math.
+  let winning = null;
+  let requestId = 5;
+  for(let i=0;i<600;i++){
+    const result=await post({action:'spin',bet:1,lines:5,denomination:1,
+      request_id:String(requestId++)});
+    assert.equal(result.status,200);
+    const displayed=Number(result.body.spin.wins.total);
+    const sum=result.body.spin.wins.line_wins.reduce((n,w)=>n+Number(w.amount),0);
+    assert.ok(Math.abs(displayed-sum)<0.01,'Demo line win total must match winning symbols');
+    if(displayed>0){winning=result;break;}
+  }
+  assert.ok(winning,'Demo should pay a natural winning spin from its original reel strips');
+  const pending=Number(winning.body.spin.wins.total);
+  assert.ok(winning.body.available_actions.includes('gamble'),
+    'Gamble must appear after a demo win');
+  const offer=await post({action:'get_double',request_id:String(requestId++)});
+  assert.equal(offer.status,200);
+  assert.equal(offer.body.gamble.bet,pending);
+  assert.ok(offer.body.available_actions.includes('set_double'));
+  const amountBefore=Number(offer.body.balance.after);
+  const gambleRequest={action:'set_double',choice:0,request_id:String(requestId++)};
+  const dealt=await post(gambleRequest);
+  assert.equal(dealt.status,200,'Demo gamble must accept a red/black card');
+  const card=dealt.body.gamble.history.items[1];
+  const red=['hearts','diamonds'].includes(card.suit);
+  assert.equal(dealt.body.gamble.status,red?'win':'lose');
+  assert.ok(Math.abs(Number(dealt.body.balance.after)-
+    (amountBefore+(red?pending:-pending)))<0.01,
+    'Gamble credits/debits must match the result');
+  const again=await post(gambleRequest);
+  assert.deepEqual(again.body,dealt.body,'Gamble request retry must not pay twice');
+  const finalize=await post({action:'collect',request_id:String(requestId++)});
+  assert.equal(finalize.status,200);
+  assert.deepEqual(finalize.body.available_actions,['spin']);
   const other=await fetch(base,{
     method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({data:JSON.stringify({action:'init'})}),
