@@ -3,7 +3,6 @@ import { pool, query } from '../db.mjs';
 import { requireAuth } from '../ledger/auth.mjs';
 import { isLedgerReady } from '../ledger/store.mjs';
 import { publicRtpProfiles, profileById } from './rtp-profiles.mjs';
-import { placeCasinoSpin } from './transactions.mjs';
 
 // Sizzling uses the same authenticated PostgreSQL balance as sports betting.
 // The admin may suspend wagering at any time; math remains uncertified.
@@ -26,10 +25,10 @@ async function getSettings(executor = query) {
   return {
     enabled: Boolean(setting.enabled),
     deploymentEnabled: true,
-    realMoneyAvailable: Boolean(setting.enabled),
+    realMoneyAvailable: false,
     profile: setting.profile,
     profiles, mathApproved: false, certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: 'Simulim shkollor me kredite virtuale.',
+    warning: 'Sizzling Hot Deluxe uses separate demo credits; wallet betting is disabled.',
   };
 }
 
@@ -38,16 +37,8 @@ casinoWalletRouter.get('/casino/status', ...access, safe(async (req, res) => {
   res.json({ ...await getSettings(), balance: req.user.balance });
 }));
 
-casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
-  if(req.user.role !== 'PLAYER' || req.user.status !== 'ACTIVE')throw fault(403,'Account cannot play casino');
-  const outcome=await placeCasinoSpin({
-    userId:req.user.id,
-    requestId:req.body?.clientRequestId,
-    bet:req.body?.bet,denomination:req.body?.denomination,lines:req.body?.lines,
-  });
-  res.set('Cache-Control','no-store');
-  res.json(outcome);
-}));
+// The wallet-backed casino spin route is intentionally not exposed.
+// Sizzling Hot Deluxe runs on standalone virtual demo credits.
 
 casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getSettings())));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
