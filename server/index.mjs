@@ -638,6 +638,9 @@ app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
 if (existsSync(webDist)) {
+  // Old bookmarked wallet cabinet URLs now use the same demo-credit cabinet.
+  app.get('/app/casino-original/sizzling/index-real.html', (_req,res) =>
+    res.redirect(302, '/app/casino-original/sizzling/index.html'));
   // The original Pixi demo entry is directly reachable again.
   // Serve original game files without SPA fallback. If an asset is missing,
   // return a real 404 instead of React's index.html with a misleading 200.
@@ -646,7 +649,7 @@ if (existsSync(webDist)) {
     express.static(path.join(webDist,'casino-original/sizzling'),{
       fallthrough:false,
       setHeaders:(res,file)=>{
-        if(/(?:index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
+        if(/(?:index(?:-real)?|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
           res.setHeader('Cache-Control','no-store, max-age=0');
       },
     }));
