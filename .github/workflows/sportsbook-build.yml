@@ -88,6 +88,8 @@ jobs:
           node --check server/ledger/decided-markets.mjs
           node --check server/ledger/view.mjs
           node --check server/casino/sizzling-demo.mjs
+          node --check server/casino/wallet.mjs
+          node --check server/casino/finance.mjs
       - name: Build Vite frontend
         run: npm run build:web
       - name: Verify original Sizzling demo protocol and Goldsvet math
