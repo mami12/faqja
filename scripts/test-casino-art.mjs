@@ -100,7 +100,7 @@ assert.ok(goldsvet.includes('reelset_reel_stop-5bd4b48edb.ogg'),
 assert.ok(goldsvet.includes('reelset_moving-2da16a7a33.ogg'),
   'original reel movement effect missing');
 assert.ok(goldsvet.includes('class SoundEngine'),'Goldsvet sound engine replaced');
-const inlineScripts=[...goldsvet.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)];
+const inlineScripts=[...goldsvet.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
 assert.ok(inlineScripts.length > 0, 'Goldsvet client script missing');
 inlineScripts.forEach((match,index) =>
   assert.doesNotThrow(()=>new vm.Script(match[1],{filename:'goldsvet-inline-'+index+'.js'}),
