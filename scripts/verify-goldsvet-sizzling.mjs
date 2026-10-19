@@ -16,6 +16,15 @@ const images = [
   'star.png','grapes.png','watermelon.png','seven.png',
 ];
 const pngHeader = Buffer.from([137,80,78,71,13,10,26,10]);
+const audioNames = [
+  'background_fs-8da5d6c953.ogg', 'reelset_moving-2da16a7a33.ogg',
+  'reelset_reel_stop-5bd4b48edb.ogg', 'ui_click-a33df725de.ogg',
+  'ui_changebet_deluxe-a32d4cdbb0.ogg',
+  'ui_maxbetlines_deluxe-dac40c7240.ogg',
+  'ui_autoplay_start_deluxe-f82e9171c3.ogg',
+  'ui_autoplay_stop_deluxe-f8b12ea774.ogg',
+  'collect-2691aee57c.ogg', '1_win25-3baac3ba30.ogg',
+];
 for (const dir of [srcDir,distDir]) {
   const html = join(dir,'index.html');
   assert.ok(existsSync(html), 'Goldsvet HTML missing from '+html);
@@ -29,5 +38,12 @@ for (const dir of [srcDir,distDir]) {
     assert.ok(image.length>200&&image.subarray(0,8).equals(pngHeader),
       'Invalid Goldsvet PNG in Vite output: '+path);
   }
+  for (const name of audioNames) {
+    const path = join(dir,'audio',name);
+    assert.ok(existsSync(path), 'Missing original Sizzling sound: '+path);
+    const bytes=readFileSync(path);
+    assert.ok(bytes.length>500 && bytes.toString('ascii',0,4)==='OggS',
+      'Invalid Sizzling audio in Vite output: '+path);
+  }
 }
-console.log('Goldsvet release verified: index.html and all 8 original images in source and /app build output');
+console.log('Goldsvet release verified: index.html, all 8 Goldsvet images and 10 original audio files in source and /app build output');
