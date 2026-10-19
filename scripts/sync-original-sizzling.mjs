@@ -111,6 +111,19 @@ html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!i
   const realPage = page.replace(JSON.stringify(config), JSON.stringify(realConfig));
   await writeFile(join(output, 'index-real.html'), realPage);
   const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
+  // The archived desktop reelset resource references SD Spine filenames, but
+  // only HD Spine animations were committed. Point the original resource names
+  // at the existing HD JSON rather than serving missing files (99% stall).
+  for (let symbol = 0; symbol <= 7; symbol++) {
+    const normal = 'animations/' + symbol + '_symbol.json';
+    const hd = 'animations/' + symbol + '_symbol-hd.json';
+    const hdFile = manifest[hd];
+    if (!hdFile) throw new Error('Missing original HD Spine manifest entry: ' + hd);
+    await stat(join(output, hdFile));
+    manifest[normal] = hdFile;
+  }
+  await writeFile(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await writeFile(join(output, 'manifest-7976fbc9075178.json'), JSON.stringify(manifest, null, 2));
   // The original archive includes desktop assets but not its mobile component
   // tree. Preserve the original desktop gameplay and select that component
   // tree on every device, including phones.
