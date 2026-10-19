@@ -156,7 +156,7 @@ html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!i
     const atlas = JSON.parse(await readFile(join(output, file), 'utf8'));
     if (!atlas.meta?.image) continue;
     const texture = atlas.meta.image;
-    const base = texture.replace(/\\.(?:jpg|jpeg|png|webp)$/i, '');
+    const base = texture.replace(/\.(?:jpg|jpeg|png|webp)$/i, '');
     const originalTexture = 'images/' + base + '.webp';
     const resolvedTexture = manifest[originalTexture];
     if (resolvedTexture && await stat(join(output, resolvedTexture)).then(x=>x.isFile()).catch(()=>false)) {
