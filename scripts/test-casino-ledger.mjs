@@ -113,6 +113,15 @@ try{
     const after=await getUserById(player.id);
     assert.equal(after.balance,spin.body.balance.after,'sports header must equal Pixi wallet');
     assert.equal(after.balance,round(before.balance-5+Number(spin.body.spin.wins.total)));
+    // The legacy Pixi client treats every non-200 response as a fatal
+    // "Internal Server Error" and exits to lobby. Expected rejects instead
+    // use the client's documented JSON error envelope (HTTP 200).
+    const invalid=await play({action:'spin',bet:999,lines:5,denomination:1,request_id:'777'});
+    assert.equal(invalid.status,200,'Pixi must not drop to lobby on invalid virtual bets');
+    assert.equal(invalid.body.error?.code,400);
+    assert.match(invalid.body.error?.message||'',/Invalid Sizzling bet/);
+    assert.equal((await getUserById(player.id)).balance,after.balance,
+      'rejected Pixi bet must never change the virtual wallet');
     const replay=await play(request);
     assert.deepEqual(replay.body,spin.body,'repeated Pixi request must not deduct again');
     assert.equal((await getUserById(player.id)).balance,after.balance);

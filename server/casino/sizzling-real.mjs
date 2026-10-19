@@ -17,9 +17,16 @@ const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
 const fault=(status,message)=>Object.assign(new Error(message),{status});
 const cookieValue=req=>String(req.headers.cookie||'').split(';').map(s=>s.trim())
   .find(s=>s.startsWith(COOKIE+'='))?.slice(COOKIE.length+1);
-const deny=(res,error)=>{
-  if(!error.status||error.status>=500)console.error('[casino pixi]',error);
-  return res.status(error.status||500).json({error:error.status?error.message:'CASINO_SERVICE_ERROR'});
+// The original Pixi XHR maps *any* non-200 status to "Internal Server
+// Error! Back to Lobby". Expected game failures are protocol JSON errors,
+// not infrastructure failures. Preserve genuine HTTP 5xx for server faults.
+const deny=(res,error,action='unknown')=>{
+  const status=Number(error?.status)||500;
+  const message=status>=500?'CASINO_SERVICE_ERROR':String(error.message||'CASINO_REQUEST_REJECTED');
+  if(status>=500)console.error('[casino pixi] failed action='+action,error);
+  else console.warn('[casino pixi] rejected action='+action+' status='+status+' code='+message);
+  if(status<500)return res.status(200).json({error:{code:status,message}});
+  return res.status(status).json({error:{code:status,message}});
 };
 function uuidFromId(nonce,requestId){
   const h=createHash('sha256').update(nonce+':'+requestId).digest();
@@ -41,11 +48,11 @@ async function getWalletPlayer(req){
   if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
   return {user,nonce:claim.jti};
 }
-function spinProtocol(round,bet,lines,reqId){
+function spinProtocol(round,bet,lines,denomination,reqId){
   const before=Number((round.balance+round.stake-round.payout).toFixed(2));
   const total=round.payout.toFixed(2);
   return {
-    balance:{before,after:round.balance},denomination:1,
+    balance:{before,after:round.balance},denomination,
     available_actions:round.payout>0?['spin','collect']:['spin'],
     macro_round:{wins:{total}},
     spin:{bet,lines,multiplier:1,next_multiplier:1,next_request_id:reqId+1,
@@ -57,6 +64,7 @@ export function createSizzlingRealRouter(){
   const router=Router();
   router.post('/play',raw({type:()=>true,limit:'128kb'}),async(req,res)=>{
     res.set('Cache-Control','no-store');
+    let action='unknown';
     try{
       if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
       if(req.headers.origin){
@@ -66,7 +74,7 @@ export function createSizzlingRealRouter(){
       const {user,nonce}=await getWalletPlayer(req);
       await ensureAdminEnabled();
       const request=decodeRequest(req);
-      const action=String(request.action||'init');
+      action=String(request.action||'init');
       const rawId=request.request_id;
       const id=rawId==null?null:Number(rawId);
       if(rawId!=null&&(!Number.isSafeInteger(id)||id<0||id>1e9))throw fault(400,'INVALID_REQUEST_ID');
@@ -80,7 +88,7 @@ export function createSizzlingRealRouter(){
         const bet=Number(request.bet),lines=Number(request.lines),denomination=Number(request.denomination??1);
         const round=await placeCasinoSpin({userId:user.id,requestId:uuidFromId(nonce,id),
           bet,denomination,lines});
-        return res.json(spinProtocol(round,bet,lines,id));
+        return res.json(spinProtocol(round,bet,lines,denomination,id));
       }
       if(action==='collect'){
         // Winnings are already credited atomically at spin settlement.
@@ -93,7 +101,7 @@ export function createSizzlingRealRouter(){
       if(action==='get_double'||action==='set_double')
         throw fault(409,'GAMBLE_DISABLED_IN_WALLET_MODE');
       throw fault(400,'INVALID_ACTION');
-    }catch(error){deny(res,error);}
+    }catch(error){deny(res,error,action);}
   });
   return router;
 }

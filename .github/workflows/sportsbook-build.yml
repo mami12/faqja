@@ -5,6 +5,7 @@ on:
     paths:
       - 'web/**'
       - 'scripts/test-casino-art.mjs'
+      - 'scripts/test-sizzling-wallet-browser.mjs'
       - 'server/**'
       - 'scripts/test-live-risk.mjs'
       - 'scripts/test-live-money-risk.mjs'
