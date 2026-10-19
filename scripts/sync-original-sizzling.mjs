@@ -58,38 +58,7 @@ try {
   const responsive = `<style>
 html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 #slotCanvas {touch-action:none}
-</style>
-<script>
-(function(){
-  // Fast-stop belongs to the original Start/Stop Spin button. Use the engine's
-  // own timescale for reels/Spine/tweens; never swap or redraw game assets.
-  var active=false,fast=false,watchdog;
-  function reset(){
-    active=false;fast=false;
-    clearTimeout(watchdog);
-    if(window.c2d&&c2d.timescale!==1)c2d.timescale=1;
-  }
-  document.addEventListener('spin.requestWasSent',function(){
-    reset();active=true;watchdog=setTimeout(reset,10000);
-  });
-  document.addEventListener('spin.reelsWasStopped',reset);
-  document.addEventListener('game.goToLobby',reset);
-  window.addEventListener('blur',reset);
-  window.addEventListener('pointerdown',function(event){
-    if(!active||fast||!window.c2d||!c2d.env||!c2d.env.screenParams)return;
-    var canvas=document.getElementById('slotCanvas');
-    if(!canvas||event.target!==canvas)return;
-    var r=canvas.getBoundingClientRect(),p=c2d.env.screenParams;
-    if(!p.canvasScaleCoef||!p.pixelRatio)return;
-    var x=(event.clientX-r.left)*p.pixelRatio/p.canvasScaleCoef-p.paddingLeft;
-    var y=(event.clientY-r.top)*p.pixelRatio/p.canvasScaleCoef-p.paddingTop;
-    // Original HD Start and quick-stop controls share cabinet coordinates.
-    if(Math.abs(x-1570)>155||Math.abs(y-1025)>100)return;
-    fast=true;
-    c2d.timescale=4;
-  },true);
-})();
-</script>`;
+</style>`;
   await writeFile(join(output,'responsive-desktop.html'),responsive);
   await writeFile(join(output,'body.html'),responsive + bodySource);
   const config = {
