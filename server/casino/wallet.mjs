@@ -131,3 +131,26 @@ casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(asyn
   } catch(error) { await client.query('rollback').catch(()=>{});throw error; }
   finally {client.release();}
 }));
+
+
+// Switch only between published, immutable profiles; no per-player RTP.
+// Active rounds hold FOR SHARE; this update takes an exclusive row lock.
+casinoWalletRouter.patch('/admin/casino/profile', ...access, isAdmin, safe(async(req,res)=>{
+  const profile=String(req.body?.profile||'');
+  if(!profileById(profile)) throw fault(400,'Unknown RTP profile');
+  const client=await pool.connect();
+  try {
+    await client.query('begin');
+    const settings=await client.query('select enabled,profile from app_casino_settings where id=1 for update');
+    if(settings.rows[0]?.enabled) throw fault(409,'Disable monetary casino before changing the RTP profile');
+    const previous=settings.rows[0]?.profile;
+    await client.query('update app_casino_settings set profile=$1,updated_by=$2,updated_at=now() where id=1',
+      [profile,req.user.id]);
+    await client.query(
+      "insert into app_admin_audit(actor_id,actor_name,actor_role,action,target_type,target_id,details) values($1,$2,$3,'PATCH /admin/casino/profile','casino','sizzling',$4::jsonb)",
+      [req.user.id,req.user.username,req.user.role,JSON.stringify({from:previous,to:profile})]);
+    await client.query('commit');
+    res.json(await getSettings());
+  } catch(error){await client.query('rollback').catch(()=>{});throw error;}
+  finally {client.release();}
+}));
