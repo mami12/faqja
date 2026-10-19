@@ -110,6 +110,7 @@ try{
 }finally{
   await browser?.close();
   if(server)await new Promise(done=>server.close(done));
-  await query('update app_casino_settings set enabled=false where id=1').catch(()=>{});
+  // Leave the test setting enabled so the following casino-ledger regression
+  // can verify its first-deploy state in the same disposable CI database.
   await closePool();
 }
