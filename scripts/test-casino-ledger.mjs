@@ -170,7 +170,7 @@ try{
     assert.equal(unavailable.body.error?.message,'NOTHING_TO_GAMBLE');
     assert.equal((await getUserById(player.id)).balance,gambleAfter.balance);
     const me=await fetch(origin+'/app/api/auth/me',{headers:{Authorization:'Bearer '+token}});
-    assert.equal((await me.json()).balance,after.balance,'same sports auth/me balance after Pixi spin');
+    assert.equal((await me.json()).balance,gambleAfter.balance,'same sports auth/me balance after Gamble');
   }finally{
     await new Promise(done=>http.close(done));
   }
