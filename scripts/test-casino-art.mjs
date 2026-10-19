@@ -84,6 +84,27 @@ for (const name of ['cherry','lemon','orange','plum','star','grapes','watermelon
 }
 assert.ok(webPackage.scripts.build.includes('sync-goldsvet-sizzling.mjs'),
   'Vite build must fetch original Goldsvet sprites');
+assert.ok(syncScript.includes('fileURLToPath(import.meta.url)'),
+  'Goldsvet asset path must be anchored to script directory');
+assert.ok(!syncScript.includes("resolve('web/public"),
+  'Never create web/web/public when npm runs with cwd=web');
+assert.ok(webPackage.scripts.dev.includes('sync-goldsvet-sizzling.mjs'),
+  'Vite dev server must also have the Goldsvet sprites');
+assert.ok(webPackage.scripts.build.includes('verify-goldsvet-sizzling.mjs'),
+  'Do not ship a build unless real PNG and OGG assets are present in web/dist');
+assert.ok(goldsvet.includes('id="btn-music"'), 'music control missing');
+assert.ok(goldsvet.includes('background_fs-8da5d6c953.ogg'),
+  'original Sizzling music loop missing');
+assert.ok(goldsvet.includes('reelset_reel_stop-5bd4b48edb.ogg'),
+  'original reel stop effect missing');
+assert.ok(goldsvet.includes('reelset_moving-2da16a7a33.ogg'),
+  'original reel movement effect missing');
+assert.ok(goldsvet.includes('class SoundEngine'),'Goldsvet sound engine replaced');
+const inlineScripts=[...goldsvet.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+assert.ok(inlineScripts.length > 0, 'Goldsvet client script missing');
+inlineScripts.forEach((match,index) =>
+  assert.doesNotThrow(()=>new vm.Script(match[1],{filename:'goldsvet-inline-'+index+'.js'}),
+    'Goldsvet embedded script must be valid JavaScript'));
 
 console.log('Casino graphics: 9 games, 8 original sprite slots each, ' + imageCount +
   ' checked local image references.');

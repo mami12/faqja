@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "node ../scripts/sync-goldsvet-sizzling.mjs && vite build",
+    "dev": "node ../scripts/sync-goldsvet-sizzling.mjs && vite",
+    "build": "node ../scripts/sync-goldsvet-sizzling.mjs && vite build && node ../scripts/verify-goldsvet-sizzling.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

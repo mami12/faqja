@@ -220,6 +220,10 @@
         .btn-game:active:not(:disabled) {
             transform: translateY(1px);
         }
+        #btn-music.active {
+            background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+            border-color: #6ee7b7;
+        }
         .btn-game:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -297,6 +301,11 @@
             font-weight: bold;
         }
         @media (max-width: 768px) {
+            #header-bar { padding: 6px 8px; gap: 6px; }
+            .logo-title { font-size: clamp(12px, 4vw, 22px); letter-spacing: 0; }
+            .logo-badge { font-size: 9px; }
+            .controls-group { gap: 5px; }
+            .btn-game { min-height: 38px; padding: 6px 9px; font-size: 11px; }
             .symbol-cell { height: 110px; }
             .symbol-cell img { width: 80px; height: 80px; }
             #dashboard { height: auto; flex-wrap: wrap; justify-content: center; }
@@ -314,7 +323,8 @@
             </div>
             <div class="controls-group">
                 <button class="btn-game" id="btn-paytable">ℹ️ Paytable</button>
-                <button class="btn-game" id="btn-sound">🔊</button>
+                <button class="btn-game" id="btn-music" aria-pressed="false" title="Muzikë nga skedarët audio të Sizzling Hot Deluxe">🎵 MUSIC</button>
+                <button class="btn-game" id="btn-sound" aria-pressed="true">🔊</button>
             </div>
         </header>
 
@@ -383,15 +393,17 @@
             init() {
                 if (!this.ctx) {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContext) return;
                     this.ctx = new AudioContext();
                 }
-                if (this.ctx.state === 'suspended') {
+                if (this.ctx && this.ctx.state === 'suspended') {
                     this.ctx.resume();
                 }
             }
             playTone(freq, type, duration, gainVal = 0.2) {
                 if (this.muted) return;
                 this.init();
+                if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = type;
@@ -403,18 +415,49 @@
                 osc.start();
                 osc.stop(this.ctx.currentTime + duration);
             }
+            // Goldsvet originally generated sound only from oscillators. The
+            // user also has the actual Sizzling audio effects in New-folder.
+            // Prefer the bundled OGG samples, falling back to Goldsvet tones
+            // on browsers without OGG support.
+            playSample(filename, volume, fallback) {
+                if (this.muted) return;
+                try {
+                    const clip = new Audio('audio/' + filename);
+                    clip.volume = volume;
+                    void clip.play().catch(() => { if (fallback) fallback(); });
+                } catch (_error) {
+                    if (fallback) fallback();
+                }
+            }
             reelTick() {
-                this.playTone(220, 'triangle', 0.04, 0.15);
+                this.playTone(220, 'triangle', 0.04, 0.045);
+            }
+            reelStart() {
+                this.playSample('reelset_moving-2da16a7a33.ogg', 0.17,
+                    () => this.playTone(270, 'triangle', 0.18, 0.09));
+            }
+            betChange() {
+                this.playSample('ui_changebet_deluxe-a32d4cdbb0.ogg', 0.18, () => this.click());
+            }
+            maxBet() {
+                this.playSample('ui_maxbetlines_deluxe-dac40c7240.ogg', 0.22, () => this.click());
+            }
+            autoToggle(enabled) {
+                this.playSample(enabled
+                    ? 'ui_autoplay_start_deluxe-f82e9171c3.ogg'
+                    : 'ui_autoplay_stop_deluxe-f8b12ea774.ogg',
+                    0.2, () => this.click());
             }
             reelStop() {
-                this.playTone(110, 'square', 0.08, 0.3);
+                this.playSample('reelset_reel_stop-5bd4b48edb.ogg', 0.22,
+                    () => this.playTone(110, 'square', 0.08, 0.18));
             }
             winSound() {
-                const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0];
-                notes.forEach((freq, idx) => {
-                    setTimeout(() => {
-                        this.playTone(freq, 'sine', 0.25, 0.3);
-                    }, idx * 70);
+                this.playSample('1_win25-3baac3ba30.ogg', 0.35, () => {
+                    const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0];
+                    notes.forEach((freq, idx) => {
+                        setTimeout(() => this.playTone(freq, 'sine', 0.22, 0.12), idx * 70);
+                    });
                 });
             }
             jackpotSound() {
@@ -426,10 +469,52 @@
                 });
             }
             click() {
-                this.playTone(440, 'triangle', 0.05, 0.1);
+                this.playSample('ui_click-a33df725de.ogg', 0.16,
+                    () => this.playTone(440, 'triangle', 0.05, 0.06));
             }
         }
         const audio = new SoundEngine();
+
+        // The Goldsvet standalone browser demo has no background-music track.
+        // This loop is a real Sizzling Hot Deluxe OGG asset from New-folder,
+        // with a visible on/off control and no autoplay before a user gesture.
+        const musicTrack = new Audio('audio/background_fs-8da5d6c953.ogg');
+        musicTrack.loop = true;
+        musicTrack.preload = 'none';
+        musicTrack.volume = 0.12;
+        let musicEnabled = false;
+        function updateMusic() {
+            const button = document.getElementById('btn-music');
+            button.classList.toggle('active', musicEnabled);
+            button.setAttribute('aria-pressed', String(musicEnabled));
+            button.textContent = musicEnabled ? '🎵 MUSIC ON' : '🎵 MUSIC';
+        }
+        function pauseMusic() {
+            musicEnabled = false;
+            musicTrack.pause();
+            updateMusic();
+        }
+        document.getElementById('btn-music').addEventListener('click', async () => {
+            if (musicEnabled) { pauseMusic(); return; }
+            try {
+                audio.init(); // Start only after this explicit user interaction.
+                musicTrack.muted = audio.muted;
+                await musicTrack.play();
+                musicEnabled = true;
+                updateMusic();
+            } catch (error) {
+                pauseMusic();
+                console.warn('[Sizzling] music unavailable in this browser', error);
+            }
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pauseMusic();
+                isAuto = false;
+                document.getElementById('btn-auto').style.background = '';
+            }
+        });
+        window.addEventListener('pagehide', pauseMusic);
 
         // --- Game Symbols & Paytable ---
         const SYMBOLS = [
@@ -532,6 +617,7 @@
                     visibleGrid[c].push(symId);
                     const cell = document.createElement('div');
                     cell.className = 'symbol-cell';
+                    cell.style.height = (reelCol.clientHeight / 3) + 'px';
                     cell.innerHTML = `<img src="images/${SYMBOL_MAP[symId].file}" alt="sym">`;
                     strip.appendChild(cell);
                 }
@@ -544,6 +630,15 @@
             const container = document.getElementById('reels-container');
             paylineCanvas.width = container.clientWidth;
             paylineCanvas.height = container.clientHeight;
+            if (!isSpinning) {
+                for (let c = 0; c < 5; c++) {
+                    const reel = document.getElementById('reel-' + c);
+                    const h = reel.clientHeight / 3;
+                    reel.querySelectorAll('.symbol-cell').forEach(cell => {
+                        cell.style.height = h + 'px';
+                    });
+                }
+            }
         }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
@@ -560,6 +655,7 @@
             }
 
             audio.init();
+            audio.reelStart();
             balance -= currentBet;
             dispWin.innerText = '0.00';
             updateDisplays();
@@ -605,7 +701,10 @@
             const spinCount = 18 + colIdx * 4;
             const symbolSeq = [];
             for (let i = 0; i < spinCount; i++) {
-                symbolSeq.push(SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)].id);
+                // The animated strip must have the same symbol proportions
+                // as Goldsvet's sampled reel strips, not random placeholders.
+                const source = REEL_STRIPS[colIdx];
+                symbolSeq.push(source[Math.floor(Math.random() * source.length)]);
             }
             symbolSeq.push(...finalSymbols);
 
@@ -804,12 +903,13 @@
         btnAuto.addEventListener('click', () => {
             audio.click();
             isAuto = !isAuto;
+            audio.autoToggle(isAuto);
             btnAuto.style.background = isAuto ? 'linear-gradient(180deg, #10b981, #047857)' : '';
             if (isAuto && !isSpinning) spin();
         });
 
         btnBetPlus.addEventListener('click', () => {
-            audio.click();
+            audio.betChange();
             if (betIndex < BET_STEPS.length - 1) {
                 betIndex++;
                 updateDisplays();
@@ -817,7 +917,7 @@
         });
 
         btnBetMinus.addEventListener('click', () => {
-            audio.click();
+            audio.betChange();
             if (betIndex > 0) {
                 betIndex--;
                 updateDisplays();
@@ -825,14 +925,16 @@
         });
 
         btnBetMax.addEventListener('click', () => {
-            audio.click();
+            audio.maxBet();
             betIndex = BET_STEPS.length - 1;
             updateDisplays();
         });
 
         btnSound.addEventListener('click', () => {
             audio.muted = !audio.muted;
+            musicTrack.muted = audio.muted;
             btnSound.innerText = audio.muted ? '🔇' : '🔊';
+            btnSound.setAttribute('aria-pressed', String(!audio.muted));
         });
 
         btnPaytable.addEventListener('click', () => {
