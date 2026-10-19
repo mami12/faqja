@@ -51,16 +51,6 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
   res.json(outcome);
 }));
 
-casinoWalletRouter.post('/casino/game/:gameId/spin', ...access, safe(async(req,res)=>{
-  if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'Player account disabled');
-  const outcome=await placeCasinoSpin({
-    userId:req.user.id,gameId:String(req.params.gameId),
-    requestId:req.body?.clientRequestId,bet:req.body?.bet,denomination:1,lines:1,
-  });
-  res.set('Cache-Control','no-store');
-  res.json(outcome);
-}));
-
 casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getSettings())));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
   if(typeof req.body?.enabled !== 'boolean') throw fault(400, 'enabled must be boolean');
