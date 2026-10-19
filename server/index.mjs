@@ -30,6 +30,7 @@ import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './id
 import { createSizzlingDemoRouter } from './casino/sizzling-demo.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
+import {createSizzlingRealRouter,casinoSessionRouter} from './casino/sizzling-real.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -630,6 +631,8 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
 // Original Sizzling Hot Deluxe (same origin as the sports site).
 // Only virtual demo credits; intentionally isolated from ledger/real balances.
 app.use('/app/api/casino/sizzlinghotdeluxe', createSizzlingDemoRouter());
+app.use('/app/api/casino/sizzlinghotdeluxe/real',createSizzlingRealRouter());
+app.use('/app/api',casinoSessionRouter);
 
 app.use('/app/api', casinoWalletRouter);
 app.use('/app/api', casinoFinanceRouter);
