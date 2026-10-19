@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Coins, Play, RotateCcw, Square, Sparkles } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
@@ -36,7 +36,7 @@ const creditsFormat = (value: number) => value.toLocaleString('sq-AL', {
 
 export default function CasinoPage() {
   const { gameId } = useParams<{ gameId?: string }>();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const storageKey = 'casino-demo-v2:' + (user?.id ?? 'guest');
   const [demo, setDemo] = useState<CasinoDemoState>(() => readDemoStorage(storageKey));
@@ -45,9 +45,14 @@ export default function CasinoPage() {
   const [spinAnimation, setSpinAnimation] = useState(0);
   const [showRules, setShowRules] = useState(false);
   const [realMoneyAvailable,setRealMoneyAvailable] = useState(false);
+  const [walletBalance,setWalletBalance]=useState<number|null>(null);
+  const [spinBusy,setSpinBusy]=useState(false);
+  const [spinError,setSpinError]=useState('');
+  const spinLock=useRef(false);
+  const pendingSpin=useRef<{id:string;gameId:string;bet:number}|null>(null);
   useEffect(()=>{
     let active=true;
-    void apiClient.get('/casino/status').then(r=>{if(active)setRealMoneyAvailable(Boolean(r.data.realMoneyAvailable));}).catch(()=>{});
+    void apiClient.get('/casino/status').then(r=>{if(active){setRealMoneyAvailable(Boolean(r.data.realMoneyAvailable));setWalletBalance(Number(r.data.balance));}}).catch(()=>{});
     return()=>{active=false;};
   },[]);
 
@@ -57,28 +62,54 @@ export default function CasinoPage() {
     : null, [demo.sessions, game]);
 
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify(demo)); } catch { /* storage disabled */ }
-  }, [demo, storageKey]);
+    if(!realMoneyAvailable)try { localStorage.setItem(storageKey, JSON.stringify(demo)); } catch { /* storage disabled */ }
+  }, [demo, storageKey, realMoneyAvailable]);
 
-  useEffect(() => { setAuto(false); setShowRules(false); }, [gameId]);
+  useEffect(() => { setAuto(false); setShowRules(false);setSpinError(''); }, [gameId]);
 
-  const canPlay = !!game && !!session &&
-    (demo.credits >= bet || session.freeSpins > 0 || session.respins > 0);
-
-  const spin = useCallback(() => {
-    if (!game) return;
-    setDemo(previous => playDemoRound(previous, game, bet));
-    setSpinAnimation(previous => previous + 1);
-  }, [game, bet]);
-
-  useEffect(() => {
-    if (!auto || !canPlay) {
-      if (auto && !canPlay) setAuto(false);
+  const displayedBalance=realMoneyAvailable ? (walletBalance??user?.balance??0) : demo.credits;
+  const canPlay=!!game&&!!session&&displayedBalance>=bet;
+  const spin=useCallback(async()=>{
+    if(!game||spinLock.current)return;
+    if(!realMoneyAvailable||user?.role!=='PLAYER'){
+      setDemo(previous=>playDemoRound(previous,game,bet));
+      setSpinAnimation(previous=>previous+1);
       return;
     }
-    const timer = window.setInterval(spin, 900);
-    return () => window.clearInterval(timer);
-  }, [auto, canPlay, spin]);
+    spinLock.current=true;setSpinBusy(true);setSpinError('');
+    const pending=pendingSpin.current||{id:crypto.randomUUID(),gameId:game.id,bet};
+    pendingSpin.current=pending;
+    try{
+      const response=await apiClient.post('/casino/game/'+pending.gameId+'/spin',{
+        clientRequestId:pending.id,bet:pending.bet,
+      });
+      const outcome=response.data;
+      const data=outcome.result;
+      const grid=(data.grid as number[][]).map(row=>row.map(symbol=>game.symbols[symbol]||game.symbols[0]));
+      setWalletBalance(Number(outcome.balance));
+      setDemo(previous=>({
+        ...previous,credits:Number(outcome.balance),
+        sessions:{...previous.sessions,[game.id]:{
+          freeSpins:0,respins:0,held:[],lastGrid:grid,lastWin:Number(outcome.payout),
+          lastMessage:data.message+(data.bonusSpins?' · '+data.bonusSpins+' falas':''),
+          winningCells:data.winningCells as number[],totalSpins:(previous.sessions[game.id]?.totalSpins||0)+1,
+        }},
+      }));
+      setSpinAnimation(previous=>previous+1);
+      pendingSpin.current=null;
+      void refreshUser();
+    }catch(e:any){
+      setSpinError(e.response?.data?.message||'Lidhja u ndërpre. Riprovo pa ndryshuar bastin.');
+      if(e.response?.status===400||e.response?.status===403||e.response?.status===409)
+        pendingSpin.current=null;
+    }finally{spinLock.current=false;setSpinBusy(false);}
+  },[game,bet,realMoneyAvailable,refreshUser,user?.role]);
+
+  useEffect(()=>{
+    if(!auto||realMoneyAvailable||!canPlay){if(auto&&(!canPlay||realMoneyAvailable))setAuto(false);return;}
+    const timer=window.setInterval(()=>void spin(),900);
+    return()=>window.clearInterval(timer);
+  },[auto,realMoneyAvailable,canPlay,spin]);
 
   const openGame = (id: GameId) => {
     setAuto(false);
@@ -135,30 +166,29 @@ export default function CasinoPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-black sm:text-2xl">{game ? game.title : 'Kazino'}</h1>
-                <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300">Demo</span>
+                <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-300">{realMoneyAvailable&&user?.role==='PLAYER'?'Bilanci real':'Demo'}</span>
               </div>
-              <p className="text-xs text-slate-400">9 lojëra · Brenda faqes sportive · Pa para reale</p>
+              <p className="text-xs text-slate-400">9 lojëra · Brenda faqes sportive · {realMoneyAvailable&&user?.role==='PLAYER'?'Fonde të përbashkëta':'Demo'}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="rounded-xl border border-amber-500/30 bg-[#1c2430] px-3 py-2 text-right">
-              <span className="block text-[10px] uppercase tracking-widest text-slate-400">Kredite demo</span>
+              <span className="block text-[10px] uppercase tracking-widest text-slate-400">{realMoneyAvailable&&user?.role==='PLAYER'?'Bilanci sport + kazino':'Kredite demo'}</span>
               <span aria-live="polite" className="text-lg font-extrabold tabular-nums text-amber-300">
-                <Coins size={16} className="mr-1 inline align-[-2px]" />{creditsFormat(demo.credits)}
+                <Coins size={16} className="mr-1 inline align-[-2px]" />{creditsFormat(displayedBalance)}
               </span>
             </div>
-            <button type="button" onClick={resetCredits}
+            {(!realMoneyAvailable||user?.role!=='PLAYER')&&<button type="button" onClick={resetCredits}
               className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-2.5 text-xs font-bold hover:border-amber-400 hover:text-amber-300">
               <RotateCcw size={15} /> Rimbush demo
-            </button>
+            </button>}
           </div>
         </div>
 
         {!game ? (
           <>
             <div className="mb-5 rounded-xl border border-white/10 bg-[#172337] p-4 text-sm text-slate-300">
-              Zgjidh një lojë për ta luajtur këtu. Këto janë versione të pavarura demonstrimi,
-              jo klientët apo tabelat zyrtare të pagesave të prodhuesve. Kreditet nuk kanë vlerë monetare.
+              {realMoneyAvailable&&user?.role==='PLAYER' ? 'Përdoruesi luan nga i njëjti bilanc si sporti. Rezultatet dhe fitimet llogariten e ruhen nga serveri. Lojërat e tjera, përveç Sizzling, përdorin motorin tonë, jo matematikën zyrtare të prodhuesve.' : 'Zgjidh një lojë. Kreditë demo nuk kanë vlerë monetare.'}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {GAMES.map(item => (
@@ -246,17 +276,17 @@ export default function CasinoPage() {
 
               <div className="mt-4 flex flex-wrap items-end justify-center gap-2 sm:gap-3">
                 <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200">
-                  Basti demo
+                  {realMoneyAvailable&&user?.role==='PLAYER'?'Basti në Lek':'Basti demo'}
                   <select value={bet} onChange={event => {setAuto(false);setBet(Number(event.target.value));}}
-                    disabled={auto} className="h-11 rounded-lg border border-white/20 bg-[#142237] px-3 font-bold text-white">
-                    {BET_OPTIONS.map(option => <option key={option} value={option}>{option} kredite</option>)}
+                    disabled={auto||spinBusy||!!pendingSpin.current} className="h-11 rounded-lg border border-white/20 bg-[#142237] px-3 font-bold text-white">
+                    {BET_OPTIONS.map(option => <option key={option} value={option}>{option} {realMoneyAvailable&&user?.role==='PLAYER'?'Lek':'kredite'}</option>)}
                   </select>
                 </label>
-                <button type="button" disabled={!canPlay || auto} onClick={spin}
+                <button type="button" disabled={!canPlay || auto || spinBusy} onClick={()=>void spin()}
                   className="flex h-11 min-w-[130px] items-center justify-center gap-2 rounded-lg bg-amber-400 px-6 font-black text-[#251802] shadow-lg transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">
                   <Play size={19} fill="currentColor" /> {session.respins > 0 ? 'RESPIN' : session.freeSpins > 0 ? 'FALAS' : 'SPIN'}
                 </button>
-                <button type="button" disabled={!canPlay && !auto}
+                {(!realMoneyAvailable||user?.role!=='PLAYER')&&<button type="button" disabled={!canPlay && !auto}
                   onClick={() => setAuto(current => !current)}
                   className={
                     'flex h-11 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-bold transition ' +
@@ -265,11 +295,12 @@ export default function CasinoPage() {
                   }>
                   {auto ? <Square size={15} fill="currentColor" /> : <RotateCcw size={16} />}
                   {auto ? 'NDALO AUTO' : 'AUTO'}
-                </button>
+                </button>}
               </div>
-              {!canPlay && <p className="mt-3 text-center text-xs text-rose-200">Nuk ka mjaft kredite demo. Përdor «Rimbush demo».</p>}
+              {spinError&&<p role="alert" className="mt-3 text-center text-xs text-rose-200">{spinError}</p>}
+              {!canPlay && <p className="mt-3 text-center text-xs text-rose-200">{realMoneyAvailable?'Nuk ka fonde të mjaftueshme.':'Nuk ka mjaft kredite demo.'}</p>}
               <p className="mt-3 text-center text-[11px] text-white/60">
-                Vetëm simulim lokal. Asnjë bast, fitim apo lëvizje në llogarinë reale.
+                {realMoneyAvailable&&user?.role==='PLAYER'?'Transaksionet regjistrohen në bilancin e përbashkët dhe mund të kontrollohen në historik.':'Vetëm simulim lokal.'}
               </p>
             </div>
 
