@@ -81,6 +81,7 @@ create table if not exists app_transaction (
   created_at    timestamptz not null default now()
 );
 create index if not exists app_transaction_user_idx on app_transaction (user_id, created_at desc);
+create index if not exists app_transaction_ref_type_idx on app_transaction (reference_id, type);
 
 create table if not exists app_ticket (
   id               uuid primary key default gen_random_uuid(),
