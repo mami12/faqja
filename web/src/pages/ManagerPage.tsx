@@ -5,6 +5,7 @@ import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X } from 'lucide-react';
 import FinancialChart from '../components/Finance/FinancialChart';
+import CasinoFinanceCenter from '../components/Finance/CasinoFinanceCenter';
 import { formatTicketSelection, translateTicketStatus, translateTicketType } from '../utils/sportsbookLabels';
 
 interface PlayerFinancial {
@@ -36,7 +37,7 @@ interface FinancialState {
 
 export default function ManagerPage() {
   const { t } = useLanguage();
-  const [tab, setTab] = useState<'users' | 'tickets'>('users');
+  const [tab, setTab] = useState<'users' | 'tickets' | 'finance'>('users');
   const [searchUser, setSearchUser] = useState('');
   const [userStatus, setUserStatus] = useState<'ALL' | 'ACTIVE' | 'FROZEN' | 'BANNED'>('ALL');
   const [showFinancialDetails, setShowFinancialDetails] = useState(false);
@@ -49,6 +50,7 @@ export default function ManagerPage() {
   const [showBalanceModal, setShowBalanceModal] = useState<'deposit' | 'withdraw' | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [financeUserId,setFinanceUserId] = useState('');
   const [amount, setAmount] = useState('');
 
   // Create form
@@ -94,7 +96,7 @@ export default function ManagerPage() {
       const refreshTimer = window.setInterval(() => void fetchUsers(false), 30000);
       return () => window.clearInterval(refreshTimer);
     }
-    void fetchTickets();
+    if (tab === 'tickets') void fetchTickets();
   }, [tab]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -241,11 +243,17 @@ export default function ManagerPage() {
           >
             <TicketIcon size={16} /> <span>{t('manager.tickets')}</span>
           </button>
+          <button type="button" onClick={() => {setFinanceUserId('');setTab('finance');}}
+            className={'flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold '+(tab==='finance'?'bg-accent-green text-primary':'text-text-secondary hover:text-white')}>
+            <Wallet size={16}/> Financat Sport + Kazino
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {tab === 'users' ? (
+        {tab === 'finance' ? (
+          <CasinoFinanceCenter role="manager" initialUserId={financeUserId}/>
+        ) : tab === 'users' ? (
           <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             {financials?.manager && (
               <div className="mb-6 space-y-4">
@@ -387,6 +395,7 @@ export default function ManagerPage() {
                           <div><span className="block text-text-secondary">Fonde të luajtura</span><strong className="mt-1 block text-white">{(finance?.totalStake ?? 0).toFixed(2)} Lëk</strong></div>
                           <div><span className="block text-text-secondary">Diferenca neto</span><strong className={`mt-1 block ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(finance?.netDifference ?? 0).toFixed(2)} Lëk</strong></div>
                         </div>
+                        <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-300">Financat Sport + Kazino</button>
                         <div className="grid grid-cols-2 gap-2">
                           <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('deposit'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-400"><ArrowUpRight size={15} /> {t('admin.deposit')}</button>
                           <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('withdraw'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/15 py-2.5 text-xs font-bold text-amber-400"><ArrowDownRight size={15} /> {t('admin.withdraw')}</button>
@@ -462,6 +471,7 @@ export default function ManagerPage() {
                         })()}
                         <td className="p-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
+                            <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="rounded-lg bg-emerald-500/15 px-2 py-1.5 text-xs font-bold text-emerald-300">Financat</button>
                             <button 
                               onClick={() => { setSelectedUser(u); setShowBalanceModal('deposit'); }}
                               className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-semibold flex items-center gap-1"

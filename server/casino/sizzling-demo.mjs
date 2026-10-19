@@ -340,3 +340,6 @@ export function createSizzlingDemoRouter() {
   }));
   return router;
 }
+
+// Reuse the original Pixi protocol format without duplicating demo mechanics.
+export { decodeRequest, initResponse, basicResponse };

@@ -117,7 +117,7 @@ export function pgClientOptions(connectionString = config.databaseUrl, max = 5) 
   url.searchParams.delete('sslmode');
   return {
     connectionString: url.toString(),
-    ssl: { rejectUnauthorized: false },
+    ssl: ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ? false : { rejectUnauthorized: false },
     max,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 15000,

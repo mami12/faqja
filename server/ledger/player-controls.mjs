@@ -101,7 +101,7 @@ export async function assertPlayerCanBet(client, userId, stake) {
        coalesce(sum(-amount) filter (where created_at >= date_trunc('week', now())), 0) as weekly_used,
        coalesce(sum(-amount) filter (where created_at >= date_trunc('month', now())), 0) as monthly_used
      from app_transaction
-     where user_id = $1 and type = 'BET_PLACED' and amount < 0`,
+     where user_id = $1 and type in ('BET_PLACED','CASINO_SPIN') and amount < 0`,
     [userId],
   );
   const used = usage.rows[0] ?? {};

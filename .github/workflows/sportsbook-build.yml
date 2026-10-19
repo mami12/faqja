@@ -88,8 +88,15 @@ jobs:
           node --check server/ledger/decided-markets.mjs
           node --check server/ledger/view.mjs
           node --check server/casino/sizzling-demo.mjs
+          node --check server/casino/wallet.mjs
+          node --check server/casino/finance.mjs
+          node --check server/casino/transactions.mjs
+          node --check server/casino/rtp-profiles.mjs
+          node --check server/casino/sizzling-real.mjs
       - name: Build Vite frontend
         run: npm run build:web
+      - name: Validate Sizzling RTP profiles and reel math
+        run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math
         run: node scripts/test-sizzling-demo.mjs
       - name: Browser-smoke test original Sizzling Pixi client
@@ -101,3 +108,34 @@ jobs:
           name: sizzling-original-browser
           path: tmp/sizzling-browser-check/*.png
           if-no-files-found: ignore
+
+
+  casino-ledger:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: casino
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: casino_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casino -d casino_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify real casino and sportsbook wallet transactions in disposable PostgreSQL
+        env:
+          DATABASE_URL: postgresql://casino:test@localhost:5432/casino_test
+          CASINO_REAL_MONEY_ENABLED: 'true'
+          CASINO_MATH_APPROVED: 'true'
+        run: node scripts/test-casino-ledger.mjs
