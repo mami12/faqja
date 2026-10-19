@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const read=path=>readFileSync(join(root,path),'utf8');
 const page=read('web/src/pages/CasinoPage.tsx');
+const walletPage=read('web/src/pages/CasinoOriginalWallet.tsx');
 const original=read('scripts/sync-original-sizzling.mjs');
 const web=JSON.parse(read('web/package.json'));
 const demo=read('server/casino/sizzling-demo.mjs');
@@ -18,7 +19,7 @@ assert.ok(page.includes('CasinoOriginalWallet'),'wallet must mount original Sizz
 assert.ok(!page.includes('casino-original/sizzling/index.html'),'never mount separate demo wallet');
 assert.ok(!page.includes('<CasinoFullscreen'),'casino page must use authenticated wallet component');
 assert.ok(page.includes('realMoneyAvailable'),'casino gate must not fall back to play-money credits');
-assert.ok(page.includes('CasinoFullscreen'),'mobile fullscreen required');
+assert.ok(walletPage.includes('CasinoFullscreen'),'wallet-only Sizzling must support mobile fullscreen');
 assert.ok(original.includes('index-real.html'),'production client build missing');
 assert.ok(original.includes('scripts') && original.includes('images') &&
   original.includes('audio') && original.includes('animations'),'original assets must be copied');
