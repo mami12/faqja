@@ -28,9 +28,17 @@ export default function CasinoOriginalWallet(){
   };
   useEffect(()=>{void connect();},[]);
   useEffect(()=>{
-    // Keep the sports header synchronized while the embedded game is active.
-    const id=window.setInterval(()=>void refreshUser().catch(()=>{}),15000);
-    return()=>window.clearInterval(id);
+    // Both the sports header and the Pixi cabinet read app_user.balance.
+    // Keep the header updated after a spin without a second wallet.
+    const sync=()=>{void refreshUser().catch(()=>{});};
+    const id=window.setInterval(sync,3000);
+    window.addEventListener('focus',sync);
+    document.addEventListener('visibilitychange',sync);
+    return()=>{
+      window.clearInterval(id);
+      window.removeEventListener('focus',sync);
+      document.removeEventListener('visibilitychange',sync);
+    };
   },[refreshUser]);
   if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">Po lidhet bilanci i përbashkët i kazinosë...</div>;
   if(error||!url)return <div className="flex min-h-56 flex-col items-center justify-center gap-4 bg-black p-8 text-center">
