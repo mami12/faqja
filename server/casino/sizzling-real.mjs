@@ -48,11 +48,11 @@ async function getWalletPlayer(req){
   if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
   return {user,nonce:claim.jti};
 }
-function spinProtocol(round,bet,lines,reqId){
+function spinProtocol(round,bet,lines,denomination,reqId){
   const before=Number((round.balance+round.stake-round.payout).toFixed(2));
   const total=round.payout.toFixed(2);
   return {
-    balance:{before,after:round.balance},denomination:1,
+    balance:{before,after:round.balance},denomination,
     available_actions:round.payout>0?['spin','collect']:['spin'],
     macro_round:{wins:{total}},
     spin:{bet,lines,multiplier:1,next_multiplier:1,next_request_id:reqId+1,
@@ -88,7 +88,7 @@ export function createSizzlingRealRouter(){
         const bet=Number(request.bet),lines=Number(request.lines),denomination=Number(request.denomination??1);
         const round=await placeCasinoSpin({userId:user.id,requestId:uuidFromId(nonce,id),
           bet,denomination,lines});
-        return res.json(spinProtocol(round,bet,lines,id));
+        return res.json(spinProtocol(round,bet,lines,denomination,id));
       }
       if(action==='collect'){
         // Winnings are already credited atomically at spin settlement.
