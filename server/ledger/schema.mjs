@@ -216,10 +216,17 @@ create table if not exists app_casino_round (
 create index if not exists app_casino_round_user_date_idx on app_casino_round(user_id,created_at desc);
 create table if not exists app_casino_settings (
  id smallint primary key check (id=1),
- enabled boolean not null default false,
+ enabled boolean not null default true,
  profile text not null default 'SIZZLING_STANDARD_V1',
  updated_by uuid references app_user(id) on delete set null,
- updated_at timestamptz not null default now()
+ updated_at timestamptz not null default now(),
+ wallet_rollout_applied boolean not null default false
 );
+alter table app_casino_settings add column if not exists wallet_rollout_applied boolean not null default false;
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
+-- Migrate the old disabled-by-default casino exactly once. Afterwards the
+-- administrator's OFF switch is persistent even across future restarts.
+update app_casino_settings
+   set enabled = true, wallet_rollout_applied = true, updated_at = now()
+ where id = 1 and wallet_rollout_applied = false;
 `;
