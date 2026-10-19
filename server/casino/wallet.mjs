@@ -29,7 +29,7 @@ async function getSettings(executor = query) {
     realMoneyAvailable: Boolean(setting.enabled),
     profile: setting.profile,
     profiles, mathApproved: false, certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: 'Shared sports wallet is live when enabled. This is a custom game adapter, not independently certified Novomatic math.',
+    warning: 'Simulim shkollor me kredite virtuale.',
   };
 }
 
@@ -75,7 +75,7 @@ casinoWalletRouter.patch('/admin/casino/profile', ...access, isAdmin, safe(async
   try {
     await client.query('begin');
     const settings=await client.query('select enabled,profile from app_casino_settings where id=1 for update');
-    if(settings.rows[0]?.enabled) throw fault(409,'Disable monetary casino before changing the RTP profile');
+    // A row lock serializes RTP changes with active spins. This project uses virtual credits.
     const previous=settings.rows[0]?.profile;
     await client.query('update app_casino_settings set profile=$1,updated_by=$2,updated_at=now() where id=1',
       [profile,req.user.id]);

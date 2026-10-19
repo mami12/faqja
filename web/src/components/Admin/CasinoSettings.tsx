@@ -49,19 +49,26 @@ export default function CasinoSettings(){
       </div>
       <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
         <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
-        <p className="text-xs text-text-secondary">Zgjidh profilin RTP të disponueshëm.</p>
+        <p className="text-xs text-text-secondary">Simulim shkollor me kredite virtuale.</p>
+        <label className="block space-y-2 text-sm text-white">
+          <span>RTP i simulimit: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').at(-1) : Math.round(data?.theoreticalRtp ?? 0)}%</span>
+          <input aria-label="RTP nga 0 deri në 100" type="range" min="0" max="100" step="1"
+            className="w-full accent-amber-400" disabled={busy}
+            value={selectedProfile.startsWith('SCHOOL_RTP_') ? Number(selectedProfile.split('_').at(-1)) : Math.round(data?.theoreticalRtp ?? 0)}
+            onChange={e=>setSelectedProfile('SCHOOL_RTP_'+e.target.value)} />
+        </label>
         <div className="flex flex-wrap items-end gap-3">
           <label className="min-w-[210px] flex-1 space-y-1 text-xs text-text-secondary">
             <span>Zgjidh profilin</span>
             <select value={selectedProfile} onChange={e=>setSelectedProfile(e.target.value)}
-              disabled={busy||data?.enabled} className="block min-h-11 w-full rounded-lg border border-tertiary bg-secondary px-3 text-white">
+              disabled={busy} className="block min-h-11 w-full rounded-lg border border-tertiary bg-secondary px-3 text-white">
               {(data?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.label} · {p.theoreticalRtp.toFixed(2)}% RTP</option>)}
             </select>
           </label>
-          <button type="button" disabled={busy||data?.enabled||!selectedProfile||selectedProfile===data?.profile}
+          <button type="button" disabled={busy||!selectedProfile||selectedProfile===data?.profile}
             onClick={()=>void updateProfile()} className="min-h-11 rounded-lg bg-amber-400 px-5 font-bold text-slate-950 disabled:opacity-40">Ruaj RTP</button>
         </div>
-        {data?.enabled&&<p className="text-xs text-amber-200">Çaktivizo lojën përpara ndryshimit të profilit RTP.</p>}
+
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-tertiary pt-4">
         <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Përdor të njëjtin bilanc si bastet sportive.</p></div>

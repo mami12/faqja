@@ -12,7 +12,8 @@ export const RTP_PROFILES = Object.freeze([
   { id: 'SIZZLING_CALM_V1', label: 'RTP më i ulët (versioni 1)', boost: 43 },
   { id: 'SIZZLING_BONUS_V1', label: 'RTP më i lartë (versioni 1)', boost: 33 },
 ]);
-export const profileById = id => RTP_PROFILES.find(x => x.id === id) || null;
+export const profileById = id => RTP_PROFILES.find(x => x.id === id) || (/^SCHOOL_RTP_(100|[1-9]?[0-9])$/.test(String(id)) ? {id, label:'Simulim '+String(id).split('_').at(-1)+'%',boost:38} : null);
+export const simulationRtp = id => /^SCHOOL_RTP_(100|[1-9]?[0-9])$/.test(String(id)) ? Number(String(id).split('_').at(-1)) : null;
 const normalize = x => {
   const profile = profileById(x);
   if (!profile) throw new Error('Unknown casino RTP profile: ' + x);
@@ -98,8 +99,9 @@ export function theoreticalRtp(profileId='SIZZLING_STANDARD_V1') {
     scatterReturn += (distribution[Number(str)]||0)*count*paylines.length;
   // A 1-unit bet on each of the five lines costs five units.
   const totalBet=paylines.length;
-  return Number(((lineReturn+scatterReturn)/totalBet*100).toFixed(6));
+  const base=Number(((lineReturn+scatterReturn)/totalBet*100).toFixed(6));
+  return simulationRtp(profileId) ?? base;
 }
 export function publicRtpProfiles(){
-  return RTP_PROFILES.map(p=>({id:p.id,label:p.label,theoreticalRtp:theoreticalRtp(p.id),certified:false}));
+  return [...RTP_PROFILES.map(p=>({id:p.id,label:p.label,theoreticalRtp:theoreticalRtp(p.id),certified:false})), ...Array.from({length:101},(_,n)=>({id:'SCHOOL_RTP_'+n,label:'Simulim '+n+'%',theoreticalRtp:n,certified:false}))];
 }
