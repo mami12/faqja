@@ -6,7 +6,7 @@
 import {pool} from '../db.mjs';
 import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
 import {gradeGrid,symbolMatrix} from './sizzling-demo.mjs';
-import {randomProfileGrid,profileById} from './rtp-profiles.mjs';
+import {randomProfileGrid,profileById,simulationRtp,theoreticalRtp} from './rtp-profiles.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -51,8 +51,14 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     await assertPlayerCanBet(client,userId,stake);
     const grid=randomProfileGrid(profile);
     const grading=gradeGrid(grid,bet,denomination);
-    const payout=money(grading.total);
-    const result={symbols:symbolMatrix(grid),line_wins:grading.line_wins,total:payout.toFixed(2)};
+    // School-only simulation: scale the expected return of the base reel model.
+    // Existing symbols/animations are unchanged; the simulation payout is shown
+    // explicitly in the returned line wins and the shared virtual ledger.
+    const target=simulationRtp(profile);
+    const factor=target===null ? 1 : target/theoreticalRtp('SIZZLING_STANDARD_V1');
+    const lineWins=grading.line_wins.map(win=>({...win,amount:money(Number(win.amount)*factor).toFixed(2)}));
+    const payout=money(lineWins.reduce((sum,win)=>sum+Number(win.amount),0));
+    const result={symbols:symbolMatrix(grid),line_wins:lineWins,total:payout.toFixed(2)};
     const version=profile;
     const debitAfter=money(Number(player.balance)-stake);
     const balance=money(debitAfter+payout);
