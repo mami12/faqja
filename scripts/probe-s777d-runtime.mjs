@@ -37,6 +37,10 @@ try{
   const at=fullJs.indexOf(k);
   return [k,at<0?'ABSENT':fullJs.slice(Math.max(0,at-1800),at+3200)];
  }))).slice(0,26000));
+  const exactKeys=['function PXf(', 'function $js(', 'function Gls(', 'function Vsn(', 'function bxt(', 'function NXf(', 'function Onf(', 'function Iqq(', 'function n0e(', 'function Knf(', 'function Jnf(', 'function Rqq(', 'function K5f('];
+ console.log('GWT_SID_DECODER',JSON.stringify(exactKeys.map(k=>{
+   const i=fullJs.indexOf(k); return {name:k,position:i,body:i<0?null:fullJs.slice(i,i+1600)};
+ })).slice(0,24000));
   console.log('GWT_RUNTIME_STRINGS',JSON.stringify(references).slice(0,26000));
  const trial=await browser.newPage();
  const trialReq=[];
