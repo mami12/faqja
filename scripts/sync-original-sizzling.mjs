@@ -67,8 +67,8 @@ try {
     '</head><body attach-element="./body.html"></body></html>';
   await writeFile(join(output, 'index.html'), page);
   const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
-  for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig.json',
-    'data/paytableConfig.json', 'data/audioConfig.json']) {
+  for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig_hd.json',
+    'data/paytableConfig-hd.json', 'data/audioConfig.json']) {
     const resolvedAsset = join(output, manifest[asset] ?? asset);
     const info = await stat(resolvedAsset);
     if (!info.isFile() || info.size < 10) throw new Error('Missing original game asset: ' + asset);
