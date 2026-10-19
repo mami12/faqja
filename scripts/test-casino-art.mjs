@@ -66,21 +66,24 @@ assert.ok(!pageSource.includes('>🪙</span>'), 'Hold-and-respin has emoji fallb
 assert.ok(pageSource.includes('<OriginalReelSymbol'), 'Reels not connected to original atlas renderer');
 
 
-// Verify that /casino/sizzling opens the dedicated DELUXE game rather than
-// the generic nine-line casino component. Regression for the previously
-// unreachable SizzlingHotGame.tsx implementation.
-assert.ok(pageSource.includes("game?.id === 'sizzling'"), 'dedicated Sizzling route branch missing');
-assert.ok(pageSource.includes('<SizzlingHotGame />'), 'dedicated Sizzling route not mounted');
-assert.ok(sizzlingSource.includes('casinoAssetUrl(\'sizzling/logo.png\')'), 'original Sizzling logo missing');
-assert.ok(sizzlingSource.includes('ORIGINAL_SYMBOLS.sizzling'), 'original sprite artwork not used');
-assert.ok(sizzlingSource.includes('stoppedRef.current[col]=true'), 'independent column-stop animation missing');
-assert.ok(sizzlingSource.includes('stoppedRef.current[col]?id:'), 'stopped columns must stay still');
-assert.ok(sizzlingSource.includes('sizzling-payline'), 'winning payline overlay missing');
-assert.ok(sizzlingSource.includes('setSpins(v=>v+1)'), 'spin counter missing');
-assert.ok(sizzlingSource.includes('aria-live="polite"'), 'accessible win announcement missing');
-assert.ok(sizzlingSource.includes("sizzling-deluxe-demo:"), 'per-user demo credit persistence missing');
-assert.ok(sizzlingSource.includes('if(document.hidden)'), 'pause auto-play in background');
-assert.ok(!sizzlingSource.includes('frame%2'), 'old static reel animation left in place');
+// The requested Goldsvet client, not the substitute React slot, must be
+// mounted inside the sportsbook route. The build synchronizes its PNG sprites.
+const goldsvet = read('web/public/casino-goldsvet/sizzling/index.html');
+const syncScript = read('scripts/sync-goldsvet-sizzling.mjs');
+const webPackage = JSON.parse(read('web/package.json'));
+assert.ok(pageSource.includes("game?.id === 'sizzling'"), 'dedicated Sizzling route missing');
+assert.ok(pageSource.includes('casino-goldsvet/sizzling/index.html'), 'Goldsvet iframe not mounted');
+assert.ok(!pageSource.includes('<SizzlingHotGame />'), 'substitute React game still mounted');
+assert.ok(goldsvet.includes('const PAYLINES'), 'Goldsvet paylines missing');
+assert.ok(goldsvet.includes('const REEL_STRIPS'), 'Goldsvet reel strips missing');
+assert.ok(goldsvet.includes('class SoundEngine'), 'Goldsvet sound engine missing');
+assert.ok(goldsvet.includes('animateReel('), 'Goldsvet reel animations missing');
+assert.ok(goldsvet.includes('images/'), 'Goldsvet symbol image paths missing');
+for (const name of ['cherry','lemon','orange','plum','star','grapes','watermelon','seven']) {
+  assert.ok(syncScript.includes(name+'.png'), name+': missing original sprite download');
+}
+assert.ok(webPackage.scripts.build.includes('sync-goldsvet-sizzling.mjs'),
+  'Vite build must fetch original Goldsvet sprites');
 
 console.log('Casino graphics: 9 games, 8 original sprite slots each, ' + imageCount +
   ' checked local image references.');
