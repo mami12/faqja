@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'web/**'
+      - 'scripts/test-casino-art.mjs'
       - 'server/**'
       - 'scripts/test-live-risk.mjs'
       - 'scripts/test-live-money-risk.mjs'
@@ -66,6 +67,8 @@ jobs:
         run: node scripts/test-market-expiry.mjs
       - name: Validate mobile match-count badge
         run: node scripts/test-mobile-betslip-badge.mjs
+      - name: Verify all original casino game artwork
+        run: node scripts/test-casino-art.mjs
       - name: Typecheck frontend
         run: npm --prefix web run typecheck
       - name: Check backend syntax

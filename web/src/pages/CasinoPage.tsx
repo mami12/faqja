@@ -13,7 +13,7 @@ import {
 function OriginalReelSymbol({ game, symbol }: { game: CasinoGame; symbol: string }) {
   const index = game.symbols.indexOf(symbol);
   const art: SpriteArt | undefined = index >= 0 ? ORIGINAL_SYMBOLS[game.id]?.[index] : undefined;
-  if (!art) return <span className="text-[min(7vw,48px)] sm:text-[50px]">{symbol}</span>;
+  if (!art) return <Sparkles size={28} className="text-amber-400" aria-label="Simbol demo" />;
   if (!art.rect) return <img src={casinoAssetUrl(art.src)} alt={symbol} draggable={false} className="h-[86%] w-[86%] object-contain" />;
   const { x, y, w, h, atlasW, atlasH } = art.rect;
   return <div role="img" aria-label={symbol} className="h-full w-full"
@@ -175,7 +175,7 @@ export default function CasinoPage() {
                       const winning = session.winningCells.includes(index);
                       const locked = session.respins > 0 && session.held.includes(index);
                       return (
-                        <div key={index}
+                        <div key={index + '-' + spinAnimation}
                           className={
                             'flex aspect-[4/5] select-none items-center justify-center rounded-md border text-[min(7vw,48px)] shadow-inner transition-all sm:rounded-lg sm:text-[50px] ' +
                             (winning || locked
@@ -184,7 +184,7 @@ export default function CasinoPage() {
                             (spinAnimation ? ' animate-[pulse_.24s_ease-out]' : '')
                           }
                           aria-label={'Rreshti ' + (r + 1) + ', kolona ' + (c + 1) + ': ' + symbol}>
-                          {locked ? <span className="text-3xl">🪙</span> : <OriginalReelSymbol game={game} symbol={symbol} />}
+                          <OriginalReelSymbol game={game} symbol={locked ? game.symbols[6] : symbol} />
                         </div>
                       );
                     })
