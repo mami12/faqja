@@ -10,8 +10,9 @@ import {config} from '../config.mjs';
 import {requireAuth} from '../ledger/auth.mjs';
 import {getUserById,isLedgerReady} from '../ledger/store.mjs';
 import {query} from '../db.mjs';
-import {decodeRequest,initResponse,basicResponse} from './sizzling-demo.mjs';
+import {decodeRequest,initResponse} from './sizzling-demo.mjs';
 import {placeCasinoSpin} from './transactions.mjs';
+import {casinoGambleAction} from './gamble.mjs';
 
 const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -53,7 +54,7 @@ function spinProtocol(round,bet,lines,denomination,reqId){
   const total=round.payout.toFixed(2);
   return {
     balance:{before,after:round.balance},denomination,
-    available_actions:round.payout>0?['spin','collect']:['spin'],
+    available_actions:round.payout>0?['collect','gamble','spin']:['spin'],
     macro_round:{wins:{total}},
     spin:{bet,lines,multiplier:1,next_multiplier:1,next_request_id:reqId+1,
       type:'spin',symbols:round.result.symbols,
@@ -90,16 +91,13 @@ export function createSizzlingRealRouter(){
           bet,denomination,lines});
         return res.json(spinProtocol(round,bet,lines,denomination,id));
       }
-      if(action==='collect'){
-        // Winnings are already credited atomically at spin settlement.
-        const current=await getUserById(user.id);
-        return res.json({
-          ...basicResponse({credits:Number(current.balance)},Number(current.balance)),
-          available_actions:['spin'],macro_round:{wins:{total:'0'}},collect:{total:'0'},
+      if(action==='collect'||action==='get_double'||action==='set_double'){
+        if(id==null)throw fault(400,'ACTION_REQUEST_ID_REQUIRED');
+        const reply=await casinoGambleAction({
+          userId:user.id,requestId:uuidFromId(nonce,id),action,choice:request.choice,
         });
+        return res.json(reply);
       }
-      if(action==='get_double'||action==='set_double')
-        throw fault(409,'GAMBLE_DISABLED_IN_WALLET_MODE');
       throw fault(400,'INVALID_ACTION');
     }catch(error){deny(res,error,action);}
   });

@@ -128,9 +128,38 @@ try{
     return {x:r.x+(1570+p.paddingLeft)*p.canvasScaleCoef/p.pixelRatio,
       y:r.y+(1025+p.paddingTop)*p.canvasScaleCoef/p.pixelRatio};
   });
+  // The original cabinet uses the same Start area as Stop Spin. A second
+  // press should fast-stop the reels, not send a second wager.
+  await page.evaluate(()=>{
+    window.__sizzlingStops=[];
+    window.__sizzlingTimeChanges=[];
+    if(window.c2d?.documentEvents){
+      document.addEventListener(c2d.documentEvents.SPIN_REELS_WAS_STOPPED,
+        ()=>window.__sizzlingStops.push(performance.now()));
+      document.addEventListener(c2d.documentEvents.TIMESCALE_WAS_CHANGED,
+        e=>window.__sizzlingTimeChanges.push({at:performance.now(),scale:e.detail?.timescale}));
+    }
+  });
+  const pressStarted=Date.now();
   await page.mouse.click(pressPoint.x,pressPoint.y);
-  await new Promise(resolve=>setTimeout(resolve,5200));
-  const clicks=[pressPoint];
+  await new Promise(resolve=>setTimeout(resolve,700));
+  await page.mouse.click(pressPoint.x,pressPoint.y);
+  await new Promise(resolve=>setTimeout(resolve,4500));
+  const quickStopState=await page.evaluate(()=>({
+    stopped:window.__sizzlingStops,
+    timeChanges:window.__sizzlingTimeChanges,
+    timescale:window.c2d?.timescale,
+    screen:window.c2d?.env?.screenParams?.orientation,
+  }));
+  console.log('WALLET PIXI QUICK STOP:',JSON.stringify({pressStarted,quickStopState}));
+  assert.ok(quickStopState.timeChanges.some(change=>change.scale===4),
+    'Second Start press must activate 4x speed on original Pixi reels');
+  assert.ok(quickStopState.stopped.length>0,
+    'Second Start press must finish the original reel animation');
+  assert.equal(quickStopState.timescale,1,
+    'Original reel speed must reset after stopping');
+
+  const clicks=[pressPoint,pressPoint];
   await page.screenshot({path:join(out,'wallet-after-start.png')});
   console.log('WALLET PIXI START CLICKS:',JSON.stringify(clicks));
   console.log('WALLET PIXI START API:',JSON.stringify(api));
