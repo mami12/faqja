@@ -4,6 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
 import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
+import { apiClient } from '../api/client';
+import CasinoFullscreen from '../components/Layout/CasinoFullscreen';
+import CasinoRealSizzling from './CasinoRealSizzling';
+import SizzlingHotGame from './SizzlingHotGame';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -41,6 +45,12 @@ export default function CasinoPage() {
   const [auto, setAuto] = useState(false);
   const [spinAnimation, setSpinAnimation] = useState(0);
   const [showRules, setShowRules] = useState(false);
+  const [realMoneyAvailable,setRealMoneyAvailable] = useState(false);
+  useEffect(()=>{
+    let active=true;
+    void apiClient.get('/casino/status').then(r=>{if(active)setRealMoneyAvailable(Boolean(r.data.realMoneyAvailable));}).catch(()=>{});
+    return()=>{active=false;};
+  },[]);
 
   const game = useMemo(() => GAMES.find(entry => entry.id === gameId), [gameId]);
   const session = useMemo(() => game
@@ -93,15 +103,13 @@ export default function CasinoPage() {
             <ArrowLeft size={16} /> Kthehu te Kazino
           </button>
           <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
-            <iframe
-              title="Sizzling Hot Deluxe, klienti origjinal grafik"
-              src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
-              className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
-            <p className="px-3 py-2 text-xs text-slate-400">
-              Sizzling Hot Deluxe · Grafika, animacionet dhe audio origjinale · 100% kredite demo, jo bilanci sportiv
+            {realMoneyAvailable ? <CasinoRealSizzling/> : (
+              <CasinoFullscreen><SizzlingHotGame/></CasinoFullscreen>
+            )}
+            <p className="px-3 py-3 text-xs text-slate-400">
+              {realMoneyAvailable
+                ? 'Bilanci i kazinosë dhe sportit është i përbashkët. Spin-et ruhen në databazë.'
+                : 'Kredite DEMO, jo fondet e sportit. Klienti origjinal i plotë mungon nga ky repository; demonstrimi përdor asetet lokale.'}
             </p>
           </div>
         </main>
