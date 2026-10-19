@@ -7,7 +7,6 @@ import {pool} from '../db.mjs';
 import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
 import {gradeGrid,symbolMatrix} from './sizzling-demo.mjs';
 import {randomProfileGrid,profileById} from './rtp-profiles.mjs';
-import {playGenericGame,GENERIC_GAME_IDS} from './generic-engine.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -15,18 +14,13 @@ const enabled=()=>process.env.CASINO_REAL_MONEY_ENABLED==='true'
   &&process.env.CASINO_MATH_APPROVED==='true';
 export function isCasinoDeploymentApproved(){return enabled();}
 
-export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5,gameId='sizzling'}){
+export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5}){
   if(!enabled())throw fault(403,'Monetary casino mode is not approved for deployment');
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(requestId)))
     throw fault(400,'Unique UUID required');
   bet=Number(bet);denomination=Number(denomination);lines=Number(lines);
-  const original=gameId==='sizzling';
-  if(!original&&!GENERIC_GAME_IDS.includes(gameId))throw fault(400,'Unknown casino game');
-  if(original){
-    if(![1,2,3,5,10,20,30,50,100].includes(bet)||![.5,1,2,5,10].includes(denomination)||lines!==5)
-      throw fault(400,'Invalid bet or denomination');
-  }else if(![1,2,5,10,20,50].includes(bet)||denomination!==1||lines!==1)
-    throw fault(400,'Invalid game bet');
+  if(![1,2,3,5,10,20,30,50,100].includes(bet)||![.5,1,2,5,10].includes(denomination)||lines!==5)
+    throw fault(400,'Invalid Sizzling bet, lines or denomination');
   const stake=money(bet*denomination*lines),client=await pool.connect();
   try{
     await client.query('begin');
@@ -45,12 +39,12 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     const settings=await client.query('select enabled,profile from app_casino_settings where id=1 for share');
     if(!settings.rows[0]?.enabled)throw fault(403,'Casino disabled by administrator');
     const profile=settings.rows[0].profile;
-    if(original&&!profileById(profile))throw fault(503,'Unknown RTP profile');
+    if(!profileById(profile))throw fault(503,'Unknown RTP profile');
     const previous=await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',
       [userId,requestId]);
     if(previous.rows.length){
       const old=previous.rows[0];
-      if(old.game_id!==gameId||Number(old.bet)!==bet||Number(old.denomination)!==denomination||Number(old.lines)!==lines)
+      if(old.game_id!=='sizzling'||Number(old.bet)!==bet||Number(old.denomination)!==denomination||Number(old.lines)!==lines)
         throw fault(409,'Request key was used for a different wager');
       await client.query('commit');
       return {roundId:old.id,stake:Number(old.stake),payout:Number(old.payout),
@@ -58,28 +52,23 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     }
     if(Number(player.balance)<stake)throw fault(400,'Insufficient balance');
     await assertPlayerCanBet(client,userId,stake);
-    let result,payout;
-    const version=original?profile:'GENERIC_SERVER_V1';
-    if(original){
-      const grid=randomProfileGrid(profile),grading=gradeGrid(grid,bet,denomination);
-      payout=money(grading.total);
-      result={symbols:symbolMatrix(grid),line_wins:grading.line_wins,total:payout.toFixed(2)};
-    }else{
-      result=playGenericGame(gameId,bet);
-      payout=money(result.win);
-    }
+    const grid=randomProfileGrid(profile);
+    const grading=gradeGrid(grid,bet,denomination);
+    const payout=money(grading.total);
+    const result={symbols:symbolMatrix(grid),line_wins:grading.line_wins,total:payout.toFixed(2)};
+    const version=profile;
     const debitAfter=money(Number(player.balance)-stake);
     const balance=money(debitAfter+payout);
     const round=await client.query(
       "insert into app_casino_round(user_id,client_request_id,game_id,game_version,bet,denomination,lines,stake,payout,balance_after,result) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) returning id",
-      [userId,requestId,gameId,version,bet,denomination,lines,stake,payout,balance,JSON.stringify(result)]);
+      [userId,requestId,'sizzling',version,bet,denomination,lines,stake,payout,balance,JSON.stringify(result)]);
     const roundId=round.rows[0].id;
     await client.query(
       "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",
-      [userId,-stake,roundId,debitAfter,gameId+' · spin']);
+      [userId,-stake,roundId,debitAfter,'Sizzling Hot Deluxe · spin']);
     if(payout>0)await client.query(
       "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_WIN',$3,$4,$5)",
-      [userId,payout,roundId,balance,gameId+' · payout']);
+      [userId,payout,roundId,balance,'Sizzling Hot Deluxe · payout']);
     await client.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,balance]);
     if(manager){
       const delta=money(stake-payout);
