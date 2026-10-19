@@ -27,7 +27,6 @@ import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
-import { createSizzlingDemoRouter } from './casino/sizzling-demo.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingRealRouter,casinoSessionRouter} from './casino/sizzling-real.mjs';
@@ -628,9 +627,8 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
   next();
 });
 
-// Original Sizzling Hot Deluxe (same origin as the sports site).
-// Only virtual demo credits; intentionally isolated from ledger/real balances.
-app.use('/app/api/casino/sizzlinghotdeluxe', createSizzlingDemoRouter());
+// The public casino has only Sizzling backed by the sportsbook ledger.
+// The isolated demo router still exists solely for offline automated tests.
 app.use('/app/api/casino/sizzlinghotdeluxe/real',createSizzlingRealRouter());
 app.use('/app/api',casinoSessionRouter);
 
@@ -641,6 +639,9 @@ app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
 if (existsSync(webDist)) {
+  // An old bookmark must never open a play-money version beside the sports wallet.
+  app.get('/app/casino-original/sizzling/index.html', (_req,res) =>
+    res.redirect(302, '/app/casino/sizzling'));
   app.use('/app', express.static(webDist));
   // deep links (/app/login, /app/admin, ...) fall through to the SPA shell
   app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));

@@ -30,8 +30,8 @@ async function getSettings(executor = query) {
     deploymentEnabled: deploymentEnabled(),
     realMoneyAvailable: Boolean(setting.enabled) && deploymentEnabled() && mathApproved(),
     profile: setting.profile,
-    profiles, certified: mathApproved(), theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: 'This is a custom adapter, not independently certified Novomatic game math. Monetary mode needs audited provider math, rights and QA.',
+    profiles, mathApproved: mathApproved(), certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
+    warning: 'Single sportsbook wallet only. No play-money fallback. Approval flags are deployment controls and are not proof of independent certification.',
   };
 }
 
