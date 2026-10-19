@@ -98,7 +98,22 @@ export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'
     </div>}
     <div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
       <div className="border-b border-tertiary p-4 font-bold text-white">Përdoruesit ({visible.length})</div>
-      <div className="overflow-x-auto">
+      <div className="grid gap-2 p-3 md:hidden">
+        {visible.map(p=><article key={p.id} className="rounded-xl border border-tertiary bg-primary p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0"><h4 className="break-words font-bold text-white">{p.username}</h4>
+              <p className="mt-1 text-xs text-text-secondary">Bilanci: {fmt(p.balance)}</p></div>
+            <button type="button" onClick={()=>setSelected(p.id)}
+              className="min-h-11 shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-300">Detaje</button>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded-lg bg-secondary p-2"><p className="text-text-secondary">Sport</p><b className={p.sportNet>=0?'text-emerald-300':'text-rose-300'}>{fmt(p.sportNet)}</b></div>
+            <div className="rounded-lg bg-secondary p-2"><p className="text-text-secondary">Kazino</p><b className={p.casinoNet>=0?'text-emerald-300':'text-rose-300'}>{fmt(p.casinoNet)}</b></div>
+            <div className="rounded-lg bg-secondary p-2"><p className="text-text-secondary">Total</p><b className="text-white">{fmt(p.net)}</b></div>
+          </div>
+        </article>)}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[660px] text-left text-sm">
           <thead className="bg-primary text-xs text-text-secondary"><tr>
             <th className="p-3">Lojtari</th><th className="p-3 text-right">Sport Neto</th>
