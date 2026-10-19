@@ -91,3 +91,5 @@ jobs:
         run: npm run build:web
       - name: Browser-smoke test Goldsvet graphics, music and spin
         run: node scripts/test-goldsvet-browser.mjs
+      - name: Test original Sizzling Hot Pixi/Spine engine and demo protocol
+        run: node scripts/test-original-sizzling.mjs

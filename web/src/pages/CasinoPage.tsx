@@ -94,14 +94,14 @@ export default function CasinoPage() {
           </button>
           <div className="mx-auto w-full max-w-[1060px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
             <iframe
-              title="Goldsvet Sizzling 777 Deluxe"
-              src={import.meta.env.BASE_URL + 'casino-goldsvet/sizzling/index.html'}
+              title="Sizzling Hot Deluxe, klienti origjinal Pixi"
+              src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
               className="block h-[min(82vh,820px)] min-h-[520px] w-full border-0"
               allow="autoplay; fullscreen"
               allowFullScreen
             />
             <p className="px-3 py-2 text-xs text-slate-400">
-              Goldsvet Sizzling 777 Deluxe · Demo me kredite virtuale · Pa lidhje me bilancin sportiv
+              Sizzling Hot Deluxe, klienti origjinal Pixi/Spine · Kredite demo · Pa lidhje me bilancin sportiv
             </p>
           </div>
         </main>

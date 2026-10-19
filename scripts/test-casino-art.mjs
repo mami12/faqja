@@ -72,7 +72,7 @@ const goldsvet = read('web/public/casino-goldsvet/sizzling/index.html');
 const syncScript = read('scripts/sync-goldsvet-sizzling.mjs');
 const webPackage = JSON.parse(read('web/package.json'));
 assert.ok(pageSource.includes("game?.id === 'sizzling'"), 'dedicated Sizzling route missing');
-assert.ok(pageSource.includes('casino-goldsvet/sizzling/index.html'), 'Goldsvet iframe not mounted');
+assert.ok(pageSource.includes('casino-original/sizzling/index.html'), 'Original Novomatic Pixi client not mounted');
 assert.ok(!pageSource.includes('<SizzlingHotGame />'), 'substitute React game still mounted');
 assert.ok(goldsvet.includes('const PAYLINES'), 'Goldsvet paylines missing');
 assert.ok(goldsvet.includes('const REEL_STRIPS'), 'Goldsvet reel strips missing');
