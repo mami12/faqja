@@ -66,6 +66,15 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
       "insert into app_casino_round(user_id,client_request_id,game_id,game_version,bet,denomination,lines,stake,payout,balance_after,result) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) returning id",
       [userId,requestId,'sizzling',version,bet,denomination,lines,stake,payout,balance,JSON.stringify(result)]);
     const roundId=round.rows[0].id;
+    // Initial spin winnings are credited immediately. Gamble can later double
+    // or forfeit ONLY that pending amount; a new spin closes the old offer.
+    await client.query(
+      `insert into app_casino_gamble_state(user_id,round_id,pending,step,player_card)
+       values($1,$2,$3,0,null)
+       on conflict(user_id) do update set round_id=excluded.round_id,
+         pending=excluded.pending,step=0,player_card=null,updated_at=now()`,
+      [userId,roundId,payout]);
+
     await client.query(
       "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",
       [userId,-stake,roundId,debitAfter,'Sizzling Hot Deluxe · spin']);
