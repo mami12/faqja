@@ -90,7 +90,10 @@ export function gradeGrid(grid, perLine, denomination = 1) {
     if (!mult) continue;
     const amount = money(mult * perLine * denomination);
     lineWins.push({
-      idx: l + 1,
+      // The Pixi client indexes its own linesConfig array with this value:
+      // it must be the 0-based line index, NOT the 1-based line number,
+      // otherwise the winning line is drawn one row above/below the symbols.
+      idx: l,
       code: symbol,
       pos: rows.slice(0, count).map((row, reel) => [reel, row]),
       multiplier: mult,

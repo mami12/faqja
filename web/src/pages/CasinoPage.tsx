@@ -1,13 +1,17 @@
 import { ArrowLeft, Cherry } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import Header from '../components/Layout/Header';
-import CasinoFullscreen from '../components/Layout/CasinoFullscreen';
+import CasinoOriginalWallet from './CasinoOriginalWallet';
 import { casinoAssetUrl, ORIGINAL_LOGOS } from './casinoOriginalArt';
 
 /**
- * Sizzling Hot Deluxe is the original Pixi/Spine DEMO game.
- * Spins, wins, Collect and Gamble use its isolated 100,000 play credits.
- * No sportsbook wallet, auth session or casino ledger API is involved.
+ * Sizzling Hot Deluxe — original Novomatic Pixi/Spine client playing with the
+ * player's real account balance (the same wallet used by sports betting).
+ *
+ * The game is only embedded after POST /app/api/casino/session has issued an
+ * HttpOnly session cookie AND that cookie has been verified against the
+ * real-wallet /play endpoint. There is no demo credit fallback: if the wallet
+ * is unavailable the player sees an explicit error instead of a fake balance.
  */
 export default function CasinoPage() {
   const { gameId } = useParams<{ gameId?: string }>();
@@ -21,8 +25,8 @@ export default function CasinoPage() {
           <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 bg-[#1c2733] px-4 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
             <ArrowLeft size={17}/> Kthehu te sporti
           </Link>
-          <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-200">
-            DEMO · 100,000 kredite virtuale
+          <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+            Bilanci i llogarisë · i njëjti me sportin
           </div>
         </div>
         <section aria-label="Sizzling Hot Deluxe" className="overflow-hidden rounded-xl border border-amber-500/30 bg-black shadow-2xl">
@@ -32,18 +36,10 @@ export default function CasinoPage() {
               : <Cherry size={24} className="text-rose-400"/>}
             <div>
               <h1 className="text-sm font-black sm:text-lg">Sizzling Hot Deluxe</h1>
-              <p className="text-xs text-slate-400">Kredite demo. Nuk përdoret bilanci i basteve sportive.</p>
+              <p className="text-xs text-slate-400">Lojë me bilancin real të llogarisë (jo kredite demo).</p>
             </div>
           </div>
-          <CasinoFullscreen>
-            <iframe
-              title="Sizzling Hot Deluxe · Demo"
-              src="/app/casino-original/sizzling/index.html"
-              className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
-          </CasinoFullscreen>
+          <CasinoOriginalWallet />
         </section>
       </main>
     </div>
