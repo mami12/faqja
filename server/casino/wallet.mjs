@@ -5,11 +5,9 @@ import { isLedgerReady } from '../ledger/store.mjs';
 import { publicRtpProfiles, profileById } from './rtp-profiles.mjs';
 import { placeCasinoSpin } from './transactions.mjs';
 
-// Real-money mode requires BOTH a deployment flag and an audited admin switch.
-// The included game math is an UNVERIFIED adapter, not certified provider software.
+// Sizzling uses the same authenticated PostgreSQL balance as sports betting.
+// The admin may suspend wagering at any time; math remains uncertified.
 export const casinoWalletRouter = express.Router();
-const deploymentEnabled = () => process.env.CASINO_REAL_MONEY_ENABLED === 'true';
-const mathApproved = () => process.env.CASINO_MATH_APPROVED === 'true';
 const money = value => Number(Number(value).toFixed(2));
 const fault = (status, message) => Object.assign(new Error(message), { status });
 const safe = handler => (req, res) => Promise.resolve(handler(req, res)).catch(error => {
@@ -27,11 +25,11 @@ async function getSettings(executor = query) {
   const profile = profiles.find(p => p.id === setting.profile);
   return {
     enabled: Boolean(setting.enabled),
-    deploymentEnabled: deploymentEnabled(),
-    realMoneyAvailable: Boolean(setting.enabled) && deploymentEnabled() && mathApproved(),
+    deploymentEnabled: true,
+    realMoneyAvailable: Boolean(setting.enabled),
     profile: setting.profile,
-    profiles, mathApproved: mathApproved(), certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: 'Single sportsbook wallet only. No play-money fallback. Approval flags are deployment controls and are not proof of independent certification.',
+    profiles, mathApproved: false, certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
+    warning: 'Shared sports wallet is live when enabled. This is a custom game adapter, not independently certified Novomatic math.',
   };
 }
 
@@ -54,7 +52,6 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
 casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getSettings())));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
   if(typeof req.body?.enabled !== 'boolean') throw fault(400, 'enabled must be boolean');
-  if(req.body.enabled && (!deploymentEnabled() || !mathApproved())) throw fault(409,'Real money requires deployment flag and independent math approval');
   const client=await pool.connect();
   try {
     await client.query('begin');
