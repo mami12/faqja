@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Dices, RefreshCw, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
-type Settings={enabled:boolean;deploymentEnabled:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string};
+type Settings={enabled:boolean;deploymentEnabled:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string;profiles:Array<{id:string;label:string;theoreticalRtp:number;certified:boolean}>};
 type Totals={casinoStake:number;casinoPayout:number;casinoSpins:number};
 export default function CasinoSettings(){
   const [data,setData]=useState<Settings|null>(null),[totals,setTotals]=useState<Totals|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [selectedProfile,setSelectedProfile]=useState('');
   const load=async()=>{
     setBusy(true);setError('');
-    try{const [r,finance]=await Promise.all([apiClient.get<Settings>('/admin/casino/settings'),apiClient.get<{totals:Totals}>('/admin/casino/finance')]);setData(r.data);setTotals(finance.data.totals);}
+    try{const [r,finance]=await Promise.all([apiClient.get<Settings>('/admin/casino/settings'),apiClient.get<{totals:Totals}>('/admin/casino/finance')]);setData(r.data);setSelectedProfile(r.data.profile);setTotals(finance.data.totals);}
     catch(e:any){setError(e.response?.data?.message||'Nuk u ngarkuan cilësimet');}
     finally{setBusy(false);}
   };
@@ -19,6 +20,15 @@ export default function CasinoSettings(){
     setBusy(true);setError('');
     try{const r=await apiClient.patch<Settings>('/admin/casino/settings',{enabled});setData(r.data);}
     catch(e:any){setError(e.response?.data?.message||'Ndryshimi nuk u ruajt');}
+    finally{setBusy(false);}
+  };
+  const updateProfile=async()=>{
+    if(!data||!selectedProfile||selectedProfile===data.profile)return;
+    setBusy(true);setError('');
+    try{
+      const res=await apiClient.patch<Settings>('/admin/casino/profile',{profile:selectedProfile});
+      setData(res.data);setSelectedProfile(res.data.profile);
+    }catch(e:any){setError(e.response?.data?.message||'Nuk u ruajt RTP');}
     finally{setBusy(false);}
   };
   return <section className="mx-auto max-w-5xl space-y-4 px-3 pb-10 pt-5 sm:px-6">
@@ -37,12 +47,28 @@ export default function CasinoSettings(){
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Certifikimi</p><p className="mt-1 font-bold text-amber-300">{data?.certified?'I verifikuar':'Nuk është certifikuar'}</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Modaliteti</p><p className="mt-1 font-bold text-white">{data?.realMoneyAvailable?'Fonde të përbashkëta':'Demo / i çaktivizuar'}</p></div>
       </div>
+      <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
+        <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
+        <p className="text-xs text-text-secondary">Zgjedh vetëm nga profile matematikore fikse. RTP teorike llogaritet nga çdo reel stop dhe tabela e pagesave. Profilet janë për motorin tonë, jo variante zyrtare të Novomatic.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-[210px] flex-1 space-y-1 text-xs text-text-secondary">
+            <span>Zgjidh profilin</span>
+            <select value={selectedProfile} onChange={e=>setSelectedProfile(e.target.value)}
+              disabled={busy||data?.enabled} className="block min-h-11 w-full rounded-lg border border-tertiary bg-secondary px-3 text-white">
+              {(data?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.label} · {p.theoreticalRtp.toFixed(2)}% RTP</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={busy||data?.enabled||!selectedProfile||selectedProfile===data.profile}
+            onClick={()=>void updateProfile()} className="min-h-11 rounded-lg bg-amber-400 px-5 font-bold text-slate-950 disabled:opacity-40">Ruaj RTP</button>
+        </div>
+        {data?.enabled&&<p className="text-xs text-amber-200">Çaktivizo lojën përpara ndryshimit të profilit RTP.</p>}
+      </div>
       <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
         <AlertTriangle className="mr-2 inline" size={18}/>
         Ndryshimi arbitrar i RTP-së gjatë lojës ose sipas përdoruesit nuk lejohet. Për të shtuar profil tjetër RTP duhen reel strips, tabela pagesash dhe verifikim matematikor për një version të pandryshueshëm.
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-tertiary pt-4">
-        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Kërkon CASINO_REAL_MONEY_ENABLED=true në server dhe kontroll administrativ.</p></div>
+        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Kërkon CASINO_REAL_MONEY_ENABLED=true, CASINO_MATH_APPROVED=true dhe miratimin e adminit.</p></div>
         <button type="button" disabled={!data||busy||(!data.enabled&&!data.deploymentEnabled)||!data.certified}
           onClick={()=>void change(!data!.enabled)}
           className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>
