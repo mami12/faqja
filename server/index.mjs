@@ -10,7 +10,6 @@ import { initLedgerSchema } from './ledger/store.mjs';
 import * as overrides from './ledger/overrides.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
-import { sizzlingDemoRouter } from './sizzling-demo.mjs';
 import { adminRouter } from './ledger/admin.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import { isFinished, archiveFinishedMatch } from './ledger/results.mjs';
@@ -28,6 +27,7 @@ import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
+import { createSizzlingDemoRouter } from './casino/sizzling-demo.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -625,10 +625,12 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
   next();
 });
 
+// Original Sizzling Hot Deluxe (same origin as the sports site).
+// Only virtual demo credits; intentionally isolated from ledger/real balances.
+app.use('/app/api/casino/sizzlinghotdeluxe', createSizzlingDemoRouter());
+
 app.use('/app/api', adminRouter);
 app.use('/app/api', ledgerRouter);
-// Isolated demo for Novomatic client: no real-wallet writes or ledger access.
-app.use('/app/api/casino/sizzling', sizzlingDemoRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
 if (existsSync(webDist)) {

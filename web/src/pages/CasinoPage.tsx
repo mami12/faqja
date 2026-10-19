@@ -92,16 +92,16 @@ export default function CasinoPage() {
             className="mb-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-[#1c2733] px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
             <ArrowLeft size={16} /> Kthehu te Kazino
           </button>
-          <div className="mx-auto w-full max-w-[1060px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
+          <div className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-xl border border-amber-500/30 bg-black">
             <iframe
-              title="Sizzling Hot Deluxe, klienti origjinal Pixi"
+              title="Sizzling Hot Deluxe, klienti origjinal grafik"
               src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
-              className="block h-[min(82vh,820px)] min-h-[520px] w-full border-0"
+              className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
               allow="autoplay; fullscreen"
               allowFullScreen
             />
             <p className="px-3 py-2 text-xs text-slate-400">
-              Sizzling Hot Deluxe, klienti origjinal Pixi/Spine · Kredite demo · Pa lidhje me bilancin sportiv
+              Sizzling Hot Deluxe · Grafika, animacionet dhe audio origjinale · 100% kredite demo, jo bilanci sportiv
             </p>
           </div>
         </main>
