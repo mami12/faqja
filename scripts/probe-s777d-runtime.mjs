@@ -30,9 +30,9 @@ try{
   return {diag:window.__s777dDiagnostics,bodyHtml:document.body.innerHTML.slice(0,1800),canvas:canvases.map(c=>({w:c.width,h:c.height,style:c.getAttribute('style')})),imgs,frames,bodyText:document.body.innerText.slice(0,500),title:document.title};
  });
  const fullJs=readFileSync(join(root,'web/dist/casino-goldsvet/s777d/s777d/B6FA10F25A93883264359F51D1E0D3A5.cache.js'),'utf8');
- const patterns=['https://','http://','game_session','sessionId','demoMode','serverUrl','serverURL','/game/','/api/','json','/games/','slotEvent','act:', 'nCGuJ1R7Iw98aD7o'];
+ const patterns=['SID missing error','SID=', 'sid=', '?sid', '?SID', 'session_id=', 'sid', 'SID', 'game_session','sessionId', 'baseUrl','assets_default','https://','http://','demoMode','serverUrl','/game/','/api/','/games/','slotEvent','nCGuJ1R7Iw98aD7o'];
  const references=Object.fromEntries(patterns.map(key=>{let n=0,positions=[];for(let i=fullJs.indexOf(key);i>=0&&n<12;i=fullJs.indexOf(key,i+key.length)){n++;positions.push(fullJs.slice(Math.max(0,i-75),i+155))}return [key,positions]}));
- console.log('GWT_RUNTIME_STRINGS',JSON.stringify(references).slice(0,17000));
+ console.log('GWT_RUNTIME_STRINGS',JSON.stringify(references).slice(0,26000));
  const loaded=await page.evaluate(async()=>{
   let urls=['./s777d/s777d.nocache.js','./s777d/B6FA10F25A93883264359F51D1E0D3A5.cache.js','./s777d/s777d-0.js','./s777d/style.css'];
   return Promise.all(urls.map(async u=>{let r=await fetch(u,{method:'HEAD'});return {url:u,status:r.status,length:r.headers.get('content-length')}}));
