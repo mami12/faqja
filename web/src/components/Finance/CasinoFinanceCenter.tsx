@@ -8,7 +8,8 @@ type PlayerFinance = {
   casinoStake:number;casinoPayout:number;casinoNet:number;casinoSpins:number;net:number;
 };
 type Transaction = {id:string;amount:number;type:string;description:string|null;balanceAfter:number;createdAt:string};
-type Report = {players:PlayerFinance[];totals:Omit<PlayerFinance,'id'|'username'|'balance'>;transactions:Transaction[];truncated:boolean};
+type CasinoRound={id:string;gameId:string;gameVersion:string;stake:number;payout:number;balanceAfter:number;net:number;createdAt:string};
+type Report = {players:PlayerFinance[];totals:Omit<PlayerFinance,'id'|'username'|'balance'>;transactions:Transaction[];rounds:CasinoRound[];truncated:boolean};
 type Filter = 'all'|'sport'|'casino';
 const fmt=(value:number)=>Number(value||0).toLocaleString('sq-AL',{minimumFractionDigits:2,maximumFractionDigits:2})+' Lek';
 const stamp=(text:string)=>new Date(text).toLocaleString('sq-AL');
@@ -22,6 +23,7 @@ function SummaryCard({title,value,caption}:{title:string;value:number;caption?:s
 export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'manager';initialUserId?:string}){
   const [report,setReport]=useState<Report|null>(null);
   const [detail,setDetail]=useState<Transaction[]>([]);
+  const [rounds,setRounds]=useState<CasinoRound[]>([]);
   const [selected,setSelected]=useState(initialUserId||'');
   const [category,setCategory]=useState<Filter>('all');
   const [from,setFrom]=useState(''),[to,setTo]=useState('');
@@ -39,11 +41,11 @@ export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'
   useEffect(()=>{void load();},[load]);
   useEffect(()=>{if(initialUserId)setSelected(initialUserId);},[initialUserId]);
   useEffect(()=>{
-    if(!selected){setDetail([]);return;}
+    if(!selected){setDetail([]);setRounds([]);return;}
     let cancelled=false;
     void apiClient.get<Report>(endpoint,{params:{userId:selected,from:from||undefined,to:to||undefined}})
-      .then(res=>{if(!cancelled)setDetail(res.data.transactions);})
-      .catch(()=>{if(!cancelled)setDetail([]);});
+      .then(res=>{if(!cancelled){setDetail(res.data.transactions);setRounds(res.data.rounds||[]);}})
+      .catch(()=>{if(!cancelled){setDetail([]);setRounds([]);}});
     return()=>{cancelled=true;};
   },[endpoint,selected,from,to]);
   const visible=(report?.players||[]).filter(p=>p.username.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
@@ -141,6 +143,31 @@ export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'
         </div>
       </div>):<p className="p-5 text-sm text-text-secondary">Nuk ka transaksione për kategorinë e zgjedhur.</p>}</div>
       {detail.length>=300&&<p className="p-3 text-xs text-amber-300">Po shfaqen 300 transaksionet më të fundit për intervalin.</p>}
+    </div>}
+    {player&&category!=='sport'&&<div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
+      <div className="border-b border-tertiary p-4">
+        <h3 className="font-bold text-white">Historia e lojërave të kazinosë · {player.username}</h3>
+        <p className="text-xs text-text-secondary">Çdo raund lidhet me një pagesë dhe një bilanc në databazë.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[600px] text-sm">
+          <thead className="bg-primary text-xs text-text-secondary">
+            <tr><th className="p-3 text-left">Koha / Loja</th><th className="p-3 text-right">Basti</th>
+            <th className="p-3 text-right">Fitimi</th><th className="p-3 text-right">Diferenca</th>
+            <th className="p-3 text-right">Bilanci pas</th></tr>
+          </thead>
+          <tbody className="divide-y divide-tertiary">{rounds.map(r=><tr key={r.id}>
+            <td className="p-3"><div className="font-semibold text-white">{r.gameId}</div>
+              <div className="text-xs text-text-secondary">{stamp(r.createdAt)}</div></td>
+            <td className="p-3 text-right text-white">{fmt(r.stake)}</td>
+            <td className="p-3 text-right text-white">{fmt(r.payout)}</td>
+            <td className={'p-3 text-right font-semibold '+(r.net>=0?'text-emerald-300':'text-rose-300')}>{fmt(r.net)}</td>
+            <td className="p-3 text-right text-text-secondary">{fmt(r.balanceAfter)}</td>
+          </tr>)}</tbody>
+        </table>
+        {!rounds.length&&<p className="p-5 text-sm text-text-secondary">Nuk ka raunde kazinoje për këtë periudhë.</p>}
+      </div>
+      {rounds.length>=300&&<p className="p-3 text-xs text-amber-300">Po shfaqen 300 raundet më të fundit.</p>}
     </div>}
     {report?.truncated&&<p className="text-xs text-amber-300">Raporti ka kufi 2000 përdorues. Përdor filtër më të ngushtë për eksport të plotë.</p>}
   </section>;
