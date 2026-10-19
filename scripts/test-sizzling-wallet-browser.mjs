@@ -120,20 +120,17 @@ try{
   await page.screenshot({path:join(out,'wallet-loading.png')});
   // The previous smoke test stopped at the loader and never clicked Start.
   // Press the original PIXI canvas button and capture the actual POST payload.
-  const canvasBox=await page.$eval('#slotCanvas',el=>{
-    const r=el.getBoundingClientRect();
-    return {x:r.left,y:r.top,width:r.width,height:r.height};
+  // Use the game's own scale/padding conversion, as proven by
+  // test-sizzling-controls.mjs on both desktop and mobile.
+  const pressPoint=await page.evaluate(()=>{
+    const p=c2d.env.screenParams;
+    const r=document.querySelector('#slotCanvas').getBoundingClientRect();
+    return {x:r.x+(1570+p.paddingLeft)*p.canvasScaleCoef/p.pixelRatio,
+      y:r.y+(1025+p.paddingTop)*p.canvasScaleCoef/p.pixelRatio};
   });
-  const clickPositions=[[0.72,0.82],[0.72,0.9],[0.72,0.96],[0.83,0.88]];
-  const clicks=[];
-  for(const [fx,fy] of clickPositions){
-    const x=canvasBox.x+canvasBox.width*fx;
-    const y=canvasBox.y+canvasBox.height*fy;
-    clicks.push({fx,fy,x,y});
-    await page.mouse.click(x,y);
-    await new Promise(resolve=>setTimeout(resolve,1800));
-    if(api.some(entry=>/\\"action\\"\\s*:\\s*\\"spin\\"/.test(entry.request||'')))break;
-  }
+  await page.mouse.click(pressPoint.x,pressPoint.y);
+  await new Promise(resolve=>setTimeout(resolve,5200));
+  const clicks=[pressPoint];
   await page.screenshot({path:join(out,'wallet-after-start.png')});
   console.log('WALLET PIXI START CLICKS:',JSON.stringify(clicks));
   console.log('WALLET PIXI START API:',JSON.stringify(api));
