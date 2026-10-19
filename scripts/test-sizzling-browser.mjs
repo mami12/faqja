@@ -30,7 +30,7 @@ try {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 1 });
-  const jsErrors = [], badAssets = [], posts = [], browserConsole = [];
+  const jsErrors = [], badAssets = [], posts = [], browserConsole = [], notFound = [];
   const rootUrl = 'http://127.0.0.1:' + server.address().port;
   page.on('pageerror', error => jsErrors.push(error.message));
   page.on('console', event => {
@@ -38,8 +38,11 @@ try {
   });
   page.on('response', response => {
     const url = response.url();
-    if (response.status() >= 400 && url.startsWith(rootUrl + '/app/casino-original/sizzling/')) {
-      badAssets.push(response.status() + ' ' + url);
+    if (response.status() >= 400 && url.startsWith(rootUrl)) {
+      notFound.push(response.status() + ' ' + url);
+      if (url.startsWith(rootUrl + '/app/casino-original/sizzling/')) {
+        badAssets.push(response.status() + ' ' + url);
+      }
     }
     if (url.includes('/app/api/casino/sizzlinghotdeluxe/play')) {
       posts.push({ code:response.status(), request:response.request().postData()?.slice(0,500) ?? '' });
@@ -106,6 +109,14 @@ try {
   console.log('Pixi runtime:',JSON.stringify(visible));
   console.log('Casino protocol calls:',posts.map(p=>({code:p.code, body:p.request.slice(0,120)})));
   console.log('Browser warnings:',browserConsole.slice(-20));
+  console.log('All local HTTP errors:',notFound);
+  const actions=posts.map(p=>{
+    const matched=/"action"s*:s*"([^"]+)"/.exec(p.request);
+    return matched?.[1] ?? 'unknown';
+  });
+  console.log('Protocol actions:', actions);
+  assert.ok(actions.includes('init'),'Original client must initialize');
+  assert.ok(actions.includes('spin'),'Pixi SPIN button must reach demo backend');
   console.log('Browser screenshots captured at',artifacts);
   assert.ok(posts.length>=2, 'Canvas clicks must trigger a real spin protocol request');
   assert.deepEqual(jsErrors,[],'Original browser client must not throw JS errors');
