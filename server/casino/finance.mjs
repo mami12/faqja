@@ -20,21 +20,30 @@ function date(value, isEnd) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value)) || !Number.isFinite(Date.parse(value))) throw bad(400, 'Invalid date');
   return value + (isEnd ? 'T23:59:59.999Z' : 'T00:00:00.000Z');
 }
+// Aggregate ticket settlements, not quoted potential payouts. The payout is
+// read from the actual posted BET_WON transaction so voided legs are correct.
 const playerSQL = [
   'select u.id,u.username,u.balance,',
   'coalesce(s.turnover,0) as "sportTurnover",coalesce(s.pending,0) as "sportPending",',
   'coalesce(s.stake,0) as "sportStake",coalesce(s.payout,0) as "sportPayout",coalesce(s.cnt,0) as "sportCount",',
   'coalesce(c.stake,0) as "casinoStake",coalesce(c.payout,0) as "casinoPayout",coalesce(c.cnt,0) as "casinoSpins"',
   'from app_user u',
-  'left join lateral (select coalesce(sum(t.stake),0) as turnover,',
+  'left join lateral (',
+  'select coalesce(sum(t.stake),0) as turnover,',
   "coalesce(sum(t.stake) filter(where t.status='PENDING'),0) as pending,",
   "coalesce(sum(t.stake) filter(where t.status in ('WON','LOST')),0) as stake,",
-  'coalesce(sum((select coalesce(sum(tx.amount),0) from app_transaction tx ' +
-  "where tx.user_id=u.id and tx.reference_id=t.id and tx.type=\'BET_WON\')) filter(where t.status=\'WON\'),0) as payout,",
+  "coalesce(sum(w.paid) filter(where t.status='WON'),0) as payout,",
   "count(*) filter(where t.status in ('WON','LOST')) as cnt",
-  'from app_ticket t where t.user_id=u.id',
-  'and ($3::timestamptz is null or t.placed_at >= $3)',
-  'and ($4::timestamptz is null or t.placed_at <= $4)) s on true',
+  'from app_ticket t',
+  "left join lateral (select coalesce(sum(tx.amount),0) as paid from app_transaction tx",
+  "where tx.user_id=u.id and tx.reference_id=t.id and tx.type='BET_WON') w on true",
+  'where t.user_id=u.id',
+  "and (($3::timestamptz is null and $4::timestamptz is null) or",
+  "(t.status='PENDING' and ($3::timestamptz is null or t.placed_at >= $3)",
+  "and ($4::timestamptz is null or t.placed_at <= $4)) or",
+  "(t.status<>'PENDING' and ($3::timestamptz is null or t.settled_at >= $3)",
+  'and ($4::timestamptz is null or t.settled_at <= $4)))',
+  ') s on true',
   'left join lateral (select coalesce(sum(c.stake),0) as stake,',
   'coalesce(sum(c.payout),0) as payout,count(*) as cnt',
   'from app_casino_round c where c.user_id=u.id',
