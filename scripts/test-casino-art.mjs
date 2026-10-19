@@ -100,6 +100,16 @@ assert.ok(goldsvet.includes('reelset_reel_stop-5bd4b48edb.ogg'),
 assert.ok(goldsvet.includes('reelset_moving-2da16a7a33.ogg'),
   'original reel movement effect missing');
 assert.ok(goldsvet.includes('class SoundEngine'),'Goldsvet sound engine replaced');
+assert.ok(goldsvet.includes('href="./retro.css"'), 'original-style cabinet CSS missing');
+const cabinetStyle=read('web/public/casino-goldsvet/sizzling/retro.css');
+assert.ok(cabinetStyle.includes('.reel-stage'),'wide graphical reel cabinet missing');
+assert.ok(cabinetStyle.includes('.line-star'),'winning payline star markers missing');
+assert.ok(cabinetStyle.includes('.btn-spin:after'),'orange spin wheel visual missing');
+assert.ok(goldsvet.includes('id="cabinet-status"'),'win-status window missing');
+assert.ok(goldsvet.includes('class="btn-game chip"'),'bet denomination controls missing');
+assert.ok(goldsvet.includes("button.dataset.bet"),'bet denomination handlers missing');
+assert.ok(goldsvet.includes("button.dataset.line"),'payline preview handlers missing');
+assert.ok(goldsvet.includes("function animateReel"),'original Goldsvet spin animation replaced');
 const inlineScripts=[...goldsvet.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
 assert.ok(inlineScripts.length > 0, 'Goldsvet client script missing');
 inlineScripts.forEach((match,index) =>

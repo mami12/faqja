@@ -40,6 +40,24 @@ try {
   assert.equal(loaded.length,15,'all 15 reel-window symbols must render');
   assert.ok(loaded.every(image => image.loaded),
     'broken reel image(s): '+JSON.stringify(loaded.filter(x => !x.loaded)));
+  const cabinet = await page.evaluate(() => ({
+    title: document.querySelector('.logo-title')?.textContent,
+    stars: document.querySelectorAll('.line-star').length,
+    chips: document.querySelectorAll('.chip').length,
+    background: getComputedStyle(document.getElementById('game-wrapper')).backgroundImage,
+    stage: !!document.querySelector('.reel-stage'),
+  }));
+  assert.match(cabinet.title,/SIZZLING 777/);
+  assert.equal(cabinet.stars,10,'five payoff markers on each side');
+  assert.equal(cabinet.chips,7,'Goldsvet betting denomination bar');
+  assert.ok(cabinet.stage);
+  assert.ok(cabinet.background.includes('radial-gradient'),'deluxe cabinet CSS must be loaded');
+  await page.click('.line-star[data-line="0"]');
+  const preview = await page.$eval('.line-star[data-line="0"]', el => el.classList.contains('active'));
+  assert.ok(preview,'side star should preview its real payline');
+  await page.click('.chip[data-bet="2"]');
+  const bet = await page.$eval('#disp-bet', node => node.textContent.trim());
+  assert.equal(bet,'40.00','denomination changes should update total stake');
   await page.click('#btn-paytable');
   const paytable = await page.$eval('#paytable-modal', modal => modal.classList.contains('open'));
   assert.ok(paytable,'paytable must open');
