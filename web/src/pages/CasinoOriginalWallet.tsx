@@ -107,6 +107,9 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   </div>;
   return <CasinoFullscreen>
     <div className="relative">
+      <p className="flex items-center justify-center gap-2 bg-[#111824] px-3 py-2 text-center text-[11px] text-amber-200 sm:hidden">
+        <RefreshCw size={13} className="rotate-90"/> Rrotullo telefonin horizontalisht për ekran më të madh
+      </p>
       <iframe ref={frame} title={cfg.title+' · bilanci i llogarisë'}
         src={url} className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
         allow="autoplay; fullscreen" allowFullScreen/>
