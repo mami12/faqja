@@ -91,3 +91,5 @@ jobs:
         run: npm run build:web
       - name: Browser-smoke test Goldsvet graphics, music and spin
         run: node scripts/test-goldsvet-browser.mjs
+      - name: Diagnose original Goldsvet s777d GWT runtime
+        run: node scripts/probe-s777d-runtime.mjs
