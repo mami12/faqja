@@ -348,6 +348,13 @@ export async function updateUser(id, fields = {}) {
 
 /** deletes the login; tickets keep their history (user_id becomes null) */
 export async function deleteUser(id) {
+  // Do not cascade financial audit records by deleting a funded player.
+  // The staff UI can freeze or ban the account without losing its ledger.
+  const activity = await query(
+    "select (exists(select 1 from app_ticket where user_id=$1) or exists(select 1 from app_transaction where user_id=$1) or exists(select 1 from app_casino_round where user_id=$1)) as has_activity",
+    [id]);
+  if(activity.rows[0]?.has_activity)
+    throw Object.assign(new Error('Ky përdorues ka histori financiare. Ngrije ose bllokoje; mos fshi transaksionet.'),{status:409});
   const res = await query('delete from app_user where id = $1 returning id', [id]);
   return res.rows[0]?.id ?? null;
 }
