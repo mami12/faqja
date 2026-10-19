@@ -9,9 +9,11 @@ import TicketAudit from '../components/Admin/TicketAudit';
 import { useLanguage } from '../context/LanguageContext';
 import AdminAuditLog from '../components/Admin/AdminAuditLog';
 import TransactionHistoryPage from './TransactionHistoryPage';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert } from 'lucide-react';
+import CasinoFinanceCenter from '../components/Finance/CasinoFinanceCenter';
+import CasinoSettings from '../components/Admin/CasinoSettings';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit';
+type AdminTab = 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -25,12 +27,14 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'builders', label: 'Bet Builder', description: 'Kombinime universale nga API', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve LIVE', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
     ],
   },
   {
     title: 'Raportet',
     items: [
       { id: 'transactions', label: 'Transaksionet', description: 'Lëvizjet financiare', icon: Receipt },
+      { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
       { id: 'audit', label: 'Regjistri', description: 'Historiku i veprimeve', icon: ClipboardList },
     ],
   },
@@ -127,6 +131,8 @@ export default function AdminPage() {
             {tab === 'tickets' && <TicketAudit />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
+            {tab === 'casino-finance' && <CasinoFinanceCenter role="admin" />}
+            {tab === 'casino-settings' && <CasinoSettings />}
           </main>
         </div>
       </div>
