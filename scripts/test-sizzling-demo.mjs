@@ -79,13 +79,18 @@ try {
   assert.equal(spin.status,200);
   assert.equal(Object.keys(spin.body.spin.symbols).length,5);
   assert.equal(spin.body.spin.wins.line_wins.length>=0,true);
-  assert.ok(spin.body.balance.after>=before-5);
+  assert.ok(spin.body.balance.after<=before-5+0.001,'spin debits only the stake');
+  assert.ok(spin.body.balance.after>=before-5-0.001,'spin never credits the win early');
   assert.equal(typeof spin.body.macro_round.wins.total,'string');
   const replay=await post(request);
   assert.deepEqual(replay.body,spin.body,'identical retry must not debit twice');
+  const pendingWin=Number(spin.body.spin.wins.total);
   const collected=await post({action:'collect',request_id:'3'});
   assert.equal(collected.status,200);
   assert.deepEqual(collected.body.available_actions,['spin']);
+  assert.equal(Number(collected.body.balance.after),
+    Number((spin.body.balance.after+pendingWin).toFixed(2)),
+    'collect credits exactly the pending win');
   const other=await fetch(base,{
     method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({data:JSON.stringify({action:'init'})}),
@@ -118,11 +123,13 @@ try {
   const gambleChoice=await post({action:'set_double',choice:0,request_id:String(nextRequestId++)});
   assert.equal(gambleChoice.status,200);
   assert.ok(['win','lose'].includes(gambleChoice.body.gamble.status));
-  assert.equal(Number(gambleChoice.body.balance.after),
-    Number((balanceBefore+(gambleChoice.body.gamble.status==='win'?initialPending:-initialPending)).toFixed(2)));
+  assert.equal(Number(gambleChoice.body.balance.after),balanceBefore,
+    'gambling moves only the pending win, never the meter');
   const collectedGamble=await post({action:'collect',request_id:String(nextRequestId++)});
   assert.equal(collectedGamble.status,200);
   assert.deepEqual(collectedGamble.body.available_actions,['spin']);
+  assert.equal(Number(collectedGamble.body.collect.total),
+    Number(gambleChoice.body.gamble.bet),'collect pays the doubled/forfeited pending win');
   const status=await fetch('http://127.0.0.1:'+server.address().port+
     '/app/api/casino/sizzlinghotdeluxe/status');
   assert.equal((await status.json()).realMoney,false);

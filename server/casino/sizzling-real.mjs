@@ -11,7 +11,7 @@ import {requireAuth} from '../ledger/auth.mjs';
 import {getUserById,isLedgerReady} from '../ledger/store.mjs';
 import {query} from '../db.mjs';
 import {decodeRequest,initResponse} from './sizzling-demo.mjs';
-import {placeCasinoSpin} from './transactions.mjs';
+import {placeCasinoSpin,settlePendingWin} from './transactions.mjs';
 import {casinoGambleAction} from './gamble.mjs';
 
 const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
@@ -50,7 +50,8 @@ async function getWalletPlayer(req){
   return {user,nonce:claim.jti};
 }
 function spinProtocol(round,bet,lines,denomination,reqId){
-  const before=Number((round.balance+round.stake-round.payout).toFixed(2));
+  // The win is PENDING (paid on collect), so the wallet only lost the stake.
+  const before=Number((round.balance+round.stake).toFixed(2));
   const total=round.payout.toFixed(2);
   return {
     balance:{before,after:round.balance},denomination,
@@ -80,7 +81,12 @@ export function createSizzlingRealRouter(){
       const id=rawId==null?null:Number(rawId);
       if(rawId!=null&&(!Number.isSafeInteger(id)||id<0||id>1e9))throw fault(400,'INVALID_REQUEST_ID');
       if(action==='init'){
-        const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1});
+        // A pending win survives page reloads/tab closes: credit it first so
+        // the casino meter and the sportsbook balance stay in sync.
+        await settlePendingWin(user.id);
+        const fresh=await getUserById(user.id);
+        const credits=Number(fresh?.balance ?? user.balance);
+        const init=initResponse({credits, requestId:id==null?1:id+1});
         init.init.currency='LEK';
         return res.json(init);
       }

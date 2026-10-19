@@ -219,7 +219,9 @@ function handleSpin(state, request) {
   const before = state.credits;
   const grid = randomGrid();
   const wins = gradeGrid(grid, bet, denomination);
-  state.credits = money(state.credits - stake + wins.total);
+  // The cabinet debits the stake on spin and pays the win on collect, so the
+  // demo must not add the win to the meter before the player collects it.
+  state.credits = money(state.credits - stake);
   state.pending = wins.total;
   state.gambleStep = 0;
   state.gamblePlayer = null;
@@ -269,9 +271,8 @@ function setGamble(state, req) {
   const dealer = randomCard();
   const red = ['hearts','diamonds'].includes(dealer.suit);
   const won = (choice === 0) === red;
-  // The preceding spin has already added the pending win to DEMO credits.
-  // Here only the delta is applied: +pending on win, -pending on loss.
-  state.credits = money(state.credits + (won ? state.pending : -state.pending));
+  // The stake already left the meter and the win is still pending: gambling
+  // only doubles or forfeits that pending amount.
   state.pending = won ? money(state.pending * 2) : 0;
   state.gambleStep++;
   state.gamblePlayer = dealer;
@@ -315,11 +316,14 @@ export function createSizzlingDemoRouter() {
           response = initResponse(state); break;
         case 'spin':
           response = handleSpin(state,request); break;
-        case 'collect':
+        case 'collect': {
+          const collected = state.pending;
+          state.credits = money(state.credits + collected);
           state.pending = 0; state.gambleStep = 0; state.gamblePlayer = null;
           response = { ...basicResponse(state,before), available_actions:['spin'],
-            macro_round:{ wins:{total:'0'} }, collect:{total:'0'} };
+            macro_round:{ wins:{total:'0'} }, collect:{total:money(collected).toFixed(2)} };
           break;
+        }
         case 'get_double':
           response = getGamble(state); break;
         case 'set_double':

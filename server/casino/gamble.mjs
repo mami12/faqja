@@ -1,10 +1,13 @@
 /**
- * Persisted, replay-safe gamble for the school Sizzling virtual-credit wallet.
- * Spin winnings are already credited. Red/black changes the SAME sportsbook
- * wallet only by +pending on success or -pending on loss.
+ * Persisted, replay-safe gamble for the Sizzling Hot Deluxe real wallet.
+ *
+ * The spin already debited the stake; the win is PENDING until the player
+ * collects. Red/black only doubles or forfeits that pending amount, so the
+ * sportsbook balance and the casino meter always show the same number.
  */
 import {randomInt} from 'node:crypto';
 import {pool} from '../db.mjs';
+import {creditPendingWin} from './transactions.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -27,7 +30,7 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
     if(!lookup.rows.length)throw fault(404,'PLAYER_NOT_FOUND');
     const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
     const locked=await db.query(
-      'select id,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+      'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
     const users=new Map(locked.rows.map(row=>[row.id,row]));
     const player=users.get(userId),manager=player?.manager_id?users.get(player.manager_id):null;
     if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
@@ -49,11 +52,17 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
     let answer;
 
     if(action==='collect'){
-      if(state)await db.query(
-        'update app_casino_gamble_state set pending=0,player_card=null,updated_at=now() where user_id=$1',
+      // This is where the pending win finally reaches the wallet.
+      const after=pending>0
+        ? await creditPendingWin(db,{userId,player,manager,pending,roundId:state.round_id})
+        : previous;
+      if(pending>0&&state?.round_id)await db.query(
+        'update app_casino_round set payout=$2 where id=$1',[state.round_id,pending]);
+      await db.query(
+        'update app_casino_gamble_state set pending=0,step=0,player_card=null,updated_at=now() where user_id=$1',
         [userId]);
-      answer={...basic(previous,previous),available_actions:['spin'],
-        macro_round:{wins:{total:'0'}},collect:{total:'0'}};
+      answer={...basic(previous,after),available_actions:['spin'],
+        macro_round:{wins:{total:'0'}},collect:{total:money(pending).toFixed(2)}};
     }else if(action==='get_double'){
       if(!state||pending<=0||state.step>=5)throw fault(409,'NOTHING_TO_GAMBLE');
       const card=state.player_card||randomCard();
@@ -72,29 +81,15 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
       const dealer=randomCard();
       const red=dealer.suit==='hearts'||dealer.suit==='diamonds';
       const won=(selected===0)===red;
-      const delta=won?pending:-pending;
-      const after=money(previous+delta);
+      // Only the PENDING amount moves; the wallet is untouched until collect.
       const newPending=won?money(pending*2):0;
       const step=state.step+1;
       await db.query(
-        'update app_user set balance=$2,updated_at=now() where id=$1',
-        [userId,after]);
-      await db.query(
-        "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,$3,$4,$5,$6)",
-        [userId,delta,won?'CASINO_GAMBLE_WIN':'CASINO_GAMBLE_LOSS',state.round_id,after,
-          won?'Sizzling virtual gamble win':'Sizzling virtual gamble loss']);
-      if(manager){
-        const managerAfter=money(Number(manager.balance)-delta);
-        await db.query('update app_user set balance=$2,updated_at=now() where id=$1',
-          [manager.id,managerAfter]);
-        await db.query(
-          "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_GAMBLE_NET',$3,$4,$5)",
-          [manager.id,-delta,state.round_id,managerAfter,'Sizzling virtual gamble manager adjustment']);
-      }
-      await db.query(
         'update app_casino_gamble_state set pending=$2,step=$3,player_card=$4::jsonb,updated_at=now() where user_id=$1',
         [userId,newPending,step,JSON.stringify(dealer)]);
-      answer={...basic(previous,after),
+      if(state.round_id)await db.query(
+        'update app_casino_round set payout=$2 where id=$1',[state.round_id,newPending]);
+      answer={...basic(previous,previous),
         available_actions:newPending>0?
           ['collect',...(step<5?['get_double']:[]),'spin']:['spin'],
         macro_round:{wins:{total:newPending.toFixed(2)}},
