@@ -11,7 +11,7 @@ import {casinoSessionRouter,createSizzlingRealRouter} from '../server/casino/siz
 import {casinoWalletRouter} from '../server/casino/wallet.mjs';
 import {initLedgerSchema,createUser,getUserById} from '../server/ledger/store.mjs';
 import {query,closePool} from '../server/db.mjs';
-import {placeCasinoSpin} from '../server/casino/transactions.mjs';
+import {placeCasinoSpin,settlePendingWin} from '../server/casino/transactions.mjs';
 import {generateCasinoFinanceReport} from '../server/casino/finance.mjs';
 const round=x=>Number(Number(x).toFixed(2));
 if(!process.env.DATABASE_URL?.includes('/casino_test'))throw new Error('Run only against a disposable casino_test database');
@@ -38,13 +38,13 @@ try{
   assert.equal(b.replayed,true);
   assert.equal(a.stake,5);
   const latest=await getUserById(player.id);
-  assert.equal(latest.balance,round(10000-5+a.payout));
+  assert.equal(latest.balance,round(10000-5),'a spin only debits the stake');
   const m=await getUserById(manager.id);
-  assert.equal(m.balance,round(10000+5-a.payout));
+  assert.equal(m.balance,round(10000+5),'the house keeps the stake until the player collects');
   let tx=await query('select type,amount from app_transaction where reference_id=$1 order by created_at',[a.roundId]);
   assert.equal(tx.rows.filter(x=>x.type==='CASINO_SPIN').length,1);
   assert.equal(tx.rows.filter(x=>x.type==='CASINO_MANAGER_NET').length,1);
-  if(a.payout>0)assert.equal(tx.rows.filter(x=>x.type==='CASINO_WIN').length,1);
+  assert.equal(tx.rows.filter(x=>x.type==='CASINO_WIN').length,0,'the win is not paid before collect');
   let report=await generateCasinoFinanceReport({managerId:manager.id,userId:player.id});
   assert.equal(report.players.length,1);
   assert.equal(report.players[0].casinoSpins,1);
@@ -63,8 +63,11 @@ try{
   assert.equal(report.players[0].casinoPayout,round(a.payout+second.payout));
   const currentPlayer=await getUserById(player.id);
   const currentManager=await getUserById(manager.id);
-  assert.equal(currentPlayer.balance,round(10000-15+a.payout+second.payout));
-  assert.equal(currentManager.balance,round(10000+15-a.payout-second.payout));
+  // The first win was still pending, so it is auto-collected before the second
+  // wager; the second win itself stays pending until collect.
+  assert.equal(currentPlayer.balance,round(10000-5+a.payout-10),
+    'an uncollected win is credited automatically before the next spin');
+  assert.equal(currentManager.balance,round(10000+5-a.payout+10));
   // The actual Pixi client uses a same-origin cookie rather than Bearer on
   // its multipart spin requests; prove that its balance is the SPORT balance.
   const app=express();
@@ -82,6 +85,9 @@ try{
   try{
     const origin='http://127.0.0.1:'+http.address().port;
     const token=signToken(player);
+    // The previous wager is still pending (paid on collect): settle it first so
+    // this block starts from a stable, unencumbered sportsbook balance.
+    await settlePendingWin(player.id);
     const before=await getUserById(player.id);
     const state=await fetch(origin+'/app/api/casino/status',{headers:{Authorization:'Bearer '+token}});
     assert.equal(state.status,200);
@@ -112,7 +118,8 @@ try{
     assert.ok(spin.body.spin.symbols&&spin.body.spin.wins,'Pixi receives graphical reel outcome');
     const after=await getUserById(player.id);
     assert.equal(after.balance,spin.body.balance.after,'sports header must equal Pixi wallet');
-    assert.equal(after.balance,round(before.balance-5+Number(spin.body.spin.wins.total)));
+    assert.equal(after.balance,round(before.balance-5),'the spin debits the stake only');
+    const pending=Number(spin.body.spin.wins.total);
     // The legacy Pixi client treats every non-200 response as a fatal
     // "Internal Server Error" and exits to lobby. Expected rejects instead
     // use the client's documented JSON error envelope (HTTP 200).
@@ -127,7 +134,8 @@ try{
     assert.equal((await getUserById(player.id)).balance,after.balance);
     const collect=await play({action:'collect',request_id:'2'});
     assert.equal(collect.status,200);
-    assert.equal(collect.body.balance.after,after.balance,'collect must not pay twice');
+    assert.equal(collect.body.balance.after,round(after.balance+pending),
+      'collect credits exactly the pending win');
 
     // Deterministic fixture for a winning spin: confirm that Gamble uses the
     // shared wallet, pays just the delta, and survives duplicate HTTP retries.
@@ -150,27 +158,23 @@ try{
     assert.equal(gamble.body.gamble.status,won?'win':'lose');
     assert.equal(gamble.body.gamble.bet,won?30:0);
     const gambleAfter=await getUserById(player.id);
-    assert.equal(gambleAfter.balance,round(walletBeforeGamble.balance+(won?15:-15)),
-      'Gamble must update the shared sportsbook balance by exactly one pending win');
-    assert.equal((await getUserById(manager.id)).balance,
-      round(managerBeforeGamble.balance+(won?-15:15)));
+    assert.equal(gambleAfter.balance,walletBeforeGamble.balance,
+      'Gamble only changes the pending win; the wallet moves on collect');
+    assert.equal((await getUserById(manager.id)).balance,managerBeforeGamble.balance);
     const retry=await play(gambleReq);
     assert.deepEqual(retry.body,gamble.body,'Repeated gamble must replay the original deal');
     assert.equal((await getUserById(player.id)).balance,gambleAfter.balance);
-    const gamblingEntries=await query(
-      "select count(*)::int as count from app_transaction where user_id=$1 and type in ('CASINO_GAMBLE_WIN','CASINO_GAMBLE_LOSS')",
-      [player.id]);
-    assert.equal(gamblingEntries.rows[0].count,1,'One gamble can settle only once');
     const cashout=await play({action:'collect',request_id:'5'});
     assert.equal(cashout.status,200);
-    assert.equal(cashout.body.balance.after,gambleAfter.balance);
+    assert.equal(cashout.body.balance.after,round(gambleAfter.balance+(won?30:0)),
+      'collect pays the doubled win (or nothing after a loss)');
     assert.deepEqual((await play({action:'collect',request_id:'5'})).body,cashout.body);
     const unavailable=await play({action:'get_double',request_id:'6'});
     assert.equal(unavailable.status,200);
     assert.equal(unavailable.body.error?.message,'NOTHING_TO_GAMBLE');
-    assert.equal((await getUserById(player.id)).balance,gambleAfter.balance);
+    assert.equal((await getUserById(player.id)).balance,cashout.body.balance.after);
     const me=await fetch(origin+'/app/api/auth/me',{headers:{Authorization:'Bearer '+token}});
-    assert.equal((await me.json()).balance,gambleAfter.balance,'same sports auth/me balance after Gamble');
+    assert.equal((await me.json()).balance,cashout.body.balance.after,'same sports auth/me balance after collect');
   }finally{
     await new Promise(done=>http.close(done));
   }

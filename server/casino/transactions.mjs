@@ -9,7 +9,7 @@
  *   init     -> any abandoned pending win is auto-collected
  */
 import {pool} from '../db.mjs';
-import {assertPlayerCanBet} from '../ledger/bet-risk.mjs';
+import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
 import {randomProfileGrid,profileById,profileFactor} from './rtp-profiles.mjs';
 import {gradeGrid,symbolMatrix} from './sizzling-demo.mjs';
 

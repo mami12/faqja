@@ -25,10 +25,10 @@ async function getSettings(executor = query) {
   return {
     enabled: Boolean(setting.enabled),
     deploymentEnabled: true,
-    realMoneyAvailable: false,
+    realMoneyAvailable: true,
     profile: setting.profile,
     profiles, mathApproved: false, certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: 'Sizzling Hot Deluxe uses separate demo credits; wallet betting is disabled.',
+    warning: null,
   };
 }
 
