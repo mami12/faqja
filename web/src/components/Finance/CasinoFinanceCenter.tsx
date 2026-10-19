@@ -1,0 +1,132 @@
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, RefreshCw, Search, Wallet, Dices, Trophy } from 'lucide-react';
+import { apiClient } from '../../api/client';
+
+type PlayerFinance = {
+  id:string;username:string;balance:number;sportTurnover:number;sportPending:number;
+  sportStake:number;sportPayout:number;sportNet:number;sportCount:number;
+  casinoStake:number;casinoPayout:number;casinoNet:number;casinoSpins:number;net:number;
+};
+type Transaction = {id:string;amount:number;type:string;description:string|null;balanceAfter:number;createdAt:string};
+type Report = {players:PlayerFinance[];totals:Omit<PlayerFinance,'id'|'username'|'balance'>;transactions:Transaction[];truncated:boolean};
+type Filter = 'all'|'sport'|'casino';
+const fmt=(value:number)=>Number(value||0).toLocaleString('sq-AL',{minimumFractionDigits:2,maximumFractionDigits:2})+' Lek';
+const stamp=(text:string)=>new Date(text).toLocaleString('sq-AL');
+function SummaryCard({title,value,caption}:{title:string;value:number;caption?:string}){
+  return <div className="rounded-xl border border-tertiary bg-secondary p-3 sm:p-4">
+    <div className="text-xs font-medium text-text-secondary">{title}</div>
+    <div className={'mt-2 break-words text-lg sm:text-xl font-black tabular-nums '+(value<0?'text-rose-400':'text-white')}>{value>0&&title.includes('Neto')?'+':''}{fmt(value)}</div>
+    {caption&&<div className="mt-1 text-[11px] text-text-secondary">{caption}</div>}
+  </div>;
+}
+export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'manager';initialUserId?:string}){
+  const [report,setReport]=useState<Report|null>(null);
+  const [detail,setDetail]=useState<Transaction[]>([]);
+  const [selected,setSelected]=useState(initialUserId||'');
+  const [category,setCategory]=useState<Filter>('all');
+  const [from,setFrom]=useState(''),[to,setTo]=useState('');
+  const [search,setSearch]=useState('');
+  const [error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const endpoint='/'+role+'/casino/finance';
+  const load=useCallback(async()=>{
+    setBusy(true);setError('');
+    try{
+      const result=await apiClient.get<Report>(endpoint,{params:{from:from||undefined,to:to||undefined}});
+      setReport(result.data);
+    }catch(e:any){setError(e.response?.data?.message||'Nuk u ngarkua raporti financiar');}
+    finally{setBusy(false);}
+  },[endpoint,from,to]);
+  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{if(initialUserId)setSelected(initialUserId);},[initialUserId]);
+  useEffect(()=>{
+    if(!selected){setDetail([]);return;}
+    let cancelled=false;
+    void apiClient.get<Report>(endpoint,{params:{userId:selected,from:from||undefined,to:to||undefined}})
+      .then(res=>{if(!cancelled)setDetail(res.data.transactions);})
+      .catch(()=>{if(!cancelled)setDetail([]);});
+    return()=>{cancelled=true;};
+  },[endpoint,selected,from,to]);
+  const visible=(report?.players||[]).filter(p=>p.username.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const player=report?.players.find(p=>p.id===selected);
+  const numbers=player||report?.totals;
+  const stake=category==='sport'?numbers?.sportStake:category==='casino'?numbers?.casinoStake:(numbers?.sportStake||0)+(numbers?.casinoStake||0);
+  const payout=category==='sport'?numbers?.sportPayout:category==='casino'?numbers?.casinoPayout:(numbers?.sportPayout||0)+(numbers?.casinoPayout||0);
+  const net=Number((Number(payout||0)-Number(stake||0)).toFixed(2));
+  const txFiltered=detail.filter(tx=>category==='all'||
+    (category==='casino'?tx.type.startsWith('CASINO_'):
+      tx.type.startsWith('BET_')||tx.type.startsWith('TICKET_')));
+  const cards=[
+    ['Fonde të luajtura',Number(stake||0),'Vetëm bastet e përfunduara'],
+    ['Pagesa fituese',Number(payout||0),'Shumat e kthyera nga fitoret'],
+    ['Neto i lojtarit',net,'Pozitiv = lojtari ka fituar'],
+    ['Neto i operatorit',-net,'Pozitiv = diferencë për operatorin'],
+  ] as const;
+  return <section className="mx-auto max-w-7xl space-y-4 px-3 pb-10 pt-5 sm:px-6">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 className="text-xl font-black text-white">Financat · Sport & Kazino</h2>
+        <p className="mt-1 text-xs text-text-secondary">Një bilanc i përbashkët. Raportet e aktivitetit ndahen sipas produktit.</p>
+      </div>
+      <button type="button" onClick={()=>void load()} disabled={busy}
+        className="flex items-center gap-2 rounded-lg border border-tertiary bg-secondary px-3 py-2.5 text-sm text-white disabled:opacity-50">
+        <RefreshCw size={15} className={busy?'animate-spin':''}/> Rifresko
+      </button>
+    </div>
+    <div className="grid grid-cols-1 gap-3 rounded-xl border border-tertiary bg-secondary p-3 sm:grid-cols-2 xl:grid-cols-4">
+      <label className="space-y-1 text-xs text-text-secondary"><span>Nga data</span><input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="block w-full rounded-lg border border-tertiary bg-primary p-2.5 text-white"/></label>
+      <label className="space-y-1 text-xs text-text-secondary"><span>Deri më</span><input type="date" value={to} min={from||undefined} onChange={e=>setTo(e.target.value)} className="block w-full rounded-lg border border-tertiary bg-primary p-2.5 text-white"/></label>
+      <label className="space-y-1 text-xs text-text-secondary"><span>Kërko përdorues</span><span className="relative block"><Search className="absolute left-3 top-3" size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Emri i lojtarit" className="w-full rounded-lg border border-tertiary bg-primary p-2.5 pl-10 text-white"/></span></label>
+      <label className="space-y-1 text-xs text-text-secondary"><span>Llogaria</span><select value={selected} onChange={e=>setSelected(e.target.value)} className="block w-full rounded-lg border border-tertiary bg-primary p-2.5 text-white"><option value="">Të gjithë përdoruesit</option>{visible.map(p=><option key={p.id} value={p.id}>{p.username}</option>)}</select></label>
+    </div>
+    <div role="group" aria-label="Filtro aktivitetin" className="flex flex-wrap gap-2">
+      {([['all','Të gjitha',Wallet],['sport','Sport',Trophy],['casino','Kazino',Dices]] as const).map(([id,label,Icon])=>
+        <button key={id} type="button" onClick={()=>setCategory(id)} aria-pressed={category===id}
+          className={'flex min-h-11 items-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold '+(category===id?'border-emerald-400 bg-emerald-500/15 text-emerald-300':'border-tertiary bg-secondary text-text-secondary')}>
+          <Icon size={16}/>{label}
+        </button>)}
+    </div>
+    {error&&<p role="alert" className="rounded-lg border border-rose-500/40 p-3 text-rose-300">{error}</p>}
+    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 sm:gap-3">
+      {cards.map(([title,value,caption])=><SummaryCard key={title} title={title} value={value} caption={caption}/>)}
+    </div>
+    {player&&<div className="flex flex-wrap gap-4 rounded-lg border border-tertiary bg-secondary p-3 text-sm text-text-secondary">
+      <span>Lojtari: <strong className="text-white">{player.username}</strong></span>
+      <span>Bilanci aktual: <strong className="text-amber-300">{fmt(player.balance)}</strong></span>
+      <span>Baste në pritje: <strong className="text-white">{fmt(player.sportPending)}</strong></span>
+      <span>Spins: <strong className="text-white">{player.casinoSpins}</strong></span>
+      <span>RTP i vëzhguar: <strong className="text-white">{player.casinoStake>0?(100*player.casinoPayout/player.casinoStake).toFixed(2)+'%':'Pa të dhëna'}</strong></span>
+    </div>}
+    <div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
+      <div className="border-b border-tertiary p-4 font-bold text-white">Përdoruesit ({visible.length})</div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[660px] text-left text-sm">
+          <thead className="bg-primary text-xs text-text-secondary"><tr>
+            <th className="p-3">Lojtari</th><th className="p-3 text-right">Sport Neto</th>
+            <th className="p-3 text-right">Kazino Neto</th><th className="p-3 text-right">Neto Total</th><th className="p-3">Detaje</th>
+          </tr></thead>
+          <tbody className="divide-y divide-tertiary">{visible.map(p=><tr key={p.id} className={selected===p.id?'bg-emerald-500/10':'hover:bg-primary/60'}>
+            <td className="p-3 font-semibold text-white">{p.username}</td>
+            <td className={'p-3 text-right tabular-nums '+(p.sportNet>=0?'text-emerald-300':'text-rose-300')}>{fmt(p.sportNet)}</td>
+            <td className={'p-3 text-right tabular-nums '+(p.casinoNet>=0?'text-emerald-300':'text-rose-300')}>{fmt(p.casinoNet)}</td>
+            <td className="p-3 text-right font-bold text-white">{fmt(p.net)}</td>
+            <td className="p-3"><button onClick={()=>setSelected(p.id)} className="rounded-lg bg-primary px-3 py-2 font-bold text-emerald-300">Hap financat</button></td>
+          </tr>)}</tbody>
+        </table>
+        {!visible.length&&<p className="p-6 text-center text-text-secondary">Nuk ka përdorues për këto filtra.</p>}
+      </div>
+    </div>
+    {player&&<div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
+      <div className="border-b border-tertiary p-4"><h3 className="font-bold text-white">Transaksionet · {player.username}</h3><p className="text-xs text-text-secondary">Depozitat dhe transfertat shfaqen në “Të gjitha”, por nuk përfshihen në neton e lojërave.</p></div>
+      <div className="divide-y divide-tertiary">{txFiltered.length?txFiltered.map(tx=><div key={tx.id} className="grid grid-cols-[1fr_auto] gap-3 p-3 sm:grid-cols-[1fr_1fr_auto]">
+        <div className="min-w-0"><p className="break-words text-sm font-semibold text-white">{tx.description||tx.type}</p><p className="text-xs text-text-secondary">{stamp(tx.createdAt)} · {tx.type}</p></div>
+        <p className="hidden self-center text-xs text-text-secondary sm:block">Bilanci pas: {fmt(tx.balanceAfter)}</p>
+        <div className={'flex items-center gap-1 self-center font-bold tabular-nums '+(tx.amount>=0?'text-emerald-300':'text-rose-300')}>
+          {tx.amount>=0?<ArrowUpRight size={15}/>:<ArrowDownRight size={15}/>}
+          {fmt(tx.amount)}
+        </div>
+      </div>):<p className="p-5 text-sm text-text-secondary">Nuk ka transaksione për kategorinë e zgjedhur.</p>}</div>
+      {detail.length>=300&&<p className="p-3 text-xs text-amber-300">Po shfaqen 300 transaksionet më të fundit për intervalin.</p>}
+    </div>}
+    {report?.truncated&&<p className="text-xs text-amber-300">Raporti ka kufi 2000 përdorues. Përdor filtër më të ngushtë për eksport të plotë.</p>}
+  </section>;
+}
