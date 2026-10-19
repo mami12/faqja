@@ -214,6 +214,28 @@ create table if not exists app_casino_round (
  unique(user_id,client_request_id)
 );
 create index if not exists app_casino_round_user_date_idx on app_casino_round(user_id,created_at desc);
+-- The original cabinet can gamble an already credited spin win. Persist the
+-- current pending win and card so restarts and concurrent requests remain safe.
+create table if not exists app_casino_gamble_state (
+ user_id uuid primary key references app_user(id) on delete cascade,
+ round_id uuid not null references app_casino_round(id) on delete cascade,
+ pending numeric(14,2) not null default 0 check (pending >= 0),
+ step integer not null default 0 check (step >= 0 and step <= 5),
+ player_card jsonb,
+ updated_at timestamptz not null default now()
+);
+-- Retries of gamble/collect must return the original result without affecting
+-- the sportsbook wallet a second time.
+create table if not exists app_casino_gamble_event (
+ user_id uuid not null references app_user(id) on delete cascade,
+ request_id uuid not null,
+ action text not null,
+ response jsonb not null,
+ created_at timestamptz not null default now(),
+ primary key (user_id,request_id)
+);
+create index if not exists app_casino_gamble_event_date_idx
+ on app_casino_gamble_event (created_at desc);
 create table if not exists app_casino_settings (
  id smallint primary key check (id=1),
  enabled boolean not null default true,
