@@ -58,7 +58,7 @@ export default function CasinoSettings(){
               {(data?.profiles||[]).map(p=><option key={p.id} value={p.id}>{p.label} · {p.theoreticalRtp.toFixed(2)}% RTP</option>)}
             </select>
           </label>
-          <button type="button" disabled={busy||data?.enabled||!selectedProfile||selectedProfile===data.profile}
+          <button type="button" disabled={busy||data?.enabled||!selectedProfile||selectedProfile===data?.profile}
             onClick={()=>void updateProfile()} className="min-h-11 rounded-lg bg-amber-400 px-5 font-bold text-slate-950 disabled:opacity-40">Ruaj RTP</button>
         </div>
         {data?.enabled&&<p className="text-xs text-amber-200">Çaktivizo lojën përpara ndryshimit të profilit RTP.</p>}
