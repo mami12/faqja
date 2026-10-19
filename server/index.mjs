@@ -28,6 +28,8 @@ import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-setting
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 import { createSizzlingDemoRouter } from './casino/sizzling-demo.mjs';
+import { casinoWalletRouter } from './casino/wallet.mjs';
+import { casinoFinanceRouter } from './casino/finance.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -629,6 +631,8 @@ app.use('/app/api/matches/:id', (req, _res, next) => {
 // Only virtual demo credits; intentionally isolated from ledger/real balances.
 app.use('/app/api/casino/sizzlinghotdeluxe', createSizzlingDemoRouter());
 
+app.use('/app/api', casinoWalletRouter);
+app.use('/app/api', casinoFinanceRouter);
 app.use('/app/api', adminRouter);
 app.use('/app/api', ledgerRouter);
 
