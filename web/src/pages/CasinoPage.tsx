@@ -189,6 +189,7 @@ export default function CasinoPage() {
             </div>
           </>
         ) : session && (
+          <CasinoFullscreen>
           <div className="mx-auto max-w-5xl">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl sm:p-6"
               style={{
@@ -295,6 +296,7 @@ export default function CasinoPage() {
               ))}
             </div>
           </div>
+          </CasinoFullscreen>
         )}
       </main>
     </div>
