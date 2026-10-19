@@ -115,7 +115,7 @@ try {
   const otherData=await other.json();
   assert.equal(otherData.balance.after,100000,'different cookies have isolated credits');
   assert.ok(await other.headers.get('set-cookie'),'anonymous session must have own cookie');
-  const bad=await post({action:'spin',bet:-5,lines:5,denomination:1,request_id:'4'});
+  const bad=await post({action:'spin',bet:-5,lines:5,denomination:1,request_id:String(requestId++)});
   assert.equal(bad.status,400);
   const status=await fetch('http://127.0.0.1:'+server.address().port+
     '/app/api/casino/sizzlinghotdeluxe/status');
