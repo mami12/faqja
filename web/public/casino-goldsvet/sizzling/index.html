@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sizzling Hot Deluxe - 77777 Games</title>
+    <title>Sizzling 777 Deluxe - Goldsvet Demo</title>
+    <link rel="stylesheet" href="./retro.css">
     <style>
         * {
             box-sizing: border-box;
@@ -319,7 +320,7 @@
     <div id="game-wrapper">
         <header id="header-bar">
             <div class="logo-title">
-                🔥 SIZZLING HOT <span class="logo-badge">DELUXE</span>
+                SIZZLING 777 <span class="logo-badge">DELUXE</span>
             </div>
             <div class="controls-group">
                 <button class="btn-game" id="btn-paytable">ℹ️ Paytable</button>
@@ -328,7 +329,15 @@
             </div>
         </header>
 
-        <div id="reels-container">
+        <div class="reel-stage">
+          <aside class="line-rail" aria-label="Linjat e majta">
+            <button class="line-star" data-line="0" aria-label="Shfaq linjën 1">★</button>
+            <button class="line-star" data-line="1" aria-label="Shfaq linjën 2">★</button>
+            <button class="line-star" data-line="2" aria-label="Shfaq linjën 3">★</button>
+            <button class="line-star" data-line="3" aria-label="Shfaq linjën 4">★</button>
+            <button class="line-star" data-line="4" aria-label="Shfaq linjën 5">★</button>
+          </aside>
+          <div id="reels-container">
             <canvas id="payline-canvas"></canvas>
             
             <div class="reel-col" id="reel-0"><div class="reel-strip"></div></div>
@@ -341,6 +350,14 @@
                 <h2 id="win-title">🔥 BIG WIN! 🔥</h2>
                 <div class="win-amount" id="win-banner-amount">0.00</div>
             </div>
+          </div>
+          <aside class="line-rail" aria-label="Linjat e djathta">
+            <button class="line-star" data-line="0" aria-label="Shfaq linjën 1">★</button>
+            <button class="line-star" data-line="1" aria-label="Shfaq linjën 2">★</button>
+            <button class="line-star" data-line="2" aria-label="Shfaq linjën 3">★</button>
+            <button class="line-star" data-line="3" aria-label="Shfaq linjën 4">★</button>
+            <button class="line-star" data-line="4" aria-label="Shfaq linjën 5">★</button>
+          </aside>
         </div>
 
         <div class="paytable-overlay" id="paytable-modal">
@@ -356,29 +373,34 @@
         </div>
 
         <footer id="dashboard">
-            <div class="info-box">
-                <div class="label">CREDITS / BALANCE</div>
-                <div class="value" id="disp-balance">1000.00</div>
+            <div class="balance-box">
+              <div class="info-box">
+                <div class="label">KREDITE DEMO</div>
+                <div class="value" id="disp-balance">100,000.00</div>
+              </div>
+              <div class="info-box win" aria-live="polite">
+                <div class="label">FITIMI</div><div class="value" id="disp-win">0.00</div>
+              </div>
             </div>
-
-            <div class="controls-group">
-                <button class="btn-game btn-bet" id="btn-bet-minus">-</button>
-                <div class="info-box" style="min-width: 100px;">
-                    <div class="label">TOTAL BET</div>
-                    <div class="value" id="disp-bet">5.00</div>
-                </div>
-                <button class="btn-game btn-bet" id="btn-bet-plus">+</button>
-                <button class="btn-game" id="btn-bet-max">MAX</button>
+            <div class="stake-box">
+              <div class="cabinet-status" id="cabinet-status" role="status" aria-live="polite">Press Spin to Win</div>
+              <div class="bet-strip">
+                <button class="btn-game btn-bet" id="btn-bet-minus" aria-label="Ul bastin">◀</button>
+                <button class="btn-game chip" data-bet="0">10.00</button>
+                <button class="btn-game chip" data-bet="1">20.00</button>
+                <button class="btn-game chip" data-bet="2">40.00</button>
+                <button class="btn-game chip" data-bet="3">60.00</button>
+                <button class="btn-game chip" data-bet="4">80.00</button>
+                <button class="btn-game chip" data-bet="5">100.00</button>
+                <button class="btn-game chip" data-bet="6">5000</button>
+                <button class="btn-game btn-bet" id="btn-bet-plus" aria-label="Rrit bastin">▶</button>
+                <button class="btn-game" id="btn-bet-max" aria-label="Basti maksimal">MAX</button>
+              </div>
+              <div class="sr-only">Basti total: <span id="disp-bet">10.00</span></div>
             </div>
-
-            <div class="info-box win">
-                <div class="label">LAST WIN</div>
-                <div class="value" id="disp-win">0.00</div>
-            </div>
-
-            <div class="controls-group">
-                <button class="btn-game" id="btn-auto">AUTO</button>
-                <button class="btn-game btn-spin" id="btn-spin">SPIN</button>
+            <div class="action-box">
+              <button class="btn-game" id="btn-auto" title="Rrotullim automatik">AUTO</button>
+              <button class="btn-game btn-spin" id="btn-spin" aria-label="Rrotullo" title="Rrotullo">SPIN</button>
             </div>
         </footer>
     </div>
@@ -549,9 +571,11 @@
         ];
 
         // Game State
-        const BET_STEPS = [1, 2, 5, 10, 20, 50, 100, 200];
-        let betIndex = 2; // Default 5.00
-        let balance = parseFloat(localStorage.getItem('sizzling_balance') || '1000.00');
+        const BET_STEPS = [10, 20, 40, 60, 80, 100, 5000];
+        let betIndex = 0;
+        const localBalanceKey = 'sizzling_777_deluxe_demo_balance';
+        let balance = Number(localStorage.getItem(localBalanceKey) || '100000');
+        if (!Number.isFinite(balance) || balance < 0) balance = 100000;
         let isSpinning = false;
         let isAuto = false;
         let reelStops = [0, 0, 0, 0, 0];
@@ -580,7 +604,12 @@
         function updateDisplays() {
             dispBalance.innerText = balance.toFixed(2);
             dispBet.innerText = BET_STEPS[betIndex].toFixed(2);
-            localStorage.setItem('sizzling_balance', balance);
+            document.querySelectorAll('.chip').forEach(button => {
+                const selected = Number(button.dataset.bet) === betIndex;
+                button.classList.toggle('selected', selected);
+                button.setAttribute('aria-pressed', String(selected));
+            });
+            localStorage.setItem(localBalanceKey, balance);
         }
 
         // Build Paytable Modal
@@ -648,8 +677,8 @@
             if (isSpinning) return;
             const currentBet = BET_STEPS[betIndex];
             if (balance < currentBet) {
-                alert('Not enough credits! Balance has been replenished with 1000.00 credits.');
-                balance = 1000.00;
+                alert('Kreditet demo nuk mjaftojnë. U rimbushën 100,000 kredite demo.');
+                balance = 100000.00;
                 updateDisplays();
                 return;
             }
@@ -662,6 +691,7 @@
             clearWinHighlights();
 
             isSpinning = true;
+            document.getElementById('cabinet-status').textContent = 'GOOD LUCK!';
             btnSpin.innerText = 'STOP';
             btnSpin.classList.add('spinning');
             btnSpin.disabled = true;
@@ -763,6 +793,7 @@
             btnSpin.innerText = 'SPIN';
             btnSpin.classList.remove('spinning');
             btnSpin.disabled = false;
+            document.getElementById('cabinet-status').textContent = 'Press Spin to Win';
 
             const lineBet = BET_STEPS[betIndex] / 5.0;
             let totalWin = 0;
@@ -828,6 +859,7 @@
             if (totalWin > 0) {
                 balance += totalWin;
                 dispWin.innerText = totalWin.toFixed(2);
+                document.getElementById('cabinet-status').textContent = 'YOU WON ' + totalWin.toFixed(2) + '!';
                 updateDisplays();
                 highlightWins(winningLines);
 
@@ -853,7 +885,12 @@
             const colW = container.clientWidth / 5;
             const rowH = container.clientHeight / 3;
 
+            document.querySelectorAll('.line-star').forEach(button => button.classList.remove('active'));
             winLines.forEach(wl => {
+                if (wl.lineIndex >= 0) {
+                    document.querySelectorAll('.line-star[data-line="' + wl.lineIndex + '"]')
+                      .forEach(button => button.classList.add('active'));
+                }
                 // Highlight cells
                 wl.coords.forEach(pt => {
                     const reel = document.getElementById(`reel-${pt.col}`);
@@ -884,6 +921,7 @@
             pCtx.clearRect(0, 0, paylineCanvas.width, paylineCanvas.height);
             document.querySelectorAll('.win-highlight').forEach(el => el.classList.remove('win-highlight'));
             winBanner.classList.remove('show');
+            document.querySelectorAll('.line-star').forEach(button => button.classList.remove('active'));
         }
 
         function showWinBanner(title, amount) {
@@ -894,6 +932,39 @@
                 winBanner.classList.remove('show');
             }, 2500);
         }
+
+        // Preview each of Goldsvet's five REAL paylines on either side.
+        document.querySelectorAll('.line-star').forEach(button => {
+            button.addEventListener('click', () => {
+                if (isSpinning) return;
+                const line = PAYLINES[Number(button.dataset.line)];
+                if (!line) return;
+                clearWinHighlights();
+                button.classList.add('active');
+                const container = document.getElementById('reels-container');
+                const w = container.clientWidth / 5;
+                const h = container.clientHeight / 3;
+                pCtx.beginPath();
+                pCtx.strokeStyle = '#ffda32';
+                pCtx.lineWidth = 5;
+                pCtx.shadowColor = '#ff4500';
+                pCtx.shadowBlur = 12;
+                line.forEach((row, col) => {
+                    const x = col * w + w / 2, y = row * h + h / 2;
+                    if (col === 0) pCtx.moveTo(x, y); else pCtx.lineTo(x, y);
+                });
+                pCtx.stroke();
+                audio.click();
+            });
+        });
+        document.querySelectorAll('.chip').forEach(button => {
+            button.addEventListener('click', () => {
+                if (isSpinning) return;
+                betIndex = Number(button.dataset.bet);
+                audio.betChange();
+                updateDisplays();
+            });
+        });
 
         // Controls Bindings
         btnSpin.addEventListener('click', () => {
