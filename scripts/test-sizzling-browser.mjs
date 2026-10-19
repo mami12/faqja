@@ -104,14 +104,14 @@ try {
     await new Promise(ok=>setTimeout(ok,350));
     if(posts.length>=2)break;
   }
-  await new Promise(ok=>setTimeout(ok,1800));
+  await new Promise(ok=>setTimeout(ok,4700));
   await page.screenshot({path:join(artifacts,'sizzling-after-spin.png')});
   console.log('Pixi runtime:',JSON.stringify(visible));
   console.log('Casino protocol calls:',posts.map(p=>({code:p.code, body:p.request.slice(0,120)})));
   console.log('Browser warnings:',browserConsole.slice(-20));
   console.log('All local HTTP errors:',notFound);
   const actions=posts.map(p=>{
-    const matched=/"action"s*:s*"([^"]+)"/.exec(p.request);
+    const matched=/"action"\s*:\s*"([^"]+)"/.exec(p.request);
     return matched?.[1] ?? 'unknown';
   });
   console.log('Protocol actions:', actions);
