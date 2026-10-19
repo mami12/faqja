@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { casinoAssetUrl, ORIGINAL_BACKGROUNDS, ORIGINAL_LOGOS, ORIGINAL_SYMBOLS } from './casinoOriginalArt';
 import type { SpriteArt } from './casinoOriginalArt';
 import Header from '../components/Layout/Header';
+import SizzlingHotGame from './SizzlingHotGame';
 import { useAuth } from '../context/AuthContext';
 import {
   BET_OPTIONS, GAMES, freshState, newSession, playDemoRound, readDemoStorage,
@@ -147,6 +148,8 @@ export default function CasinoPage() {
               ))}
             </div>
           </>
+        ) : game.id === 'sizzling' ? (
+          <SizzlingHotGame />
         ) : session && (
           <div className="mx-auto max-w-5xl">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl sm:p-6"
