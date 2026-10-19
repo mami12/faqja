@@ -34,7 +34,7 @@ export default function CasinoSettings(){
   return <section className="mx-auto max-w-5xl space-y-4 px-3 pb-10 pt-5 sm:px-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><div>
       <h2 className="text-xl font-black text-white">Cilësimet e Kazinosë</h2>
-      <p className="mt-1 text-sm text-text-secondary">Konfigurimi i lojërave dhe kontrolli i modalitetit financiar.</p>
+      <p className="mt-1 text-sm text-text-secondary">Konfigurimi i Sizzling Hot dhe kontrolli i portofolit të përbashkët.</p>
     </div><button onClick={()=>void load()} disabled={busy} className="flex items-center gap-2 rounded-lg border border-tertiary bg-secondary px-3 py-2 text-sm font-semibold text-white"><RefreshCw size={16}/>Rifresko</button></div>
     {error&&<p role="alert" className="rounded-lg border border-rose-500/50 bg-rose-500/10 p-3 text-rose-200">{error}</p>}
     <div className="rounded-xl border border-tertiary bg-secondary p-4 sm:p-6">
@@ -68,14 +68,14 @@ export default function CasinoSettings(){
         Ndryshimi arbitrar i RTP-së gjatë lojës ose sipas përdoruesit nuk lejohet. Për të shtuar profil tjetër RTP duhen reel strips, tabela pagesash dhe verifikim matematikor për një version të pandryshueshëm.
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-tertiary pt-4">
-        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Kërkon CASINO_REAL_MONEY_ENABLED=true, CASINO_MATH_APPROVED=true dhe miratimin e adminit.</p></div>
-        <button type="button" disabled={!data||busy||(!data.enabled&&(!data.deploymentEnabled||!data.mathApproved))}
+        <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Përdor automatikisht të njëjtin bilanc si sport betting. Aktivizimi fillestar bëhet gjatë migrimit, por administratori mund ta çaktivizojë.</p></div>
+        <button type="button" disabled={!data||busy}
           onClick={()=>void change(!data!.enabled)}
           className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>
           {data?.enabled?'Çaktivizo':'Aktivizo'}
         </button>
       </div>
-      <p className="mt-3 flex items-start gap-2 text-xs text-text-secondary"><ShieldCheck size={16} className="shrink-0"/>Loja nuk ka portofol tjetër apo kalim automatik në demo. Aktivizimi kërkon miratimin teknik dhe ligjor të operatorit; flamujt e serverit nuk përbëjnë certifikim. Çdo ndryshim regjistrohet në audit.</p>
+      <p className="mt-3 flex items-start gap-2 text-xs text-text-secondary"><ShieldCheck size={16} className="shrink-0"/>Loja nuk ka portofol tjetër apo kalim automatik në demo. Matematika e këtij adapteri nuk është certifikuar në mënyrë të pavarur; përdorimi monetar kërkon kontroll ligjor dhe verifikim. Çdo ndryshim regjistrohet në audit.</p>
     </div>
   </section>;
 }
