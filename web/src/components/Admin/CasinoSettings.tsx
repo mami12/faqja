@@ -3,11 +3,12 @@ import { AlertTriangle, Dices, RefreshCw, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
 type Settings={enabled:boolean;deploymentEnabled:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string};
+type Totals={casinoStake:number;casinoPayout:number;casinoSpins:number};
 export default function CasinoSettings(){
-  const [data,setData]=useState<Settings|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [data,setData]=useState<Settings|null>(null),[totals,setTotals]=useState<Totals|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const load=async()=>{
     setBusy(true);setError('');
-    try{const r=await apiClient.get<Settings>('/admin/casino/settings');setData(r.data);}
+    try{const [r,finance]=await Promise.all([apiClient.get<Settings>('/admin/casino/settings'),apiClient.get<{totals:Totals}>('/admin/casino/finance')]);setData(r.data);setTotals(finance.data.totals);}
     catch(e:any){setError(e.response?.data?.message||'Nuk u ngarkuan cilësimet');}
     finally{setBusy(false);}
   };
@@ -30,8 +31,9 @@ export default function CasinoSettings(){
       <div className="flex flex-wrap items-start gap-3"><Dices className="text-amber-300"/><div>
         <h3 className="font-bold text-white">Sizzling Hot Deluxe</h3><p className="text-xs text-text-secondary">Profili matematikor: {data?.profile||'...'}</p>
       </div></div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP teorike</p><p className="mt-1 font-bold text-white">{data?.theoreticalRtp==null?'Pa verifikim':data.theoreticalRtp+'%'}</p></div>
+        <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP i vëzhguar</p><p className="mt-1 font-bold text-white">{totals?.casinoStake ? (100*totals.casinoPayout/totals.casinoStake).toFixed(2)+"%" : "Pa spins"}</p><p className="text-[10px] text-text-secondary">Nga {totals?.casinoSpins||0} spins (nuk është RTP teorike)</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Certifikimi</p><p className="mt-1 font-bold text-amber-300">{data?.certified?'I verifikuar':'Nuk është certifikuar'}</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Modaliteti</p><p className="mt-1 font-bold text-white">{data?.realMoneyAvailable?'Fonde të përbashkëta':'Demo / i çaktivizuar'}</p></div>
       </div>
