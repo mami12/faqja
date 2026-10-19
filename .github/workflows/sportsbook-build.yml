@@ -87,9 +87,17 @@ jobs:
           node --check server/ledger/routes.mjs
           node --check server/ledger/decided-markets.mjs
           node --check server/ledger/view.mjs
+          node --check server/casino/sizzling-demo.mjs
       - name: Build Vite frontend
         run: npm run build:web
-      - name: Browser-smoke test Goldsvet graphics, music and spin
-        run: node scripts/test-goldsvet-browser.mjs
-      - name: Test original Sizzling Hot Pixi/Spine engine and demo protocol
-        run: node scripts/test-original-sizzling.mjs
+      - name: Verify original Sizzling demo protocol and Goldsvet math
+        run: node scripts/test-sizzling-demo.mjs
+      - name: Browser-smoke test original Sizzling Pixi client
+        run: node scripts/test-sizzling-browser.mjs
+      - name: Preserve Sizzling original screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sizzling-original-browser
+          path: tmp/sizzling-browser-check/*.png
+          if-no-files-found: ignore
