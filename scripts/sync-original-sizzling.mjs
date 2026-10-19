@@ -32,18 +32,17 @@ try {
     .replaceAll('{$game_path}', './');
   const body = await readFile(join(source, 'body.html'), 'utf8');
   const sourceEntry = await readFile(join(source, 'sizzlinghotdeluxe.html'), 'utf8');
-  const configMatch = sourceEntry.match(/window\\.clientConfig\\s*=\\s*\\{[\\s\\S]*?\\};/);
+  const configMatch = sourceEntry.match(/window\.clientConfig\s*=\s*\{[\s\S]*?\};/);
   // Keep the upstream configuration if present, including its original demo URL.
   // Never silently replace it with a locally fabricated outcome service.
-  const config = (configMatch?.[0] ?? '').replace(/\\"resourcesBasePath\\"\\s*:\\s*\\"[^\\"]+\\"/, '\"resourcesBasePath\": \"./\"');
-  const inlineScripts = [...sourceEntry.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)]
+  const config = (configMatch?.[0] ?? '').replace(/\"resourcesBasePath\"\s*:\s*\"[^\"]+\"/, '\"resourcesBasePath\": \"./\"');
+  const inlineScripts = [...sourceEntry.matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(match => '<script>' + match[1] + '</script>')
     .filter(tag => !tag.includes('window.clientConfig ='))
-    .join('\\n');
+    .join('\n');
   const html = '<!doctype html><html><head>' + inlineScripts + head +
     '<base href="./"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}</style>' +
-    config + '</head><body>' + body + '</body></html>';
-  await writeFile(join(output, 'index.html'), html.replaceAll('{$game_path}', './'));
+    '<script>' + config + '</script></head><body>' + body + '</body></html>';
   await cp(join(source, 'libs/assembler.js'), join(output, 'libs/assembler.js'));
   // The original loader expects assembler.startDOMLoading() to fetch head/body.
   // Here head/body are already inlined, so start the original assembler locally.
