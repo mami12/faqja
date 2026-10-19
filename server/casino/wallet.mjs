@@ -3,12 +3,14 @@ import { pool, query } from '../db.mjs';
 import { requireAuth } from '../ledger/auth.mjs';
 import { isLedgerReady } from '../ledger/store.mjs';
 import { assertPlayerCanBet } from '../ledger/player-controls.mjs';
-import { randomGrid, gradeGrid, symbolMatrix } from './sizzling-demo.mjs';
+import { gradeGrid, symbolMatrix } from './sizzling-demo.mjs';
+import { randomProfileGrid, publicRtpProfiles, profileById } from './rtp-profiles.mjs';
 
 // Real-money mode requires BOTH a deployment flag and an audited admin switch.
 // The included game math is an UNVERIFIED adapter, not certified provider software.
 export const casinoWalletRouter = express.Router();
 const deploymentEnabled = () => process.env.CASINO_REAL_MONEY_ENABLED === 'true';
+const mathApproved = () => process.env.CASINO_MATH_APPROVED === 'true';
 const money = value => Number(Number(value).toFixed(2));
 const fault = (status, message) => Object.assign(new Error(message), { status });
 const safe = handler => (req, res) => Promise.resolve(handler(req, res)).catch(error => {
@@ -22,11 +24,15 @@ const isAdmin = (req, res, next) => req.user.role === 'ADMIN'
 async function getSettings(executor = query) {
   const { rows } = await executor('select enabled, profile from app_casino_settings where id = 1');
   const setting = rows[0] || { enabled: false, profile: 'SIZZLING_STANDARD_V1' };
+  const profiles = publicRtpProfiles();
+  const profile = profiles.find(p => p.id === setting.profile);
   return {
-    enabled: Boolean(setting.enabled), deploymentEnabled: deploymentEnabled(),
-    realMoneyAvailable: Boolean(setting.enabled) && deploymentEnabled(),
-    profile: setting.profile, certified: false, theoreticalRtp: null,
-    warning: 'Uncertified game mathematics. Monetary play requires licensing, independent validation and production QA.',
+    enabled: Boolean(setting.enabled),
+    deploymentEnabled: deploymentEnabled(),
+    realMoneyAvailable: Boolean(setting.enabled) && deploymentEnabled() && mathApproved(),
+    profile: setting.profile,
+    profiles, certified: mathApproved(), theoreticalRtp: profile?.theoreticalRtp ?? null,
+    warning: 'This is a custom adapter, not independently certified Novomatic game math. Monetary mode needs audited provider math, rights and QA.',
   };
 }
 
@@ -37,7 +43,7 @@ casinoWalletRouter.get('/casino/status', ...access, safe(async (req, res) => {
 
 casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
   if (req.user.role !== 'PLAYER' || req.user.status !== 'ACTIVE') throw fault(403, 'Account cannot play casino');
-  if (!deploymentEnabled()) throw fault(403, 'Real-money casino is disabled by deployment');
+  if (!deploymentEnabled() || !mathApproved()) throw fault(403, 'Real-money casino is disabled until independent validation and deployment approval');
   const requestId = String(req.body?.clientRequestId || '');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))
     throw fault(400, 'Unique UUID request ID required');
@@ -48,11 +54,22 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('begin');
-    const userResult = await client.query('select role,status,balance from app_user where id=$1 for update', [req.user.id]);
-    const user = userResult.rows[0];
+    // Lock player and manager in UUID order, matching cashier transfer locks.
+    const owner = await client.query('select manager_id from app_user where id=$1', [req.user.id]);
+    if (!owner.rows.length) throw fault(404, 'Player not found');
+    const ids = [req.user.id, owner.rows[0].manager_id].filter(Boolean).sort();
+    const accounts = await client.query(
+      'select id,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+    const byId = new Map(accounts.rows.map(row => [row.id,row]));
+    const user = byId.get(req.user.id);
     if (!user || user.role !== 'PLAYER' || user.status !== 'ACTIVE') throw fault(403, 'Account unavailable');
-    const config = await client.query('select enabled from app_casino_settings where id=1 for share');
+    if (user.manager_id !== owner.rows[0].manager_id) throw fault(409, 'Account manager changed during spin. Retry.');
+    const manager = user.manager_id ? byId.get(user.manager_id) : null;
+    if (user.manager_id && (!manager || manager.role !== 'MANAGER')) throw fault(409, 'Account manager is unavailable');
+    const config = await client.query('select enabled,profile from app_casino_settings where id=1 for share');
     if (!config.rows[0]?.enabled) throw fault(403, 'Casino play is disabled');
+    const profileId = config.rows[0].profile;
+    if (!profileById(profileId)) throw fault(503, 'Unrecognized casino math profile');
     const previous = await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2', [req.user.id,requestId]);
     if (previous.rows.length) {
       const r = previous.rows[0];
@@ -64,14 +81,14 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
     }
     if (Number(user.balance) < stake) throw fault(400, 'Not enough funds');
     await assertPlayerCanBet(client, req.user.id, stake);
-    const grid = randomGrid();
+    const grid = randomProfileGrid(profileId);
     const win = gradeGrid(grid, bet, denomination);
     const payout = money(win.total), afterDebit = money(Number(user.balance)-stake);
     const after = money(afterDebit+payout);
     const outcome = { symbols:symbolMatrix(grid), line_wins:win.line_wins, total:payout.toFixed(2) };
     const round = await client.query(
-      "insert into app_casino_round (user_id, client_request_id, game_id, game_version, bet, denomination, lines, stake, payout, balance_after, result) values ($1,$2,'sizzling','SIZZLING_STANDARD_V1',$3,$4,$5,$6,$7,$8,$9::jsonb) returning id",
-      [req.user.id,requestId,bet,denomination,lines,stake,payout,after,JSON.stringify(outcome)]);
+      "insert into app_casino_round (user_id, client_request_id, game_id, game_version, bet, denomination, lines, stake, payout, balance_after, result) values ($1,$2,'sizzling',$10,$3,$4,$5,$6,$7,$8,$9::jsonb) returning id",
+      [req.user.id,requestId,bet,denomination,lines,stake,payout,after,JSON.stringify(outcome),profileId]);
     const roundId = round.rows[0].id;
     await client.query(
       "insert into app_transaction (user_id,amount,type,reference_id,balance_after,description) values ($1,$2,'CASINO_SPIN',$3,$4,'Sizzling Hot Deluxe - spin')",
@@ -80,6 +97,15 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
       "insert into app_transaction (user_id,amount,type,reference_id,balance_after,description) values ($1,$2,'CASINO_WIN',$3,$4,'Sizzling Hot Deluxe - payout')",
       [req.user.id,payout,roundId,after]);
     await client.query('update app_user set balance=$2,updated_at=now() where id=$1', [req.user.id,after]);
+    if (manager) {
+      const managerDelta = money(stake-payout);
+      const managerAfter = money(Number(manager.balance)+managerDelta);
+      await client.query('update app_user set balance=$2,updated_at=now() where id=$1',
+        [manager.id,managerAfter]);
+      await client.query(
+        "insert into app_transaction (user_id,amount,type,reference_id,balance_after,description) values ($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",
+        [manager.id,managerDelta,roundId,managerAfter,'Sizzling Hot Deluxe: player ' + req.user.username]);
+    }
     await client.query('commit');
     res.set('Cache-Control','no-store');
     res.json({roundId,stake,payout,balance:after,result:outcome,replayed:false});
@@ -92,7 +118,7 @@ casinoWalletRouter.post('/casino/spin', ...access, safe(async (req, res) => {
 casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getSettings())));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
   if(typeof req.body?.enabled !== 'boolean') throw fault(400, 'enabled must be boolean');
-  if(req.body.enabled && !deploymentEnabled()) throw fault(409,'Deployment flag CASINO_REAL_MONEY_ENABLED is off');
+  if(req.body.enabled && (!deploymentEnabled() || !mathApproved())) throw fault(409,'Real money requires deployment flag and independent math approval');
   const client=await pool.connect();
   try {
     await client.query('begin');
