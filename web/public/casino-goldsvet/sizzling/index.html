@@ -314,72 +314,74 @@
             .btn-spin { font-size: 16px; padding: 10px 24px; }
         }
     </style>
+    <link rel="stylesheet" href="./deluxe-skin.css">
 </head>
 <body>
     <div id="game-wrapper">
         <header id="header-bar">
-            <div class="logo-title">
-                🔥 SIZZLING HOT <span class="logo-badge">DELUXE</span>
+            <button type="button" class="btn-game" id="btn-exit" title="Kthehu te kazino" aria-label="Kthehu te kazino">↩</button>
+            <div id="logo-area" aria-label="Sizzling 777 Deluxe">
+                <span id="brand-main">SIZZLING</span>
+                <span id="brand-777">777</span>
+                <span id="brand-deluxe">DELUXE</span>
             </div>
-            <div class="controls-group">
-                <button class="btn-game" id="btn-paytable">ℹ️ Paytable</button>
-                <button class="btn-game" id="btn-music" aria-pressed="false" title="Muzikë nga skedarët audio të Sizzling Hot Deluxe">🎵 MUSIC</button>
-                <button class="btn-game" id="btn-sound" aria-pressed="true">🔊</button>
-            </div>
+            <span id="demo-note">DEMO · PA PARA REALE</span>
         </header>
 
-        <div id="reels-container">
-            <canvas id="payline-canvas"></canvas>
-            
+        <aside id="payline-left" aria-label="Linjat e pagesës 1 deri 10"></aside>
+        <aside id="payline-right" aria-label="Linjat e pagesës 11 deri 20"></aside>
+
+        <div id="reels-container" aria-label="Pesë kolona me tre simbole; 20 linja fitimi">
+            <canvas id="payline-canvas" aria-label="Shtegu i linjave fituese"></canvas>
             <div class="reel-col" id="reel-0"><div class="reel-strip"></div></div>
             <div class="reel-col" id="reel-1"><div class="reel-strip"></div></div>
             <div class="reel-col" id="reel-2"><div class="reel-strip"></div></div>
             <div class="reel-col" id="reel-3"><div class="reel-strip"></div></div>
             <div class="reel-col" id="reel-4"><div class="reel-strip"></div></div>
-
-            <div id="win-banner">
-                <h2 id="win-title">🔥 BIG WIN! 🔥</h2>
+            <div id="win-banner" aria-live="polite">
+                <h2 id="win-title">FITOVE!</h2>
                 <div class="win-amount" id="win-banner-amount">0.00</div>
             </div>
         </div>
 
-        <div class="paytable-overlay" id="paytable-modal">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #ff4500; padding-bottom: 10px;">
-                <h2 style="color: #ffd700;">PAYTABLE &amp; RULES (5 PAYLINES)</h2>
-                <button class="btn-game" id="btn-close-paytable">✖ CLOSE</button>
+        <div class="paytable-overlay" id="paytable-modal" role="dialog" aria-modal="true" aria-label="Tabela e pagesave">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:2px solid #ffae34;padding-bottom:10px;">
+                <h2 style="color:#ffe07c;">TABELA E FITIMEVE · 20 LINJA</h2>
+                <button type="button" class="btn-game" id="btn-close-paytable">✖ MBYLL</button>
             </div>
             <div class="paytable-grid" id="paytable-grid"></div>
-            <div style="margin-top: 15px; font-size: 13px; color: #ccc; text-align: center;">
-                All payouts are multiplied by line bet. 5 = 5 of a kind, 4 = 4 of a kind, 3 = 3 of a kind.<br>
-                ⭐ Star is SCATTER and pays in any position on the screen!
-            </div>
+            <p style="margin-top:12px;text-align:center;font-size:12px;color:#e6d2cd;">
+                Pagesat janë për bastin e një linje. Fitoret numërohen nga e majta.
+                Ylli është SCATTER dhe mund të paguajë në çdo pozicion.
+                Të gjitha kreditë janë vetëm për demonstrim.
+            </p>
         </div>
 
         <footer id="dashboard">
-            <div class="info-box">
-                <div class="label">CREDITS / BALANCE</div>
-                <div class="value" id="disp-balance">1000.00</div>
+            <div id="balance-panel">
+                <span id="balance-icon">♛</span>
+                <span class="value" id="disp-balance" aria-label="Kreditet demo" aria-live="polite">100,000.00</span>
             </div>
-
-            <div class="controls-group">
-                <button class="btn-game btn-bet" id="btn-bet-minus">-</button>
-                <div class="info-box" style="min-width: 100px;">
-                    <div class="label">TOTAL BET</div>
-                    <div class="value" id="disp-bet">5.00</div>
-                </div>
-                <button class="btn-game btn-bet" id="btn-bet-plus">+</button>
-                <button class="btn-game" id="btn-bet-max">MAX</button>
+            <div id="status-text" role="status" aria-live="polite">PRESS SPIN TO WIN</div>
+            <div id="quick-actions">
+                <button type="button" class="btn-game" id="btn-paytable" title="Tabela e fitimeve" aria-label="Tabela e fitimeve">ⓘ</button>
+                <button type="button" class="btn-game" id="btn-sound" title="Efektet zanore" aria-label="Efektet zanore" aria-pressed="true">🔊</button>
+                <button type="button" class="btn-game" id="btn-music" title="Muzika" aria-label="Muzika" aria-pressed="false">♫</button>
+                <button type="button" class="btn-game" id="btn-reset" title="Rimbush kreditet demo" aria-label="Rimbush kreditet demo">↻</button>
+                <button type="button" class="btn-game" id="btn-fullscreen" title="Ekran i plotë" aria-label="Ekran i plotë">⛶</button>
             </div>
-
-            <div class="info-box win">
-                <div class="label">LAST WIN</div>
-                <div class="value" id="disp-win">0.00</div>
+            <div id="bet-controls" aria-label="Shuma e bastit">
+                <button type="button" class="bet-chip chip-arrow" id="btn-bet-minus" aria-label="Ule bastin">◀</button>
+                <div id="bet-chip-list" style="display:contents"></div>
+                <button type="button" class="bet-chip chip-arrow" id="btn-bet-plus" aria-label="Rrite bastin">▶</button>
+                <button type="button" class="bet-chip chip-max" id="btn-bet-max" title="Basti maksimal">MAX</button>
             </div>
-
-            <div class="controls-group">
-                <button class="btn-game" id="btn-auto">AUTO</button>
-                <button class="btn-game btn-spin" id="btn-spin">SPIN</button>
-            </div>
+            <span id="disp-bet" style="display:none" aria-live="polite">80.00</span>
+            <span id="disp-win" style="display:none" aria-live="polite">0.00</span>
+            <button type="button" id="btn-spin" class="btn-game btn-spin" aria-label="SPIN" title="Rrotullo">
+                <span class="spin-glyph">⟳</span>
+            </button>
+            <button type="button" id="btn-auto" class="btn-game" title="Auto Play" aria-label="Auto Play" aria-pressed="false">▶</button>
         </footer>
     </div>
 
@@ -997,7 +999,8 @@
         const BET_STEPS = [10, 20, 40, 60, 80, 100, 5000];
         let betIndex = 4; // Default 80 demo credits, like the supplied machine screenshot
         const DEMO_BALANCE_KEY = 'sizzling777-deluxe-demo-balance-v3';
-        const existingCredits = Number(localStorage.getItem(DEMO_BALANCE_KEY));
+        const storedCredits = localStorage.getItem(DEMO_BALANCE_KEY);
+        const existingCredits = storedCredits === null ? NaN : Number(storedCredits);
         let balance = Number.isFinite(existingCredits) && existingCredits >= 0 && existingCredits <= 1e9
             ? existingCredits : 100000;
         let isSpinning = false;
