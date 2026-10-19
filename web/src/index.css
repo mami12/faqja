@@ -142,4 +142,4 @@
   width: 100%;
 }
 .casino-game-expanded iframe,
-.casino-game-pseudo iframe { min-height: min(100dvh, 700px); }
+.casino-game-pseudo iframe { height: 100dvh !important; min-height: 0 !important; width: 100% !important; }
