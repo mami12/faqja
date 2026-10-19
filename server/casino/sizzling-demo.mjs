@@ -186,7 +186,7 @@ function initResponse(state) {
       bet: '1', lines: 5, multiplier: 1, currency: 'EUR',
       restorestate: false, next_request_id: state.requestId,
       ranges: {
-        bet: { 1: BET_OPTIONS },
+        bet: Object.fromEntries(Object.values(DENOMINATIONS).map(value => [value, [...BET_OPTIONS]])),
         denomination: DENOMINATIONS,
       },
       directory: { lines: LINES.map(row => Object.fromEntries(row.map((pos, i) => [i, pos]))),

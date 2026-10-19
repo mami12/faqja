@@ -38,6 +38,12 @@ try {
   for (const file of ['manifest.json', 'manifest-7976fbc9075178.json']) {
     await cp(join(source, file), join(output, file));
   }
+  // The archive omits the mobile CSS background; reuse its original desktop art.
+  const stylePath = join(output, 'styles/bundle-3757edaaf8.css');
+  const style = await readFile(stylePath, 'utf8');
+  await stat(join(output, 'images/background-desktop-520de17f9c.jpg'));
+  await writeFile(stylePath, style.replaceAll('background-mobile-57f969fbc3.jpg',
+    'background-desktop-520de17f9c.jpg'));
   // Preserve real head/body and Pixi/Spine loader; avoid missing icon 404s.
   const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
   const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
@@ -47,41 +53,18 @@ try {
   // The canvas remains responsive via CSS scaling; no substitute art/math.
   const bodySource = await readFile(join(source, 'body.html'), 'utf8');
   await writeFile(join(output, 'body.html'), bodySource);
+  // Let the original renderer own canvas dimensions and pointer coordinates.
+  // object-fit letterboxing on a separately stretched canvas breaks hit tests.
   const responsive = `<style>
-html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:#000}
-#slotCanvas {display:block;max-width:100%;max-height:100%;touch-action:manipulation}
-@media (max-width:700px) { .app-container {width:100vw!important;height:100dvh!important} }
-</style>
-<script>
-(function(){
-  // Device detection in the old client selects missing componentsMobile.json.
-  // Advertise desktop layout before game scripts run, then scale its canvas.
-  var root=document.documentElement;
-  root.classList.add('desktop');
-  root.classList.remove('mobile');
-  function resize(){
-    var canvas=document.getElementById('slotCanvas');
-    if(!canvas)return;
-    var box=canvas.parentElement;
-    if(!box)return;
-    box.style.width='100vw';
-    box.style.height='100dvh';
-    box.style.display='flex';
-    box.style.alignItems='center';
-    box.style.justifyContent='center';
-    canvas.style.width='100%';
-    canvas.style.height='100%';
-    canvas.style.objectFit='contain';
-  }
-  window.addEventListener('resize',resize);
-  document.addEventListener('DOMContentLoaded',resize);
-  setInterval(resize,1200);
-})();
-</script>`;
+html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#000}
+#slotCanvas {touch-action:none}
+</style>`;
   await writeFile(join(output,'responsive-desktop.html'),responsive);
   await writeFile(join(output,'body.html'),responsive + bodySource);
   const config = {
     sessionToken: 'local-demo',
+    // Use the engine's supported switch for components, HD assets AND geometry.
+    desktop: true,
     resourcesBasePath: './',
     displayTime: false,
     displayCurrency: false,
@@ -124,14 +107,6 @@ html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!i
   }
   await writeFile(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   await writeFile(join(output, 'manifest-7976fbc9075178.json'), JSON.stringify(manifest, null, 2));
-  // The original archive includes desktop assets but not its mobile component
-  // tree. Preserve the original desktop gameplay and select that component
-  // tree on every device, including phones.
-  const gamePath = join(output, 'scripts/game-c269ffb1da.js');
-  const gameCode = await readFile(gamePath, 'utf8');
-  const mobileSelection = 'r+=c2d.env.isDesktop?';
-  if (!gameCode.includes(mobileSelection)) throw new Error('Sizzling component selector changed upstream');
-  await writeFile(gamePath, gameCode.replace(mobileSelection, 'r+=true?'));
   // Do not reject a working desktop build because the upstream manifest also
   // advertises mobile-only or optional assets missing from its own archive.
   for (const asset of ['data/application.json', 'images/logo.png', 'data/reelsetConfig_hd.json',
@@ -145,3 +120,4 @@ html,body,#container,.app-container,.canvas-box {margin:0!important;width:100%!i
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }
+
