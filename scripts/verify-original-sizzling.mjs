@@ -39,9 +39,9 @@ for (const dir of [source, output]) {
   assert.doesNotMatch(entry, /agame-nvm\.ampxy2\.com/,
     'No upstream live casino endpoint allowed');
   const manifest = JSON.parse(readFileSync(join(dir,'manifest.json'),'utf8'));
-  for (const key of ['images/logo.png', 'data/reelsetConfig.json',
-    'data/paytableConfig.json','data/audioConfig.json',
-    'images/lines_deluxe.png','images/reelset_0.webp']) {
+  for (const key of ['images/logo.png', 'data/reelsetConfig_hd.json',
+    'data/paytableConfig-hd.json','data/audioConfig.json',
+    'images/lines_deluxe_hd.png','images/reelset_0-hd.webp']) {
     assert.ok(manifest[key], 'Original resource manifest has no ' + key);
     assert.ok(existsSync(join(dir, manifest[key])), 'Missing hashed resource: ' + key);
   }
