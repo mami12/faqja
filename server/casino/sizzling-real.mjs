@@ -1,0 +1,120 @@
+/**
+ * Same-origin real wallet protocol for the unchanged Novomatic Pixi/Spine
+ * browser client. This adapter is NOT licensed/certified provider game math.
+ * It is completely isolated from the original demo endpoint.
+ */
+import {Router,raw} from 'express';
+import jwt from 'jsonwebtoken';
+import {randomUUID,createHash} from 'node:crypto';
+import {config} from '../config.mjs';
+import {requireAuth} from '../ledger/auth.mjs';
+import {getUserById,isLedgerReady} from '../ledger/store.mjs';
+import {query} from '../db.mjs';
+import {decodeRequest,initResponse,basicResponse} from './sizzling-demo.mjs';
+import {placeCasinoSpin,isCasinoDeploymentApproved} from './transactions.mjs';
+
+const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
+const fault=(status,message)=>Object.assign(new Error(message),{status});
+const cookieValue=req=>String(req.headers.cookie||'').split(';').map(s=>s.trim())
+  .find(s=>s.startsWith(COOKIE+'='))?.slice(COOKIE.length+1);
+const deny=(res,error)=>{
+  if(!error.status||error.status>=500)console.error('[casino pixi]',error);
+  return res.status(error.status||500).json({error:error.status?error.message:'CASINO_SERVICE_ERROR'});
+};
+function uuidFromId(nonce,requestId){
+  const h=createHash('sha256').update(nonce+':'+requestId).digest();
+  h[6]=(h[6]&0x0f)|0x40;h[8]=(h[8]&0x3f)|0x80;
+  const a=h.toString('hex').slice(0,32);
+  return [a.slice(0,8),a.slice(8,12),a.slice(12,16),a.slice(16,20),a.slice(20)].join('-');
+}
+function gate(){
+  if(!isCasinoDeploymentApproved())throw fault(403,'CASINO_DEPLOYMENT_NOT_APPROVED');
+}
+async function ensureAdminEnabled(){
+  const {rows}=await query('select enabled from app_casino_settings where id=1');
+  if(!rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
+}
+async function getWalletPlayer(req){
+  const token=cookieValue(req);
+  if(!token)throw fault(401,'CASINO_SESSION_REQUIRED');
+  let claim;
+  try{claim=jwt.verify(token,config.jwtSecret);}catch{throw fault(401,'CASINO_SESSION_EXPIRED');}
+  if(claim.kind!=='casino-pixi-wallet'||typeof claim.jti!=='string')throw fault(401,'CASINO_SESSION_INVALID');
+  const user=await getUserById(claim.sub);
+  if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
+  return {user,nonce:claim.jti};
+}
+function spinProtocol(round,bet,lines,reqId){
+  const before=Number((round.balance+round.stake-round.payout).toFixed(2));
+  const total=round.payout.toFixed(2);
+  return {
+    balance:{before,after:round.balance},denomination:1,
+    available_actions:round.payout>0?['spin','collect']:['spin'],
+    macro_round:{wins:{total}},
+    spin:{bet,lines,multiplier:1,next_multiplier:1,next_request_id:reqId+1,
+      type:'spin',symbols:round.result.symbols,
+      wins:{line_wins:round.result.line_wins,total}},
+  };
+}
+export function createSizzlingRealRouter(){
+  const router=Router();
+  router.post('/play',raw({type:()=>true,limit:'128kb'}),async(req,res)=>{
+    res.set('Cache-Control','no-store');
+    try{
+      gate();
+      if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
+      if(req.headers.origin){
+        const origin=new URL(req.headers.origin);
+        if(origin.host!==req.headers.host)throw fault(403,'CROSS_ORIGIN_DENIED');
+      }
+      const {user,nonce}=await getWalletPlayer(req);
+      await ensureAdminEnabled();
+      const request=decodeRequest(req);
+      const action=String(request.action||'init');
+      const rawId=request.request_id;
+      const id=rawId==null?null:Number(rawId);
+      if(rawId!=null&&(!Number.isSafeInteger(id)||id<0||id>1e9))throw fault(400,'INVALID_REQUEST_ID');
+      if(action==='init'){
+        const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1});
+        init.init.currency='LEK';
+        return res.json(init);
+      }
+      if(action==='spin'){
+        if(id==null)throw fault(400,'SPIN_REQUEST_ID_REQUIRED');
+        const bet=Number(request.bet),lines=Number(request.lines),denomination=Number(request.denomination??1);
+        const round=await placeCasinoSpin({userId:user.id,requestId:uuidFromId(nonce,id),
+          bet,denomination,lines});
+        return res.json(spinProtocol(round,bet,lines,id));
+      }
+      if(action==='collect'){
+        // Winnings are already credited atomically at spin settlement.
+        const current=await getUserById(user.id);
+        return res.json({
+          ...basicResponse({credits:Number(current.balance)},Number(current.balance)),
+          available_actions:['spin'],macro_round:{wins:{total:'0'}},collect:{total:'0'},
+        });
+      }
+      if(action==='get_double'||action==='set_double')
+        throw fault(409,'GAMBLE_DISABLED_IN_WALLET_MODE');
+      throw fault(400,'INVALID_ACTION');
+    }catch(error){deny(res,error);}
+  });
+  return router;
+}
+export const casinoSessionRouter=Router();
+casinoSessionRouter.post('/casino/session',requireAuth,async(req,res)=>{
+  try{
+    gate();
+    if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
+    if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
+    await ensureAdminEnabled();
+    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet'};
+    const token=jwt.sign(claim,config.jwtSecret,{expiresIn:MAX_AGE});
+    res.cookie(COOKIE,token,{
+      httpOnly:true,sameSite:'strict',secure:req.secure||req.headers['x-forwarded-proto']==='https',
+      path:'/app/api/casino/sizzlinghotdeluxe/real',maxAge:MAX_AGE*1000,
+    });
+    res.set('Cache-Control','no-store');
+    res.json({ready:true,gameUrl:'/app/casino-original/sizzling/index-real.html',expiresIn:MAX_AGE});
+  }catch(error){deny(res,error);}
+});
