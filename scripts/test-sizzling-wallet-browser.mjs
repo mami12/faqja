@@ -152,6 +152,13 @@ try{
     screen:window.c2d?.env?.screenParams?.orientation,
   }));
   console.log('WALLET PIXI QUICK STOP:',JSON.stringify({pressStarted,quickStopState}));
+  assert.ok(quickStopState.timeChanges.some(change=>change.scale===4),
+    'Second Start press must activate 4x speed on original Pixi reels');
+  assert.ok(quickStopState.stopped.length>0,
+    'Second Start press must finish the original reel animation');
+  assert.equal(quickStopState.timescale,1,
+    'Original reel speed must reset after stopping');
+
   const clicks=[pressPoint,pressPoint];
   await page.screenshot({path:join(out,'wallet-after-start.png')});
   console.log('WALLET PIXI START CLICKS:',JSON.stringify(clicks));
