@@ -166,19 +166,6 @@ export default function CasinoPage() {
               ))}
             </div>
           </>
-        ) : game.id === 'sizzling' ? (
-          <div className="mx-auto max-w-6xl overflow-hidden rounded-xl border border-amber-700/40 bg-black">
-            <iframe
-              title="Sizzling Hot Deluxe, motori origjinal"
-              src={import.meta.env.BASE_URL + 'casino-original/sizzling/index.html'}
-              className="block h-[min(82vh,820px)] min-h-[520px] w-full border-0"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
-            <p className="px-3 py-2 text-xs text-slate-400">
-              Motori origjinal nga New-folder. Loja mund të kërkojë një sesion aktiv nga serveri origjinal për SPIN dhe fitimet.
-            </p>
-          </div>
         ) : session && (
           <div className="mx-auto max-w-5xl">
             <div className="relative overflow-hidden rounded-2xl border border-white/10 p-3 shadow-2xl sm:p-6"
