@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Dices, RefreshCw, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
-type Settings={enabled:boolean;deploymentEnabled:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string;profiles:Array<{id:string;label:string;theoreticalRtp:number;certified:boolean}>};
+type Settings={enabled:boolean;deploymentEnabled:boolean;mathApproved:boolean;realMoneyAvailable:boolean;profile:string;certified:boolean;theoreticalRtp:number|null;warning:string;profiles:Array<{id:string;label:string;theoreticalRtp:number;certified:boolean}>};
 type Totals={casinoStake:number;casinoPayout:number;casinoSpins:number};
 export default function CasinoSettings(){
   const [data,setData]=useState<Settings|null>(null),[totals,setTotals]=useState<Totals|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -45,7 +45,7 @@ export default function CasinoSettings(){
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP teorike</p><p className="mt-1 font-bold text-white">{data?.theoreticalRtp==null?'Pa verifikim':data.theoreticalRtp+'%'}</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP i vëzhguar</p><p className="mt-1 font-bold text-white">{totals?.casinoStake ? (100*totals.casinoPayout/totals.casinoStake).toFixed(2)+"%" : "Pa spins"}</p><p className="text-[10px] text-text-secondary">Nga {totals?.casinoSpins||0} spins (nuk është RTP teorike)</p></div>
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Certifikimi</p><p className="mt-1 font-bold text-amber-300">{data?.certified?'I verifikuar':'Nuk është certifikuar'}</p></div>
-        <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Modaliteti</p><p className="mt-1 font-bold text-white">{data?.realMoneyAvailable?'Fonde të përbashkëta':'Demo / i çaktivizuar'}</p></div>
+        <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">Modaliteti</p><p className="mt-1 font-bold text-white">{data?.realMoneyAvailable?'Bilanci i sportit aktiv':'Bilanci i sportit i çaktivizuar'}</p></div>
       </div>
       <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
         <h4 className="font-bold text-white">Konfigurimi RTP i lojës</h4>
@@ -69,13 +69,13 @@ export default function CasinoSettings(){
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-tertiary pt-4">
         <div className="min-w-0"><p className="font-bold text-white">Lejo lojën me bilancin e përdoruesit</p><p className="text-xs text-text-secondary">Kërkon CASINO_REAL_MONEY_ENABLED=true, CASINO_MATH_APPROVED=true dhe miratimin e adminit.</p></div>
-        <button type="button" disabled={!data||busy||(!data.enabled&&!data.deploymentEnabled)||!data.certified}
+        <button type="button" disabled={!data||busy||(!data.enabled&&(!data.deploymentEnabled||!data.mathApproved))}
           onClick={()=>void change(!data!.enabled)}
           className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>
           {data?.enabled?'Çaktivizo':'Aktivizo'}
         </button>
       </div>
-      <p className="mt-3 flex items-start gap-2 text-xs text-text-secondary"><ShieldCheck size={16} className="shrink-0"/>Aktivizimi është i bllokuar derisa të regjistrohet një profil i certifikuar. Konfigurimi ruan historikun e ndryshimeve në regjistrin e adminit.</p>
+      <p className="mt-3 flex items-start gap-2 text-xs text-text-secondary"><ShieldCheck size={16} className="shrink-0"/>Loja nuk ka portofol tjetër apo kalim automatik në demo. Aktivizimi kërkon miratimin teknik dhe ligjor të operatorit; flamujt e serverit nuk përbëjnë certifikim. Çdo ndryshim regjistrohet në audit.</p>
     </div>
   </section>;
 }
