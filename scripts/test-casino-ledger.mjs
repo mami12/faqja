@@ -55,7 +55,7 @@ try{
     [player.id]);
   await assert.rejects(
     placeCasinoSpin({userId:player.id,requestId:randomUUID(),bet:1,denomination:1,lines:5}),
-    /self.?exclu|excluded|blocked|limit|cannot|denied/i);
+    error => error?.status === 403);
   console.log('Casino wallet integration OK: player, manager, 8-game ledger, idempotency, scoped finances, exclusion');
 }finally{
   await query('update app_casino_settings set enabled=false where id=1').catch(()=>{});
