@@ -112,3 +112,34 @@
     background-color: transparent; 
   }
 }
+
+
+/* Casino fullscreen: native landscape lock where supported, visual rotation
+   fallback for iOS and embedded browsers without screen.orientation.lock. */
+.casino-game-expanded:fullscreen,
+.casino-game-pseudo {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  overflow: auto !important;
+  background: #070707 !important;
+}
+.casino-game-rotated {
+  inset: auto !important;
+  left: 100vw !important;
+  top: 0 !important;
+  width: 100dvh !important;
+  height: 100vw !important;
+  transform: rotate(90deg);
+  transform-origin: top left;
+}
+.casino-game-expanded .casino-game-content,
+.casino-game-pseudo .casino-game-content {
+  min-height: 100%;
+  width: 100%;
+}
+.casino-game-expanded iframe,
+.casino-game-pseudo iframe { min-height: min(100dvh, 700px); }
