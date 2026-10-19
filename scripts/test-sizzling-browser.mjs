@@ -98,10 +98,12 @@ try {
   });
   // Desktop reference cabinet SPIN center ≈83% across, 94% down.
   console.log('Canvas bounds:',bounds);
+  // Never hammer the Pixi cabinet while its first spin animation is active.
+  // The game is WebGL, so there is no DOM button to await.
   const points=[[.83,.94],[.83,.91],[.84,.86],[.84,.96],[.82,.80]];
   for(const [x,y] of points){
     await page.mouse.click(bounds.x+bounds.w*x,bounds.y+bounds.h*y);
-    await new Promise(ok=>setTimeout(ok,350));
+    await new Promise(ok=>setTimeout(ok,1600));
     if(posts.length>=2)break;
   }
   await new Promise(ok=>setTimeout(ok,4700));
