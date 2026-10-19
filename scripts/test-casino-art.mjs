@@ -15,7 +15,9 @@ const real=read('server/casino/sizzling-real.mjs');
 assert.ok(!page.includes('GAMES.map('),'other slot games must not be shown');
 assert.ok(!page.includes('casinoEngine'),'no generic casino engine');
 assert.ok(page.includes('CasinoOriginalWallet'),'wallet must mount original Sizzling');
-assert.ok(page.includes('casino-original/sizzling/index.html'),'demo must mount original Sizzling');
+assert.ok(!page.includes('casino-original/sizzling/index.html'),'never mount separate demo wallet');
+assert.ok(!page.includes('<CasinoFullscreen'),'casino page must use authenticated wallet component');
+assert.ok(page.includes('realMoneyAvailable'),'casino gate must not fall back to play-money credits');
 assert.ok(page.includes('CasinoFullscreen'),'mobile fullscreen required');
 assert.ok(original.includes('index-real.html'),'production client build missing');
 assert.ok(original.includes('scripts') && original.includes('images') &&
