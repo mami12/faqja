@@ -92,11 +92,10 @@ jobs:
           node --check server/casino/finance.mjs
           node --check server/casino/transactions.mjs
           node --check server/casino/rtp-profiles.mjs
-          node --check server/casino/generic-engine.mjs
           node --check server/casino/sizzling-real.mjs
       - name: Build Vite frontend
         run: npm run build:web
-      - name: Validate casino RTP profiles and secure generic game math
+      - name: Validate Sizzling RTP profiles and reel math
         run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math
         run: node scripts/test-sizzling-demo.mjs
