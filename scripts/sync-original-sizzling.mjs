@@ -38,6 +38,12 @@ try {
   for (const file of ['manifest.json', 'manifest-7976fbc9075178.json']) {
     await cp(join(source, file), join(output, file));
   }
+  // The archive omits the mobile CSS background; reuse its original desktop art.
+  const stylePath = join(output, 'styles/bundle-3757edaaf8.css');
+  const style = await readFile(stylePath, 'utf8');
+  await stat(join(output, 'images/background-desktop-520de17f9c.jpg'));
+  await writeFile(stylePath, style.replaceAll('background-mobile-57f969fbc3.jpg',
+    'background-desktop-520de17f9c.jpg'));
   // Preserve real head/body and Pixi/Spine loader; avoid missing icon 404s.
   const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
   const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
@@ -114,3 +120,4 @@ html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#000}
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }
+
