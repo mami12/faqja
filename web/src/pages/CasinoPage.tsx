@@ -68,7 +68,7 @@ export default function CasinoPage() {
   useEffect(() => { setAuto(false); setShowRules(false);setSpinError(''); }, [gameId]);
 
   const displayedBalance=realMoneyAvailable ? (walletBalance??user?.balance??0) : demo.credits;
-  const canPlay=!!game&&!!session&&displayedBalance>=bet;
+  const canPlay=!!game&&!!session&&(displayedBalance>=bet||!!pendingSpin.current);
   const spin=useCallback(async()=>{
     if(!game||spinLock.current)return;
     if(!realMoneyAvailable||user?.role!=='PLAYER'){
