@@ -25,9 +25,11 @@ function stopWeights(reel, profile, reelIndex) {
   const preferredSymbol = [1,2,3,4,5][reelIndex];
   return reel.map(symbol => symbol===preferredSymbol ? profile.boost : 1);
 }
+const cache = new Map();
 function reelModel(profileId) {
   const profile = normalize(profileId);
-  return REELS.map((reel,reelIndex) => {
+  if (cache.has(profileId)) return cache.get(profileId);
+  const models = REELS.map((reel,reelIndex) => {
     const weights = stopWeights(reel, profile, reelIndex);
     const total = weights.reduce((a, b) => a + b, 0);
     const symbols = Array.from({length:3}, () => Array(8).fill(0));
@@ -49,6 +51,8 @@ function reelModel(profileId) {
       scatter: scatter.map(n=>n/total),
     };
   });
+  cache.set(profileId,models);
+  return models;
 }
 export function randomProfileGrid(profileId='SIZZLING_STANDARD_V1', random=bound=>randomInt(bound)) {
   return reelModel(profileId).map(({reel,weights,total})=>{
