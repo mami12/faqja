@@ -132,7 +132,22 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
+      - run: |
+          npm ci
+          npm --prefix web ci
+      - name: Build authentic Pixi Sizzling game for browser verification
+        run: npm run build:web
+      - name: Browser test Sizzling wallet loader past 29%
+        env:
+          DATABASE_URL: postgresql://casino:test@localhost:5432/casino_test
+        run: node scripts/test-sizzling-wallet-browser.mjs
+      - name: Preserve Sizzling wallet loader screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sizzling-wallet-loading
+          path: tmp/sizzling-wallet-browser/*.png
+          if-no-files-found: ignore
       - name: Verify real casino and sportsbook wallet transactions in disposable PostgreSQL
         env:
           DATABASE_URL: postgresql://casino:test@localhost:5432/casino_test
