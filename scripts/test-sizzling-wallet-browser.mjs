@@ -147,7 +147,7 @@ try{
   assert.deepEqual(jsErrors,[],'Wallet Pixi game threw an error');
   assert.ok(loaded,
     'Real-wallet Pixi preloader never finished. State: '+JSON.stringify(state));
-  const attemptedSpin=api.find(entry=>/\\"action\\"\\s*:\\s*\\"spin\\"/.test(entry.request||''));
+  const attemptedSpin=api.find(entry=>(entry.request||'').includes('"action": "spin"'));
   assert.ok(attemptedSpin,'Original Start button did not submit a spin. Clicks: '+JSON.stringify(clicks));
   assert.equal(attemptedSpin.status,200,
     'Original Start spin failed: '+JSON.stringify(attemptedSpin));
