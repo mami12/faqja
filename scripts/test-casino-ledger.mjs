@@ -5,6 +5,10 @@
  */
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import express from 'express';
+import {signToken} from '../server/ledger/auth.mjs';
+import {casinoSessionRouter,createSizzlingRealRouter} from '../server/casino/sizzling-real.mjs';
+import {casinoWalletRouter} from '../server/casino/wallet.mjs';
 import {initLedgerSchema,createUser,getUserById} from '../server/ledger/store.mjs';
 import {query,closePool} from '../server/db.mjs';
 import {placeCasinoSpin} from '../server/casino/transactions.mjs';
@@ -53,6 +57,65 @@ try{
   const currentManager=await getUserById(manager.id);
   assert.equal(currentPlayer.balance,round(10000-15+a.payout+second.payout));
   assert.equal(currentManager.balance,round(10000+15-a.payout-second.payout));
+  // The actual Pixi client uses a same-origin cookie rather than Bearer on
+  // its multipart spin requests; prove that its balance is the SPORT balance.
+  const app=express();
+  app.use(express.json());
+  app.get('/app/api/auth/me',async(req,res)=>{
+    const auth=req.get('authorization')||'';
+    res.json(auth.startsWith('Bearer ')?await getUserById(player.id):null);
+  });
+  app.use('/app/api',casinoSessionRouter);
+  app.use('/app/api',casinoWalletRouter);
+  app.use('/app/api/casino/sizzlinghotdeluxe/real',createSizzlingRealRouter());
+  const http=await new Promise(ok=>{
+    const listener=app.listen(0,'127.0.0.1',()=>ok(listener));
+  });
+  try{
+    const origin='http://127.0.0.1:'+http.address().port;
+    const token=signToken(player);
+    const before=await getUserById(player.id);
+    const state=await fetch(origin+'/app/api/casino/status',{headers:{Authorization:'Bearer '+token}});
+    assert.equal(state.status,200);
+    const walletStatus=await state.json();
+    assert.equal(walletStatus.realMoneyAvailable,true);
+    assert.equal(walletStatus.balance,before.balance,'casino status uses sportsbook balance');
+    const session=await fetch(origin+'/app/api/casino/session',{
+      method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}',
+    });
+    assert.equal(session.status,200,'Pixi wallet must establish authenticated session');
+    assert.equal((await session.json()).gameUrl,'/app/casino-original/sizzling/index-real.html');
+    const cookie=session.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(cookie?.startsWith('casino_pixi_wallet_session='));
+    const play=async(payload)=>{
+      const form=new FormData();
+      form.append('data',JSON.stringify(payload));
+      const response=await fetch(origin+'/app/api/casino/sizzlinghotdeluxe/real/play',{
+        method:'POST',headers:{Cookie:cookie,Origin:origin},body:form,
+      });
+      return {status:response.status,body:await response.json()};
+    };
+    const init=await play({action:'init',request_id:'0'});
+    assert.equal(init.status,200);
+    assert.equal(init.body.balance.after,before.balance,'Pixi cabinet must start at sports balance');
+    const request={action:'spin',bet:1,lines:5,denomination:1,request_id:'1'};
+    const spin=await play(request);
+    assert.equal(spin.status,200);
+    assert.ok(spin.body.spin.symbols&&spin.body.spin.wins,'Pixi receives graphical reel outcome');
+    const after=await getUserById(player.id);
+    assert.equal(after.balance,spin.body.balance.after,'sports header must equal Pixi wallet');
+    assert.equal(after.balance,round(before.balance-5+Number(spin.body.spin.wins.total)));
+    const replay=await play(request);
+    assert.deepEqual(replay.body,spin.body,'repeated Pixi request must not deduct again');
+    assert.equal((await getUserById(player.id)).balance,after.balance);
+    const collect=await play({action:'collect',request_id:'2'});
+    assert.equal(collect.status,200);
+    assert.equal(collect.body.balance.after,after.balance,'collect must not pay twice');
+    const me=await fetch(origin+'/app/api/auth/me',{headers:{Authorization:'Bearer '+token}});
+    assert.equal((await me.json()).balance,after.balance,'same sports auth/me balance after Pixi spin');
+  }finally{
+    await new Promise(done=>http.close(done));
+  }
   // A self-excluded account must not be able to wager in either category.
   await query(
     "insert into app_player_controls(user_id,self_excluded_until) values($1,now()+interval '1 day') on conflict(user_id) do update set self_excluded_until=excluded.self_excluded_until",
