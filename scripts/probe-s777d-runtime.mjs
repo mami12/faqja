@@ -32,8 +32,20 @@ try{
  const fullJs=readFileSync(join(root,'web/dist/casino-goldsvet/s777d/s777d/B6FA10F25A93883264359F51D1E0D3A5.cache.js'),'utf8');
  const patterns=['SID missing error','SID=', 'sid=', '?sid', '?SID', 'session_id=', 'sid', 'SID', 'game_session','sessionId', 'baseUrl','assets_default','https://','http://','demoMode','serverUrl','/game/','/api/','/games/','slotEvent','nCGuJ1R7Iw98aD7o'];
  const references=Object.fromEntries(patterns.map(key=>{let n=0,positions=[];for(let i=fullJs.indexOf(key);i>=0&&n<12;i=fullJs.indexOf(key,i+key.length)){n++;positions.push(fullJs.slice(Math.max(0,i-75),i+155))}return [key,positions]}));
- console.log('GWT_RUNTIME_STRINGS',JSON.stringify(references).slice(0,26000));
- const loaded=await page.evaluate(async()=>{
+ const selectors=['SID missing error','function oqq(','function oqq','function Pqq(','sidLanguage','gameLaunchUrl','function Knf(', 'function zjf(','function xjf('];
+ console.log('GWT_SID_SOURCE',JSON.stringify(Object.fromEntries(selectors.map(k=>{
+  const at=fullJs.indexOf(k);
+  return [k,at<0?'ABSENT':fullJs.slice(Math.max(0,at-1800),at+3200)];
+ }))).slice(0,26000));
+  console.log('GWT_RUNTIME_STRINGS',JSON.stringify(references).slice(0,26000));
+ const trial=await browser.newPage();
+ const trialReq=[];
+ trial.on('request',q=>{if(trialReq.length<18)trialReq.push({method:q.method(),url:q.url().slice(0,200),post:q.postData()?.slice(0,300)})});
+ await trial.goto(url+'?sid=example',{waitUntil:'domcontentloaded',timeout:30000});
+ await new Promise(r=>setTimeout(r,3500));
+ console.log('GWT_SID_EXAMPLE',JSON.stringify({text:(await trial.evaluate(()=>document.body.innerText)).slice(0,450),requests:trialReq}).slice(0,6000));
+ await trial.close();
+  const loaded=await page.evaluate(async()=>{
   let urls=['./s777d/s777d.nocache.js','./s777d/B6FA10F25A93883264359F51D1E0D3A5.cache.js','./s777d/s777d-0.js','./s777d/style.css'];
   return Promise.all(urls.map(async u=>{let r=await fetch(u,{method:'HEAD'});return {url:u,status:r.status,length:r.headers.get('content-length')}}));
  });
