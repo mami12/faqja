@@ -1673,6 +1673,476 @@
       "path": "html-interface-stable/VideoAPI/videoAssets6.json",
       "bytes": 1043,
       "sha256": "ec15f670e88e2f8dd7f7d02e158ee40f3fda6dd14987b1181165a69e194d2bad"
+    },
+    {
+      "path": "html-20200413-stable/css/fullscreen.css",
+      "bytes": 11845,
+      "sha256": "171ea31cc119ae38d8084cc025df3e853277c619543434f0ca09a88e86b30a28"
+    },
+    {
+      "path": "html-20200413-stable/interface/1024/swipe-arrow.svg",
+      "bytes": 478,
+      "sha256": "a5ae911a6238d84e91b62aea1783d09151467a227ad8f09b3914ebd01c11fea1"
+    },
+    {
+      "path": "html-20200413-stable/interface/1024/swipe-hand-click.svg",
+      "bytes": 697,
+      "sha256": "3dea1f54bc4a26bc1a3890e8414c7aab3e125c7bd6f6b451917b45e9787de8cc"
+    },
+    {
+      "path": "html-20200413-stable/interface/1024/swipe-hand.svg",
+      "bytes": 1024,
+      "sha256": "9e073e5be6beee93ae39a3acf6cebbb42c955712fe08abb5c0eb865004bcc56a"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/lightning_01_small.png",
+      "bytes": 360433,
+      "sha256": "67b80d4ea20701249801fe90fd28097f54a2b4f69c9dfaceea8209d029df9eab"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/new/5_of_a_KIND_small.webp",
+      "bytes": 1326548,
+      "sha256": "b6a2471c75f7c6d54a9d04947eeae92685eb049d70225be0a741cb4988458dc4"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/new/BIG_WIN_small.webp",
+      "bytes": 1927718,
+      "sha256": "a6dcc0559537eb068ce8a631b85bc56c0c9999b6c2412c529d55439d04263192"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/new/FREE_GAMES_small.webp",
+      "bytes": 886818,
+      "sha256": "68f4c0b87463cf0ede87f9c78a2afd89a05dd1d2370681587d0ee1896077a978"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/new/MEGA_WIN_small.webp",
+      "bytes": 1356288,
+      "sha256": "f03e1fef30e7f997e22b4b088e578b3fa870bc01a426191d27fadc91d1631b31"
+    },
+    {
+      "path": "html-interface-stable/1024/attractions/waves_small.png",
+      "bytes": 890754,
+      "sha256": "7edfc56a75ff445a4854c0a727222c4879c1faea7dadc94dbc6f3dea40aa1c01"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00000.webp",
+      "bytes": 938,
+      "sha256": "81e1614abd131975fcacf6d728d0b868e67ee995c5395c8afd61752e57f39cd7"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00001.webp",
+      "bytes": 1248,
+      "sha256": "d4aa7445821240d067f951fba0bd7bd39dd41e32d078078ba1f61172d8d8d5bc"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00002.webp",
+      "bytes": 2126,
+      "sha256": "dde972efd54a11f806dad68735df5be9111dea476b116d2bf95a051927c6914c"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00003.webp",
+      "bytes": 2242,
+      "sha256": "46c1cb763e93dcb28603cdb21db641658211f421b177089386956e8046e4d05b"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00004.webp",
+      "bytes": 2980,
+      "sha256": "ca42770ec09e2e726949f8852c0af27c5ab352f987fa563afd408992a3b42a7b"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00005.webp",
+      "bytes": 3746,
+      "sha256": "69e932db531ff0e9f46a0b5bc09dd423ff6391f620785f87a1a7e7a5763c7376"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00006.webp",
+      "bytes": 3684,
+      "sha256": "47494b36b53d670b5cf6f3378927da36c85e9501d76f048427f4b221537b8e98"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00007.webp",
+      "bytes": 4728,
+      "sha256": "cebd3cc29692a9c0334fe9f8073d057e2ecce894d507de309526989111655f60"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00008.webp",
+      "bytes": 5626,
+      "sha256": "0a96a8efc8eee879822457fbb847cee71b0361fba4435a40bca95a21c150f7c2"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00009.webp",
+      "bytes": 5386,
+      "sha256": "987554565395a68db3e424c29dd40419384ec328539d7b26035d81a26ed3858b"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00010.webp",
+      "bytes": 6106,
+      "sha256": "c2e37a5652aa8ea4a803f4181d07be7dcae3f9941ffd1c6b72bcc17b1feb2286"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00011.webp",
+      "bytes": 6054,
+      "sha256": "57262e6dc5b8cd8368ae8a18cf0c8eafc58b489aa24cd3a5ad32b8e7e3f6c247"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00012.webp",
+      "bytes": 5426,
+      "sha256": "a5f697d7397085e6b2ff1ccf4b6030787f8928d3612f73caac4d4f34c87411e6"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00013.webp",
+      "bytes": 5658,
+      "sha256": "fadfd090f6b37783d8127e8354b9e536b6f4a7c04f55ba80ac22c7d16fbebc37"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00014.webp",
+      "bytes": 6484,
+      "sha256": "b1994ab4fc0c116c2714c1bc27b05cd963471131934951d1dbf7045817374de3"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00015.webp",
+      "bytes": 7798,
+      "sha256": "4b6e6eb6d07023b74b415103e493b76cc7f085f2347cc42feba118fa87e8c12c"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00016.webp",
+      "bytes": 8586,
+      "sha256": "1643a37db00167e9cbd782997ff0fab5f904a3ca1c7bc24420cfa3c9978b1dff"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00017.webp",
+      "bytes": 9298,
+      "sha256": "c4b1059af261272c806d0022ed45ec784023a9972545e7d8e1e19c9001e2d32a"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00018.webp",
+      "bytes": 11206,
+      "sha256": "fdde99bb7261a2fc3ffef337b67f0287c29b08d7a76f63d65086e77cf1d7e26d"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00019.webp",
+      "bytes": 12426,
+      "sha256": "5b0383fd470dd8860284b55c9a51aff52cb9abc5cb0736648848fb51edb0f4b4"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00020.webp",
+      "bytes": 13476,
+      "sha256": "de31a02e341713c3f54361b25e879ebeab694a949d3acb6629f6ff2b0e1dfb23"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00021.webp",
+      "bytes": 14864,
+      "sha256": "99b99411f6b1a26002bfc533a11c7ba6d31351e9bc33690e122bc87126178a57"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00022.webp",
+      "bytes": 15800,
+      "sha256": "705f50098ea4809a7814d941cb52d35f1fe36857f3be6618744b1a3e3d02a472"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00023.webp",
+      "bytes": 18328,
+      "sha256": "da1239f16ae7a1cb81eae6b3e374f604835845efc5d4cd5abf41a252d8569ebf"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00024.webp",
+      "bytes": 20726,
+      "sha256": "993ea4ae7100455c02c757cdd3f3e1d892b61ab612e9b815fab4819a693c2164"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00025.webp",
+      "bytes": 21882,
+      "sha256": "6a5f4b049c7061191a014e195bb4f4f7134a4c1cfa06e7b8c61997d34400fe32"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00026.webp",
+      "bytes": 24060,
+      "sha256": "29bde369c70f1571625930b02b49d691ce84d2b65f109acd60047a972fdbffda"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00027.webp",
+      "bytes": 24602,
+      "sha256": "f8a36ba565c8c3a231f17d8df51022906787722dd51b9838e7ff50672ff70e94"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00028.webp",
+      "bytes": 24252,
+      "sha256": "9a86adac18bc682262ad7fc65b141048543d9e65a12996d95d8f3f1c1a848be8"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00029.webp",
+      "bytes": 26652,
+      "sha256": "ac5c88436a83e14311f0699f9602ce4b9fe07cb0bc350439c82f5b398f132da9"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00030.webp",
+      "bytes": 27392,
+      "sha256": "1934ea0a40e2b7a954ff048ed75897267b2c9a9ed35889a238c0c798caf02f86"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00031.webp",
+      "bytes": 26782,
+      "sha256": "a1fa19f24524172c16aec3a14bf1e4dc8f799300e37649d8f560bcbb54757f8a"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00032.webp",
+      "bytes": 27484,
+      "sha256": "9f28b2b2747cdf4a6c1a131004f842f16826a4b946f108b7eb35b922384fe77d"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00033.webp",
+      "bytes": 30188,
+      "sha256": "9f0fb8a4435c583010247d50eae9d1147c10f611c7c2a47e90a9206de8705170"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00034.webp",
+      "bytes": 31850,
+      "sha256": "47fae0b9139b9198810326d39244b9c7ff11375deddf00d606b12f808ce8e9f9"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00035.webp",
+      "bytes": 33454,
+      "sha256": "014046b382d6b2872dca077709de72e16d2670e12fff3b8f1cabfffd65ee4d92"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00036.webp",
+      "bytes": 34802,
+      "sha256": "0a18b30a300828237db02bf0429ce641ef79eabd8f21df8bc81a2e084506c380"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00037.webp",
+      "bytes": 37664,
+      "sha256": "df5648d758898c3924958866d7210cf92e294be50e9119c9f081712817651c29"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00038.webp",
+      "bytes": 39628,
+      "sha256": "e5779d08d6285e205bd212738cfe554a0d992f6d2430e611d4b41b852fddfddc"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00039.webp",
+      "bytes": 38726,
+      "sha256": "4b3f3b759b3a6a4d91688275abe28edbd5aae84f54311c32e2fe046f370562c9"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00040.webp",
+      "bytes": 40320,
+      "sha256": "92cfeccffc2d20c0f72cda64b2253e86a5895c281b1d5a87dc731448132c4ba5"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00041.webp",
+      "bytes": 43108,
+      "sha256": "1e79cb09a0942b1ae2e5cf98d817d033fb7fcfd3a7a5d69bbc2829c4692923b9"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00042.webp",
+      "bytes": 43460,
+      "sha256": "b823753ef3cdb76115719f55057b9571b9de1992e2d9152554fdeebb52199281"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00043.webp",
+      "bytes": 43280,
+      "sha256": "5be2506d969b87fd0b69a8f5fef0f78ab8c785b168e3799c030468942210536f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00044.webp",
+      "bytes": 45018,
+      "sha256": "d784a6c5c0e2b50824ab9e381e0f3ebba825a7441847117d09dc324535ee27c3"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00045.webp",
+      "bytes": 44920,
+      "sha256": "5abc40fb62ca18c16f8d1f3c90add700262abaa44a925216b55657690daf76e8"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00046.webp",
+      "bytes": 46870,
+      "sha256": "dcaa14d0affea8f1e578a5543059b8110860a9330b015b0a285b5dae3f389a0d"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00047.webp",
+      "bytes": 47766,
+      "sha256": "333daa883bcb4ec9d1257ff09a784a1493d5a7215d3e4644d3b86cf3a87699ab"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00048.webp",
+      "bytes": 49290,
+      "sha256": "f58c8b3367db800bbf7b9a3c65a18481aea1ee7202c10d476c85b521cb8d7ffc"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00049.webp",
+      "bytes": 49238,
+      "sha256": "bf287bf401b9caa2ea7122062d004d363ffa791f201e83a924a3e070aef2274a"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00050.webp",
+      "bytes": 48256,
+      "sha256": "2d8a75baa3abdd358c4da11de794bfd5f8f95056a9cab2c6203f50f585e4b9dc"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00051.webp",
+      "bytes": 48014,
+      "sha256": "c9cace63a5a65c414df7290a930d5e871fdc9fd893c5e692f1ff0b98e3913a1f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00052.webp",
+      "bytes": 48760,
+      "sha256": "10d6e9cd5d1a863bc35cb624c300381fe85916b247ef27e1e473b0c72d8e7982"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00053.webp",
+      "bytes": 49464,
+      "sha256": "7d72a64985ad559d26b977337d62f94e61c28386cb237fa4ec7f95f21128959a"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00054.webp",
+      "bytes": 50392,
+      "sha256": "9dbb3da46041975816adcbb9a314c78159b55151016c835b1bbb405f3efcb510"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00055.webp",
+      "bytes": 51010,
+      "sha256": "e58efb2c2d858566904719ca5f79765b74d5d98d1a5cee51d1f91ab49560e71f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00056.webp",
+      "bytes": 49874,
+      "sha256": "4fbb607016ad0acc0a87468fc03595b311b69d627d0bd6811fd6773d8565d653"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00057.webp",
+      "bytes": 49390,
+      "sha256": "2bd78e1b446d2805921daec837aee7cf1aee3f622a800a890829ddc796087c2f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00058.webp",
+      "bytes": 49964,
+      "sha256": "0f18bab87d78f4028ea7b470a0ae1d7fd8470c6a77aa9feaf16455ee47938248"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00059.webp",
+      "bytes": 49100,
+      "sha256": "224bf831198bab501947ee0a23e1ab49477e28cbf7b5dff4f954db6b6503c84b"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00060.webp",
+      "bytes": 51188,
+      "sha256": "37eefb3b812300cd24dda4e2fb078962c446a18e929cc35d7ae5f21a738844ab"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00061.webp",
+      "bytes": 54686,
+      "sha256": "0108c59fcbb6cc38f6e032629bb711614ae25ca8fa308157eaed913a2e1b002c"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00062.webp",
+      "bytes": 56910,
+      "sha256": "4ae73784824aadcda1d3ee8fe13b47a85795c2ac0581742fea1c29078718cda8"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00063.webp",
+      "bytes": 58378,
+      "sha256": "2c2c1252b8bd590d98282383315fce8dc6f48f3426362efe9756b0ab61ddd3b8"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00064.webp",
+      "bytes": 57396,
+      "sha256": "3c398bb6753cf9443ee4551d6e1ad7b93d85fb428582a0410511475b4e5cec26"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00065.webp",
+      "bytes": 56812,
+      "sha256": "7d711f0628b92daa2d38fd92daf2d912ae2b476eb91be89740413c510e0465ce"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00066.webp",
+      "bytes": 55160,
+      "sha256": "4566575c605e6d0c73b1073a1cfdd95dd96fdfa22655cfda59b35cd842eccf6d"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00067.webp",
+      "bytes": 50994,
+      "sha256": "f1ad686c2528b0214c77cfe3612f14a4245640ce94e374fd70479b3f47ea8dab"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00068.webp",
+      "bytes": 50058,
+      "sha256": "4efb838181c351953fcea47ea2346d221181c22d6cd098aa271014cc46af266d"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00069.webp",
+      "bytes": 46918,
+      "sha256": "7ab0e4dc5d54354cfa45efd46bff7032a4caceaa755fceee0f7ba3ef7e640ff7"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00070.webp",
+      "bytes": 47568,
+      "sha256": "b5c5c798fbcf174f8c2e90dfb8e0e743fc509e9ffde56b739b75b312eff37f3c"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00071.webp",
+      "bytes": 41370,
+      "sha256": "ffc3f454ce655f361336be7358e59eb9f8473e034d9d2ba810f0255b81138757"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00072.webp",
+      "bytes": 41002,
+      "sha256": "8c7131c5ffa8446847d776ae41c555c874c5eb71646edf79aa2d90d6874919c4"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00073.webp",
+      "bytes": 39500,
+      "sha256": "fd6bca5ef919dced859050704f44cdfa9dac38ad6de7c500df23c9d8907cb6d3"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00074.webp",
+      "bytes": 39978,
+      "sha256": "696744b6a7613938a73ba4dc5191a8e032f64858efcb3068404f1fd366499bd6"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00075.webp",
+      "bytes": 39604,
+      "sha256": "dd9c39f5d2e108ab023507ac2aa89959a0b84e3423dea3b069748ef928b51ab3"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00076.webp",
+      "bytes": 41682,
+      "sha256": "731722f9b9eb521dc707cfae1ae64948b04cfc17e05f15c5f0fb0be2dc43cdbf"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00077.webp",
+      "bytes": 41096,
+      "sha256": "45471fc6f2e7a87c1e666fb9b7642926e76cc0604e78ec31c25566faa0eb8c7f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00078.webp",
+      "bytes": 1108,
+      "sha256": "1be656bfda0ccfbfa563fe0671f185c4ca0d6ee7e23addd82ab0e0d910864c5b"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00079.webp",
+      "bytes": 1352,
+      "sha256": "1ce36a2c55fcc528e6579ac3e0e67cb45ea0422b8addff2b1ab2d121518bdc36"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00080.webp",
+      "bytes": 2174,
+      "sha256": "e632e297cdcfedc1814253c43efa0a2495faedf75958ed9b0e5d7edc23a3dc4f"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY_webp/money_crop_1024x618_00081.webp",
+      "bytes": 2120,
+      "sha256": "5c4f0e6de2ac559b902a6aa3c2107cc2d45743f7888d7162eb876407ffa78c86"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY.json",
+      "bytes": 25676,
+      "sha256": "1f11d06832e6e57c42313424d2d076cf5cdea27cef1779fdbb547c583c86cf95"
+    },
+    {
+      "path": "html-interface-stable/VideoAPI/resources/MONEY/MONEY.webm",
+      "bytes": 1028311,
+      "sha256": "125cd575f0962ff6905d6dd6bba1821519b4ab7029af09f82c4870bd8721168a"
     }
   ]
 }

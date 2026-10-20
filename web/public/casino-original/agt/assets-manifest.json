@@ -1103,6 +1103,76 @@
       "path": "sevenhot20.html",
       "bytes": 8736,
       "sha256": "d49230c367f9f52291d740f24598066baaa2993597c67a2a8d2240ae77dc5858"
+    },
+    {
+      "path": "css/13309.otf",
+      "bytes": 58640,
+      "sha256": "03f5cd5ba07436d7033ddd2991505870b4a4a48c40c9a2d37b0595b482bd814b"
+    },
+    {
+      "path": "css/digital-dismay.regular.otf",
+      "bytes": 13928,
+      "sha256": "fb92c986c5b184a23c7535969d816b03bd780573d4073cde95dc26dd7a22ee00"
+    },
+    {
+      "path": "images/common/ui/sound_big.webp",
+      "bytes": 1690,
+      "sha256": "a3f90fadc45ac214ac33ca93f287f6d73981026dd869d8e476b25cb5711bab59"
+    },
+    {
+      "path": "images/games/sevenhot20/ui/menubg.webp",
+      "bytes": 1461762,
+      "sha256": "7081ad18385c1d40db28283edd2b7c2bb77c0c951ba08c01fa5c4fc167b6a9a9"
+    },
+    {
+      "path": "images/themes/lightgreen2/buttons/mobile/main_vert.json",
+      "bytes": 1311,
+      "sha256": "759f4d6f736b43de186323bc8a8dd82658f2ecfe7b466057388e6d8bbe283e89"
+    },
+    {
+      "path": "images/themes/lightgreen2/buttons/mobile/main_vert.webp",
+      "bytes": 27610,
+      "sha256": "a234876acbd3697cffcf57e69d80d161c63d64078684bfb9264d1885e4ea0219"
+    },
+    {
+      "path": "images/themes/lightgreen2/buttons/mobile/main.json",
+      "bytes": 1304,
+      "sha256": "14256545657f1cebef8922714fa4d5d2b432708d02751828ba37329faa57afde"
+    },
+    {
+      "path": "images/themes/lightgreen2/buttons/mobile/main.webp",
+      "bytes": 10236,
+      "sha256": "dba5b843c621efdfead468d4b6dda601d4ee0092e4db89d1362ab2d74bf1f09c"
+    },
+    {
+      "path": "images/themes/lightgreen2/buttons/top/mobile.webp",
+      "bytes": 3948,
+      "sha256": "7ca1d032c5caf9f7388a6f82202f9b957299ec930004c1694d044326d0654149"
+    },
+    {
+      "path": "images/themes/maroon/buttons/mobile/main_vert.json",
+      "bytes": 1334,
+      "sha256": "3ab3e7681700c32d99bc4243fe89878faa546687b89c5131ab17b0afa88bd8f2"
+    },
+    {
+      "path": "images/themes/maroon/buttons/mobile/main_vert.webp",
+      "bytes": 128228,
+      "sha256": "46e899ef62d0e769fb581fcf0c1d02def09e6a504bc9440dff65177b0d240900"
+    },
+    {
+      "path": "images/themes/maroon/buttons/mobile/main.json",
+      "bytes": 1252,
+      "sha256": "bb85dad5d1ac92a3604f0e701e5073ccc130985467ce8e96ca520b0d14390cbc"
+    },
+    {
+      "path": "images/themes/maroon/buttons/mobile/main.webp",
+      "bytes": 30932,
+      "sha256": "488d65a7a5fece97654f48b45edffbc82bb268d18d8afa8fb894a5fe0f5d4795"
+    },
+    {
+      "path": "images/themes/maroon/buttons/top/mobile.webp",
+      "bytes": 3948,
+      "sha256": "7ca1d032c5caf9f7388a6f82202f9b957299ec930004c1694d044326d0654149"
     }
   ]
 }

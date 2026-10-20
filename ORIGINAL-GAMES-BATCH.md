@@ -33,6 +33,14 @@ Only local transport/session defaults and the demo connection are adapted. AGT E
 
 The original source folders on drive D: are unchanged. Experimental clients excluded from the batch are outside the Git repository.
 
+## Mobile asset repair — October 21
+
+The CT clients choose additional resources by user agent. Desktop-only checks missed the `_small` attraction sprites, iPhone fullscreen stylesheet/gesture artwork, and the Lottie image frames used instead of WebM on iOS. These original files, plus the referenced MONEY WebM, are now packaged locally for Lucky Clover X3 and Viking's Fun. No provider UI, audio, animation code or device selection is changed.
+
+AGT mobile button atlases for Fruit Queen and Seven Hot, the mobile sound icon and two fonts are also included from the original public asset host. These resources were absent from the desktop capture.
+
+`npm run test:originals` checks all mobile attraction references, both WebM/Lottie branches, every nested Lottie image, and AGT mobile button atlases against the packaged manifests. Browser checks use phone dimensions and Android/iPhone user-agent branches; these are desktop browser simulations, not physical-device Safari tests.
+
 ## Verification
 
 - 20,370 deterministic grids were compared directly against the unmodified Go scanners at the pinned Slotopol commit: 12,242 Viking's Fun and 8,128 AGT cases. Base/free modes and mixed wilds were included.
