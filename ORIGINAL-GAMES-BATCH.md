@@ -1,0 +1,50 @@
+# Original game clients — October 2026 batch
+
+The casino adds three separately labelled FUN-credit demos: Viking's Fun, Fruit Queen and Seven Hot. Their supplied provider JavaScript, menus, artwork, symbol animations and sound files run locally. Game controls remain in English. Outcomes are calculated on the Node server using ports of the matching [Slotopol scanners](https://github.com/slotopol/server/tree/2a6fd837feea1b52bbfd65035a7698d0c70e096a/game/slot), with the upstream reel strips and MIT source notices included in `server/casino/slotopol-source/`.
+
+These are local demo adapters, not the providers' private RGS services. Demo sessions live in memory and reset when the backend restarts. They do not use the real sports/casino wallet. The existing Sizzling Hot Deluxe and Book of Ra wallet integrations are preserved.
+
+## Included
+
+| Game | Original client | Math | Features |
+| --- | --- | --- | --- |
+| Viking's Fun | CT Interactive HTML client | `ct/vikingsfun`, 25 selected lines, 96.105777 reel set | 15 free games, retriggers, extra wilds during free games, red/black and suit gamble, take/half |
+| Fruit Queen | AGT Phaser client | `agt/fruitqueen`, original selectable lines, nearest 96% reel set | Original bet/line menus, original animation/sound, red/black x2 and suit x4 |
+| Seven Hot | AGT Phaser client | `agt/sevenhot`, 20-line client, nearest 96% reel set | Original bet/line menus, original animation/sound, red/black x2 and suit x4 |
+
+Only local transport/session defaults and the demo connection are adapted. AGT English dictionaries and paytables were recovered from newly created official public demo sessions; session identifiers, balances and captured user histories are not packaged. Missing public static files were recovered from the original asset hosts during development. The deployed games do not proxy requests to those hosts.
+
+## Skipped under the instruction to omit incomplete games
+
+| Capture/game | Reason |
+| --- | --- |
+| Dolphins | The capture does not contain an identifiable complete game client. |
+| Ultra Sevens | Site/wrapper files are present; the playable client is missing. |
+| Roobet archive | Encrypted launcher/wrapper only; no identifiable complete game client. |
+| Ice Fruits 6 Reels | Official client line patterns differ from the Slotopol algorithm, including lines 8/9, 12/13 and 16/17. It is not silently substituted with a different set of winning lines. |
+| Zeus | Required original resources `ui/specscatter.webp` and common `ui/smoke.webp` are absent and return HTTP 404 from the public host. |
+| Aladdin | Capture is incomplete; four original wild variants/feature presentation were not established as equivalent to Slotopol's single wild representation. |
+| Mega Joker Jackpot | Missing playable bootstrap and incomplete CWS resources; exact Jackpot-variant equivalence to the Slotopol Mega Joker algorithm is unverified. |
+| Arabian Nights | Incomplete captured launch/session dependencies; full original offline client and bonus protocol were not established. |
+| Fruit Shop | Same limitation as Arabian Nights; the Google capture is a duplicate, not an extra game. |
+| Beetle Mania Deluxe | Manifest lists many absent resources, including bonus animations and all captured audio. No incomplete version is exposed in the lobby. |
+| Fairy Queen | Incomplete Greentube client/launch capture. |
+| Fruit Sensation | The supplied Greenslots client is a recreation; original-provider provenance is not established. |
+
+The original source folders on drive D: are unchanged. Experimental clients excluded from the batch are outside the Git repository.
+
+## Verification
+
+- 20,370 deterministic grids were compared directly against the unmodified Go scanners at the pinned Slotopol commit: 12,242 Viking's Fun and 8,128 AGT cases. Base/free modes and mixed wilds were included.
+- 600 reference cases from those Go runs are included as regression fixtures.
+- Protocol tests cover free-game retriggers, single collection, invalid bets, separate demo sessions and x2/x4 outcomes.
+- 554 packaged resource hashes are checked for the three new clients. Lucky Clover's existing 318-resource check remains unchanged.
+- `npm run build:web`, `npm run test:originals` and `npm run test:clover` check the integration.
+
+Run `npm run demo:originals` for a local database-free preview on port 3320. Individual paths:
+
+- `/app/casino-original/vikings-fun/index.html`
+- `/app/casino-original/agt/fruitqueen.html`
+- `/app/casino-original/agt/sevenhot20.html`
+
+Automated and visual checks establish the behavior tested; they are not a claim of equivalence to every private provider service or a guarantee of zero defects.

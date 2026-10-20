@@ -36,7 +36,9 @@
     "verify:suspension": "node scripts/verify-suspension.mjs",
     "verify:idle": "node scripts/verify-idle.mjs",
     "test:clover": "node scripts/test-lucky-clover.mjs && node scripts/test-clover-ct.mjs && node scripts/verify-lucky-clover-assets.mjs",
-    "demo:clover": "node scripts/serve-lucky-clover.mjs"
+    "demo:clover": "node scripts/serve-lucky-clover.mjs",
+    "demo:originals": "node scripts/serve-original-games.mjs",
+    "test:originals": "node scripts/test-original-games.mjs && node scripts/verify-original-game-assets.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

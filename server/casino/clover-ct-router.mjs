@@ -2,15 +2,15 @@ import {Router} from 'express';
 import {randomBytes,randomInt} from 'node:crypto';
 import {spin} from './lucky-clover-engine.mjs';
 import {ctConfig,DENOMS,rows,symbol} from './clover-ct-config.mjs';
-export function createCtProtocolRouter({spinFn=spin,cardRandom=randomInt}={}){
+export function createCtProtocolRouter({spinFn=spin,cardRandom=randomInt,configFn=ctConfig,initialGrid=()=>spin(5).grid,selectedLines=5,cookieName='ct_clover_demo',apiPath='/app/api/casino/luckycloverx3',mapRound}={}){
  const router=Router(),sessions=new Map();
  const account=s=>({credit:s.credit,currency:'FUN',currency_code:'FUN',currency_sign:'',digits_after_decimal_separator:2,decimal_separator:'.',thousands_separator:',',freeround_limit:0});
  router.get('/rgsm',(req,res)=>{
   res.set('Cache-Control','no-store');if(req.get('sec-fetch-site')==='cross-site')return res.sendStatus(403);
   let commands;try{commands=JSON.parse(req.query.request);if(!Array.isArray(commands)||!commands.length||commands.length>20||commands.some(c=>!c||typeof c.command!=='string'||!Number.isSafeInteger(c.sequence_number)||c.sequence_number<0))throw 0;}catch{return res.status(400).json({error:'Invalid request'});}
   const now=Date.now();for(const [k,s] of sessions)if(now-s.seen>4*3600000)sessions.delete(k);
-  let cookie=(req.headers.cookie||'').split(';').map(c=>c.trim()).find(c=>c.startsWith('ct_clover_demo='))?.split('=')[1],s=sessions.get(cookie);
-  if(!s){if(commands[0]?.command!=='create_session')return res.status(401).json({error:'Session expired. Reload the game.'});if(sessions.size>=2000)return res.sendStatus(503);cookie=randomBytes(24).toString('hex');s={credit:10000000,grid:spin(5).grid,seen:now,results:new Map(),round:0,pending:0,history:[]};sessions.set(cookie,s);res.setHeader('Set-Cookie',`ct_clover_demo=${cookie}; Path=/app/api/casino/luckycloverx3; HttpOnly; SameSite=Strict; Max-Age=14400${req.secure?'; Secure':''}`);}
+  let cookie=(req.headers.cookie||'').split(';').map(c=>c.trim()).find(c=>c.startsWith(cookieName+'='))?.split('=')[1],s=sessions.get(cookie);
+  if(!s){if(commands[0]?.command!=='create_session')return res.status(401).json({error:'Session expired. Reload the game.'});if(sessions.size>=2000)return res.sendStatus(503);cookie=randomBytes(24).toString('hex');s={credit:10000000,grid:initialGrid(),seen:now,results:new Map(),round:0,pending:0,history:[]};sessions.set(cookie,s);res.setHeader('Set-Cookie',`${cookieName}=${cookie}; Path=${apiPath}; HttpOnly; SameSite=Strict; Max-Age=14400${req.secure?'; Secure':''}`);}
   s.seen=now;
   const responses=[];
   for(const c of commands){
@@ -20,16 +20,16 @@ export function createCtProtocolRouter({spinFn=spin,cardRandom=randomInt}={}){
    try{
     switch(c.command){
      case 'create_session':Object.assign(r,{session_id:'local-demo',server_denom:{value:1},enabled_denoms:DENOMS,preferred_languages:['en_GB'],ping_interval:30,client_request_timeout:10,gameplay_mintime:0,credit_display_mode:'cash_only',use_currency_locale:1,last_game_recall_enabled:0});break;
-     case 'init_game':Object.assign(r,{game_config:ctConfig(s.grid),show_win:'last_win',finish_game_command:'normal',resume:0,freeround_limit:0});break;
+     case 'init_game':Object.assign(r,{game_config:configFn(s.grid),show_win:'last_win',finish_game_command:'normal',resume:0,freeround_limit:0});break;
      case 'play':{
       const d=DENOMS.find(d=>d.id===c.game_denom),bet=Number(c.total_bet)*d?.cents;
-      if(!d||c.lines!==5||!Number.isSafeInteger(c.line_bet)||c.line_bet<1||c.line_bet>100||c.total_bet!==c.line_bet*5||!Number.isSafeInteger(bet)||bet<5||s.credit<bet)throw new Error('Invalid bet or insufficient credit.');
+      if(!d||c.lines!==selectedLines||!Number.isSafeInteger(c.line_bet)||c.line_bet<1||c.line_bet>100||c.total_bet!==c.line_bet*selectedLines||!Number.isSafeInteger(bet)||bet<5||s.credit<bet)throw new Error('Invalid bet or insufficient credit.');
       if(s.phase&&s.phase!=='finished')throw new Error('Finish the current game first.');
-      const result=spinFn(bet,5);s.credit-=bet;s.grid=result.grid;s.pending=result.winCents;s.round++;s.denom=d.cents;s.phase='playing';s.nextStep=1;
-      const lines=result.wins.filter(w=>w.line).map(w=>({line_number:w.line-1,symbol:symbol(w.symbol),symbols:Array(w.count).fill(symbol(w.symbol)),symbol_count:w.count,win:w.amount/d.cents,positions:w.cells.map((_,x)=>x),subgame_win_factor:result.multiplier,paytable_factor:w.amount/(c.line_bet*d.cents*result.multiplier),wilds:[]}));
+      const result=spinFn(bet,selectedLines);s.credit-=bet;s.grid=result.grid;s.pending=result.winCents;s.round++;s.denom=d.cents;s.phase='playing';s.nextStep=1;
+      if(!mapRound){ const lines=result.wins.filter(w=>w.line).map(w=>({line_number:w.line-1,symbol:symbol(w.symbol),symbols:Array(w.count).fill(symbol(w.symbol)),symbol_count:w.count,win:w.amount/d.cents,positions:w.cells.map((_,x)=>x),subgame_win_factor:result.multiplier,paytable_factor:w.amount/(c.line_bet*d.cents*result.multiplier),wilds:[]}));
       const scatters=result.wins.filter(w=>!w.line).map(w=>({symbol:symbol(w.symbol),count:w.count,symbol_count:w.count,win:w.amount/d.cents,positions:w.cells.map(([x,y])=>[y,x]),paytable_factor:w.amount/(bet*result.multiplier),subgame_win_factor:result.multiplier,bonus_type:'none',bonus_value:0}));
       s.subgame={type:'slot_subgame',step_number:0,subgame_label:'main',reels_sets_name:'main',stop_reels:result.grid.map(r=>r.map(symbol)),result_reels:rows(result.grid),lines_win:lines,scatters_win:scatters,subgame_bonus:[],win:result.winCents/d.cents,total_win:result.winCents/d.cents,subgame_factor:result.multiplier,is_free:0,is_last:true,expanded_wilds:result.wildReels.flatMap((v,x)=>v?[{col_index:x,symbol:11,wild_position:[result.grid[x].indexOf(1),x],expanded_positions:[0,1,2].map(y=>[y,x])}]:[])};
-      r.result=[s.subgame];if(s.pending>0){s.phase='gamble';r.result.push({type:'can_play_red_black_double',step_number:s.nextStep++,wait_for_continue:1,double_cards_history:s.history,continue_params:[{label:'double_betpart',values:['skip','all','half']}]});}r.gameplay_id=s.round;break;
+      } r.result=mapRound?mapRound(result,c,d):[s.subgame];s.nextStep=r.result.length;if(s.pending>0){s.phase='gamble';r.result.push({type:'can_play_red_black_double',step_number:s.nextStep++,wait_for_continue:1,double_cards_history:s.history,continue_params:[{label:'double_betpart',values:['skip','all','half']}]});}r.gameplay_id=s.round;break;
      }
      case 'subgame_finished':r.result=[];break;
      case 'continue':{

@@ -5,8 +5,9 @@ import CasinoOriginalWallet, { type CasinoGame } from './CasinoOriginalWallet';
 import { casinoAssetUrl } from './casinoOriginalArt';
 
 type GameMeta = {
-  id: CasinoGame | 'lucky-clover-x3';
+  id: CasinoGame | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot';
   demo?: boolean;
+  clientPath?: string;
   title: string;
   subtitle: string;
   logo: string;
@@ -14,8 +15,12 @@ type GameMeta = {
 };
 
 const GAMES: GameMeta[] = [
+  {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 lines · 15 free games · Double Up · DEMO',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp',demo:true,clientPath:'vikings-fun/index.html'},
+  {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 lines · Double Up · DEMO',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg',demo:true,clientPath:'agt/fruitqueen.html'},
+  {id:'seven-hot',title:'Seven Hot',subtitle:'20 lines · Double Up · DEMO',logo:'seven-hot/top.webp',background:'seven-hot/emptyback.jpg',demo:true,clientPath:'agt/sevenhot20.html'},
   {
     id: 'lucky-clover-x3',
+    clientPath: 'lucky-clover-x3/index.html',
     title: 'Lucky Clover X3',
     subtitle: '5 lines · Wild x3 · Double Up · DEMO',
     logo: 'lucky-clover-x3/main/top_name.webp',
@@ -147,10 +152,10 @@ export default function CasinoPage() {
               </div>
             </div>
           </div>
-          {game.id === 'lucky-clover-x3' ? (
+          {game.id === 'lucky-clover-x3' || game.id === 'vikings-fun' || game.id === 'fruit-queen' || game.id === 'seven-hot' ? (
             <iframe
-              title="Lucky Clover X3 — original client, demo"
-              src={import.meta.env.BASE_URL + 'casino-original/lucky-clover-x3/index.html'}
+              title={game.title + " — original client, demo"}
+              src={import.meta.env.BASE_URL + 'casino-original/' + game.clientPath}
               className="block h-[min(88vh,980px)] min-h-[580px] w-full border-0"
               allow="autoplay; fullscreen"
               allowFullScreen

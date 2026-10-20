@@ -14,3 +14,6 @@ web/public/casino-original/*
 !web/public/casino-original/lucky-clover-x3/
 # test artifacts
 tmp/
+
+!web/public/casino-original/vikings-fun/
+!web/public/casino-original/agt/

@@ -27,6 +27,8 @@ import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
+import { createVikingsRouter } from './casino/vikings-ct-router.mjs';
+import { createAgtRouter } from './casino/agt-router.mjs';
 import { createCtProtocolRouter } from './casino/clover-ct-router.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
@@ -641,6 +643,8 @@ app.use('/app/api', casinoBookOfRaSessionRouter);
 
 // Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/luckycloverx3',createCtProtocolRouter());
+app.use('/app/api/casino/vikingsfun', createVikingsRouter());
+app.use('/app/api/casino/agt', createAgtRouter());
 app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
 app.use('/app/api/casino/bookofra',createBookOfRaDemoRouter());
 
