@@ -9,7 +9,9 @@ const asset='/app/casino-original/luckycloverx3/html-interface-stable/1024/games
 document.getElementById('logo').src=asset+'top_name.webp';
 document.getElementById('header').style.backgroundImage='linear-gradient(#091c0799,#091c0799),url("'+asset+'background.webp")';
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toFixed(2);
-const reels=$('reels'),cells=[];let balance=1000,bet=1,lines=30,win=0,pending=0,busy=false,auto=false,sound=true,audio;\nconst api="/app/api/casino/luckycloverx3";\nasync function request(endpoint,payload){const response=await fetch(api+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(payload||{})});const data=await response.json();if(!response.ok)throw Error(data.error||"Gabim serveri");return data;}
+const reels=$('reels'),cells=[];let balance=1000,bet=1,lines=30,win=0,pending=0,busy=false,auto=false,sound=true,audio;
+const api="/app/api/casino/luckycloverx3";
+async function request(endpoint,payload){const response=await fetch(api+endpoint,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(payload||{})});const data=await response.json();if(!response.ok)throw Error(data.error||"Gabim serveri");return data;}
 const betOptions=[1,2,5,10,20,50,100],lineOptions=[1,5,10,15,20,25,30];
 const paylines=[
 [1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],[0,1,2,1,0],[2,1,0,1,2],[0,0,1,0,0],[2,2,1,2,2],[1,0,0,0,1],[1,2,2,2,1],[0,1,1,1,0],[2,1,1,1,2],[1,1,0,1,1],[1,1,2,1,1],[0,0,0,1,2],[2,2,2,1,0],[0,1,0,1,0],[2,1,2,1,2],[1,0,1,0,1],[1,2,1,2,1],[0,1,2,2,2],[2,1,0,0,0],[0,0,1,2,2],[2,2,1,0,0],[1,0,1,2,1],[1,2,1,0,1],[0,1,0,0,1],[2,1,2,2,1],[0,2,0,2,0],[2,0,2,0,2],[1,0,2,0,1]];
