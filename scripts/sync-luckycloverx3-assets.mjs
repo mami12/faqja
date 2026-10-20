@@ -3,7 +3,7 @@
  * Run: node scripts/sync-luckycloverx3-assets.mjs
  * This does not activate real-money play or modify existing games.
  */
-import {mkdtemp,writeFile,cp,readdir,rm,mkdir,access} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,cp,readdir,rm,mkdir,access} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -23,6 +23,10 @@ try {
   if(roots.length!==1)throw Error('Unexpected source archive');
   const source=join(scratch,roots[0].name,'www.livebet.com','cdn2.ctrgs.com');
   await access(join(source,'html-20200413-stable/LuckyCloverX3/app.html'));
+  const originalHtml=await readFile(join(source,'html-20200413-stable/LuckyCloverX3/app.html'),'utf8');
+  if(!/<html[\\s>]/i.test(originalHtml)||!/script|canvas|game/i.test(originalHtml)){
+    throw Error('Original Lucky Clover X3 app.html is not a playable HTML client. Archive contains a redirect or placeholder; refusing to label it the original engine.');
+  }
   await access(join(source,'html-interface-stable/1024/games/LuckyCloverX3/game/main/background.webp'));
   await mkdir(destination,{recursive:true});
   await cp(join(source,'html-20200413-stable'),join(destination,'html-20200413-stable'),{recursive:true,force:true});
