@@ -24,9 +24,10 @@ try {
   const source=join(scratch,roots[0].name,'www.livebet.com','cdn2.ctrgs.com');
   await access(join(source,'html-20200413-stable/LuckyCloverX3/app.html'));
   const originalHtml=await readFile(join(source,'html-20200413-stable/LuckyCloverX3/app.html'),'utf8');
-  if(!/<html[\\s>]/i.test(originalHtml)||!/script|canvas|game/i.test(originalHtml)){
-    throw Error('Original Lucky Clover X3 app.html is not a playable HTML client. Archive contains a redirect or placeholder; refusing to label it the original engine.');
-  }
+  // Archived app.html is a crawler's "No Content: URL" placeholder.
+  // Do not reject the real animation/audio/script asset archive because of it.
+  const hasOriginalLauncher=/<html[\s>]/i.test(originalHtml);
+  if(!hasOriginalLauncher)console.warn('Archived Lucky Clover app.html is a URL placeholder; original launcher unavailable. Copying original assets and scripts only.');
   await access(join(source,'html-interface-stable/1024/games/LuckyCloverX3/game/main/background.webp'));
   await mkdir(destination,{recursive:true});
   await cp(join(source,'html-20200413-stable'),join(destination,'html-20200413-stable'),{recursive:true,force:true});
