@@ -165,6 +165,7 @@ export function findProviderBuilderQuote(match, legs) {
   let quote = null;
   for (const market of match.markets ?? []) {
     if (market.status !== 'ACTIVE' || Number(market.period ?? 0) !== 0 ||
+        /\b(?:first|1st|second|2nd)\s*half\b|\b(?:halftime|half-time|ht)\b/i.test(market.name ?? '') ||
         !isNativeMarket(String(market.name ?? '').trim()) ||
         isDecidedLiveMarket(match,market)) continue;
     for (const outcome of market.outcomes ?? []) {
