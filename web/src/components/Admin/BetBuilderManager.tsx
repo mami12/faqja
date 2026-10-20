@@ -4,7 +4,8 @@ import {apiClient} from '../../api/client';
 
 type Leg={market:string;outcome:string;line:string};
 type Option=Leg&{label:string};
-type Category={market:string;title:string;options:Option[]};
+type Preset={id:string;label:string;legs:Leg[]};
+type Category={market:string;title:string;options:Option[];presets?:Preset[]};
 type Template={id:string;name:string;legs:Leg[];active:boolean};
 const initial=():Template=>({id:'',name:'',legs:[],active:true});
 const key=(leg:Leg)=>[leg.market,leg.outcome,leg.line].join(':');
@@ -22,7 +23,13 @@ export default function BetBuilderManager(){
  };
  useEffect(()=>{void refresh().catch(e=>setError(e.response?.data?.message||'Nuk u ngarkuan tregjet.'));},[]);
  const sorted=[...draft.legs].sort((a,b)=>order.indexOf(a.market)-order.indexOf(b.market));
- const name=sorted.map(label).join(' + '),complete=sorted.length===2;
+ const presets=catalog.flatMap(item=>item.presets||[]);
+ const matchesPreset=(preset:Preset)=>draft.legs.length===preset.legs.length&&preset.legs.every(leg=>draft.legs.some(l=>key(l)===key(leg)));
+ const name=presets.find(matchesPreset)?.label||sorted.map(label).join(' + '),complete=sorted.length===2;
+ const choosePreset=(preset:Preset)=>{
+  setError('');setNotice('');setCategory('BTTS');
+  setDraft(value=>({...value,legs:preset.legs.map(leg=>({...leg}))}));
+ };
  const compatible=(option:Leg)=>{
   const other=draft.legs.find(l=>l.market!==option.market);
   return !other||pairs.includes([other.market,option.market].sort().join('+'));
@@ -62,6 +69,15 @@ export default function BetBuilderManager(){
   <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
    <section className="space-y-4 rounded-xl border border-tertiary bg-secondary p-4">
     <div className="flex items-center justify-between gap-2"><h2 className="font-bold text-white">{draft.id?'Modifiko Bet Builder':'Bet Builder i ri'}</h2><button type="button" onClick={reset} disabled={busy} className="flex min-h-11 items-center gap-1 px-2 text-xs text-text-secondary"><RotateCcw size={16}/>Pastro</button></div>
+    {presets.length>0&&<div className="space-y-2 rounded-lg border border-tertiary bg-primary p-3">
+     <h3 className="text-sm font-bold text-white">Shënon vetëm njëri ekip</h3>
+     <p className="text-xs text-text-secondary">Vendasit janë ekipi i parë në ndeshje, mysafirët ekipi i dytë. Secili buton zgjedh të dy tregjet; 0–0 nuk fiton.</p>
+     <div role="group" aria-label="Kombinime të shpejta për golat" className="grid gap-2 sm:grid-cols-2">
+      {presets.map(preset=><button key={preset.id} type="button" disabled={busy} aria-pressed={matchesPreset(preset)} onClick={()=>choosePreset(preset)} className={'flex min-h-14 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-bold disabled:opacity-30 '+(matchesPreset(preset)?'border-accent-green bg-accent-green/20 text-accent-green':'border-tertiary bg-secondary text-white hover:border-accent-green')}>
+       {matchesPreset(preset)&&<Check size={16} className="shrink-0"/>}<span>{preset.label}</span>
+      </button>)}
+     </div>
+    </div>}
     <div className="flex flex-wrap gap-2" role="group" aria-label="Kategoritë e tregjeve">
      {catalog.map(item=><button key={item.market} type="button" aria-pressed={category===item.market} onClick={()=>setCategory(item.market)} className={'min-h-11 rounded-lg border px-3 py-2 text-xs font-bold '+(category===item.market?'border-accent-green bg-accent-green text-primary':'border-tertiary bg-primary text-white')}>{item.title}</button>)}
     </div>

@@ -132,6 +132,53 @@ assert.equal(providerQuote(firstHalfQuote, [
   {market:'1X2',outcome:'X',line:''},{market:'BTTS',outcome:'Yes',line:''},
 ]),null, 'a 1st-half quote must never price a full-time builder');
 
+// "Arsenal scores, Chelsea does not" is home win + BTTS No; the reverse
+// is away win + BTTS No. A goalless draw must never pay either contract.
+const scoringSides = [
+  {winner:'1',team:'Arsenal',wins:[[1,0],[2,0]],loses:[[0,0],[0,1],[0,2],[1,1],[2,1]]},
+  {winner:'2',team:'Chelsea',wins:[[0,1],[0,2]],loses:[[0,0],[1,0],[2,0],[1,1],[1,2]]},
+];
+for (const {winner,team,wins,loses} of scoringSides) {
+  const scoringLegs = [
+    {market:'1X2',outcome:winner,line:''},
+    {market:'BTTS',outcome:'No',line:''},
+  ];
+  const scoringMatch = {
+    id:'123', homeTeam:'Arsenal', awayTeam:'Chelsea', markets:[
+      market('1X2','1X2','',winner,winner,2.0),
+      market('Both Teams to Score','OTHER','','No','No',1.8),
+      market('Result and both teams to score','OTHER','',team+' To Nil','opaque-provider-id',2.7),
+    ],
+  };
+  assert.ok(scoringLegs.every(leg=>findLeg(scoringMatch,leg)),team+' scoring legs are eligible');
+  assert.equal(providerQuote(scoringMatch,scoringLegs),2.7,
+    team+' To Nil uses the native joint price, not the 3.6 single-price product');
+  const compactQuote = structuredClone(scoringMatch);
+  compactQuote.markets[2].outcomes[0].name='Provider selection';
+  compactQuote.markets[2].outcomes[0].code=winner+'/No';
+  assert.equal(providerQuote(compactQuote,scoringLegs),2.7,winner+'/No is the same native contract');
+  const missingQuote = {...scoringMatch,markets:scoringMatch.markets.slice(0,2)};
+  assert.equal(providerQuote(missingQuote,scoringLegs),null,
+    team+' scoring cannot be priced from individual selections alone');
+  const suspendedQuote = structuredClone(scoringMatch);
+  suspendedQuote.markets[2].outcomes[0].status='SUSPENDED';
+  assert.equal(providerQuote(suspendedQuote,scoringLegs),null,team+' suspended joint outcome is unavailable');
+  const suspendedMarket = structuredClone(scoringMatch);
+  suspendedMarket.markets[2].status='SUSPENDED';
+  assert.equal(providerQuote(suspendedMarket,scoringLegs),null,team+' suspended joint market is unavailable');
+  const scoringTicket = {builder_legs:[
+    {market_name:'1X2',outcome_key:winner,outcome_name:winner,line:''},
+    {market_name:'Both Teams to Score',outcome_key:'No',outcome_name:'No',line:''},
+  ]};
+  for (const [expected,scores] of [['WON',wins],['LOST',loses]]) {
+    for (const [home,away] of scores) {
+      assert.equal(gradeLine(scoringTicket,{
+        home_score:home,away_score:away,home_team:'Arsenal',away_team:'Chelsea',
+      }),expected,team+' scores alone: '+home+'-'+away);
+    }
+  }
+}
+
 const id=builderId('123','11111111-1111-4111-8111-111111111111');
 assert.deepEqual(parseBuilderId(id),{matchId:'123',templateId:'11111111-1111-4111-8111-111111111111'});
 assert.equal(parseBuilderId('123|1X2||1'),null);
