@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && vite",
-    "build": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && vite build && node ../scripts/verify-original-sizzling.mjs",
+    "dev": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && node ../scripts/sync-luckycloverx3-assets.mjs && vite",
+    "build": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && node ../scripts/sync-luckycloverx3-assets.mjs && vite build && node ../scripts/verify-original-sizzling.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
