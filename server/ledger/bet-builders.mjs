@@ -5,6 +5,8 @@
  */
 import { query } from '../db.mjs';
 import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs';
+import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
+import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 
 const CONTRACTS = {
   '1X2': ['1', 'X', '2'],
@@ -92,6 +94,95 @@ export function findLeg(match, leg) {
   return null;
 }
 
+
+/**
+ * Same-game selections are correlated. Multiplying individual odds produces
+ * arbitrary (and often dangerously generous) synthetic prices. A builder is
+ * quotable only when the provider supplies the EXACT joint contract.
+ *
+ * We still settle the saved underlying legs individually, so a provider quote
+ * is used for PRICE only, never to guess settlement from an opaque feed code.
+ */
+function parseDoubleChanceTotal(value) {
+  const text = String(value ?? '').trim().replace(/\b1\s*\/\s*X\b/gi,'1X')
+    .replace(/\bX\s*\/\s*2\b/gi,'X2').replace(/\b1\s*\/\s*2\b/gi,'12');
+  const parts = text.split(/\s*(?:\band\b|&|\+|,)\s*/i).map(p => p.trim()).filter(Boolean);
+  if (parts.length !== 2) return null;
+  const dc = part => /^(?:1X|X2|12)$/i.test(part) ? part.toUpperCase() : null;
+  const total = part => {
+    const m = part.match(/^(?:total(?:\s+goals?)?\s+)?(over|under)\s+(\d+(?:[.,]\d+)?)$/i);
+    return m ? { outcome: m[1][0].toUpperCase()+m[1].slice(1).toLowerCase(), line: m[2].replace(',','.') } : null;
+  };
+  const a = dc(parts[0]), b = total(parts[1]);
+  if (a && b) return { dc: a, ...b };
+  const c = dc(parts[1]), d = total(parts[0]);
+  return c && d ? { dc: c, ...d } : null;
+}
+
+export function findProviderBuilderQuote(match, legs) {
+  if (!Array.isArray(legs) || legs.length !== 2) return null;
+  const byMarket = new Map(legs.map(leg => [leg.market, leg]));
+  if (byMarket.size !== 2) return null;
+  const kinds = [...byMarket.keys()].sort().join('+');
+  let family;
+  if (kinds === '1X2+BTTS') family = 'RESULT_BTTS';
+  else if (kinds === '1X2+TOTAL') family = 'RESULT_TOTAL';
+  else if (kinds === 'BTTS+TOTAL') family = 'TOTAL_BTTS';
+  else if (kinds === 'DC+TOTAL') family = 'DC_TOTAL';
+  else return null;
+
+  const isNativeMarket = name => {
+    if (family === 'RESULT_BTTS') return isResultBttsMarket(name);
+    if (family === 'RESULT_TOTAL') return isResultTotalMarket(name) ||
+      /^(?:full\s*time\.?\s*)?result\s+and\s+total\s+goals?$/i.test(name);
+    if (family === 'TOTAL_BTTS') return isTotalBttsMarket(name);
+    return /^double\s+chance\s+(?:and|&|\+)\s+(?:total(?:\s+goals?)?|goals?)$/i.test(name);
+  };
+  const sameContract = (value) => {
+    if (family === 'RESULT_BTTS') {
+      const parsed = parseResultBttsOutcome(value, match.homeTeam, match.awayTeam);
+      return parsed?.result === byMarket.get('1X2').outcome &&
+        parsed.bothScore === (byMarket.get('BTTS').outcome === 'Yes');
+    }
+    if (family === 'RESULT_TOTAL') {
+      const parsed = parseResultTotal(value, match.homeTeam, match.awayTeam);
+      return parsed?.result === byMarket.get('1X2').outcome &&
+        parsed.side === byMarket.get('TOTAL').outcome.toLowerCase() &&
+        String(parsed.line) === byMarket.get('TOTAL').line;
+    }
+    if (family === 'TOTAL_BTTS') {
+      const parsed = parseTotalBtts(value);
+      return parsed?.btts === (byMarket.get('BTTS').outcome === 'Yes') &&
+        parsed.side === byMarket.get('TOTAL').outcome.toLowerCase() &&
+        String(parsed.line) === byMarket.get('TOTAL').line;
+    }
+    const parsed = parseDoubleChanceTotal(value);
+    return parsed?.dc === byMarket.get('DC').outcome &&
+      parsed.outcome === byMarket.get('TOTAL').outcome &&
+      parsed.line === byMarket.get('TOTAL').line;
+  };
+
+  let quote = null;
+  for (const market of match.markets ?? []) {
+    if (market.status !== 'ACTIVE' || Number(market.period ?? 0) !== 0 ||
+        !isNativeMarket(String(market.name ?? '').trim()) ||
+        isDecidedLiveMarket(match,market)) continue;
+    for (const outcome of market.outcomes ?? []) {
+      const odds = Number(outcome.odds);
+      if (outcome.status !== 'ACTIVE' || !Number.isFinite(odds) || odds <= 1 || odds > 1000 ||
+          isDecidedLiveOutcome(match, {
+            name: market.name, line: market.line, period: market.period,
+            outcomeName: outcome.name, outcomeCode: outcome.code,
+          }) ||
+          ![outcome.code, outcome.name].some(sameContract)) continue;
+      // If the feed duplicates the identical joint contract, prefer the
+      // conservative (lower) currently offered price.
+      if (!quote || odds < Number(quote.outcome.odds)) quote = { market, outcome };
+    }
+  }
+  return quote;
+}
+
 export function builderId(matchId, templateId) { return `BB|${matchId}|${templateId}`; }
 export function parseBuilderId(id) {
   const parts = String(id ?? '').split('|');
@@ -110,8 +201,11 @@ export async function decorateMatches(matches) {
       // cannot stay sellable through the synthetic Bet Builder market.
       const resolved = template.legs.map(leg => findLeg(match,leg));
       if (resolved.some(r => !r)) continue;
-      const price = resolved.reduce((p,r) => p * Number(r.outcome.odds),1);
-      if (!Number.isFinite(price) || price > 1000) continue;
+      // Do not expose a synthetic quote if no exact provider joint price exists.
+      const providerQuote = findProviderBuilderQuote(match,template.legs);
+      if (!providerQuote) continue;
+      const price = Number(providerQuote.outcome.odds);
+      if (!Number.isFinite(price) || price <= 1 || price > 1000) continue;
       const id = builderId(match.id,template.id);
       match.markets ??= [];
       match.markets.push({
@@ -120,7 +214,7 @@ export async function decorateMatches(matches) {
         status: 'ACTIVE', sortOrder: 9000, line: '',
         // Real constituent IDs let the browser respond to immediate socket
         // suspensions, even before the next REST refresh.
-        builderLegs: resolved.map(part => ({
+        builderLegs: [...resolved,providerQuote].map(part => ({
           marketId: part.market.id, outcomeId: part.outcome.id,
         })),
         outcomes: [{
