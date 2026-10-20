@@ -114,34 +114,24 @@
 }
 
 
-/* Casino fullscreen: native landscape lock where supported, visual rotation
-   fallback for iOS and embedded browsers without screen.orientation.lock. */
-.casino-game-expanded:fullscreen,
-.casino-game-pseudo {
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 9999 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  max-width: none !important;
-  overflow: auto !important;
-  background: #070707 !important;
+/* A reserved toolbar stays outside every provider iframe, including fullscreen. */
+.casino-game-stage {
+ position: fixed; inset: 0; z-index: 9999;
+ display: flex; flex-direction: column;
+ width: 100vw; height: 100dvh; overflow: hidden; background: #000;
 }
+.casino-game-toolbar { min-height: 44px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
 .casino-game-rotated {
-  inset: auto !important;
-  left: 100vw !important;
-  top: 0 !important;
-  width: 100dvh !important;
-  height: 100vw !important;
-  transform: rotate(90deg);
-  transform-origin: top left;
+ inset: auto; left: 100vw; top: 0; width: 100dvh; height: 100vw;
+ transform: rotate(90deg); transform-origin: top left;
 }
-.casino-game-expanded .casino-game-content,
-.casino-game-pseudo .casino-game-content {
-  min-height: 100%;
-  width: 100%;
+.casino-game-content iframe { width: 100%; height: 100%; min-height: 0; border: 0; }
+.casino-game-content { display: flex; align-items: center; justify-content: center; }
+.casino-wallet-surface {
+ width: min(100vw, calc((100dvh - 44px) * 16 / 9));
+ height: min(calc(100dvh - 44px), calc(100vw * 9 / 16));
 }
-.casino-game-expanded iframe,
-.casino-game-pseudo iframe { height: 100dvh !important; min-height: 0 !important; width: 100% !important; }
-
-.casino-game-rotated iframe { height: 100vw !important; min-height: 0 !important; max-height: 100vw !important; }
+.casino-game-rotated .casino-wallet-surface {
+ width: min(100dvh, calc((100vw - 44px) * 16 / 9));
+ height: min(calc(100vw - 44px), calc(100dvh * 9 / 16));
+}

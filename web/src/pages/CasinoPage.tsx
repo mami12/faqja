@@ -1,13 +1,14 @@
+import CasinoFullscreen,{requestCasinoLandscape} from '../components/Layout/CasinoFullscreen';
+import {apiClient} from '../api/client';
+import {useAuth} from '../context/AuthContext';
 import { ArrowLeft, BookOpen, Cherry } from 'lucide-react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import CasinoOriginalWallet, { type CasinoGame } from './CasinoOriginalWallet';
 import { casinoAssetUrl } from './casinoOriginalArt';
 
 type GameMeta = {
-  id: CasinoGame | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot';
-  demo?: boolean;
-  clientPath?: string;
+  id: CasinoGame;
   title: string;
   subtitle: string;
   logo: string;
@@ -15,17 +16,16 @@ type GameMeta = {
 };
 
 const GAMES: GameMeta[] = [
-  {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 lines · 15 free games · Double Up · DEMO',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp',demo:true,clientPath:'vikings-fun/index.html'},
-  {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 lines · Double Up · DEMO',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg',demo:true,clientPath:'agt/fruitqueen.html'},
-  {id:'seven-hot',title:'Seven Hot',subtitle:'20 lines · Double Up · DEMO',logo:'seven-hot/top.webp',background:'seven-hot/emptyback.jpg',demo:true,clientPath:'agt/sevenhot20.html'},
+  {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 lines · 15 free games · Double Up',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp'},
+  {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 lines · Double Up',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg'},
+  {id:'seven-hot',title:'Seven Hot',subtitle:'20 lines · Double Up',logo:'seven-hot/top.webp',background:'seven-hot/emptyback.jpg'},
   {
     id: 'lucky-clover-x3',
-    clientPath: 'lucky-clover-x3/index.html',
     title: 'Lucky Clover X3',
-    subtitle: '5 lines · Wild x3 · Double Up · DEMO',
+    subtitle: '5 lines · Wild x3 · Double Up',
     logo: 'lucky-clover-x3/main/top_name.webp',
     background: 'lucky-clover-x3/main/background.webp',
-    demo: true,
+
   },
   {
     id: 'sizzling',
@@ -54,14 +54,16 @@ function GameArt({ game, className }: { game: GameMeta; className: string }) {
   );
 }
 
-/**
- * Original cabinets: Novomatic games use the player's real account balance —
- * the same wallet used by sports betting. A game is only embedded after the
- * wallet session cookie has been verified against the /real/play endpoint.
- * Lucky Clover is a separately labelled demo with its own virtual-credit API.
- */
+/** Original provider cabinets connected to the shared sportsbook wallet. */
 export default function CasinoPage() {
   const { gameId } = useParams<{ gameId?: string }>();
+  const navigate=useNavigate(),{refreshUser}=useAuth();
+  const exitGame=async()=>{
+    const original=['lucky-clover-x3','vikings-fun','fruit-queen','seven-hot'].includes(gameId||'');
+    try{await apiClient.post(original?'/casino/original/'+gameId+'/close':'/casino/original/pixi/close',{},{validateStatus:status=>status===401||(status>=200&&status<300)});}
+    catch{/* Pending wins remain durable if collection is temporarily unavailable. */}
+    await refreshUser().catch(()=>{});navigate('/casino');
+  };
 
   if (!gameId) {
     return (
@@ -82,6 +84,7 @@ export default function CasinoPage() {
               <Link
                 key={game.id}
                 to={`/casino/${game.id}`}
+                onClick={()=>{void requestCasinoLandscape();}}
                 className="group relative flex flex-col overflow-hidden rounded-xl border border-amber-500/30 bg-black shadow-2xl transition hover:border-amber-400/80"
               >
                 <div className="relative h-40 overflow-hidden sm:h-44">
@@ -113,7 +116,7 @@ export default function CasinoPage() {
           </div>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Sizzling Hot Deluxe dhe Book of Ra përdorin bilancin e llogarisë. Lucky Clover X3 është DEMO me kredite virtuale.
+            Të gjitha lojërat përdorin të njëjtin bilanc me sport betting.
           </p>
         </main>
       </div>
@@ -123,46 +126,7 @@ export default function CasinoPage() {
   const game = GAMES.find((g) => g.id === gameId);
   if (!game) return <Navigate to="/casino" replace />;
 
-  return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#0b1018] text-white">
-      <Header />
-      <main className="mx-auto w-full max-w-[1320px] flex-1 px-2 pb-12 pt-3 sm:px-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <Link to="/casino" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 bg-[#1c2733] px-4 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
-            <ArrowLeft size={17}/> Kazinoja
-          </Link>
-          <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-            {game.demo ? 'DEMO · Virtual credits' : 'Bilanci i llogarisë · i njëjti me sportin'}
-          </div>
-        </div>
-
-        <section aria-label={game.title} className="overflow-hidden rounded-xl border border-amber-500/30 bg-black shadow-2xl">
-          <div className="relative flex items-center gap-3 border-b border-white/10 px-3 py-3 sm:px-5">
-            <img
-              src={casinoAssetUrl(game.background)}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 h-full w-full object-cover opacity-25"
-            />
-            <div className="relative flex items-center gap-3">
-              <GameArt game={game} className="h-10 w-auto max-w-48 object-contain sm:h-12"/>
-              <div>
-                <h1 className="text-sm font-black sm:text-lg">{game.title}</h1>
-                <p className="text-xs text-slate-300">{game.subtitle}{!game.demo && ' · bilanc real (jo kredite demo)'}</p>
-              </div>
-            </div>
-          </div>
-          {game.id === 'lucky-clover-x3' || game.id === 'vikings-fun' || game.id === 'fruit-queen' || game.id === 'seven-hot' ? (
-            <iframe
-              title={game.title + " — original client, demo"}
-              src={import.meta.env.BASE_URL + 'casino-original/' + game.clientPath}
-              className="block h-[min(88vh,980px)] min-h-[580px] w-full border-0"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
-          ) : <CasinoOriginalWallet game={game.id} />}
-        </section>
-      </main>
-    </div>
-  );
+  return <CasinoFullscreen key={game.id} title={game.title} onExit={exitGame}>
+    <CasinoOriginalWallet game={game.id}/>
+  </CasinoFullscreen>;
 }

@@ -30,6 +30,7 @@ import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './id
 import { createVikingsRouter } from './casino/vikings-ct-router.mjs';
 import { createAgtRouter } from './casino/agt-router.mjs';
 import { createCtProtocolRouter } from './casino/clover-ct-router.mjs';
+import {createOriginalWalletRouter,originalFrameShellRouter} from './casino/original-wallet.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
@@ -640,6 +641,8 @@ app.use('/app/api/casino/sizzlinghotdeluxe/real', createSizzlingRealRouter());
 app.use('/app/api/casino/bookofra/real', createBookOfRaRealRouter());
 app.use('/app/api', casinoSessionRouter);
 app.use('/app/api', casinoBookOfRaSessionRouter);
+app.use('/app/api/casino/original',createOriginalWalletRouter());
+app.use('/app/casino-original',originalFrameShellRouter);
 
 // Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/luckycloverx3',createCtProtocolRouter());

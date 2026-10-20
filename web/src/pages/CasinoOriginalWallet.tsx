@@ -2,11 +2,16 @@ import {useEffect,useRef,useState} from 'react';
 import {AlertTriangle,RefreshCw} from 'lucide-react';
 import {apiClient} from '../api/client';
 import {useAuth} from '../context/AuthContext';
-import CasinoFullscreen from '../components/Layout/CasinoFullscreen';
 
-export type CasinoGame = 'sizzling' | 'bookofra';
 
-const GAMES: Record<CasinoGame, {title: string; session: string; play: string; prefix: string}> = {
+export type CasinoGame = 'sizzling' | 'bookofra' | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot';
+
+const original=(id:CasinoGame,title:string)=>({title,session:`/casino/original/${id}/session`,prefix:`/app/api/casino/original/${id}/launch`});
+const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; prefix: string}> = {
+  'lucky-clover-x3':original('lucky-clover-x3','Lucky Clover X3'),
+  'vikings-fun':original('vikings-fun',"Viking's Fun"),
+  'fruit-queen':original('fruit-queen','Fruit Queen'),
+  'seven-hot':original('seven-hot','Seven Hot'),
   sizzling: {
     title: 'Sizzling Hot Deluxe',
     session: '/casino/session',
@@ -51,6 +56,7 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       const response=await apiClient.post<{ready:boolean;gameUrl:string}>(cfg.session);
       if(!response.data.ready||!response.data.gameUrl.startsWith(cfg.prefix))
         throw new Error('Sesioni i lojës nuk u krijua');
+      if(cfg.play){
       const payload=new FormData();
       payload.append('data',JSON.stringify({action:'init',request_id:'0',time_offset:0}));
       const test=await fetch(cfg.play,{
@@ -63,7 +69,10 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       const init=await test.json();
       if(!init?.init?.start_symbols||typeof init?.balance?.after!=='number')
         throw new Error('Serveri ktheu një përgjigje jo të plotë për nisjen e lojës.');
-      setUrl(response.data.gameUrl+'?wallet='+Date.now());
+      }
+      const gameUrl=new URL(response.data.gameUrl,window.location.origin);
+      gameUrl.searchParams.set('wallet',String(Date.now()));
+      setUrl(gameUrl.pathname+gameUrl.search);
     }catch(e:any){
       const text=e.response?.data?.message||e.message||'Lidhja me portofolin dështoi';
       setError(String(text));
@@ -79,7 +88,7 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
         if(!doc)return;
         const loader=doc.getElementById('preloaderContainer');
         const canvas=doc.getElementById('slotCanvas') as HTMLCanvasElement|null;
-        if(!loader&&canvas&&canvas.width>0){setReady(true);setStalled(false);return;}
+        if((!cfg.play&&doc.getElementById('gameContainer'))||(!loader&&canvas&&canvas.width>0)){setReady(true);setStalled(false);return;}
         const message=doc.getElementById('preloaderText')?.textContent;
         if(message)setProgress(message.trim());
       }catch{/* cross-origin frames cannot be inspected */}
@@ -105,14 +114,12 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
     <p role="alert" className="max-w-xl text-sm text-rose-200">{error||'Loja nuk është e disponueshme'}</p>
     <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rilidhu me bilancin</button>
   </div>;
-  return <CasinoFullscreen>
-    <div className="relative">
-      <p className="flex items-center justify-center gap-2 bg-[#111824] px-3 py-2 text-center text-[11px] text-amber-200 sm:hidden">
-        <RefreshCw size={13} className="rotate-90"/> Rrotullo telefonin horizontalisht për ekran më të madh
-      </p>
+  return <>
+    <div className="casino-wallet-surface relative">
       <iframe ref={frame} title={cfg.title+' · bilanci i llogarisë'}
-        src={url} className="block h-[min(84vh,920px)] min-h-[530px] w-full border-0"
-        allow="autoplay; fullscreen" allowFullScreen/>
+        src={url} className="casino-wallet-frame block h-full min-h-0 w-full border-0"
+        allow="autoplay; fullscreen; screen-wake-lock" allowFullScreen
+        onLoad={()=>{if(!cfg.play)setReady(true);}}/>
       {stalled&&!ready&&<div role="alert"
         className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black/95 p-5 text-center text-white">
         <AlertTriangle className="text-amber-300" size={32}/>
@@ -121,5 +128,5 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
         <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rifresko lojën</button>
       </div>}
     </div>
-  </CasinoFullscreen>;
+  </>;
 }

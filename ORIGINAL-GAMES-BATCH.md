@@ -1,5 +1,17 @@
 # Original game clients — October 2026 batch
 
+## Current wallet integration — October 21
+
+All six lobby games now use the authenticated sportsbook account balance. The four Slotopol clients below launch through `/app/api/casino/original/:id/session`; their separate virtual-credit routes remain available only as standalone development demos and are no longer linked by the lobby. Original game controls and assets are preserved. The new adapter uses the original Slotopol reel/paytable outcomes; the Sizzling RTP-profile setting does not scale these four games.
+
+Each paid spin debits `app_user.balance` and writes a casino round and player/manager ledger entries in one SQL transaction. Wins remain pending until Take/Collect, the next AGT spin, a new launch or Back. Pending state and replay responses live in PostgreSQL, so a restart, repeated request or parallel frame cannot pay twice. Relaunching the same game invalidates its previous frame. CT Viking free-game chains are calculated and persisted with the paid round before playback; closing midway credits the already awarded full result. Existing account blocks, self-exclusion, stake limits and the administrator casino switch apply to new wagers. There is no demo fallback on wallet or database failure.
+
+All game routes use one horizontal fullscreen container with a reserved Back toolbar. Android fullscreen/orientation lock is requested from the game-card click. A rotated landscape layout covers browsers that deny native orientation lock. The child transport bridge keeps provider fullscreen requests inside the parent so Back remains visible. Physical Android/iOS orientation behavior still requires device verification.
+
+`npm run test:original-wallet` runs isolated PostgreSQL-compatible PGlite SQL tests for all four games, stakes, payouts, retries, restart recovery, manager conservation, free games, x2/x4, close/collect, player restrictions and cookie authentication. It never uses production credentials or player money. Browser checks use a disposable local account and verify horizontal presentation, Back, wallet amounts and transport requests.
+
+The following sections document the original demo import and skipped captures.
+
 The casino adds three separately labelled FUN-credit demos: Viking's Fun, Fruit Queen and Seven Hot. Their supplied provider JavaScript, menus, artwork, symbol animations and sound files run locally. Game controls remain in English. Outcomes are calculated on the Node server using ports of the matching [Slotopol scanners](https://github.com/slotopol/server/tree/2a6fd837feea1b52bbfd65035a7698d0c70e096a/game/slot), with the upstream reel strips and MIT source notices included in `server/casino/slotopol-source/`.
 
 These are local demo adapters, not the providers' private RGS services. Demo sessions live in memory and reset when the backend restarts. They do not use the real sports/casino wallet. The existing Sizzling Hot Deluxe and Book of Ra wallet integrations are preserved.

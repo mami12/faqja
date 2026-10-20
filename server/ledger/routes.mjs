@@ -173,6 +173,8 @@ ledgerRouter.put('/admin/live-risk', requireLedger, requireAuth, requireAdmin,
   guard(async (req,res) => res.json(await writeLiveRiskSettings(req.body?.settings,req.user))));
 
 /* ------------------------------------------------------- universal bet builders */
+ledgerRouter.get('/admin/bet-builders/catalog', requireLedger, requireAuth, requireAdmin,
+  (req,res) => res.json(builders.builderCatalog()));
 ledgerRouter.get('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,
   guard(async (req,res) => res.json(await builders.listTemplates())));
 ledgerRouter.post('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,

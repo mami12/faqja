@@ -1,3 +1,4 @@
+import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 /**
  * Ledger schema - users, money, tickets.
  *
@@ -256,6 +257,7 @@ create table if not exists app_casino_freespin_state (
   updated_at timestamptz not null default now()
 );
 
+${ORIGINAL_WALLET_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.

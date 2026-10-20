@@ -1,72 +1,48 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Maximize2, Minimize2, RotateCw } from 'lucide-react';
+import {useEffect,useState} from 'react';
+import type {ReactNode} from 'react';
+import {ArrowLeft,Maximize2} from 'lucide-react';
 
-type LockableOrientation = ScreenOrientation & {lock?: (orientation:'landscape')=>Promise<void>;unlock?:()=>void};
-export default function CasinoFullscreen({children}:{children:ReactNode}){
-  const root=useRef<HTMLDivElement>(null);
-  const [expanded,setExpanded]=useState(false);
-  const [pseudo,setPseudo]=useState(false);
-  const [rotate,setRotate]=useState(false);
-  useEffect(()=>{
-    const onChange=()=>{
-      const active=document.fullscreenElement===root.current;
-      if(!active&&!pseudo){setExpanded(false);setRotate(false);}
-      if(active)setExpanded(true);
-    };
-    document.addEventListener('fullscreenchange',onChange);
-    return()=>document.removeEventListener('fullscreenchange',onChange);
-  },[pseudo]);
-  useEffect(()=>{
-    if(!expanded)return;
-    const update=()=>{
-      const portrait=window.innerHeight>window.innerWidth;
-      // A visual fallback for mobile browsers that deny ScreenOrientation.lock().
-      setRotate(portrait);
-    };
-    window.addEventListener('resize',update);
-    return()=>window.removeEventListener('resize',update);
-  },[expanded,pseudo]);
-  useEffect(()=>{
-    document.body.style.overflow=expanded?'hidden':'';
-    return()=>{document.body.style.overflow='';};
-  },[expanded]);
-  const close=async()=>{
-    try{(screen.orientation as LockableOrientation | undefined)?.unlock?.();}catch{/* unsupported */}
-    if(document.fullscreenElement===root.current){
-      try{await document.exitFullscreen();}catch{/* unsupported */}
-    }
-    setPseudo(false);setRotate(false);setExpanded(false);
+type LandscapeOrientation=ScreenOrientation&{lock?:(value:'landscape')=>Promise<void>};
+export async function requestCasinoLandscape(){
+ try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen?.();}catch{/* visual landscape works without native fullscreen */}
+ try{await (screen.orientation as LandscapeOrientation)?.lock?.('landscape');}catch{/* unsupported or denied by browser */}
+}
+export async function releaseCasinoLandscape(){
+ try{screen.orientation?.unlock?.();}catch{}
+ try{if(document.fullscreenElement)await document.exitFullscreen();}catch{}
+}
+
+export default function CasinoFullscreen({children,title,onExit}:{children:ReactNode;title:string;onExit:()=>Promise<void>}){
+ const [portrait,setPortrait]=useState(()=>window.innerHeight>window.innerWidth);
+ const [closing,setClosing]=useState(false),[error,setError]=useState('');
+ const exit=async()=>{
+  if(closing)return;setClosing(true);setError('');
+  try{await onExit();await releaseCasinoLandscape();}catch(e:any){setError(e?.message||'Could not close the game. Try again.');setClosing(false);}
+ };
+ useEffect(()=>{
+  const update=()=>setPortrait(window.innerHeight>window.innerWidth);
+  const overflow=document.body.style.overflow;document.body.style.overflow='hidden';
+  window.addEventListener('resize',update);screen.orientation?.addEventListener?.('change',update);
+  void requestCasinoLandscape();
+  return()=>{document.body.style.overflow=overflow;window.removeEventListener('resize',update);screen.orientation?.removeEventListener?.('change',update);void releaseCasinoLandscape();};
+ },[]);
+ useEffect(()=>{
+  const message=(event:MessageEvent)=>{
+   if(event.origin!==window.location.origin)return;
+   const frame=document.querySelector('.casino-game-content iframe') as HTMLIFrameElement|null;
+   if(!frame||event.source!==frame.contentWindow)return;
+   if(event.data?.type==='casino:fullscreen')void requestCasinoLandscape();
+   if(event.data?.type==='casino:exit')void exit();
   };
-  const open=async()=>{
-    const target=root.current;
-    if(!target)return;
-    let native=false;
-    try{
-      if(target.requestFullscreen){await target.requestFullscreen();native=true;}
-    }catch{/* iOS Safari and embedded browsers may deny fullscreen */}
-    let locked=false;
-    try{
-      const orientation=screen.orientation as LockableOrientation | undefined;
-      if(orientation?.lock){await orientation.lock('landscape');locked=true;}
-    }catch{/* orientation lock requires supported mobile browser */}
-    setPseudo(!native);
-    setExpanded(true);
-    setRotate(!locked&&window.innerHeight>window.innerWidth);
-  };
-  return <div ref={root} className={
-    'relative overflow-hidden bg-black '+(expanded?'casino-game-expanded ':'')+
-    (pseudo?'casino-game-pseudo ':'')+(rotate?'casino-game-rotated ':'')
-  }>
-    <div className="casino-game-toolbar absolute right-2 top-2 z-50 flex items-center gap-2">
-      {rotate&&<span className="rounded-lg bg-slate-950/85 px-2 py-1 text-xs text-amber-200"><RotateCw size={13} className="mr-1 inline"/>Pamje landscape</span>}
-      <button type="button" onClick={()=>void(expanded?close():open())}
-        aria-label={expanded?'Dil nga fullscreen':'Fullscreen landscape'}
-        className="flex min-h-11 items-center gap-2 rounded-lg border border-white/30 bg-slate-950/90 px-3 text-sm font-bold text-white shadow-xl">
-        {expanded?<Minimize2 size={17}/>:<Maximize2 size={17}/>}
-        <span>{expanded?'Dil':'Fullscreen'}</span>
-      </button>
-    </div>
-    <div className="casino-game-content">{children}</div>
-  </div>;
+  window.addEventListener('message',message);return()=>window.removeEventListener('message',message);
+ });
+ return <div className={'casino-game-stage '+(portrait?'casino-game-rotated':'')}>
+  <div className="casino-game-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-white/20 bg-slate-950 px-2 text-white">
+   <button type="button" onClick={()=>void exit()} disabled={closing} aria-label="Back to casino"
+    className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold hover:bg-white/10 disabled:opacity-60"><ArrowLeft size={18}/>{closing?'Closing…':'Back'}</button>
+   <span className="truncate text-sm font-bold">{error||title}</span>
+   <button type="button" onClick={()=>void requestCasinoLandscape()} aria-label="Fullscreen landscape" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-white/10"><Maximize2 size={18}/></button>
+  </div>
+  <div className="casino-game-content relative min-h-0 flex-1">{children}</div>
+ </div>;
 }

@@ -1,3 +1,5 @@
+import {normalizeBuilder} from './bet-builder-contracts.mjs';
+export {builderCatalog} from './bet-builder-contracts.mjs';
 /**
  * Universal Bet Builder templates. Admin selects contracts, not per-match prices.
  * Public markets are synthesized from active, eligible provider selections.
@@ -8,23 +10,8 @@ import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 
-const CONTRACTS = {
-  '1X2': ['1', 'X', '2'],
-  DC: ['1X', '12', 'X2'],
-  BTTS: ['Yes', 'No'],
-  TOTAL: ['Over', 'Under'],
-};
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const fail = (message) => { throw Object.assign(new Error(message), { status: 400 }); };
-
-function cleanLeg(leg) {
-  const market = String(leg?.market ?? '').toUpperCase();
-  const outcome = String(leg?.outcome ?? '').trim();
-  const line = market === 'TOTAL' ? String(leg?.line ?? '').replace(',', '.') : '';
-  if (!CONTRACTS[market]?.some(o => o.toLowerCase() === outcome.toLowerCase())) fail('Market ose zgjedhje e pavlefshme.');
-  if (market === 'TOTAL' && !['0.5','1.5','2.5','3.5','4.5','5.5','6.5'].includes(line)) fail('Linjë golash e pavlefshme.');
-  return { market, outcome: CONTRACTS[market].find(o => o.toLowerCase() === outcome.toLowerCase()), line };
-}
+const fail = message=>{throw Object.assign(new Error(message),{status:400});};
 
 export async function listTemplates({ activeOnly = false } = {}) {
   const { rows } = await query(
@@ -36,16 +23,9 @@ export async function listTemplates({ activeOnly = false } = {}) {
   return rows;
 }
 
-export async function saveTemplate({ id, name, legs, active }) {
-  const title = String(name ?? '').trim();
-  if (title.length < 3 || title.length > 80) fail('Emri duhet të ketë 3–80 karaktere.');
-  if (!Array.isArray(legs) || legs.length < 2 || legs.length > 5) fail('Zgjidh 2–5 markete.');
-  const cleaned = legs.map(cleanLeg);
-  if (new Set(cleaned.map(l => l.market + ':' + l.line)).size !== cleaned.length) {
-    fail('Nuk mund të zgjedhësh dy rezultate të të njëjtit market.');
-  }
-  if (id != null && !uuid.test(String(id))) fail('ID e pavlefshme.');
-  const { rows } = await query(
+export async function saveTemplate(input,{executor=query}={}) {
+  const {id,name:title,legs:cleaned,active}=normalizeBuilder(input);
+  const { rows } = await executor(
     `insert into app_bet_builder_template (id,name,legs,active)
      values (coalesce($1::uuid,gen_random_uuid()),$2,$3::jsonb,$4)
      on conflict (id) do update set name=excluded.name,legs=excluded.legs,

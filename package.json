@@ -38,7 +38,9 @@
     "test:clover": "node scripts/test-lucky-clover.mjs && node scripts/test-clover-ct.mjs && node scripts/verify-lucky-clover-assets.mjs",
     "demo:clover": "node scripts/serve-lucky-clover.mjs",
     "demo:originals": "node scripts/serve-original-games.mjs",
-    "test:originals": "node scripts/test-original-games.mjs && node scripts/verify-original-game-assets.mjs && node scripts/verify-original-mobile-assets.mjs"
+    "test:originals": "node scripts/test-original-games.mjs && node scripts/verify-original-game-assets.mjs && node scripts/verify-original-mobile-assets.mjs",
+    "test:original-wallet": "node scripts/test-original-wallet.mjs && node scripts/test-casino-bridge.mjs",
+    "test:builder-admin": "node scripts/test-bet-builder-admin.mjs && node --import ./scripts/fixtures/isolated-casino-env.mjs scripts/test-bet-builder.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -52,6 +54,7 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
