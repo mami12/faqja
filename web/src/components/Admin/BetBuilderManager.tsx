@@ -54,8 +54,8 @@ export default function BetBuilderManager() {
     <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6">
       <div className="rounded-xl border border-tertiary bg-secondary p-4 text-sm text-text-secondary">
         Krijo kombinimin një herë. Shfaqet automatikisht në çdo ndeshje që ka të gjitha marketet aktive.
-        Koeficienti = shumëzimi i kuotave aktuale të API-së. Basti ruan koeficientin e pranuar.
-        <p className="mt-2 text-amber-200">Kujdes: shumëzimi i tregjeve të lidhura nuk është model probabilistik i kalibruar. Aktivizo vetëm kombinime të kontrolluara.</p>
+        Koeficienti merret nga tregu i kombinuar ekzakt i API-së, jo nga shumëzimi i kuotave.
+        <p className="mt-2 text-amber-200">Nëse furnizuesi nuk ofron kuotë për të njëjtin kombinim, Bet Builder nuk shfaqet për atë ndeshje. Kombinimet me më shumë se dy tregje kërkojnë një burim të posaçëm kuotimi.</p>
       </div>
       {error && <div role="alert" className="border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
       {notice && <div className="border border-emerald-500/30 p-3 text-sm text-emerald-300">{notice}</div>}
