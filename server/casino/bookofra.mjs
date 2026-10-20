@@ -204,14 +204,18 @@ export function spinResponse({ credits, stake, payout, bet, lines, grid, grading
   return body;
 }
 
-export function freespinResponse({ credits, payout, bet, lines, grid, grading, left, done, mud }) {
+export function freespinResponse({ credits, payout, bet, lines, grid, grading, left, done, mud, requestId }) {
   const total = money(payout).toFixed(2);
   return {
     balance: { before: money(credits), after: money(credits) },
     denomination: 1,
     available_actions: left > 0 ? ['freespin'] : ['collect'],
     spin: {
-      bet, lines, multiplier: 1, next_multiplier: 1, type: 'free_spin',
+      bet, lines, multiplier: 1, next_multiplier: 1,
+      // The Pixi client keys its reel stop / next-request logic off these two
+      // fields: without next_request_id the reels keep spinning and Start
+      // stays disabled, and the type must be the free-spin enum.
+      type: 'freespin', next_request_id: (Number(requestId) || 0) + 1,
       symbols: symbolMatrix(grid),
       wins: { line_wins: grading.line_wins, total },
     },
@@ -285,13 +289,19 @@ export function createBookOfRaDemoRouter() {
             response = { ...initResponse({ credits: state.credits, requestId: state.requestId }), error: 'INSUFFICIENT_DEMO_CREDITS' };
             break;
           }
-          const grid = randomGrid();
+          // QA hook: CASINO_FS_TEST=1 makes the first spin trigger the free
+          // spins so the intro/stop flow can be tested without waiting.
+          const grid = process.env.CASINO_FS_TEST === '1' && !state.free && state.requestId <= 2
+            ? [[0, 1, 2], [0, 3, 4], [0, 5, 6], [7, 8, 9], [2, 3, 4]]
+            : randomGrid();
           const graded = gradeGrid(grid, bet, lines);
           state.credits = money(state.credits - stake);
           state.pending = graded.total;
           const books = grid.flat().filter(s => s === 0).length;
           let free = null;
-          if (books >= 3) {
+          // Free spins stay OFF until the client FS handshake is finished; the
+          // scatter still pays. Enable with BOOKOFRA_FREE_SPINS=1.
+          if (books >= 3 && process.env.BOOKOFRA_FREE_SPINS === '1') {
             const mud = pickMudSymbol();
             state.free = { left: FREE_SPINS, done: 0, mud };
             free = { left: FREE_SPINS, done: 0, add: 0, mud, wins: { total: 0, win_before_chain: 0 }, type: 'freespins' };
@@ -323,7 +333,8 @@ export function createBookOfRaDemoRouter() {
           state.free.done += 1;
           state.pending = money(state.pending + graded.total);
           response = freespinResponse({ credits: state.credits, payout: state.pending, bet: 1, lines: LINES.length,
-            grid, grading: graded, left: state.free.left, done: state.free.done, mud: state.free.mud });
+            grid, grading: graded, left: state.free.left, done: state.free.done, mud: state.free.mud,
+            requestId: Number(requestId) || 0 });
           if (state.free.left <= 0) state.free = null;
           break;
         }
@@ -435,7 +446,7 @@ export function createBookOfRaRealRouter(){
           return res.json(freespinResponse({
             credits:round.balance,payout:round.pending,bet,lines:lines,
             grid:round.grid,grading:round.graded,
-            left:round.free.left,done:round.free.done,mud:round.free.mud,
+            left:round.free.left,done:round.free.done,mud:round.free.mud,requestId:id,
           }));
         }
         if(round.replayed){

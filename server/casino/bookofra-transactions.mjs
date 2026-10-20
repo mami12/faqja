@@ -120,7 +120,8 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
     }
     const books=grid.flat().filter(s=>s===0).length;
     let free=null;
-    if(books>=3){
+    // Free spins stay OFF until the client FS handshake is finished.
+    if(books>=3 && process.env.BOOKOFRA_FREE_SPINS==='1'){
       const mud=pickMudSymbol();
       await db.query(
         `insert into app_casino_freespin_state(user_id,round_id,left_spins,done_spins,mud,bet,lines)
