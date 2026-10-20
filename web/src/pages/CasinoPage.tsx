@@ -1,11 +1,11 @@
-import { ArrowLeft, BookOpen, Cherry } from 'lucide-react';
+import { ArrowLeft, BookOpen, Cherry, Clover } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import Header from '../components/Layout/Header';
 import CasinoOriginalWallet, { type CasinoGame } from './CasinoOriginalWallet';
 import { casinoAssetUrl } from './casinoOriginalArt';
 
 type GameMeta = {
-  id: CasinoGame;
+  id: CasinoGame | 'luckycloverx3';
   title: string;
   subtitle: string;
   logo: string;
@@ -13,6 +13,13 @@ type GameMeta = {
 };
 
 const GAMES: GameMeta[] = [
+  {
+    id: 'luckycloverx3',
+    title: 'Lucky Clover X3',
+    subtitle: 'Pamje provë · imazhe origjinale · pa baste reale',
+    logo: 'luckycloverx3/html-interface-stable/1024/games/LuckyCloverX3/game/main/top_name.webp',
+    background: 'luckycloverx3/html-interface-stable/1024/games/LuckyCloverX3/game/main/background.webp',
+  },
   {
     id: 'sizzling',
     title: 'Sizzling Hot Deluxe',
@@ -80,7 +87,7 @@ export default function CasinoPage() {
                   <div className="absolute inset-x-0 bottom-0 flex items-end justify-center px-4 pb-3">
                     <GameArt game={game} className="max-h-20 w-auto max-w-[85%] object-contain"/>
                   </div>
-                  {game.id === 'bookofra'
+                  {game.id === 'luckycloverx3' ? <Clover size={18} className="absolute right-3 top-3 text-green-300"/> : game.id === 'bookofra'
                     ? <BookOpen size={18} className="absolute right-3 top-3 text-amber-300/80"/>
                     : <Cherry size={18} className="absolute right-3 top-3 text-rose-300/80"/>}
                 </div>
@@ -98,7 +105,7 @@ export default function CasinoPage() {
           </div>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Të dyja lojërat luhen me bilancin real të llogarisë. Nuk ka kredite demo.
+            Sizzling Hot dhe Book of Ra përdorin bilancin e llogarisë. Lucky Clover X3 është ende pamje provë.
           </p>
         </main>
       </div>
@@ -133,11 +140,15 @@ export default function CasinoPage() {
               <GameArt game={game} className="h-10 w-auto max-w-48 object-contain sm:h-12"/>
               <div>
                 <h1 className="text-sm font-black sm:text-lg">{game.title}</h1>
-                <p className="text-xs text-slate-300">{game.subtitle} · bilanc real (jo kredite demo)</p>
+                <p className="text-xs text-slate-300">{game.subtitle}</p>
               </div>
             </div>
           </div>
-          <CasinoOriginalWallet game={game.id} />
+          {game.id === 'luckycloverx3' ? (
+            <iframe title="Lucky Clover X3 · pamje provë" src="/app/casino-original/luckycloverx3-preview.html" className="block h-[min(84vh,920px)] min-h-[550px] w-full border-0" allow="autoplay; fullscreen" allowFullScreen />
+          ) : (
+            <CasinoOriginalWallet game={game.id} />
+          )}
         </section>
       </main>
     </div>
