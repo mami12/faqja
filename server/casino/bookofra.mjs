@@ -191,7 +191,9 @@ export function spinResponse({ credits, stake, payout, bet, lines, grid, grading
     balance: { before: money(credits), after: money(money(credits) - stake) },
     denomination: 1,
     macro_round: { wins: { total } },
-    available_actions: free ? ['collect', 'gamble', 'spin'] : ['collect', 'gamble', 'spin'],
+    // Gamble/Collect may only be offered when the spin actually won something;
+    // otherwise the cabinet shows "0 won" and Gamble answers NOTHING_TO_GAMBLE.
+    available_actions: payout > 0 ? ['collect', 'gamble', 'spin'] : ['spin'],
     spin: {
       bet, lines, multiplier: 1, next_multiplier: 1, next_request_id: requestId + 1,
       type: 'spin', symbols: symbolMatrix(grid),
