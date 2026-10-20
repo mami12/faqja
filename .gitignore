@@ -9,6 +9,8 @@ web/node_modules/
 web/dist/
 
 # original Novomatic client is fetched at build time by scripts/sync-original-sizzling.mjs
-web/public/casino-original/
+web/public/casino-original/*
+# Lucky Clover's recovered original client is packaged and verified locally.
+!web/public/casino-original/lucky-clover-x3/
 # test artifacts
 tmp/

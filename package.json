@@ -34,7 +34,9 @@
     "verify:app": "node scripts/verify-app.mjs",
     "verify:admin": "node scripts/verify-admin.mjs",
     "verify:suspension": "node scripts/verify-suspension.mjs",
-    "verify:idle": "node scripts/verify-idle.mjs"
+    "verify:idle": "node scripts/verify-idle.mjs",
+    "test:clover": "node scripts/test-lucky-clover.mjs && node scripts/test-clover-ct.mjs && node scripts/verify-lucky-clover-assets.mjs",
+    "demo:clover": "node scripts/serve-lucky-clover.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -12,14 +12,14 @@ const web=JSON.parse(read('web/package.json'));
 const demo=read('server/casino/sizzling-demo.mjs');
 const server=read('server/index.mjs');
 
-// The catalogue may only contain the two original Novomatic cabinets: no
-// generic slot engine and no imitation frontend.
+// Keep the original Novomatic wallet cabinets alongside the original CT demo:
+// no generic slot engine and no imitation frontend.
 assert.ok(!page.includes('casinoEngine'),'no generic casino engine');
 assert.ok(page.includes("id: 'sizzling'")&&page.includes("id: 'bookofra'"),
-  'only the two original Novomatic games may be listed');
+  'both original Novomatic wallet games must remain available');
 assert.ok(!page.includes('slots.map(')&&!page.includes('CATALOG.map('),'no generic slot catalogue');
-// The casino plays for real wallet money: the page must mount the wallet
-// component (which verifies the session cookie) and never the demo iframe.
+// Novomatic games must still use the verified wallet component. Lucky Clover
+// has a separate, explicitly labelled demo entry.
 assert.ok(page.includes('CasinoOriginalWallet'),'casino must use the real wallet component');
 assert.ok(!page.includes('casino-original/sizzling/index.html'),'casino must not mount the demo entry');
 assert.ok(page.includes('<CasinoFullscreen')||wallet.includes('<CasinoFullscreen'),'casino must keep mobile fullscreen');
@@ -39,4 +39,4 @@ assert.ok(demo.includes('gradeGrid'),'demo must use real reel paylines');
 assert.ok(web.scripts.build.includes('sync-original-sizzling.mjs'));
 assert.ok(web.scripts.build.includes('verify-original-sizzling.mjs'));
 assert.ok(web.scripts.dev.includes('sync-original-sizzling.mjs'));
-console.log('Only Sizzling Hot Deluxe: original Pixi/Spine/Howler build, audio, graphics, paylines and demo credits verified');
+console.log('Original Novomatic artwork, wallet integration and client build verified');

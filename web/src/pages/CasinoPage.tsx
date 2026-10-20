@@ -5,7 +5,8 @@ import CasinoOriginalWallet, { type CasinoGame } from './CasinoOriginalWallet';
 import { casinoAssetUrl } from './casinoOriginalArt';
 
 type GameMeta = {
-  id: CasinoGame;
+  id: CasinoGame | 'lucky-clover-x3';
+  demo?: boolean;
   title: string;
   subtitle: string;
   logo: string;
@@ -13,6 +14,14 @@ type GameMeta = {
 };
 
 const GAMES: GameMeta[] = [
+  {
+    id: 'lucky-clover-x3',
+    title: 'Lucky Clover X3',
+    subtitle: '5 lines · Wild x3 · Double Up · DEMO',
+    logo: 'lucky-clover-x3/main/top_name.webp',
+    background: 'lucky-clover-x3/main/background.webp',
+    demo: true,
+  },
   {
     id: 'sizzling',
     title: 'Sizzling Hot Deluxe',
@@ -41,9 +50,10 @@ function GameArt({ game, className }: { game: GameMeta; className: string }) {
 }
 
 /**
- * Casino cabinet. Every game plays with the player's real account balance —
+ * Original cabinets: Novomatic games use the player's real account balance —
  * the same wallet used by sports betting. A game is only embedded after the
  * wallet session cookie has been verified against the /real/play endpoint.
+ * Lucky Clover is a separately labelled demo with its own virtual-credit API.
  */
 export default function CasinoPage() {
   const { gameId } = useParams<{ gameId?: string }>();
@@ -98,7 +108,7 @@ export default function CasinoPage() {
           </div>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Të dyja lojërat luhen me bilancin real të llogarisë. Nuk ka kredite demo.
+            Sizzling Hot Deluxe dhe Book of Ra përdorin bilancin e llogarisë. Lucky Clover X3 është DEMO me kredite virtuale.
           </p>
         </main>
       </div>
@@ -117,7 +127,7 @@ export default function CasinoPage() {
             <ArrowLeft size={17}/> Kazinoja
           </Link>
           <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-            Bilanci i llogarisë · i njëjti me sportin
+            {game.demo ? 'DEMO · Virtual credits' : 'Bilanci i llogarisë · i njëjti me sportin'}
           </div>
         </div>
 
@@ -133,11 +143,19 @@ export default function CasinoPage() {
               <GameArt game={game} className="h-10 w-auto max-w-48 object-contain sm:h-12"/>
               <div>
                 <h1 className="text-sm font-black sm:text-lg">{game.title}</h1>
-                <p className="text-xs text-slate-300">{game.subtitle} · bilanc real (jo kredite demo)</p>
+                <p className="text-xs text-slate-300">{game.subtitle}{!game.demo && ' · bilanc real (jo kredite demo)'}</p>
               </div>
             </div>
           </div>
-          <CasinoOriginalWallet game={game.id} />
+          {game.id === 'lucky-clover-x3' ? (
+            <iframe
+              title="Lucky Clover X3 — original client, demo"
+              src={import.meta.env.BASE_URL + 'casino-original/lucky-clover-x3/index.html'}
+              className="block h-[min(88vh,980px)] min-h-[580px] w-full border-0"
+              allow="autoplay; fullscreen"
+              allowFullScreen
+            />
+          ) : <CasinoOriginalWallet game={game.id} />}
         </section>
       </main>
     </div>
