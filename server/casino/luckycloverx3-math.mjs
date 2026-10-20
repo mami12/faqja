@@ -22,7 +22,7 @@ export function grade(grid,bet=1,selectedLines=5){
     const rows=LINES[li],sym=grid[0][rows[0]];
     let count=1;
     for(let x=1;x<5;x++){if(wildReels[x]||grid[x][rows[x]]===sym)count++;else break;}
-    const factor=PAY[sym-1]?.[count]||0;
+    const factor=PAY[sym-1]?.[count-1]||0;
     if(factor)wins.push({type:'line',line:li,symbol:sym,count,positions:rows.slice(0,count).map((r,x)=>[x,r]),amount:bet*factor*multiplier});
   }
   const positions=id=>grid.flatMap((r,x)=>r.flatMap((s,y)=>s===id?[[x,y]]:[]));
