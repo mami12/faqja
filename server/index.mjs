@@ -31,6 +31,7 @@ import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
 import {createSizzlingRealRouter, casinoSessionRouter} from './casino/sizzling-real.mjs';
+import luckyCloverDemoRouter from './casino/luckycloverx3-demo.mjs';
 import {createBookOfRaDemoRouter, createBookOfRaRealRouter, casinoBookOfRaSessionRouter} from './casino/bookofra.mjs';
 
 const app = express();
@@ -641,6 +642,7 @@ app.use('/app/api', casinoBookOfRaSessionRouter);
 // Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
 app.use('/app/api/casino/bookofra',createBookOfRaDemoRouter());
+app.use('/app/api/casino/luckycloverx3',luckyCloverDemoRouter);
 
 // Keep staff settings/finance history, but disable the old wallet spin API.
 app.use('/app/api', casinoWalletRouter);
