@@ -19,7 +19,7 @@ import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
-import { parseBuilderId, findLeg, listTemplates } from './bet-builders.mjs';
+import { parseBuilderId, findLeg, findProviderBuilderQuote, listTemplates } from './bet-builders.mjs';
 import { isDecidedLiveOutcome } from './decided-markets.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
@@ -176,7 +176,14 @@ async function resolveBuilderSelection(selection, { matchId, templateId }) {
   const lines = await Promise.all(parts.map(part => resolveSelection({
     outcomeId: part.outcome.id, oddsAtPlacement: part.outcome.odds,
   })));
-  const price = Number(lines.reduce((p,l) => p*l.price,1).toFixed(4));
+  // Re-validate the native joint quote with the SAME freshness, suspension,
+  // admin override and live-risk rules as an ordinary provider selection.
+  const quote = findProviderBuilderQuote(projected,template.legs);
+  if (!quote) throw badRequest('API-ja nuk ofron koeficient për këtë kombinim.');
+  const quotedLine = await resolveSelection({
+    outcomeId: quote.outcome.id, oddsAtPlacement: quote.outcome.odds,
+  });
+  const price = quotedLine.price;
   if (!Number.isFinite(price) || price <= 1 || price > 1000) throw badRequest('Koeficienti i Bet Builder është jashtë kufirit.');
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds);
   if (Number.isFinite(shown) && shown > 0 && Math.abs(price-shown)/shown > PRICE_TOLERANCE) {

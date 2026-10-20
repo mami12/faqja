@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { findLeg, builderId, parseBuilderId } from '../server/ledger/bet-builders.mjs';
+import { findLeg, findProviderBuilderQuote, builderId, parseBuilderId } from '../server/ledger/bet-builders.mjs';
 import { gradeLine } from '../server/ledger/settler.mjs';
 import { isDecidedLiveMarket, isDecidedLiveOutcome } from '../server/ledger/decided-markets.mjs';
 
@@ -82,6 +82,55 @@ const projected = {...late, scoreAt: null};
 assert.ok(findLeg(projected,{market:'TOTAL',outcome:'Over',line:'2.5'}),
   'without provider-confirmed score, frontend synthetic quotes are not hidden by an inferred score');
 assert.equal(findLeg({...projected,scoreAt:raw.score_at},{market:'TOTAL',outcome:'Over',line:'2.5'}),null);
+
+
+// Do not multiply correlated same-match prices: X+BTTS Yes must use the
+// provider's native Result+BTTS quote (6.50, not the 18.075 product).
+const quotedMatch = {
+  ...match, homeTeam:'Asyut Petroleum SC', awayTeam:'Zamalek SC',
+  markets: [
+    ...match.markets,
+    market('1X2','1X2','','X','X',7.5),
+    market('Result and both teams to score','OTHER','',
+      'Both Teams To Score And Draw','X&G/G',6.50),
+    market('Result and total','OTHER','','Draw And Under 2.5','X&U2.5',5.2),
+    market('Total and both teams to score','OTHER','',
+      'Over 2.5 And Yes','O2.5&G/G',2.6),
+    market('Double Chance and Total Goals','OTHER','',
+      '1X and Under 2.5','1X&U2.5',3.4),
+  ],
+};
+const providerQuote = (m, legs) => findProviderBuilderQuote(m, legs)?.outcome.odds ?? null;
+assert.equal(providerQuote(quotedMatch, [
+  {market:'1X2',outcome:'X',line:''},{market:'BTTS',outcome:'Yes',line:''},
+]),6.5);
+assert.equal(providerQuote(quotedMatch, [
+  {market:'1X2',outcome:'X',line:''},{market:'TOTAL',outcome:'Under',line:'2.5'},
+]),5.2);
+assert.equal(providerQuote(quotedMatch, [
+  {market:'BTTS',outcome:'Yes',line:''},{market:'TOTAL',outcome:'Over',line:'2.5'},
+]),2.6);
+assert.equal(providerQuote(quotedMatch, [
+  {market:'DC',outcome:'1X',line:''},{market:'TOTAL',outcome:'Under',line:'2.5'},
+]),3.4);
+assert.equal(providerQuote(quotedMatch, [
+  {market:'1X2',outcome:'1',line:''},{market:'BTTS',outcome:'Yes',line:''},
+]),null, 'do not guess missing native same-game prices');
+assert.equal(providerQuote(quotedMatch, [
+  {market:'1X2',outcome:'X',line:''},{market:'BTTS',outcome:'Yes',line:''},
+  {market:'TOTAL',outcome:'Over',line:'2.5'},
+]),null, 'multi-leg builders require an explicit joint quote');
+const lockedQuote = structuredClone(quotedMatch);
+lockedQuote.markets.find(m => m.name === 'Result and both teams to score').outcomes[0].status = 'SUSPENDED';
+assert.equal(providerQuote(lockedQuote, [
+  {market:'1X2',outcome:'X',line:''},{market:'BTTS',outcome:'Yes',line:''},
+]),null);
+const firstHalfQuote = structuredClone(quotedMatch);
+firstHalfQuote.markets.find(m => m.name === 'Result and both teams to score').name =
+  '1st Half Result and both teams to score';
+assert.equal(providerQuote(firstHalfQuote, [
+  {market:'1X2',outcome:'X',line:''},{market:'BTTS',outcome:'Yes',line:''},
+]),null, 'a 1st-half quote must never price a full-time builder');
 
 const id=builderId('123','11111111-1111-4111-8111-111111111111');
 assert.deepEqual(parseBuilderId(id),{matchId:'123',templateId:'11111111-1111-4111-8111-111111111111'});
