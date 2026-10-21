@@ -135,3 +135,12 @@
  width: min(100dvh, calc((100vw - 44px) * 16 / 9));
  height: min(calc(100vw - 44px), calc(100dvh * 9 / 16));
 }
+.casino-game-windowed {
+ position: relative; inset: auto; z-index: 1;
+ width: calc(100% - 24px); height: 72dvh; min-height: 260px;
+ margin: 12px; border: 1px solid #ffffff33; border-radius: 12px;
+}
+.casino-game-windowed .casino-wallet-surface {
+ width: min(100%, calc((72dvh - 46px) * 16 / 9));
+ height: auto; aspect-ratio: 16 / 9; max-height: 100%;
+}

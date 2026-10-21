@@ -1,4 +1,6 @@
-import CasinoFullscreen,{requestCasinoLandscape} from '../components/Layout/CasinoFullscreen';
+import CasinoFullscreen,{requestCasinoLandscape,releaseCasinoLandscape} from '../components/Layout/CasinoFullscreen';
+import {useMemo} from 'react';
+import {createCasinoExitController} from './casinoExit';
 import {apiClient} from '../api/client';
 import {useAuth} from '../context/AuthContext';
 import { ArrowLeft, BookOpen, Cherry } from 'lucide-react';
@@ -58,12 +60,12 @@ function GameArt({ game, className }: { game: GameMeta; className: string }) {
 export default function CasinoPage() {
   const { gameId } = useParams<{ gameId?: string }>();
   const navigate=useNavigate(),{refreshUser}=useAuth();
-  const exitGame=async()=>{
-    const original=['lucky-clover-x3','vikings-fun','fruit-queen','seven-hot'].includes(gameId||'');
-    try{await apiClient.post(original?'/casino/original/'+gameId+'/close':'/casino/original/pixi/close',{},{validateStatus:status=>status===401||(status>=200&&status<300)});}
-    catch{/* Pending wins remain durable if collection is temporarily unavailable. */}
-    await refreshUser().catch(()=>{});navigate('/casino');
-  };
+  const exitGame=useMemo(()=>createCasinoExitController({
+    releaseDisplay:()=>releaseCasinoLandscape({keepSession:true}),
+    closeWallet:()=>apiClient.post(['lucky-clover-x3','vikings-fun','fruit-queen','seven-hot'].includes(gameId||'')?'/casino/original/'+gameId+'/close':'/casino/original/pixi/close',{},{timeout:5000,validateStatus:status=>status===401||(status>=200&&status<300)}),
+    refreshWallet:refreshUser,
+    navigate:()=>navigate('/casino'),
+  }),[gameId,navigate,refreshUser]);
 
   if (!gameId) {
     return (

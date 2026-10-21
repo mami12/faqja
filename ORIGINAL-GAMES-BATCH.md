@@ -67,6 +67,14 @@ All six wallet frames stop polling the parent account every three seconds; the o
 
 The shared player-limit check no longer scans transaction history for players without period caps, while still applying mature limits and enforcing self-exclusion. Limited players scan only the earliest relevant week/month boundary in the database timezone. `npm run test:casino-display`, `npm run test:player-controls` and `npm run test:original-wallet` cover display races, calendar limits and wallet conservation. These changes reduce unnecessary work; they are not a measured guarantee of production response time.
 
+## Back and Exit fullscreen repair — October 22
+
+Back now releases display intent and returns to the casino immediately. Wallet close runs in the background with a five-second request timeout, followed by an account refresh. Pending wins remain durable if the network is unavailable and are collected by the existing close/next-launch logic. Repeated Back clicks cannot issue duplicate close requests.
+
+The display button toggles between fullscreen landscape and a normal page-sized cabinet while retaining the same game frame and session. Manual exit suppresses automatic provider fullscreen requests until the player explicitly enters again. Browser Escape also restores the normal cabinet; pending native entry, lock or exit promises cannot block Back.
+
+`npm run test:casino-display` covers suspended browser promises, late display races and immediate navigation under wallet failures. Wallet conservation tests and web typecheck/build pass. A disposable local browser check retained Sizzling's selected bet through both display modes and returned to the catalog within one second while its test close endpoint was delayed fifteen seconds. This was a desktop browser check, not a physical Android test or a production deployment verification.
+
 ## Verification
 
 - 20,370 deterministic grids were compared directly against the unmodified Go scanners at the pinned Slotopol commit: 12,242 Viking's Fun and 8,128 AGT cases. Base/free modes and mixed wilds were included.
