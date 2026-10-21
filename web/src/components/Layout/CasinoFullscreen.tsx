@@ -1,16 +1,19 @@
 import {useEffect,useState} from 'react';
 import type {ReactNode} from 'react';
 import {ArrowLeft,Maximize2} from 'lucide-react';
+import {createCasinoDisplayController} from './casinoDisplay';
 
 type LandscapeOrientation=ScreenOrientation&{lock?:(value:'landscape')=>Promise<void>};
-export async function requestCasinoLandscape(){
- try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen?.();}catch{/* visual landscape works without native fullscreen */}
- try{await (screen.orientation as LandscapeOrientation)?.lock?.('landscape');}catch{/* unsupported or denied by browser */}
-}
-export async function releaseCasinoLandscape(){
- try{screen.orientation?.unlock?.();}catch{}
- try{if(document.fullscreenElement)await document.exitFullscreen();}catch{}
-}
+const display=createCasinoDisplayController({
+ isFullscreen:()=>Boolean(document.fullscreenElement),
+ isLandscape:()=>screen.orientation?.type?screen.orientation.type.startsWith('landscape'):window.innerWidth>window.innerHeight,
+ requestFullscreen:()=>document.documentElement.requestFullscreen?.(),
+ lockLandscape:()=>(screen.orientation as LandscapeOrientation)?.lock?.('landscape'),
+ unlock:()=>screen.orientation?.unlock?.(),
+ exitFullscreen:()=>document.exitFullscreen(),
+});
+export const requestCasinoLandscape=display.request;
+export const releaseCasinoLandscape=display.release;
 
 export default function CasinoFullscreen({children,title,onExit}:{children:ReactNode;title:string;onExit:()=>Promise<void>}){
  const [portrait,setPortrait]=useState(()=>window.innerHeight>window.innerWidth);
@@ -41,7 +44,7 @@ export default function CasinoFullscreen({children,title,onExit}:{children:React
    <button type="button" onClick={()=>void exit()} disabled={closing} aria-label="Back to casino"
     className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold hover:bg-white/10 disabled:opacity-60"><ArrowLeft size={18}/>{closing?'Closing…':'Back'}</button>
    <span className="truncate text-sm font-bold">{error||title}</span>
-   <button type="button" onClick={()=>void requestCasinoLandscape()} aria-label="Fullscreen landscape" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-white/10"><Maximize2 size={18}/></button>
+   <button type="button" onClick={()=>void requestCasinoLandscape({retry:true})} aria-label="Fullscreen landscape" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg hover:bg-white/10"><Maximize2 size={18}/></button>
   </div>
   <div className="casino-game-content relative min-h-0 flex-1">{children}</div>
  </div>;

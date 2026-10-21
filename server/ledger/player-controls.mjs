@@ -95,13 +95,22 @@ export async function assertPlayerCanBet(client, userId, stake) {
   await applyMaturePendingLimits(client, userId);
   const result = await client.query('select * from app_player_controls where user_id = $1 for update', [userId]);
   const controls = publicControls(result.rows[0]);
+  // Most players have no period caps. Keep exclusion and mature-limit checks,
+  // but avoid scanning their transaction history on every casino spin.
+  if ([controls.dailyLimit, controls.weeklyLimit, controls.monthlyLimit].every(limit => limit === null)) {
+    assertBetWithinLimits({ stake, controls, used: {} });
+    return;
+  }
+  // A week can begin in the previous month; retain both periods using the
+  // database timezone, just like the individual totals below.
   const usage = await client.query(
     `select
        coalesce(sum(-amount) filter (where created_at >= date_trunc('day', now())), 0) as daily_used,
        coalesce(sum(-amount) filter (where created_at >= date_trunc('week', now())), 0) as weekly_used,
        coalesce(sum(-amount) filter (where created_at >= date_trunc('month', now())), 0) as monthly_used
      from app_transaction
-     where user_id = $1 and type in ('BET_PLACED','CASINO_SPIN') and amount < 0`,
+     where user_id = $1 and type in ('BET_PLACED','CASINO_SPIN') and amount < 0
+       and created_at >= least(date_trunc('week', now()), date_trunc('month', now()))`,
     [userId],
   );
   const used = usage.rows[0] ?? {};

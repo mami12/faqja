@@ -61,6 +61,12 @@ Both pinned Pixi clients now use a backing-pixel budget of 921,600 (1280×720 eq
 
 `npm run test:pixi-clients` exercises the original resize/adaptive methods and Pixi pointer mapping across 36 viewport/DPR cases, plus the attributed-head fullscreen regression. The build verifier checks both packaged engines. These tests establish the rendering bounds and coordinate alignment; actual Android frame rate and touch behavior still require device verification.
 
+## Shared casino latency and controls — October 22
+
+All six wallet frames stop polling the parent account every three seconds; the original client remains responsible for its own balance meter and Back refreshes the sportsbook balance. Loader checks stop when the frame is ready. Fullscreen/orientation requests from the game card, mount and provider now share one automatic attempt per session; the visible Fullscreen control can retry after a denial. Back invalidates late display requests before the next game starts.
+
+The shared player-limit check no longer scans transaction history for players without period caps, while still applying mature limits and enforcing self-exclusion. Limited players scan only the earliest relevant week/month boundary in the database timezone. `npm run test:casino-display`, `npm run test:player-controls` and `npm run test:original-wallet` cover display races, calendar limits and wallet conservation. These changes reduce unnecessary work; they are not a measured guarantee of production response time.
+
 ## Verification
 
 - 20,370 deterministic grids were compared directly against the unmodified Go scanners at the pinned Slotopol commit: 12,242 Viking's Fun and 8,128 AGT cases. Base/free modes and mixed wilds were included.

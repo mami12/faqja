@@ -1,7 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {AlertTriangle,RefreshCw} from 'lucide-react';
 import {apiClient} from '../api/client';
-import {useAuth} from '../context/AuthContext';
 
 
 export type CasinoGame = 'sizzling' | 'bookofra' | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot';
@@ -41,7 +40,6 @@ function walletError(status:number,details:string):string {
  */
 export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame}){
   const cfg=GAMES[game]??GAMES.sizzling;
-  const {refreshUser}=useAuth();
   const frame=useRef<HTMLIFrameElement>(null);
   const [url,setUrl]=useState('');
   const [loading,setLoading]=useState(true);
@@ -81,7 +79,7 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   };
   useEffect(()=>{void connect();},[game]);
   useEffect(()=>{
-    if(!url)return;
+    if(!url||ready)return;
     const check=()=>{
       try{
         const doc=frame.current?.contentDocument;
@@ -97,17 +95,8 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
     const timeout=window.setTimeout(()=>setStalled(value=>ready?value:true),60000);
     return()=>{window.clearInterval(poll);window.clearTimeout(timeout);};
   },[url,ready]);
-  useEffect(()=>{
-    const sync=()=>{void refreshUser().catch(()=>{});};
-    const id=window.setInterval(sync,3000);
-    window.addEventListener('focus',sync);
-    document.addEventListener('visibilitychange',sync);
-    return()=>{
-      window.clearInterval(id);
-      window.removeEventListener('focus',sync);
-      document.removeEventListener('visibilitychange',sync);
-    };
-  },[refreshUser]);
+  // The provider updates its own wallet meter. CasinoPage refreshes the sports
+  // balance on Back, so background account polling need not compete with spins.
   if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">Po verifikohet lidhja me bilancin e llogarisë...</div>;
   if(error||!url)return <div className="flex min-h-56 flex-col items-center justify-center gap-4 bg-black p-8 text-center">
     <AlertTriangle className="text-amber-300" size={30}/>
