@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {originalClientShell} from '../server/casino/original-client-shell.mjs';
+for(const opening of ['<head>','<head attach-element="./head.html">','<HEAD data-provider="pixi">']){
+ const html=`<!doctype html><html>${opening}<script src="./libs/assembler.js"></script></head><body attach-element="./body.html"></body></html>`;
+ const shell=originalClientShell(html,'/app/casino-original/sizzling/',{game:'</script>'});
+ assert(shell.includes(opening+'<base href="/app/casino-original/sizzling/">'));
+ assert(shell.indexOf('wallet-bridge.js')<shell.indexOf('./libs/assembler.js'),'fullscreen adapter must run before provider scripts');
+ assert(shell.includes('"game":"\\u003c/script>"'),'inline config escapes script-closing input');
+ assert(shell.includes('<body attach-element="./body.html">'),'preserve provider assembler attributes');
+}
+assert.throws(()=>originalClientShell('<html><body></body></html>','/app/'),/no HTML head/);
 const messages=[],calls=[];
 class Element{}
 class XHR{open(...args){calls.push(args);}}

@@ -8,6 +8,7 @@ import {requireAuth} from '../ledger/auth.mjs';
 import {isLedgerReady} from '../ledger/store.mjs';
 import {settlePendingWin} from './transactions.mjs';
 import {createOriginalWalletStore,ORIGINAL_GAMES,walletFault} from './original-wallet-store.mjs';
+import {originalClientShell} from './original-client-shell.mjs';
 
 const MAX_AGE=7200,cookieName=id=>'casino_original_'+id;
 const prefix=id=>'/app/api/casino/original/'+id;
@@ -29,8 +30,7 @@ const publicRoot=fileURLToPath(new URL('../../web/public/',import.meta.url));
 function assetRoot(){const dist=fileURLToPath(new URL('../../web/dist/',import.meta.url));return existsSync(path.join(dist,'index.html'))?dist:publicRoot;}
 function shell(file,base,settings={}){
  const html=readFileSync(path.join(assetRoot(),file),'utf8');
- const head=`<base href="${base}"><script>window.casinoWalletConfig=${JSON.stringify(settings).replaceAll('<','\\u003c')};</script><script src="/app/casino-original/wallet-bridge.js"></script>`;
- return html.replace(/<head>/i,'<head>'+head);
+ return originalClientShell(html,base,settings);
 }
 export function createOriginalWalletRouter({store=createOriginalWalletStore(),auth=requireAuth,ready=isLedgerReady}={}){
  const router=Router();

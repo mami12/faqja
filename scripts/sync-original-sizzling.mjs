@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {applyPixiClientCompat} from './pixi-client-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'web/public/casino-original/sizzling');
@@ -35,6 +36,8 @@ try {
   for (const folder of dirs) {
     await cp(join(source, folder), join(output, folder), { recursive: true, force: true });
   }
+  const engine='scripts/c2d-3c891074da.js';
+  await writeFile(join(output,engine),applyPixiClientCompat(await readFile(join(output,engine),'utf8')));
   for (const file of ['manifest.json', 'manifest-7976fbc9075178.json']) {
     await cp(join(source, file), join(output, file));
   }
@@ -46,7 +49,8 @@ try {
     'background-desktop-520de17f9c.jpg'));
   // Preserve real head/body and Pixi/Spine loader; avoid missing icon 404s.
   const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
-  const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
+  const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '')
+    .replace(engine+'"',engine+'?render-budget=1"');
   await writeFile(join(output, 'head.html'), head);
   // Original mobile components were not shipped in this archive. Force the
   // existing desktop Pixi component tree on narrow touch screens instead.

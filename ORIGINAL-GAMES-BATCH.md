@@ -53,6 +53,14 @@ AGT mobile button atlases for Fruit Queen and Seven Hot, the mobile sound icon a
 
 `npm run test:originals` checks all mobile attraction references, both WebM/Lottie branches, every nested Lottie image, and AGT mobile button atlases against the packaged manifests. Browser checks use phone dimensions and Android/iPhone user-agent branches; these are desktop browser simulations, not physical-device Safari tests.
 
+## Book of Ra / Sizzling rendering and fullscreen repair — October 21
+
+The fullscreen adapter now loads before the assembler even when the original HTML head has `attach-element` attributes. Previously these two wallet entrypoints skipped the adapter, allowing the provider's touch fullscreen handler to leave the parent container and its Back toolbar.
+
+Both pinned Pixi clients now use a backing-pixel budget of 921,600 (1280×720 equivalent) and a DPR cap of 1.5 on touch devices, or 2,073,600 pixels (1920×1080 equivalent) on desktop. Initial sizing, resize and adaptive quality use the same limits. Browser DPR, original HD media, control geometry, animation durations and game math are preserved. The engine URL is versioned so an older cached bundle cannot hide the correction.
+
+`npm run test:pixi-clients` exercises the original resize/adaptive methods and Pixi pointer mapping across 36 viewport/DPR cases, plus the attributed-head fullscreen regression. The build verifier checks both packaged engines. These tests establish the rendering bounds and coordinate alignment; actual Android frame rate and touch behavior still require device verification.
+
 ## Verification
 
 - 20,370 deterministic grids were compared directly against the unmodified Go scanners at the pinned Slotopol commit: 12,242 Viking's Fun and 8,128 AGT cases. Base/free modes and mixed wilds were included.

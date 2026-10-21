@@ -49,4 +49,13 @@ for (const dir of [source, output]) {
     assert.ok(existsSync(join(dir, manifest[key])), 'Missing hashed resource: ' + key);
   }
 }
+for(const [game,engine] of [['sizzling','c2d-3c891074da.js'],['bookofra','c2d-6242421041.js']]){
+ for(const tree of ['public','dist']){
+  const dir=join(root,'web',tree,'casino-original',game);
+  assert.match(readFileSync(join(dir,'scripts',engine),'utf8'),/faqja-pixi-render-budget-v1/,
+    game+' must use the bounded canvas renderer');
+  assert.ok(readFileSync(join(dir,'head.html'),'utf8').includes(engine+'?render-budget=1'),
+    game+' must refresh cached engines after the renderer fix');
+ }
+}
 console.log('Original Sizzling Pixi/Spine/Howler, manifest, atlas, audio & /app build verified');

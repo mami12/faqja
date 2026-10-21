@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {applyPixiClientCompat} from './pixi-client-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'web/public/casino-original/bookofra');
@@ -34,13 +35,16 @@ try {
   for (const folder of dirs) {
     await cp(join(source, folder), join(output, folder), { recursive: true, force: true });
   }
+  const engine='scripts/c2d-6242421041.js';
+  await writeFile(join(output,engine),applyPixiClientCompat(await readFile(join(output,engine),'utf8')));
   for (const file of ['manifest.json', 'manifest-ecc4347a48712.json']) {
     await cp(join(source, file), join(output, file));
   }
 
   // Original head/body keep the assembler contract; drop missing icon links.
   const sourceHead = await readFile(join(source, 'head.html'), 'utf8');
-  const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '');
+  const head = sourceHead.replace(/<link\b[^>]*href=["'][^"']*icons\/[^"']+["'][^>]*>\s*/gi, '')
+    .replace(engine+'"',engine+'?render-budget=1"');
   await writeFile(join(output, 'head.html'), head);
 
   const bodySource = await readFile(join(source, 'body.html'), 'utf8');
