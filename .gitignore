@@ -3,6 +3,7 @@ node_modules/
 .env.local
 *.log
 *.tmp
+.runtime/
 
 # the React app: dependencies live at the repo root, the build output is served by the backend
 web/node_modules/

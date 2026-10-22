@@ -36,6 +36,7 @@ import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
 import {createSizzlingRealRouter, casinoSessionRouter} from './casino/sizzling-real.mjs';
 import {createBookOfRaDemoRouter, createBookOfRaRealRouter, casinoBookOfRaSessionRouter} from './casino/bookofra.mjs';
+import { installGracefulShutdown } from './lifecycle.mjs';
 
 const app = express();
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
@@ -43,6 +44,16 @@ const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOr
 let collector = null;
 let pusher = null;
 let oddsStatus = { connected: false };
+let shuttingDown = false;
+let riskRefreshTimer = null;
+let socketTasks = 0;
+const backgroundTasks = new Set();
+function trackBackground(task) {
+  const pending = Promise.resolve(task);
+  backgroundTasks.add(pending);
+  void pending.finally(() => backgroundTasks.delete(pending)).catch(() => {});
+  return pending;
+}
 
 // prices for one selection can arrive from two books at once ("10:…" and "12:L:…"): keep one
 // of them per selection so the board cannot show a price that changes and then changes back
@@ -74,7 +85,7 @@ let dbProbe = { at: null, ms: null };
 let probing = false;
 
 async function probeDb() {
-  if (probing) return; // a slow/dead database must not pile up probes
+  if (shuttingDown || probing) return; // a slow/dead database must not pile up probes
   probing = true;
   const started = Date.now();
   try {
@@ -103,6 +114,7 @@ let lastUnresolvedCheck = 0;
 // De-duplicate repeated full-time frames after durable result persistence.
 const archivedTerminalMatches = new Set();
 async function ensureLedgerSchema() {
+  if (shuttingDown) return false;
   if (ledgerReady) return true;
   try {
     await initSchema();
@@ -128,9 +140,9 @@ async function ensureLedgerSchema() {
 /** the probe is pure database traffic - idle mode stops it so nothing goes out on the wire */
 let probeTimer = null;
 function armProbe() {
-  if (probeTimer) return false;
-  probeDb();
-  probeTimer = setInterval(probeDb, 15000);
+  if (shuttingDown || probeTimer) return false;
+  trackBackground(probeDb());
+  probeTimer = setInterval(() => trackBackground(probeDb()), 15000);
   probeTimer.unref?.();
   return true;
 }
@@ -168,7 +180,7 @@ function broadcastFeedState() {
  * and to run once on wake, where it catches up on everything that ended while we were asleep.
  */
 async function runSettlement(why = 'periodic') {
-  if (!ledgerReady || settlementBusy) return null;
+  if (shuttingDown || !ledgerReady || settlementBusy) return null;
   settlementBusy = true;
   try {
     const out = await settleAll();
@@ -199,7 +211,7 @@ async function runSettlement(why = 'periodic') {
 
 /** Start once after ledger creation OR database recovery. */
 function armSettlement() {
-  if (!ledgerReady || settleTimer) return;
+  if (shuttingDown || !ledgerReady || settleTimer) return;
   void runSettlement('ledger ready');
   const delay = Math.max(10000, Number(process.env.SETTLE_INTERVAL_MS) || 30000);
   settleTimer = setInterval(() => void runSettlement('periodic'), delay);
@@ -217,6 +229,7 @@ const idle = createIdleMonitor({
     broadcastFeedState();
   },
   onWake: () => {
+    if (shuttingDown) return;
     if (config.idleStopDbProbe) armProbe();
     pusher?.resume();
     broadcastFeedState();
@@ -504,7 +517,7 @@ const infoBuffer = new Map();
 let flushing = false;
 
 async function flushFeedBuffer() {
-  if (flushing || (!oddsBuffer.length && !infoBuffer.size)) return;
+  if (shuttingDown || flushing || (!oddsBuffer.length && !infoBuffer.size)) return;
   flushing = true;
   try {
     if (oddsBuffer.length) {
@@ -522,7 +535,7 @@ async function flushFeedBuffer() {
     flushing = false;
   }
 }
-setInterval(flushFeedBuffer, 1000);
+const feedFlushTimer = setInterval(() => trackBackground(flushFeedBuffer()), 1000);
 
 app.post('/ingest/odds', requireToken, async (req, res, next) => {
   try {
@@ -709,6 +722,7 @@ const io = new SocketServer(server, {
 });
 
 io.on('connection', async (socket) => {
+  if (shuttingDown) return socket.disconnect(true);
   // a visitor: the feed must be live while this socket is open (idle mode wakes it here)
   idle.clientOpen();
   socket.on('disconnect', () => idle.clientClose());
@@ -716,6 +730,7 @@ io.on('connection', async (socket) => {
   // `mode` lets the board say "odds are being refreshed" instead of showing an empty list
   // while the first feed cycle is in flight
   socket.emit('hello', { at: new Date().toISOString(), pollMs: config.pollIntervalMs, mode: getFeedMode() });
+  socketTasks++;
   try {
     const counts = await getCounts();
     socket.emit('meta', { ...counts, mode: getFeedMode() });
@@ -731,6 +746,8 @@ io.on('connection', async (socket) => {
     });
   } catch (e) {
     socket.emit('server:error', { message: e.message });
+  } finally {
+    socketTasks--;
   }
 });
 
@@ -774,11 +791,12 @@ async function boot() {
   }
 
   await ensureLedgerSchema(); // the board does not need the ledger, so a failure here is not fatal
+  if (shuttingDown) return;
   // DB remains authoritative when multiple instances serve the sportsbook.
   // For betting, the policy is reread under the singleton row lock regardless.
-  const riskRefreshTimer = setInterval(() => {
-    if (ledgerReady) refreshLiveRiskSettings().catch(e =>
-      console.warn('[live risk] refresh failed:',e.message));
+  riskRefreshTimer = setInterval(() => {
+    if (!shuttingDown && ledgerReady) trackBackground(refreshLiveRiskSettings().catch(e =>
+      console.warn('[live risk] refresh failed:',e.message)));
   }, 10000);
   riskRefreshTimer.unref?.();
 
@@ -832,19 +850,28 @@ async function boot() {
   );
 }
 
-boot();
-
-for (const sig of ['SIGTERM', 'SIGINT']) {
-  process.on(sig, async () => {
-    console.log(`[app] ${sig} received, shutting down`);
+installGracefulShutdown({
+  server,
+  io,
+  closePool,
+  stopBackground() {
+    shuttingDown = true;
     idle.stop();
     collector?.stop();
     pusher?.close();
     stopProbe();
     clearInterval(settleTimer);
-    io.close();
-    server.close();
-    await closePool();
-    process.exit(0);
-  });
-}
+    clearInterval(feedFlushTimer);
+    clearInterval(riskRefreshTimer);
+  },
+  async waitForBackground() {
+    while (backgroundTasks.size || collector?.state.running || settlementBusy || flushing || socketTasks) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  },
+});
+
+trackBackground(boot()).catch(error => {
+  console.error('[app] startup failed:', error?.message ?? error);
+  process.exit(1);
+});

@@ -42,7 +42,8 @@
     "test:original-wallet": "node scripts/test-original-wallet.mjs && node scripts/test-casino-bridge.mjs",
     "test:builder-admin": "node scripts/test-bet-builder-admin.mjs && node --import ./scripts/fixtures/isolated-casino-env.mjs scripts/test-bet-builder.mjs",
     "test:pixi-clients": "node scripts/test-casino-bridge.mjs && node scripts/test-pixi-client-compat.mjs",
-    "test:casino-display": "node scripts/test-casino-display.mjs && node scripts/test-casino-exit.mjs"
+    "test:casino-display": "node scripts/test-casino-display.mjs && node scripts/test-casino-exit.mjs",
+    "test:windows": "node scripts/test-windows-config.mjs && node scripts/test-windows-server.mjs && node scripts/test-server-lifecycle.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

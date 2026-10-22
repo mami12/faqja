@@ -1,5 +1,8 @@
 # faqja — football board (live + prematch)
 
+Për server në Windows me `start.bat`, `stop.bat` dhe konfigurim lokal `.env`,
+shiko [WINDOWS-SERVER.md](WINDOWS-SERVER.md).
+
 Minimal, dark, **real football only** board for the `bitgames6205.com` / `api-gateway.gw-lucky-bet.com`
 sports feed. Backend on **Railway**, frontend on **GitHub Pages**, storage on **Supabase Postgres**.
 
