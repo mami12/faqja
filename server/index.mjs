@@ -705,6 +705,8 @@ if (existsSync(webDist)) {
 /* ---------------------------------------------------------------- delivery */
 
 const docsDir = fileURLToPath(new URL('../docs/', import.meta.url));
+// Open the betting app when a visitor enters only the public domain.
+app.get('/', (_req, res) => res.redirect(302, '/app/'));
 app.use(express.static(docsDir));
 
 app.use((err, _req, res, _next) => {
