@@ -3,13 +3,35 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { LEDGER_SQL } from '../server/ledger/schema.mjs';
-import { createColumnsPlacer, toClientTicket, placeBet } from '../server/ledger/bets.mjs';
+import { createColumnsPlacer, toClientTicket, placeBet, resolveTicketSelection } from '../server/ledger/bets.mjs';
 import { DEFAULT_LIVE_RISK_SETTINGS } from '../server/live-risk-settings.mjs';
 import { upsert, getById } from '../server/match-store.mjs';
 import { applyRows, getOddsForMatches } from '../server/odds-store.mjs';
 import { snapshot } from '../server/ledger/overrides.mjs';
 import { setFeedMode, FEED_LIVE, FEED_WAKING } from '../server/idle-mode.mjs';
 import { config } from '../server/config.mjs';
+
+// The server must identify the precise rejected outcome when there are
+// multiple selected markets for a single fixture; unrelated errors stay separate.
+const rejectedOutcomeId = '1101|total|3.5|under';
+await assert.rejects(
+  resolveTicketSelection({outcomeId:rejectedOutcomeId},async()=>{
+    throw Object.assign(new Error('Suspended'),{status:400});
+  }),
+  error => error.code === 'SELECTION_UNAVAILABLE' && error.outcomeId === rejectedOutcomeId,
+);
+await assert.rejects(
+  resolveTicketSelection({outcomeId:rejectedOutcomeId},async()=>{
+    throw Object.assign(new Error('Feed waking'),{status:400,code:'FEED_REFRESHING'});
+  }),
+  error => error.code === 'FEED_REFRESHING' && error.outcomeId === undefined,
+);
+await assert.rejects(
+  resolveTicketSelection({outcomeId:rejectedOutcomeId},async()=>{
+    throw Object.assign(new Error('Insufficient balance'),{status:403});
+  }),
+  error => error.outcomeId === undefined,
+);
 
 assert.equal(config.matchStore, 'memory', 'isolated feed tests require in-memory matches');
 assert.equal(config.databaseUrl, 'postgresql://unused:unused@127.0.0.1:1/casino_test');
