@@ -229,10 +229,6 @@ try {
   await rejectWithoutMoney(() => placeBet(request()), error => error.status === 400,
     'a constituent suspension while waiting for wallet locks blocks the placement');
   seed();
-  await rejectWithoutMoney(() => placeBet(request([
-    {outcomeId:regularId,oddsAtPlacement:2.2}, {outcomeId:totalId,oddsAtPlacement:1.8},
-  ])), error => error.status === 400,
-    'ordinary tickets cannot multiply two correlated selections from the same event');
   const successful = request();
   const ticket = await placeBet(successful);
   assert.equal(ticket.stake,100); assert.equal(ticket.totalOdds,3.96); assert.equal(ticket.potentialPayout,396);
@@ -303,6 +299,29 @@ try {
   assert.equal(databaseTicket.totalOdds,3.96);
   assert.equal(databaseTicket.lines.length,1);
   assert.deepEqual(await wallet(), {balance:9600,tickets:4,transactions:4});
+  // Ordinary tickets are NOT Bet Builder markets: keep each selected outcome
+  // as a separate printed line, even if the match ID is identical.
+  config.matchStore = 'memory'; config.oddsStore = 'memory';
+  seed(); await persist({enabled:false, combosEnabled:false});
+  const multiMarket = await placeBet(request([
+    {outcomeId:regularId,oddsAtPlacement:2.2},
+    {outcomeId:totalId,oddsAtPlacement:1.8},
+  ]));
+  assert.equal(multiMarket.ticketType,'COMBO');
+  assert.equal(multiMarket.stake,100);
+  assert.equal(multiMarket.totalOdds,3.96);
+  assert.equal(multiMarket.lines.length,2);
+  assert.deepEqual(multiMarket.lines.map(line=>[line.matchId,line.marketName,line.oddsAtPlacement]),[
+    [String(matchId),'1X2',2.2],[String(matchId),'Total',1.8],
+  ]);
+  assert.equal(new Set(multiMarket.lines.map(line=>line.ticketId)).size,1,
+    'two separate same-match markets belong to one ticket, not two system tickets');
+  assert.deepEqual(await wallet(), {balance:9500,tickets:5,transactions:5});
+  await rejectWithoutMoney(() => placeBet(request([
+    {outcomeId:regularId,oddsAtPlacement:2.2},
+    {outcomeId:regularId,oddsAtPlacement:2.2},
+  ])),error => error.status === 400,
+    'duplicate identical outcomes cannot be placed twice on a ticket');
   console.log('PASS real combo placement: server leg/product resolution, odds acceptance, suspension/staleness/missing market, disable race under DB lock, LIVE expiry/risk, atomic wallet SQL, frozen settlement, idempotency and ordinary accumulator preservation');
 } finally {
   beforeConnect = null;
