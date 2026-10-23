@@ -36,8 +36,11 @@ export function isPossibleLiveCombo(legs, match) {
   if (!isLive) return true;
   if (('scoreAt' in (match ?? {}) && !match.scoreAt) ||
       ('score_at' in (match ?? {}) && !match.score_at)) return true;
-  const home = Number(match?.homeScore ?? match?.home_score);
-  const away = Number(match?.awayScore ?? match?.away_score);
+  const rawHome = match?.homeScore ?? match?.home_score;
+  const rawAway = match?.awayScore ?? match?.away_score;
+  if (rawHome == null || rawAway == null || rawHome === '' || rawAway === '') return true;
+  const home = Number(rawHome);
+  const away = Number(rawAway);
   if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0) return true;
   if (!Array.isArray(legs) || legs.length !== 2) return false;
   if (!legs.every(leg => ['1X2', 'DC', 'BTTS', 'TOTAL'].includes(leg.market))) return false;
