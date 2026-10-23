@@ -1,3 +1,6 @@
+import { isResultTotalMarket, parseResultTotal } from './mixed-combos.mjs';
+import { isPossibleResultUnder } from './live-combo-possibility.mjs';
+
 /**
  * Conservative LIVE contract-expiry guard, shared by synthetic Bet Builders
  * and ordinary ticket validation. This is intentionally narrower than the
@@ -67,6 +70,16 @@ export function isDecidedLiveOutcome(match, market) {
   const score = currentScore(match);
   if (!score) return false;
   if (isDecidedLiveMarket(match, market)) return true;
+  // Provider-native Result + Under can become mathematically impossible
+  // before the Under threshold itself has been exceeded (e.g. 1-2, 1 + U3.5).
+  const nativeName = String(market?.name ?? market?.market_name ?? '');
+  if (isResultTotalMarket(nativeName) && Number(market?.period ?? 0) === 0) {
+    const homeName = match?.homeTeam ?? match?.home ?? match?.home_team ?? '';
+    const awayName = match?.awayTeam ?? match?.away ?? match?.away_team ?? '';
+    const parsed = parseResultTotal(market?.outcomeName ?? market?.outcome_name, homeName, awayName)
+      ?? parseResultTotal(market?.outcomeCode ?? market?.outcome_key, homeName, awayName);
+    if (parsed?.side === 'under' && !isPossibleResultUnder(score.home, score.away, parsed.result, parsed.line)) return true;
+  }
   const name = norm(market?.name ?? market?.market_name);
   if (Number(market?.period ?? 0) === 2 ||
       /\b(?:second|2nd)\s*half\b|\b(?:ht|ft)\s*\/|halftime\s*\/?\s*fulltime/.test(name)) return false;
