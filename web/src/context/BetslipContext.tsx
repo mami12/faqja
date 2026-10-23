@@ -5,6 +5,7 @@ import { buildBetslipColumns, MIN_TOTAL_STAKE_CENTS, previewColumnPayouts, split
 
 interface BetslipContextType {
   selections: BetSelection[];
+  comboNotice: string;
   stake: string;
   setStake: (s: string) => void;
   ticketType: 'SINGLE' | 'COMBO' | 'SYSTEM';
@@ -27,6 +28,7 @@ const BetslipContext = createContext<BetslipContextType>({} as BetslipContextTyp
 
 export const BetslipProvider = ({ children }: { children: React.ReactNode }) => {
   const [selections, setSelections] = useState<BetSelection[]>([]);
+  const [comboNotice, setComboNotice] = useState('');
   // This is always the total debit, including when alternatives create columns.
   const [stake, setStake] = useState('100');
   const [isPlacingBet, setIsPlacingBet] = useState(false);
@@ -46,14 +48,22 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
       setSelections(previous => previous.filter(p => p.outcomeId !== existing.outcomeId));
       return;
     }
-    setSelections(previous => [...previous, s]);
+    setComboNotice('');
 
     // If two *different* ordinary markets from one fixture have an available
     // server-priced joint contract, use its real BB outcome ID. Never take a
     // product of unrelated browser prices and pretend it is a valid ticket.
     const prior = selections.filter(p => String(p.matchId) === String(s.matchId));
     if (prior.length !== 1 || prior[0].marketId === s.marketId ||
-        prior[0].outcomeId.startsWith('BB|') || s.outcomeId.startsWith('BB|')) return;
+        prior[0].outcomeId.startsWith('BB|') || s.outcomeId.startsWith('BB|')) {
+      // Preserve the existing System behavior for alternative selections in
+      // the very same market; it is not a correlated cross-market contract.
+      setSelections(previous => [...previous, s]);
+      return;
+    }
+    // Do not append the second cross-market pick before obtaining a trusted
+    // joint quote. Otherwise the user could accidentally place two tickets.
+    setComboNotice('Po kontrollohet kombinimi i kësaj ndeshjeje...');
     const first = prior[0];
     const ids = [first.outcomeId, s.outcomeId];
     void apiClient.get(`/matches/${encodeURIComponent(String(s.matchId))}`)
@@ -70,7 +80,11 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
             Number.isFinite(o.odds) && o.odds > 1 && o.odds <= 1000));
         const offered = joint?.outcomes?.find(o => o.status === 'ACTIVE' &&
           o.id.startsWith('BB|') && Number.isFinite(o.odds) && o.odds > 1 && o.odds <= 1000);
-        if (!joint || !offered) return; // Preserve existing alternatives if no valid builder exists.
+        if (!joint || !offered) {
+          setComboNotice('Këto dy markete nuk kanë një Bet Builder aktiv. Zgjidh një kombinim të ofruar nga ndeshja.');
+          return;
+        }
+        setComboNotice('');
         setSelections(previous => {
           const stillSelected = previous.filter(p => String(p.matchId) === String(s.matchId));
           if (stillSelected.length !== 2 || !ids.every(id =>
@@ -82,7 +96,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
             sourceOutcomeIds: ids,
           }];
         });
-      }).catch(() => { /* Keep the original system selections on lookup failure. */ });
+      }).catch(() => setComboNotice('Nuk u verifikua kombinimi. Provo sërish ose zgjidh Bet Builder nga tregjet.'));
   };
 
   const removeSelection = (outcomeId: string) => {
@@ -90,6 +104,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   const clearAll = () => {
+    setComboNotice('');
     setSelections([]);
     setStake('100');
   };
@@ -184,7 +199,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <BetslipContext.Provider value={{
-      selections, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType: effectiveTicketType,
+      selections, comboNotice, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType: effectiveTicketType,
       addSelection, removeSelection, clearAll, updateOdds,
       totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet
     }}>
