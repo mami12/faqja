@@ -22,9 +22,29 @@ The server reconstructs the contract and validates prices, freshness, suspension
 and the persisted combo switch again before any wallet debit. A changed price
 requires acceptance; a browser price is never an authority.
 
+## Two different markets on the same fixture
+
+In the updated betslip, selecting an additional outcome from **another**
+market of the same match prompts a fresh match-detail lookup for an active
+server-priced Bet Builder contract with exactly those constituent outcome IDs.
+If the contract is available, the two source buttons are represented by **one**
+Bet Builder selection, which generates one ticket line for that fixture. The
+backend still validates its underlying legs, live score, price and suspension
+under its own authority before accepting a wager. If no such contract exists,
+the second cross-market pick is not added and an explanation is shown. The UI
+must not silently turn two different markets into funded System columns.
+
+Selections from the *same* market remain alternatives and retain the System
+columns behavior documented below. Multiple fixtures can still be accumulated
+in one ordinary multiple-event ticket.
+
+The live outcome filter also rejects pairs whose future full-time scores cannot
+satisfy both parts given provider-confirmed goals already scored. For example,
+at 1–2, '1 + Under 3.5' is impossible: the smallest final home win is 3–2.
+
 ## Alternative columns
 
-Selecting more than one outcome from the same match automatically changes the
+Selecting alternative outcomes in the same market automatically changes the
 betslip to **System**. Each column contains exactly one selection per match.
 The server generates the complete Cartesian expansion from source match IDs;
 it rejects duplicate, missing or forged columns. Up to 24 columns and 20 matches
