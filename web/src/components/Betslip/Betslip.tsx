@@ -15,7 +15,7 @@ import { formatOdds } from '../../utils/formatOdds';
 
 export default function Betslip() {
   const { 
-    selections, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType,
+    selections, comboNotice, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType,
     removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet 
   } = useBetslip();
   const { t } = useLanguage();
@@ -347,6 +347,7 @@ export default function Betslip() {
               {hasMultipleColumns && columnStakes.some(amount => amount !== columnStakes[0]) && (
                 <p className="text-[10px] text-text-secondary">Diferenca prej 0.01 Lek ndahet te kolonat e para; totali ruhet saktësisht.</p>
               )}
+              {comboNotice && <p role="status" className="text-[11px] font-semibold text-amber-200">{comboNotice}</p>}
               {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
               {blockedCombos && <p role="alert" className="text-[11px] font-semibold text-rose-300">Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.</p>}
               {invalidQuote && <p role="alert" className="text-[11px] font-semibold text-rose-300">Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.</p>}
