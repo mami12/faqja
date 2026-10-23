@@ -89,12 +89,18 @@ export function buildMarkets(oddsRows) {
         existing.price = Number(o.price);
       }
       if (o.suspended === true) existing.suspended = true;
+      // Preserve the newest source update for server-side price freshness.
+      const sourceTime = new Date(o.updated_at ?? 0).getTime();
+      const storedTime = new Date(existing.updatedAt ?? 0).getTime();
+      if (Number.isFinite(sourceTime) && sourceTime > storedTime)
+        existing.updatedAt = o.updated_at;
     } else {
       outcomes.push({
         key: o.outcome_key,
         name: o.outcome_name,
         price: o.price === null ? null : Number(o.price),
         suspended: o.suspended === true,
+        updatedAt: o.updated_at ?? null,
       });
     }
   }
@@ -126,6 +132,8 @@ export function buildMarkets(oddsRows) {
           found.price = Number(oc.price);
         }
         if (found && oc.suspended) found.suspended = true;
+        if (found && new Date(oc.updatedAt ?? 0).getTime() > new Date(found.updatedAt ?? 0).getTime())
+          found.updatedAt = oc.updatedAt;
       }
     }
     const OUTCOME_RANK = (k, n) => {
