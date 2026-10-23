@@ -21,6 +21,7 @@ import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
 import { parseBuilderId, findLeg, listAvailableTemplates } from './bet-builders.mjs';
 import { multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
+import { isPossibleLiveCombo } from './live-combo-possibility.mjs';
 import { liveRiskSettings } from '../live-risk-settings.mjs';
 import { isDecidedLiveOutcome } from './decided-markets.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
@@ -192,6 +193,11 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   const raw = serializeMatch(match,await loadOdds(Number(matchId),executor));
   const projected = toClientMatch(raw);
   if (projected.isSuspended || ['ENDED','CANCELLED'].includes(projected.status)) throw badRequest('Ndeshja është pezulluar.');
+  if (!isPossibleLiveCombo(template.legs, projected)) {
+    const error = badRequest('Ky kombinim nuk mund të fitojë më me rezultatin aktual.');
+    error.code = 'MARKET_DECIDED';
+    throw error;
+  }
   const parts = template.legs.map(leg => findLeg(projected,leg));
   if (parts.some(p => !p)) throw badRequest('Një market i Bet Builder është pezulluar ose mungon.');
   const lines = await Promise.all(parts.map(part => resolveSelection({
