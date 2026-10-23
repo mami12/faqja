@@ -21,6 +21,7 @@ import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
 import { parseBuilderId, findLeg, listAvailableTemplates } from './bet-builders.mjs';
 import { multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
+import { isPossibleLiveCombo } from './live-combo-possibility.mjs';
 import { liveRiskSettings } from '../live-risk-settings.mjs';
 import { isDecidedLiveOutcome } from './decided-markets.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
@@ -42,6 +43,27 @@ const STALE_PREMATCH_ODDS_MS = Number(config.prematchStaleMs) || 90 * 60 * 1000;
 const PRICE_TOLERANCE = 0.0000001; // Any quoted-price change requires explicit acceptance.
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
+
+/**
+ * Carry the exact rejected outcome back to the slip. A ticket can have many
+ * markets from the same match, so the client must NEVER guess which one failed.
+ * Ordinary money/limit/account errors aren't quote suspensions.
+ */
+export async function resolveTicketSelection(selection, resolve = resolveSelection, options = {}) {
+  try {
+    return await resolve(selection, options);
+  } catch (error) {
+    if (Number(error?.status) === 400 && error?.code !== 'FEED_REFRESHING' && selection?.outcomeId) {
+      error.outcomeId ??= String(selection.outcomeId);
+      if (!error.code) {
+        error.code = /kuotat po rifreskohen/i.test(String(error.message))
+          ? 'STALE_ODDS' : 'SELECTION_UNAVAILABLE';
+      }
+    }
+    throw error;
+  }
+}
+
 
 const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
 
@@ -170,11 +192,22 @@ export async function resolveSelection(selection, {executor = query} = {}) {
   };
 }
 
-// A regular ticket must never multiply correlated picks from one match.
+// Normal tickets may have multiple different markets from one match.
+// Reject only an identical outcome repeated on the SAME ticket.
+function assertUniqueTicketOutcomes(lines) {
+  const identities = lines.map(line => JSON.stringify([
+    String(line.matchId), String(line.marketKey), String(line.line ?? ''), String(line.outcomeKey),
+  ]));
+  if (new Set(identities).size !== identities.length) {
+    throw badRequest('E njëjta kuotë është zgjedhur më shumë se një herë.');
+  }
+}
+
+// System columns, when explicitly used, still require one pick per match.
 function assertDistinctMatches(lines) {
   const ids = lines.map(line => String(line.matchId));
   if (new Set(ids).size !== ids.length) {
-    throw badRequest('Dy markete nga e njëjta ndeshje duhen ndarë në kolona ose zgjedhur si Bet Builder.');
+    throw badRequest('Kolona e sistemit duhet të ketë vetëm një zgjedhje për ndeshje.');
   }
 }
 
@@ -184,7 +217,7 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   if (liveRiskSettings().combosEnabled === false) {
     throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
   }
-  if (feedIsRefreshing()) throw badRequest('Kuotat po rifreskohen.');
+  if (feedIsRefreshing()) { const error=badRequest('Kuotat po rifreskohen.'); error.code='FEED_REFRESHING'; throw error; }
   const template = (await listAvailableTemplates({executor})).find(t => t.id === templateId);
   if (!template) throw badRequest('Bet Builder nuk është më aktiv.');
   const match = await loadMatch(Number(matchId),executor);
@@ -192,6 +225,11 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   const raw = serializeMatch(match,await loadOdds(Number(matchId),executor));
   const projected = toClientMatch(raw);
   if (projected.isSuspended || ['ENDED','CANCELLED'].includes(projected.status)) throw badRequest('Ndeshja është pezulluar.');
+  if (!isPossibleLiveCombo(template.legs, projected)) {
+    const error = badRequest('Ky kombinim nuk mund të fitojë më me rezultatin aktual.');
+    error.code = 'MARKET_DECIDED';
+    throw error;
+  }
   const parts = template.legs.map(leg => findLeg(projected,leg));
   if (parts.some(p => !p)) throw badRequest('Një market i Bet Builder është pezulluar ose mungon.');
   const lines = await Promise.all(parts.map(part => resolveSelection({
@@ -232,7 +270,7 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
   // Drain every read before rollback/releasing the shared transaction client.
   const results = await Promise.allSettled(selections.map(async (selection,index) => {
     const old = lines[index];
-    const current = await resolve({...selection,oddsAtPlacement:old.price,odds:old.price},{executor});
+    const current = await resolveTicketSelection({...selection,oddsAtPlacement:old.price,odds:old.price},resolve,{executor});
     const changed = frozenSelectionPrice(current.price) !== frozenSelectionPrice(old.price) ||
       JSON.stringify(current.builderLegs ?? null) !== JSON.stringify(old.builderLegs ?? null);
     if (changed) {
@@ -363,9 +401,9 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   // Independent odds checks can be awaited together instead of serially.
-  const lines = (await Promise.all(selections.map(resolve))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
+  const lines = (await Promise.all(selections.map(selection => resolveTicketSelection(selection,resolve)))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
 
-  assertDistinctMatches(lines);
+  assertUniqueTicketOutcomes(lines);
   const totalOdds = totalOddsForSelections(lines);
   if (!Number.isFinite(totalOdds) || totalOdds > 9999999999.9999) throw badRequest('Koeficienti i biletës është shumë i madh.');
   const payout = systemColumnPayout(amount, lines.map(line => line.price));
@@ -534,7 +572,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   // Every underlying selection is resolved exactly once, so repeated legs across
   // columns cannot acquire different prices while the feed changes.
   const linesById = new Map(await Promise.all(picks.map(async pick => {
-    const line = await resolve(pick);
+    const line = await resolveTicketSelection(pick,resolve);
     return [String(pick.outcomeId), { ...line, price: frozenSelectionPrice(line.price) }];
   })));
   const resolved = grouped.map(column => column.map(pick => linesById.get(String(pick.outcomeId))));
@@ -628,8 +666,8 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
-  for (const selection of selections) lines.push(await resolveSelection(selection));
-  assertDistinctMatches(lines);
+  for (const selection of selections) lines.push(await resolveTicketSelection(selection));
+  assertUniqueTicketOutcomes(lines);
 
   const totalOdds = totalOddsForSelections(lines);
   const code = bookingCode();

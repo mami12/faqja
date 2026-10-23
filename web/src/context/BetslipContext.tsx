@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useMemo, useRef } from 'react';
 import { BetSelection } from '../types';
 import { apiClient } from '../api/client';
-import { buildBetslipColumns, MIN_TOTAL_STAKE_CENTS, previewColumnPayouts, splitStakeCents, stakeToCents } from '../utils/betslipColumns';
+import { MIN_TOTAL_STAKE_CENTS, previewColumnPayouts, splitStakeCents, stakeToCents } from '../utils/betslipColumns';
 
 interface BetslipContextType {
   selections: BetSelection[];
@@ -32,8 +32,11 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const inFlightBet = useRef<Promise<any> | null>(null);
   const pendingBet = useRef<{ requestId: string; fingerprint: string } | null>(null);
-  const { columns, overflow: columnsOverflow, automaticSystem } = useMemo(() => buildBetslipColumns(selections), [selections]);
-  const effectiveTicketType = automaticSystem ? 'SYSTEM' : selections.length > 1 ? 'COMBO' : 'SINGLE';
+  // Every chosen market is a separate line on ONE ticket, even for the same match.
+  // System tickets remain a separate backend feature; never generate them implicitly.
+  const columnsOverflow = selections.length > 20;
+  const columns = useMemo(() => selections.length && selections.length <= 20 ? [selections] : [], [selections]);
+  const effectiveTicketType = selections.length > 1 ? 'COMBO' : 'SINGLE';
   const stakeCents = stakeToCents(stake);
   const columnStakes = useMemo(() => splitStakeCents(stakeCents ?? 0, columns.length), [stakeCents, columns.length]);
   const columnPreviews = useMemo(() => previewColumnPayouts(columns, columnStakes), [columns, columnStakes]);
@@ -68,7 +71,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     if (!selections.length) return Promise.reject(new Error('Zgjidh të paktën një kuotë.'));
     if (stakeCents == null) return Promise.reject(new Error('Shuma duhet të ketë maksimumi 2 shifra pas presjes.'));
     if (stakeCents < MIN_TOTAL_STAKE_CENTS) return Promise.reject(new Error('Shuma minimale totale është 100 Lek'));
-    if (columnsOverflow) return Promise.reject(new Error('Maksimumi 24 kolona për kupon.'));
+    if (columnsOverflow) return Promise.reject(new Error('Maksimumi 20 zgjedhje për kupon.'));
     if (columnPreviews.some(column => column.invalid)) return Promise.reject(new Error('Një kuotë ose pagesë është e pavlefshme. Rifresko zgjedhjet.'));
     const stakeNum = stakeCents / 100;
 
@@ -82,12 +85,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
         odds: s.odds,
       })),
     };
-    const columnPayload = automaticSystem ? {
-      totalStake: stakeNum,
-      // The server constructs the complete column set from authoritative match IDs.
-      selections: selections.map(s => ({ outcomeId: s.outcomeId, oddsAtPlacement: s.odds })),
-    } : null;
-    const fingerprint = JSON.stringify(columnPayload ?? payload);
+    const fingerprint = JSON.stringify(payload);
     // If a response is lost, retry the SAME request ID: server will return
     // the original ticket, not charge the wallet again.
     if (!pendingBet.current || pendingBet.current.fingerprint !== fingerprint) {
@@ -95,9 +93,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     }
     const clientRequestId = pendingBet.current.requestId;
     setIsPlacingBet(true);
-    const task = automaticSystem
-      ? apiClient.post('/bets/place-columns', { ...columnPayload, clientRequestId })
-      : apiClient.post('/bets/place', { ...payload, clientRequestId });
+    const task = apiClient.post('/bets/place', { ...payload, clientRequestId });
     const settled = task
       .then(res => {
         pendingBet.current = null;
@@ -120,7 +116,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   const bookTicket = async () => {
     if (!selections.length) throw new Error('Zgjidh të paktën një kuotë.');
-    if (automaticSystem) throw new Error('Prenotimi i shumë kolonave nuk është ende i disponueshëm.');
+    if (columnsOverflow) throw new Error('Maksimumi 20 zgjedhje për kupon.');
     if (columnPreviews.some(column => column.invalid)) throw new Error('Një kuotë ose pagesë është e pavlefshme. Rifresko zgjedhjet.');
     if (stakeCents == null) throw new Error('Shuma duhet të ketë maksimumi 2 shifra pas presjes.');
     const stakeNum = stakeCents / 100;

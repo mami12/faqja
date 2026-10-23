@@ -8,6 +8,8 @@ import {
   decorateMatches, findLeg, mergeComboTemplates, builderId, parseBuilderId,
 } from '../server/ledger/bet-builders.mjs';
 import { gradeLine } from '../server/ledger/settler.mjs';
+import { isPossibleLiveCombo, isPossibleResultUnder } from '../server/ledger/live-combo-possibility.mjs';
+import { isDecidedLiveOutcome } from '../server/ledger/decided-markets.mjs';
 
 const leg = (market, outcome, line = '') => ({ market, outcome, line });
 const result = leg('1X2', '1'), over = leg('TOTAL', 'Over', '2.5');
@@ -181,6 +183,24 @@ assert.equal((await decorate({ ...full(), status: 'LIVE', homeScore: 2, awayScor
   'unconfirmed placeholder scores must not prune markets');
 assert.equal((await decorate({ ...full(), homeScore: 2, awayScore: 1 })).length, eligible.length,
   'prematch is not incorrectly pruned using a LIVE-only rule');
+
+// A live joint contract must have a possible final score >= the observed score.
+const live12 = { ...full(), status:'LIVE',homeScore:1,awayScore:2,scoreAt:new Date().toISOString() };
+const u35 = [leg('1X2','1'),leg('TOTAL','Under','3.5')];
+assert.equal(isPossibleLiveCombo(u35,live12),false);
+assert.equal(isPossibleLiveCombo([leg('1X2','1'),leg('TOTAL','Under','4.5')],live12),false);
+assert.equal(isPossibleLiveCombo([leg('1X2','1'),leg('TOTAL','Under','5.5')],live12),true);
+assert.equal(isPossibleLiveCombo([leg('1X2','X'),leg('TOTAL','Under','3.5')],live12),false);
+assert.equal(isPossibleLiveCombo([leg('1X2','X'),leg('TOTAL','Under','4.5')],live12),true);
+assert.equal(isPossibleResultUnder(1,2,'1',3.5),false);
+assert.equal(isPossibleResultUnder(1,2,'X',4.5),true);
+const nativeResultUnder={name:'Result and Total',period:0,outcomeName:'1 And Under 3.5'};
+assert.equal(isDecidedLiveOutcome({service:'LIVE',home_score:1,away_score:2,score_at:new Date()},nativeResultUnder),true);
+assert.equal(isDecidedLiveOutcome({service:'LIVE',home_score:1,away_score:2,score_at:new Date()}, {...nativeResultUnder,outcomeName:'1 And Under 5.5'}),false);
+const impossibleLive = { ...full(), status:'LIVE', homeScore:1, awayScore:2,scoreAt:new Date().toISOString() };
+impossibleLive.markets[3].line = '3.5';
+const offeredImpossible=await decorate(impossibleLive);
+assert.equal(offeredImpossible.some(m=>m.outcomes[0].name.includes('1X2 1 + TOTAL Under 3.5')),false);
 
 const overflow = full(); overflow.markets[0].outcomes[0].odds = 40; overflow.markets[3].outcomes[0].odds = 30;
 assert.equal((await decorate(overflow, {templates:[baseTemplate]})).length, 0, 'products above the price cap are never offered');

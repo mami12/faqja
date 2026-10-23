@@ -15,12 +15,14 @@ on:
       - 'scripts/test-bet-builder.mjs'
       - 'scripts/test-settlement-results.mjs'
       - 'scripts/test-market-expiry.mjs'
+      - 'scripts/test-automatic-combos.mjs'
+      - 'scripts/test-betslip-columns.mjs'
       - 'scripts/test-mobile-betslip-badge.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/sportsbook-build.yml'
   push:
-    branches: [main]
+    branches: [main, faqja2]
     paths:
       - 'web/**'
       - 'scripts/test-sportsbook-labels.mjs'
@@ -56,6 +58,14 @@ jobs:
         run: node scripts/test-live-money-risk.mjs
       - name: Validate mixed market contracts and settlement
         run: node scripts/test-mixed-combos.mjs
+      - name: Validate automatic live-score combos
+        run: node scripts/test-automatic-combos.mjs
+      - name: Validate system-column betslip previews
+        run: node scripts/test-betslip-columns.mjs
+      - name: Validate single ticket with repeated match across markets
+        run: node scripts/test-combo-placement.mjs
+      - name: Verify rejected price identity and normal/system placement
+        run: node scripts/test-system-columns-feed.mjs
       - name: Validate universal builder contracts
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
@@ -96,6 +106,8 @@ jobs:
           node --check server/casino/sizzling-real.mjs
       - name: Build Vite frontend
         run: npm run build:web
+      - name: Verify browser betslip has one receipt with separate same-match markets
+        run: node scripts/test-betslip-browser.mjs
       - name: Validate Sizzling RTP profiles and reel math
         run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math

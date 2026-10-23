@@ -10,6 +10,7 @@ import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 import { liveRiskSettings } from '../live-risk-settings.mjs';
+import { isPossibleLiveCombo } from './live-combo-possibility.mjs';
 import { automaticComboTemplates, comboSignature, isCompatibleComboPair, multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -212,7 +213,7 @@ export async function decorateMatches(matches, options = {}) {
       // cannot stay sellable through the synthetic Bet Builder market.
       const resolved = template.legs.map(leg => findLeg(match,leg));
       if (resolved.some(r => !r)) continue;
-      if (!isCompatibleComboPair(template.legs)) continue;
+      if (!isCompatibleComboPair(template.legs) || !isPossibleLiveCombo(template.legs,match)) continue;
       const price = multipliedComboPrice(resolved);
       if (price === null) continue;
       const id = builderId(match.id,template.id);

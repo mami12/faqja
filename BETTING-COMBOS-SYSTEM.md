@@ -22,15 +22,48 @@ The server reconstructs the contract and validates prices, freshness, suspension
 and the persisted combo switch again before any wallet debit. A changed price
 requires acceptance; a browser price is never an authority.
 
+## Ordinary betslip: every market prints as its own ticket line
+
+An ordinary ticket can contain **any number of different selections from one
+match**, across 1X2, totals, corners, cards, BTTS and other available markets.
+Every selected outcome is shown as a distinct line, with its market name,
+original odds and repeated match name where appropriate. The source market
+does not have to have a synthetic Bet Builder contract.
+
+Example: `Home–Away / 1X2 / 1` and `Home–Away / Total 2.5 / Over`
+appear as **two lines on one ticket**, not two funded System tickets.
+Additional matches/markets also join that same ticket. The normal accumulator
+multiplies all selected prices, while backend validates every leg and stores
+each separately for independent settlement; only duplicate identical outcome
+IDs are rejected. The Admin Bet Builder toggle governs synthetic markets, not
+this normal ticket display behavior.
+
+The client never silently changes ticket type to System merely because match
+IDs repeat. Existing explicit system-column functionality is a separate
+backend flow, not automatically selected by the standard betslip.
+
+Server-declared unavailable outcomes (suspension, stale offer, expired contract
+or no longer available market) return the precise outcome ID. The betslip
+automatically removes only that rejected line and greys out its button across
+the board until a newer provider update explicitly marks it active. A
+feed-wide idle/waking event temporarily locks every odds button. Wallet,
+network or stake-limit failures do not mark selections as unavailable.
+Server-side verification remains authoritative.
+
+Provider or synthetic combo **market outcomes** are still independently
+checked against known LIVE scores: at 1–2, `1 + Under 3.5` cannot win.
+
 ## Alternative columns
 
-Selecting more than one outcome from the same match automatically changes the
-betslip to **System**. Each column contains exactly one selection per match.
+The separate explicit System placement endpoint builds alternative columns;
+it is **not triggered automatically** when the ordinary betslip contains several
+markets or outcomes from one fixture. Each explicit System column contains
+exactly one selection per match.
 The server generates the complete Cartesian expansion from source match IDs;
 it rejects duplicate, missing or forged columns. Up to 24 columns and 20 matches
 per column are supported. Different outcomes in the same market can be alternatives.
 
-The minimum is **100 LEK for the whole slip**, including every column. The amount
+For explicit System tickets, the minimum is **100 LEK for the whole slip**, including every column. The amount
 stays unchanged as picks are added or removed. Two columns receive 50 + 50;
 three receive 33.34 + 33.33 + 33.33. Remaining cents go to the first columns in
 visible order. The wallet debit always equals the entered total.

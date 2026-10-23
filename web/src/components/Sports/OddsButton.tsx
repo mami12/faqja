@@ -15,7 +15,7 @@ interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boole
 
 export default function OddsButton({ match, market, outcome, isWide, showRawLabel = false }: Props) {
   const { selections, addSelection, removeSelection } = useBetslip();
-  const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled } = useLiveFeed();
+  const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, rejectedOutcomes, lockedMarkets, lockedMatches, combosEnabled, feedMode } = useLiveFeed();
   const { t, lang } = useLanguage();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
@@ -34,6 +34,8 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     lockedOutcomes[part.outcomeId] === true ||
     riskLockedOutcomes[part.outcomeId] === true);
   const isSuspended =
+    feedMode !== 'live' ||
+    rejectedOutcomes[outcome.id] !== undefined ||
     (!combosEnabled && isComboMarket(market)) ||
     isMarketExpired(match, market) || isCompletedCombinationOutcome(match, market, outcome) ||
     builderLegLocked ||

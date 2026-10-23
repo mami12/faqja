@@ -21,6 +21,7 @@ type OutcomeLike = {
 type MatchLike = {
   status?: string; period?: string | null; currentMinute?: number;
   homeScore?: number; awayScore?: number;
+  homeTeam?: string; awayTeam?: string;
   corners?: Score | null; cards?: Score | null;
 };
 
@@ -34,6 +35,32 @@ const scoreOf = (home: unknown, away: unknown): Score | null => {
   const h = number(home), a = number(away);
   return h !== null && a !== null ? { home: h, away: a } : null;
 };
+type ComboLeg = {market:'1X2'|'DC'|'BTTS'|'TOTAL';outcome:string;line?:string};
+const isPossibleResultUnder = (home:number, away:number, result:string, line:string):boolean => {
+  const minimum = result==='1' ? Math.max(home,away+1)+away
+    : result==='2' ? home+Math.max(away,home+1)
+    : result==='X' ? 2*Math.max(home,away) : null;
+  return minimum===null || minimum<Number(line);
+};
+const comboWins = (leg:ComboLeg, home:number, away:number):boolean => {
+  const result=home>away?'1':home<away?'2':'X';
+  if(leg.market==='1X2')return leg.outcome===result;
+  if(leg.market==='DC')return leg.outcome.includes(result);
+  if(leg.market==='BTTS')return (leg.outcome==='Yes')===(home>0&&away>0);
+  if(leg.market==='TOTAL')return leg.outcome==='Over'
+    ?home+away>Number(leg.line):home+away<Number(leg.line);
+  return false;
+};
+const isPossibleLiveCombo = (legs:ComboLeg[], m:{homeScore:number;awayScore:number}):boolean => {
+  const home=m.homeScore,away=m.awayScore;
+  const bound=Math.max(12,home+3,away+3,
+    ...legs.filter(l=>l.market==='TOTAL').map(l=>Math.ceil(Number(l.line))+2));
+  if(!Number.isFinite(bound)||bound>40)return false;
+  for(let h=home;h<=bound;h++)for(let a=away;a<=bound;a++)
+    if(legs.every(l=>comboWins(l,h,a)))return true;
+  return false;
+};
+
 const isLive = (m: MatchLike) => norm(m.status) === 'live';
 
 export const isFirstHalfMarket = (name: string): boolean =>
@@ -209,6 +236,40 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
   const rawCode = String(outcome.code ?? '').trim();
   const labels = [rawName, rawCode].filter(Boolean);
   const names = labels.join(' | ').toLowerCase();
+
+  // A combined price can be impossible even while its standalone Under line
+  // has not yet lost: at 1-2, a home win requires at least 3-2 (five goals).
+  if (/^bet builder\s*:/i.test(String(market.name ?? ''))) {
+    const parseLeg = (value: string): ComboLeg | null => {
+      const part = value.trim().match(/^(1X2|DC|BTTS|TOTAL)\s+(.+)$/i);
+      if (!part) return null;
+      const kind = part[1].toUpperCase() as ComboLeg['market'];
+      if (kind === 'TOTAL') {
+        const total = part[2].match(/^(Over|Under)\s+(\d+(?:[.,]\d+)?)$/i);
+        return total ? {market:kind,outcome:total[1][0].toUpperCase()+total[1].slice(1).toLowerCase(),line:total[2].replace(',','.')} : null;
+      }
+      const outcome = part[2].trim();
+      return {market:kind,outcome: kind==='BTTS'
+        ? outcome[0].toUpperCase()+outcome.slice(1).toLowerCase() : outcome.toUpperCase()};
+    };
+    const synthetic = labels.map(text => text.split(/\s+\+\s+/).map(parseLeg))
+      .find(parts => parts.length === 2 && parts.every(Boolean));
+    if (synthetic && !isPossibleLiveCombo(synthetic as ComboLeg[], {
+      homeScore:score.home,awayScore:score.away,
+    })) return true;
+  }
+  if (/^(?:full\s*time[. ]*)?result\s+and\s+total$/i.test(String(market.name ?? '').trim())) {
+    const native = labels.map(text => text.match(/^(.+?)\s+and\s+under\s+(\d+(?:[.,]\d+)?)$/i))
+      .find(Boolean);
+    if (native) {
+      const key = native[1].trim().toLowerCase();
+      const home = norm(m.homeTeam), away = norm(m.awayTeam);
+      const result = key === '1' || key === 'home' || (home && key === home) ? '1'
+        : key === '2' || key === 'away' || (away && key === away) ? '2'
+        : ['x','draw','tie'].includes(key) ? 'X' : null;
+      if (result && !isPossibleResultUnder(score.home,score.away,result,native[2].replace(',','.'))) return true;
+    }
+  }
 
   const marketIsCombo =
     /^bet builder\s*:/.test(marketName) ||

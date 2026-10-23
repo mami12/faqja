@@ -20,7 +20,7 @@ export default function Betslip() {
   } = useBetslip();
   const { t } = useLanguage();
   const { user, refreshUser } = useAuth();
-  const { combosEnabled } = useLiveFeed();
+  const { combosEnabled, suspendUnavailableOutcome } = useLiveFeed();
   const blockedCombos = !combosEnabled && selections.some(s => s.outcomeId.startsWith('BB|') || isComboMarket(s.marketName));
   const invalidQuote = columnPreviews.some(column => column.invalid);
   
@@ -83,11 +83,20 @@ export default function Betslip() {
           marketLine: foundSel?.marketLine,
           matchName: errData?.matchName || foundSel?.matchName || '',
         });
-      } else if (errData?.code === 'LIVE_RISK_SUSPENDED' ||
-                 errData?.code === 'MARKET_DECIDED' ||
+      } else if (errData?.code === 'FEED_REFRESHING') {
+        setUnavailableNotice('Kuotat po rifreskohen. Nuk mund të pranohen baste deri sa të rikthehet feed-i.');
+      } else if (['LIVE_RISK_SUSPENDED','MARKET_DECIDED','SELECTION_UNAVAILABLE','STALE_ODDS','COMBOS_DISABLED'].includes(errData?.code) ||
                  /pezulluar|përfunduar|nuk është më e disponueshme/i.test(String(errData?.message ?? ''))) {
-        // No blocking risk modal. The server still refuses invalid bets.
-        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
+        // Never guess from the match name: a ticket may contain several markets
+        // for that same match. Only remove the exact rejected outcome ID.
+        const rejectedId = typeof errData?.outcomeId === 'string' ? errData.outcomeId : '';
+        if (rejectedId && selections.some(item => item.outcomeId === rejectedId)) {
+          suspendUnavailableOutcome(rejectedId);
+          removeSelection(rejectedId);
+          setUnavailableNotice('Kuota e pavlefshme u pezullua dhe u hoq nga kuponi. Zgjedhjet e tjera mbeten të pandryshuara.');
+        } else {
+          setUnavailableNotice(errData?.message || 'Një zgjedhje nuk është më aktive. Rifresko ndeshjen.');
+        }
       } else {
         alert(errData?.message || e.message || t('common.error'));
       }
@@ -111,9 +120,18 @@ export default function Betslip() {
       clearAll();
     } catch (e: any) {
       const detail = e.response?.data;
-      if (detail?.code === 'LIVE_RISK_SUSPENDED' || detail?.code === 'MARKET_DECIDED' ||
+      if (detail?.code === 'FEED_REFRESHING') {
+        setUnavailableNotice('Kuotat po rifreskohen. Nuk mund të pranohet prenotimi.');
+      } else if (['LIVE_RISK_SUSPENDED','MARKET_DECIDED','SELECTION_UNAVAILABLE','STALE_ODDS','COMBOS_DISABLED'].includes(detail?.code) ||
           /pezulluar|përfunduar/i.test(String(detail?.message ?? ''))) {
-        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
+        const rejectedId = typeof detail?.outcomeId === 'string' ? detail.outcomeId : '';
+        if (rejectedId && selections.some(item => item.outcomeId === rejectedId)) {
+          suspendUnavailableOutcome(rejectedId);
+          removeSelection(rejectedId);
+          setUnavailableNotice('Kuota e pavlefshme u pezullua dhe u hoq nga kuponi.');
+        } else {
+          setUnavailableNotice(detail?.message || 'Një zgjedhje nuk është më aktive. Rifresko ndeshjen.');
+        }
       } else {
         alert(detail?.message || e.message || t('common.error'));
       }
