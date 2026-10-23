@@ -20,7 +20,8 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
 
-  const isSelected = selections.some(s => s.outcomeId === outcome.id);
+  const selectedEntry = selections.find(s => s.outcomeId === outcome.id || s.sourceOutcomeIds?.includes(outcome.id));
+  const isSelected = Boolean(selectedEntry);
   const unidentifiedMixedOutcome = isResultBttsMarket(market.name) &&
     !parseResultBttsOutcome(outcome.code, match.homeTeam, match.awayTeam) &&
     !parseResultBttsOutcome(outcome.name, match.homeTeam, match.awayTeam);
@@ -81,7 +82,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
   const toggle = () => {
     if (isSuspended) return;
     if (isSelected) {
-      removeSelection(outcome.id);
+      removeSelection(selectedEntry!.outcomeId);
     } else {
       addSelection({
         outcomeId: outcome.id,
