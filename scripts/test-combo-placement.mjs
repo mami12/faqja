@@ -311,7 +311,7 @@ try {
   assert.equal(multiMarket.stake,100);
   assert.equal(multiMarket.totalOdds,3.96);
   assert.equal(multiMarket.lines.length,2);
-  assert.deepEqual(multiMarket.lines.map(line=>[line.matchId,line.marketName,line.oddsAtPlacement]).sort((a,b)=>String(a[1]).localeCompare(String(b[1])),[
+  assert.deepEqual(multiMarket.lines.map(line=>[line.matchId,line.marketName,line.oddsAtPlacement]).sort((a,b)=>String(a[1]).localeCompare(String(b[1]))),[
     [String(matchId),'1X2',2.2],[String(matchId),'Total',1.8],
   ]);
   assert.equal(new Set(multiMarket.lines.map(line=>line.ticketId)).size,1,
