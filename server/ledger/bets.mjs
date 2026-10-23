@@ -171,11 +171,22 @@ export async function resolveSelection(selection, {executor = query} = {}) {
   };
 }
 
-// A regular ticket must never multiply correlated picks from one match.
+// Normal tickets may have multiple different markets from one match.
+// Reject only an identical outcome repeated on the SAME ticket.
+function assertUniqueTicketOutcomes(lines) {
+  const identities = lines.map(line => JSON.stringify([
+    String(line.matchId), String(line.marketKey), String(line.line ?? ''), String(line.outcomeKey),
+  ]));
+  if (new Set(identities).size !== identities.length) {
+    throw badRequest('E njëjta kuotë është zgjedhur më shumë se një herë.');
+  }
+}
+
+// System columns, when explicitly used, still require one pick per match.
 function assertDistinctMatches(lines) {
   const ids = lines.map(line => String(line.matchId));
   if (new Set(ids).size !== ids.length) {
-    throw badRequest('Dy markete nga e njëjta ndeshje duhen ndarë në kolona ose zgjedhur si Bet Builder.');
+    throw badRequest('Kolona e sistemit duhet të ketë vetëm një zgjedhje për ndeshje.');
   }
 }
 
@@ -371,7 +382,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   // Independent odds checks can be awaited together instead of serially.
   const lines = (await Promise.all(selections.map(resolve))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
 
-  assertDistinctMatches(lines);
+  assertUniqueTicketOutcomes(lines);
   const totalOdds = totalOddsForSelections(lines);
   if (!Number.isFinite(totalOdds) || totalOdds > 9999999999.9999) throw badRequest('Koeficienti i biletës është shumë i madh.');
   const payout = systemColumnPayout(amount, lines.map(line => line.price));
@@ -635,7 +646,7 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
   for (const selection of selections) lines.push(await resolveSelection(selection));
-  assertDistinctMatches(lines);
+  assertUniqueTicketOutcomes(lines);
 
   const totalOdds = totalOddsForSelections(lines);
   const code = bookingCode();
