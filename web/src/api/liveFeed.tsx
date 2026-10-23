@@ -52,6 +52,9 @@ interface LiveFeedValue {
   /** prices the feed has locked right now, keyed exactly like the REST payload ids */
   lockedOutcomes: Record<string, boolean>;
   riskLockedOutcomes: Record<string, boolean>;
+  /** Server-rejected price remains locked until a fresh provider unlock/quote. */
+  rejectedOutcomes: Record<string, number>;
+  suspendUnavailableOutcome: (outcomeId: string) => void;
   lockedMarkets: Record<string, boolean>;
   lockedMatches: Record<string, boolean>;
   combosEnabled: boolean;
@@ -67,6 +70,8 @@ const EMPTY: LiveFeedValue = {
   feedMode: 'live',
   lockedOutcomes: {},
   riskLockedOutcomes: {},
+  rejectedOutcomes: {},
+  suspendUnavailableOutcome: () => {},
   lockedMarkets: {},
   lockedMatches: {},
   combosEnabled: true,
@@ -103,6 +108,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [lockedOutcomes, setLockedOutcomes] = useState<Record<string, boolean>>({});
   const [riskLockedOutcomes, setRiskLockedOutcomes] = useState<Record<string, boolean>>({});
+  const [rejectedOutcomes, setRejectedOutcomes] = useState<Record<string, number>>({});
   const [lockedMarkets, setLockedMarkets] = useState<Record<string, boolean>>({});
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const [feedMode, setFeedMode] = useState<FeedMode>('live');
@@ -110,6 +116,12 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const prevOdds = useRef<Record<string, number>>({});
   const prevOddsAt = useRef<Record<string, number>>({});
   const prevMarketAt = useRef<Record<string, number>>({});
+  const suspendUnavailableOutcome = (outcomeId: string) => {
+    if (!outcomeId) return;
+    // Use the last source version, not the client's wall-clock. Next fresh
+    // provider quote may unlock the entry without a page reload.
+    setRejectedOutcomes(prev => ({...prev, [outcomeId]: prevOddsAt.current[outcomeId] ?? Date.now()}));
+  };
 
   useEffect(() => {
     const socket: Socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
@@ -133,6 +145,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       const deltas: Record<string, OddsDelta> = {};
       const outcomeLocks: Record<string, boolean> = {};
       const marketLocks: Record<string, boolean> = {};
+      const refreshedOutcomes: Record<string, number> = {};
 
       for (const market of payload?.markets ?? []) {
         const marketId = `${payload.matchId}|${market.key}|${market.line ?? ''}`;
@@ -156,6 +169,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           const before = prevOdds.current[outcomeId];
           prevOdds.current[outcomeId] = next;
           deltas[outcomeId] = { outcomeId, newOdds: next, direction: before === undefined || next >= before ? 'up' : 'down', at: incomingAt, changed:before !== undefined && before !== next };
+          if (outcome.suspended === false && next > 1) refreshedOutcomes[outcomeId] = incomingAt;
         }
 
         // only the rows that moved are pushed, so "every row in this frame is suspended" is
@@ -170,6 +184,15 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
       if (Object.keys(outcomeLocks).length) setLockedOutcomes(prev => ({ ...prev, ...outcomeLocks }));
       if (Object.keys(marketLocks).length) setLockedMarkets(prev => ({ ...prev, ...marketLocks }));
+      // Re-enable only on a genuinely later source message explicitly stating
+      // the price is active, never merely because React re-rendered the list.
+      if (Object.keys(refreshedOutcomes).length) setRejectedOutcomes(prev => {
+        const updated = { ...prev };
+        for (const [id, at] of Object.entries(refreshedOutcomes)) {
+          if (updated[id] !== undefined && at > updated[id]) delete updated[id];
+        }
+        return updated;
+      });
 
       // also update the live clock when odds arrive (minute + phase travel with odds:update now)
       const minute = (payload as any).minute;
@@ -297,8 +320,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled }),
-    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, rejectedOutcomes, suspendUnavailableOutcome, lockedMarkets, lockedMatches, combosEnabled }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, rejectedOutcomes, lockedMarkets, lockedMatches, combosEnabled],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;
