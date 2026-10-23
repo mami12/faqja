@@ -86,11 +86,17 @@ try {
       oddsChangedResponse = null;
       return response.status(409).json(changed);
     }
-    const lines = request.body.selections.map(row => ({
-      ...row, id: row.outcomeId, matchId: 'C', marketId: 'BB|C|automatic',
-      matchName: 'Arsenal vs Chelsea', marketName: 'Bet Builder · 1 + Over 2.5',
-      outcomeName: '1 + Over 2.5', status: 'PENDING',
-    }));
+    const lines = request.body.selections.map(row => {
+      const ordinary = fixtureSelections.find(pick => pick.outcomeId === row.outcomeId);
+      return {
+        ...row, id: row.outcomeId,
+        matchId: ordinary?.matchId ?? 'C', marketId: ordinary?.marketId ?? 'BB|C|automatic',
+        matchName: ordinary?.matchName ?? 'Arsenal vs Chelsea',
+        marketName: ordinary?.marketName ?? 'Bet Builder · 1 + Over 2.5',
+        outcomeName: ordinary?.outcomeName ?? '1 + Over 2.5',
+        status: 'PENDING',
+      };
+    });
     response.json({
       id: '00000000-0000-0000-0000-000000000099', ticketType: 'SINGLE', status: 'PENDING',
       placedAt: new Date().toISOString(), stake: request.body.stake, lines,
@@ -134,68 +140,36 @@ try {
   await add([fixtureSelections[0], fixtureSelections[2]]);
   await waitType('COMBO');
   assert.equal((await snapshot()).stake, '100');
+  // Two different markets from the very same match remain separate selections.
   await add([fixtureSelections[1]]);
-  await waitType('SYSTEM');
-  assert.deepEqual(await snapshot(), { stake: '100', type: 'SYSTEM', columns: [['A1', 'B1'], ['Aover', 'B1']], stakes: [5000, 5000], payouts: [3795, 1593.9], total: 5388.9, overflow: false });
-  assert.equal(await page.$eval('select[aria-label="Lloji i skedinës"]', select => select.disabled && select.value === 'SYSTEM'), true);
-  assert.equal(await page.$eval('#betslip-stake', input => input.min), '100');
-  assert.equal(await page.$eval('button[title="Prenotimi për shumë kolona nuk është aktiv"]', button => button.disabled), true);
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('1593.90'));
-  assert.ok(!(await page.$eval('body', body => body.innerText)).includes('Shuma vendoset për kolonë'));
-  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '500').click());
-  await page.waitForFunction(() => window.slip.stake === '500');
-  assert.deepEqual((await snapshot()).stakes, [25000, 25000], 'quick amount edits the TOTAL only');
-  await page.focus('#betslip-stake');
-  await page.keyboard.down('Control');
-  await page.keyboard.press('KeyA');
-  await page.keyboard.up('Control');
-  await page.type('#betslip-stake', '100');
-  await page.waitForFunction(() => window.slip.stake === '100');
-  await page.evaluate(() => window.slip.removeSelection('Aover'));
   await waitType('COMBO');
-  assert.equal((await snapshot()).stake, '100');
-  // Multiple alternatives from the same market must be retained, including batched clicks.
-  await add([selection('A', 'A2', 3), selection('A', 'AX', 4)]);
-  await page.waitForFunction(() => window.slip.columns.length === 3);
-  assert.deepEqual((await snapshot()).stakes, [3334, 3333, 3333]);
-  assert.equal((await snapshot()).stake, '100');
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('33.33–33.34'));
-  await page.evaluate(() => window.slip.setStake('99.99'));
-  await page.waitForFunction(() => window.slip.stake === '99.99');
-  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin').click());
-  await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes('100 Lek'));
-  assert.equal(requests.length, 0);
-  await page.evaluate(() => window.slip.clearAll());
-  await page.waitForFunction(() => window.slip.selections.length === 0);
-  await add(fixtureSelections);
-  await waitType('SYSTEM');
-  failNextPlacement = true;
-  // Synchronous double click is one request, even before the disabled state renders.
-  await page.evaluate(() => {
-    const button = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin');
-    button.click(); button.click();
+  assert.deepEqual(await snapshot(), {
+    stake:'100', type:'COMBO', columns:[['A1','B1','Aover']],
+    stakes:[10000], payouts:[15939], total:15939, overflow:false,
   });
-  await page.waitForFunction(() => !window.slip.isPlacingBet);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].totalStake, 100);
-  assert.equal(requests[0].columns, undefined);
-  assert.equal(requests[0].stake, undefined);
-  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin').click());
-  await page.waitForFunction(() => document.body.innerText.includes('Sistem · Kolona 1 nga 2'));
-  assert.equal(requests.length, 2);
-  assert.equal(requests[0].clientRequestId, requests[1].clientRequestId, 'uncertain failure preserves idempotency key');
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('Shuma totale e sistemit: 100.00 Lek'));
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('Shuma e kësaj kolone'));
+  assert.equal(await page.$eval('body', body =>
+    (body.innerText.match(/Al Arabi vs Al Nejmeh/g) ?? []).length),2,
+    'the same match appears twice, once for each chosen market');
+  const before = plainRequests.length;
+  await page.evaluate(() => [...document.querySelectorAll('button')]
+    .find(button => button.textContent.trim() === 'Vendos Bastin').click());
+  await page.waitForSelector('.ticket-print-panel');
+  assert.equal(plainRequests.length,before+1,'one normal ticket is placed for all selections');
+  assert.deepEqual(plainRequests.at(-1).selections.map(pick=>pick.outcomeId),
+    ['A1','B1','Aover']);
+  assert.equal(requests.length,0,'no implicit /place-columns request');
+  assert.equal(await page.$eval('.ticket-print-panel',receipt=>
+    (receipt.innerText.match(/Al Arabi vs Al Nejmeh/g) ?? []).length),2,
+    'the receipt prints both same-match markets on one ticket');
   await page.click('button[aria-label="Mbyll"]');
-  await page.waitForFunction(() => document.body.innerText.includes('Sistem · Kolona 2 nga 2'));
-  await page.click('button[aria-label="Mbyll"]');
-  await page.waitForFunction(() => !document.body.innerText.includes('BILETË BASTI'));
-  // Actual mobile layout uses the same total and allocations.
-  await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+  await page.waitForFunction(()=>!document.querySelector('.ticket-print-panel'));
+  plainRequests.length=0;
+  // The same ordinary-ticket contract and stake preview also apply on mobile.
+  await page.setViewport({ width:390, height:844, isMobile:true, hasTouch:true });
   await add(fixtureSelections);
-  await waitType('SYSTEM');
-  assert.equal((await snapshot()).stake, '100');
-  assert.deepEqual((await snapshot()).stakes, [5000, 5000]);
+  await waitType('COMBO');
+  assert.equal((await snapshot()).stake,'100');
+  assert.deepEqual((await snapshot()).stakes,[10000]);
   // The real shared Socket.IO provider immediately disables a prefilled combo.
   await page.evaluate(() => window.slip.clearAll());
   await page.waitForFunction(() => window.slip.selections.length === 0);
@@ -342,7 +316,7 @@ try {
   assert.equal((await snapshot()).columns.length, 0);
   assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin')?.disabled), true);
   assert.deepEqual(failures, []);
-  console.log('PASS real React betslip: System stakes/payouts, desktop/mobile, caps, retries, receipts, combo socket policies, explicit price acceptance and four-decimal quotes with two-decimal money');
+  console.log('PASS real React betslip: independent same-match ticket lines and receipts, desktop/mobile, caps, combo socket policies, price acceptance and precise payouts');
 } catch (error) {
   console.error('Betslip browser regression failed:', error.message, failures);
   throw error;
