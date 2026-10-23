@@ -47,6 +47,9 @@ export async function assertLiveBetRisk(client, columns, settings) {
 
   for (const column of columns) {
     let containsLive = false;
+    // One ticket creates one full-ticket liability per distinct live match,
+    // even if several markets from that match appear on its printed lines.
+    const exposedMatches = new Set();
     for (const line of column.lines) {
       const id = String(line.matchId);
       let match = liveMatches.get(id);
@@ -72,7 +75,10 @@ export async function assertLiveBetRisk(client, columns, settings) {
         }, Date.now(), settings);
         if (reason) fail('Një zgjedhje është bllokuar nga menaxhimi i rrezikut.', 'LIVE_RISK_SUSPENDED');
       }
-      newLiability.set(id,(newLiability.get(id) ?? 0) + column.payout);
+      if (!exposedMatches.has(id)) {
+        newLiability.set(id,(newLiability.get(id) ?? 0) + column.payout);
+        exposedMatches.add(id);
+      }
     }
     if (containsLive) {
       liveStake += column.stake;
@@ -89,11 +95,15 @@ export async function assertLiveBetRisk(client, columns, settings) {
   // other bet placements, including simultaneous bets by DIFFERENT players.
   const ids = [...newLiability.keys()].map(Number);
   const { rows } = await client.query(
-    `select l.match_id, coalesce(sum(t.potential_payout),0) as pending
-       from app_ticket_line l
-       join app_ticket t on t.id=l.ticket_id
-      where t.status='PENDING' and t.user_id is not null and l.match_id = any($1::bigint[])
-      group by l.match_id`,
+    `select distinct_matches.match_id, coalesce(sum(t.potential_payout),0) as pending
+       from (
+         select distinct ticket_id, match_id
+           from app_ticket_line
+          where match_id = any($1::bigint[])
+       ) as distinct_matches
+       join app_ticket t on t.id=distinct_matches.ticket_id
+      where t.status='PENDING' and t.user_id is not null
+      group by distinct_matches.match_id`,
     [ids],
   );
   const pending = new Map(rows.map(row => [String(row.match_id),Number(row.pending)]));
