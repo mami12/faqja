@@ -64,13 +64,18 @@ const builder = (name, label, links = []) => ({
   outcomes: [{ id: 'BB|123|template', name: label, odds: 4.5, status: 'ACTIVE' }],
 });
 const dcGoals = builder('X/2&P_2.5', 'DC X2 + TOTAL Under 2.5');
-open(match(2,0), dcGoals);
+closed(match(2,0), dcGoals); // X2 plus Under 2.5 cannot happen once home leads 2-0.
 closed(match(2,1), dcGoals);
 closed(match(3,0), builder('1/2&L_2.5', 'DC 12 + TOTAL Over 2.5'));
 open(match(1,0), builder('1&G/G', '1X2 1 + BTTS Yes'));
 closed(match(1,1), builder('1&G/G', '1X2 1 + BTTS Yes'));
 open(match(1,1), builder('1X2 only', '1X2 1 + DC 1X'));
 open({status:'PREMATCH',homeScore:3,awayScore:1},dcGoals);
+closed(match(1,2),builder('live impossible','1X2 1 + TOTAL Under 3.5'));
+closed(match(1,2),builder('live impossible','1X2 1 + TOTAL Under 4.5'));
+open(match(1,2),builder('live possible','1X2 1 + TOTAL Under 5.5'));
+closed(match(1,2),builder('live impossible','1X2 X + TOTAL Under 3.5'));
+open(match(1,2),builder('live possible','1X2 X + TOTAL Under 4.5'));
 const bound = builder('X2+2.5', 'DC X2 + TOTAL Over 2.5',
   [{marketId:'123|gTotal|2.5',outcomeId:'123|gTotal|2.5|Over'}]);
 open(match(0,0), bound);
@@ -94,11 +99,15 @@ const resultTotal = providerCombo('Result and Total', [
   'Away And Over 3.5','Draw And Under 3.5',
 ]);
 assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(2,1)).map(o=>o.name),
-  ['Away And Over 3.5','Draw And Under 3.5'],
-  '2.5 result-and-goals outcomes disappear at 3 total goals, while 3.5 remains');
+  ['Away And Over 3.5'],
+  'a draw from 2-1 needs at least 2-2, so Draw + Under 3.5 is impossible');
 assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(3,1)),[],
   'every settled line disappears at four goals');
 closed(match(3,1),resultTotal);
+assert.deepEqual(filterDecidedOutcomes(
+  providerCombo('Result and Total',['1 And Under 3.5','1 And Under 5.5']).outcomes,
+  providerCombo('Result and Total',['1 And Under 3.5','1 And Under 5.5']),match(1,2))
+  .map(o=>o.name),['1 And Under 5.5']);
 const totalBtts = providerCombo('Total and both teams to score',[
   'Over 2.5 And Yes','Under 2.5 And No'
 ]);
