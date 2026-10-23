@@ -239,27 +239,27 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
 
   // A combined price can be impossible even while its standalone Under line
   // has not yet lost: at 1-2, a home win requires at least 3-2 (five goals).
-  if (/^bet builder\\s*:/i.test(String(market.name ?? ''))) {
+  if (/^bet builder\s*:/i.test(String(market.name ?? ''))) {
     const parseLeg = (value: string): ComboLeg | null => {
-      const part = value.trim().match(/^(1X2|DC|BTTS|TOTAL)\\s+(.+)$/i);
+      const part = value.trim().match(/^(1X2|DC|BTTS|TOTAL)\s+(.+)$/i);
       if (!part) return null;
       const kind = part[1].toUpperCase() as ComboLeg['market'];
       if (kind === 'TOTAL') {
-        const total = part[2].match(/^(Over|Under)\\s+(\\d+(?:[.,]\\d+)?)$/i);
+        const total = part[2].match(/^(Over|Under)\s+(\d+(?:[.,]\d+)?)$/i);
         return total ? {market:kind,outcome:total[1][0].toUpperCase()+total[1].slice(1).toLowerCase(),line:total[2].replace(',','.')} : null;
       }
       const outcome = part[2].trim();
       return {market:kind,outcome: kind==='BTTS'
         ? outcome[0].toUpperCase()+outcome.slice(1).toLowerCase() : outcome.toUpperCase()};
     };
-    const synthetic = labels.map(text => text.split(/\\s+\\+\\s+/).map(parseLeg))
+    const synthetic = labels.map(text => text.split(/\s+\+\s+/).map(parseLeg))
       .find(parts => parts.length === 2 && parts.every(Boolean));
     if (synthetic && !isPossibleLiveCombo(synthetic as ComboLeg[], {
       homeScore:score.home,awayScore:score.away,
     })) return true;
   }
-  if (/^(?:full\\s*time[. ]*)?result\\s+and\\s+total$/i.test(String(market.name ?? '').trim())) {
-    const native = labels.map(text => text.match(/^(.+?)\\s+and\\s+under\\s+(\\d+(?:[.,]\\d+)?)$/i))
+  if (/^(?:full\s*time[. ]*)?result\s+and\s+total$/i.test(String(market.name ?? '').trim())) {
+    const native = labels.map(text => text.match(/^(.+?)\s+and\s+under\s+(\d+(?:[.,]\d+)?)$/i))
       .find(Boolean);
     if (native) {
       const key = native[1].trim().toLowerCase();
