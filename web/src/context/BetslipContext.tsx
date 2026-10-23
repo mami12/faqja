@@ -87,8 +87,8 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
         setComboNotice('');
         setSelections(previous => {
           const stillSelected = previous.filter(p => String(p.matchId) === String(s.matchId));
-          if (stillSelected.length !== 2 || !ids.every(id =>
-            stillSelected.some(p => p.outcomeId === id))) return previous;
+          if (stillSelected.length !== 1 || stillSelected[0].outcomeId !== first.outcomeId)
+            return previous;
           return [...previous.filter(p => String(p.matchId) !== String(s.matchId)), {
             outcomeId: offered.id, matchId: s.matchId, marketId: joint.id,
             outcomeName: offered.name, marketName: joint.name,
