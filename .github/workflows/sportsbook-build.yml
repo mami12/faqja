@@ -106,6 +106,8 @@ jobs:
           node --check server/casino/sizzling-real.mjs
       - name: Build Vite frontend
         run: npm run build:web
+      - name: Verify browser betslip has one receipt with separate same-match markets
+        run: node scripts/test-betslip-browser.mjs
       - name: Validate Sizzling RTP profiles and reel math
         run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math
