@@ -255,7 +255,7 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
     const synthetic = labels.map(text => text.split(/\\s+\\+\\s+/).map(parseLeg))
       .find(parts => parts.length === 2 && parts.every(Boolean));
     if (synthetic && !isPossibleLiveCombo(synthetic as ComboLeg[], {
-      status:'LIVE',homeScore:score.home,awayScore:score.away,
+      homeScore:score.home,awayScore:score.away,
     })) return true;
   }
   if (/^(?:full\\s*time[. ]*)?result\\s+and\\s+total$/i.test(String(market.name ?? '').trim())) {
