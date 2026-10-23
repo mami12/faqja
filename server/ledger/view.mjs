@@ -13,6 +13,7 @@ import * as overrides from './overrides.mjs';
 import { isResultBttsMarket } from './result-btts.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
 import { frozenSelectionPrice } from './system-columns.mjs';
+import { config } from '../config.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -105,8 +106,16 @@ export function toClientMatch(m) {
           : null;
         const price = Number.isFinite(rawPrice) && rawPrice >= 1 && rawPrice <= 9999999999.9999
           ? frozenSelectionPrice(rawPrice) : null;
+        // Keep the same acceptance window as resolveSelection. A provider
+        // quote can exist in the cache while already being too old to place.
+        const rawAt = o.updatedAt;
+        const timestamp = rawAt == null ? null : new Date(rawAt).getTime();
+        const isLive = m.live === true || String(m.service).toUpperCase() === 'LIVE';
+        const allowedAge = isLive ? 120_000 : (Number(config.prematchStaleMs) || 90 * 60_000);
+        const staleQuote = timestamp !== null &&
+          (!Number.isFinite(timestamp) || Date.now() - timestamp > allowedAge);
         const providerSuspended = Boolean(
-          o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended
+          o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended || staleQuote
         );
         const riskSuspended = liveRiskReason(m, {
           marketName: mk.name,
@@ -124,6 +133,7 @@ export function toClientMatch(m) {
           // Differentiate provider/admin suspensions from this server-owned,
           // reversible risk lock, so score changes may reopen only our own lock.
           feedSuspended: providerSuspended,
+          stale: staleQuote,
           riskSuspended,
           status: providerSuspended || riskSuspended ? 'SUSPENDED' : 'ACTIVE',
         };
