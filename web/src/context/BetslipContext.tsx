@@ -39,9 +39,50 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const columnPreviews = useMemo(() => previewColumnPayouts(columns, columnStakes), [columns, columnStakes]);
 
   const addSelection = (s: BetSelection) => {
-    setSelections(previous => previous.some(p => p.outcomeId === s.outcomeId)
-      ? previous.filter(p => p.outcomeId !== s.outcomeId)
-      : [...previous, s]);
+    // A repeated click removes the actual joint selection, not a second copy.
+    const existing = selections.find(p => p.outcomeId === s.outcomeId ||
+      p.sourceOutcomeIds?.includes(s.outcomeId));
+    if (existing) {
+      setSelections(previous => previous.filter(p => p.outcomeId !== existing.outcomeId));
+      return;
+    }
+    setSelections(previous => [...previous, s]);
+
+    // If two *different* ordinary markets from one fixture have an available
+    // server-priced joint contract, use its real BB outcome ID. Never take a
+    // product of unrelated browser prices and pretend it is a valid ticket.
+    const prior = selections.filter(p => String(p.matchId) === String(s.matchId));
+    if (prior.length !== 1 || prior[0].marketId === s.marketId ||
+        prior[0].outcomeId.startsWith('BB|') || s.outcomeId.startsWith('BB|')) return;
+    const first = prior[0];
+    const ids = [first.outcomeId, s.outcomeId];
+    void apiClient.get(`/matches/${encodeURIComponent(String(s.matchId))}`)
+      .then(response => {
+        const markets = (response.data?.markets ?? []) as Array<{
+          id: string; name: string; status: string;
+          builderLegs?: Array<{outcomeId:string}>;
+          outcomes?: Array<{id:string; name:string; odds:number; status:string}>;
+        }>;
+        const joint = markets.find(m => m.status === 'ACTIVE' &&
+          m.builderLegs?.length === 2 &&
+          ids.every(id => m.builderLegs!.some(leg => leg.outcomeId === id)) &&
+          m.outcomes?.some(o => o.status === 'ACTIVE' && o.id.startsWith('BB|') &&
+            Number.isFinite(o.odds) && o.odds > 1 && o.odds <= 1000));
+        const offered = joint?.outcomes?.find(o => o.status === 'ACTIVE' &&
+          o.id.startsWith('BB|') && Number.isFinite(o.odds) && o.odds > 1 && o.odds <= 1000);
+        if (!joint || !offered) return; // Preserve existing alternatives if no valid builder exists.
+        setSelections(previous => {
+          const stillSelected = previous.filter(p => String(p.matchId) === String(s.matchId));
+          if (stillSelected.length !== 2 || !ids.every(id =>
+            stillSelected.some(p => p.outcomeId === id))) return previous;
+          return [...previous.filter(p => String(p.matchId) !== String(s.matchId)), {
+            outcomeId: offered.id, matchId: s.matchId, marketId: joint.id,
+            outcomeName: offered.name, marketName: joint.name,
+            matchName: s.matchName, odds: offered.odds,
+            sourceOutcomeIds: ids,
+          }];
+        });
+      }).catch(() => { /* Keep the original system selections on lookup failure. */ });
   };
 
   const removeSelection = (outcomeId: string) => {
