@@ -44,6 +44,27 @@ const PRICE_TOLERANCE = 0.0000001; // Any quoted-price change requires explicit 
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
 
+/**
+ * Carry the exact rejected outcome back to the slip. A ticket can have many
+ * markets from the same match, so the client must NEVER guess which one failed.
+ * Ordinary money/limit/account errors aren't quote suspensions.
+ */
+export async function resolveTicketSelection(selection, resolve = resolveSelection, options = {}) {
+  try {
+    return await resolve(selection, options);
+  } catch (error) {
+    if (Number(error?.status) === 400 && error?.code !== 'FEED_REFRESHING' && selection?.outcomeId) {
+      error.outcomeId ??= String(selection.outcomeId);
+      if (!error.code) {
+        error.code = /kuotat po rifreskohen/i.test(String(error.message))
+          ? 'STALE_ODDS' : 'SELECTION_UNAVAILABLE';
+      }
+    }
+    throw error;
+  }
+}
+
+
 const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
 
 // Under wallet locks, database-backed feed modes must use the SAME connection.
@@ -196,7 +217,7 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   if (liveRiskSettings().combosEnabled === false) {
     throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
   }
-  if (feedIsRefreshing()) throw badRequest('Kuotat po rifreskohen.');
+  if (feedIsRefreshing()) { const error=badRequest('Kuotat po rifreskohen.'); error.code='FEED_REFRESHING'; throw error; }
   const template = (await listAvailableTemplates({executor})).find(t => t.id === templateId);
   if (!template) throw badRequest('Bet Builder nuk është më aktiv.');
   const match = await loadMatch(Number(matchId),executor);
@@ -249,7 +270,7 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
   // Drain every read before rollback/releasing the shared transaction client.
   const results = await Promise.allSettled(selections.map(async (selection,index) => {
     const old = lines[index];
-    const current = await resolve({...selection,oddsAtPlacement:old.price,odds:old.price},{executor});
+    const current = await resolveTicketSelection({...selection,oddsAtPlacement:old.price,odds:old.price},resolve,{executor});
     const changed = frozenSelectionPrice(current.price) !== frozenSelectionPrice(old.price) ||
       JSON.stringify(current.builderLegs ?? null) !== JSON.stringify(old.builderLegs ?? null);
     if (changed) {
@@ -380,7 +401,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   // Independent odds checks can be awaited together instead of serially.
-  const lines = (await Promise.all(selections.map(resolve))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
+  const lines = (await Promise.all(selections.map(selection => resolveTicketSelection(selection,resolve)))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
 
   assertUniqueTicketOutcomes(lines);
   const totalOdds = totalOddsForSelections(lines);
@@ -551,7 +572,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   // Every underlying selection is resolved exactly once, so repeated legs across
   // columns cannot acquire different prices while the feed changes.
   const linesById = new Map(await Promise.all(picks.map(async pick => {
-    const line = await resolve(pick);
+    const line = await resolveTicketSelection(pick,resolve);
     return [String(pick.outcomeId), { ...line, price: frozenSelectionPrice(line.price) }];
   })));
   const resolved = grouped.map(column => column.map(pick => linesById.get(String(pick.outcomeId))));
@@ -645,7 +666,7 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
-  for (const selection of selections) lines.push(await resolveSelection(selection));
+  for (const selection of selections) lines.push(await resolveTicketSelection(selection));
   assertUniqueTicketOutcomes(lines);
 
   const totalOdds = totalOddsForSelections(lines);
