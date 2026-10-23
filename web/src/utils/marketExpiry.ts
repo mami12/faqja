@@ -1,3 +1,5 @@
+import { isPossibleLiveCombo, isPossibleResultUnder, type ComboLeg } from '../../../server/ledger/live-combo-possibility.mjs';
+
 /**
  * Live market visibility policy. A market disappears only when its contract is
  * irreversible from the *available* live facts. In particular a current 1X2
@@ -21,6 +23,7 @@ type OutcomeLike = {
 type MatchLike = {
   status?: string; period?: string | null; currentMinute?: number;
   homeScore?: number; awayScore?: number;
+  homeTeam?: string; awayTeam?: string;
   corners?: Score | null; cards?: Score | null;
 };
 
@@ -209,6 +212,40 @@ export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, 
   const rawCode = String(outcome.code ?? '').trim();
   const labels = [rawName, rawCode].filter(Boolean);
   const names = labels.join(' | ').toLowerCase();
+
+  // A combined price can be impossible even while its standalone Under line
+  // has not yet lost: at 1-2, a home win requires at least 3-2 (five goals).
+  if (/^bet builder\\s*:/i.test(String(market.name ?? ''))) {
+    const parseLeg = (value: string): ComboLeg | null => {
+      const part = value.trim().match(/^(1X2|DC|BTTS|TOTAL)\\s+(.+)$/i);
+      if (!part) return null;
+      const kind = part[1].toUpperCase() as ComboLeg['market'];
+      if (kind === 'TOTAL') {
+        const total = part[2].match(/^(Over|Under)\\s+(\\d+(?:[.,]\\d+)?)$/i);
+        return total ? {market:kind,outcome:total[1][0].toUpperCase()+total[1].slice(1).toLowerCase(),line:total[2].replace(',','.')} : null;
+      }
+      const outcome = part[2].trim();
+      return {market:kind,outcome: kind==='BTTS'
+        ? outcome[0].toUpperCase()+outcome.slice(1).toLowerCase() : outcome.toUpperCase()};
+    };
+    const synthetic = labels.map(text => text.split(/\\s+\\+\\s+/).map(parseLeg))
+      .find(parts => parts.length === 2 && parts.every(Boolean));
+    if (synthetic && !isPossibleLiveCombo(synthetic as ComboLeg[], {
+      status:'LIVE',homeScore:score.home,awayScore:score.away,
+    })) return true;
+  }
+  if (/^(?:full\\s*time[. ]*)?result\\s+and\\s+total$/i.test(String(market.name ?? '').trim())) {
+    const native = labels.map(text => text.match(/^(.+?)\\s+and\\s+under\\s+(\\d+(?:[.,]\\d+)?)$/i))
+      .find(Boolean);
+    if (native) {
+      const key = native[1].trim().toLowerCase();
+      const home = norm(m.homeTeam), away = norm(m.awayTeam);
+      const result = key === '1' || key === 'home' || (home && key === home) ? '1'
+        : key === '2' || key === 'away' || (away && key === away) ? '2'
+        : ['x','draw','tie'].includes(key) ? 'X' : null;
+      if (result && !isPossibleResultUnder(score.home,score.away,result,native[2].replace(',','.'))) return true;
+    }
+  }
 
   const marketIsCombo =
     /^bet builder\s*:/.test(marketName) ||
