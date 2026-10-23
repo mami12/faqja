@@ -62,6 +62,10 @@ jobs:
         run: node scripts/test-automatic-combos.mjs
       - name: Validate system-column betslip previews
         run: node scripts/test-betslip-columns.mjs
+      - name: Validate single ticket with repeated match across markets
+        run: node scripts/test-combo-placement.mjs
+      - name: Verify rejected price identity and normal/system placement
+        run: node scripts/test-system-columns-feed.mjs
       - name: Validate universal builder contracts
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
