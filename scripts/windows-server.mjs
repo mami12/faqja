@@ -62,14 +62,14 @@ export async function stopWindowsServer({rootDir=repository,log=console.log,time
 
 function sourceFingerprint(rootDir){
  const hash=createHash('sha256');
- const add=path=>{
+ const add=(path,include=()=>true)=>{
   if(!existsSync(path))return;
   const rel=relative(rootDir,path).replaceAll('\\','/');
   if(/^web\/public\/casino-original\/(sizzling|bookofra)(\/|$)/.test(rel))return;
   for(const entry of readdirSync(path,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
    const file=join(path,entry.name);
-   if(entry.isDirectory())add(file);
-   else if(entry.isFile()){hash.update(relative(rootDir,file));hash.update('\0');hash.update(readFileSync(file));hash.update('\0');}
+   if(entry.isDirectory())add(file,include);
+   else if(entry.isFile()&&include(file)){hash.update(relative(rootDir,file));hash.update('\0');hash.update(readFileSync(file));hash.update('\0');}
   }
  };
  for(const name of ['package.json','package-lock.json','web/package.json','web/index.html','web/vite.config.ts','web/tsconfig.json','web/tailwind.config.js','web/postcss.config.js',
@@ -77,6 +77,8 @@ function sourceFingerprint(rootDir){
   hash.update(name);hash.update(readFileSync(join(rootDir,name)));
  }
  add(join(rootDir,'web/src'));add(join(rootDir,'web/public'));
+ // The frontend imports pure ledger helpers; updating those must rebuild it.
+ add(join(rootDir,'server/ledger'),file=>/\.(?:mjs|d\.mts)$/.test(file));
  return hash.digest('hex');
 }
 function stamp(path){try{return readFileSync(path,'utf8').trim();}catch{return '';}}

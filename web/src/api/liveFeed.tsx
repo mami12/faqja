@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { Match, MatchEvent, OddsDelta } from '../types';
+import { frozenSelectionPrice } from '../../../server/ledger/system-columns.mjs';
 
 /**
  * One shared Socket.IO connection for the whole board.
@@ -53,6 +54,7 @@ interface LiveFeedValue {
   riskLockedOutcomes: Record<string, boolean>;
   lockedMarkets: Record<string, boolean>;
   lockedMatches: Record<string, boolean>;
+  combosEnabled: boolean;
 }
 
 export type FeedMode = 'live' | 'idle' | 'waking';
@@ -67,6 +69,7 @@ const EMPTY: LiveFeedValue = {
   riskLockedOutcomes: {},
   lockedMarkets: {},
   lockedMatches: {},
+  combosEnabled: true,
 };
 
 const LiveFeedContext = createContext<LiveFeedValue>(EMPTY);
@@ -103,7 +106,10 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [lockedMarkets, setLockedMarkets] = useState<Record<string, boolean>>({});
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const [feedMode, setFeedMode] = useState<FeedMode>('live');
+  const [combosEnabled, setCombosEnabled] = useState(true);
   const prevOdds = useRef<Record<string, number>>({});
+  const prevOddsAt = useRef<Record<string, number>>({});
+  const prevMarketAt = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const socket: Socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
@@ -123,6 +129,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     socket.on('feed:state', useMode);
 
     socket.on('odds:update', (payload: { matchId: string | number; markets?: any[] }) => {
+      const incomingAt = Date.parse((payload as any).at) || Date.now();
       const deltas: Record<string, OddsDelta> = {};
       const outcomeLocks: Record<string, boolean> = {};
       const marketLocks: Record<string, boolean> = {};
@@ -132,6 +139,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
         for (const outcome of market?.outcomes ?? []) {
           const outcomeId = `${marketId}|${outcome.key}`;
+          if (incomingAt < (prevOddsAt.current[outcomeId] ?? 0)) continue;
+          prevOddsAt.current[outcomeId] = incomingAt;
 
           // The feed locks a price around a goal or a dangerous attack: "status":2 arrives as
           // suspended. This is the whole point of using the socket - by REST poll the market
@@ -141,17 +150,21 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           }
 
           if (outcome?.price === null || outcome?.price === undefined) continue;
-          const next = Number(outcome.price);
+          const rawPrice = Number(outcome.price);
+          if (!Number.isFinite(rawPrice) || rawPrice < 1 || rawPrice > 9999999999.9999) continue;
+          const next = frozenSelectionPrice(rawPrice);
           const before = prevOdds.current[outcomeId];
           prevOdds.current[outcomeId] = next;
-          if (before === undefined || before === next) continue;
-          deltas[outcomeId] = { outcomeId, newOdds: next, direction: next > before ? 'up' : 'down' };
+          deltas[outcomeId] = { outcomeId, newOdds: next, direction: before === undefined || next >= before ? 'up' : 'down', at: incomingAt, changed:before !== undefined && before !== next };
         }
 
         // only the rows that moved are pushed, so "every row in this frame is suspended" is
         // what a fully locked market looks like over the socket
         const outcomes = market?.outcomes ?? [];
-        if (outcomes.length) marketLocks[marketId] = outcomes.every((o: any) => o.suspended === true);
+        if (outcomes.length && incomingAt >= (prevMarketAt.current[marketId] ?? 0)) {
+          marketLocks[marketId] = outcomes.every((o: any) => o.suspended === true);
+          prevMarketAt.current[marketId] = incomingAt;
+        }
       }
 
       if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
@@ -178,6 +191,9 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     socket.on('risk:locks', (payload: { locks?: Record<string, boolean> }) => {
       if (!payload?.locks || typeof payload.locks !== 'object') return;
       setRiskLockedOutcomes(prev => ({ ...prev, ...payload.locks }));
+    });
+    socket.on('combos:settings', (payload: {enabled?: boolean}) => {
+      if (typeof payload?.enabled === 'boolean') setCombosEnabled(payload.enabled);
     });
 
     // the whole live board, once per collector cycle
@@ -281,8 +297,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches }),
-    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;

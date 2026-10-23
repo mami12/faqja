@@ -11,6 +11,7 @@ import { useBetslip } from '../context/BetslipContext';
 import { useLanguage } from '../context/LanguageContext';
 import { CalendarDays, Search, ListOrdered, Ticket, X } from 'lucide-react';
 import type { MatchViewMode } from '../components/Sports/MatchList';
+import { formatOdds } from '../utils/formatOdds';
 
 /**
  * The board. Three columns on a desktop (leagues | matches | betslip); on a phone the two side
@@ -247,7 +248,7 @@ export default function SportsbookPage() {
             )}
             {selections.length > 0 && (
               <span className="text-[10px] font-mono font-black bg-primary/20 rounded px-1.5 py-0.5">
-                @{totalOdds.toFixed(2)}
+                @{formatOdds(totalOdds)}
               </span>
             )}
           </button>

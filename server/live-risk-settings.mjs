@@ -5,6 +5,9 @@
  */
 export const DEFAULT_LIVE_RISK_SETTINGS = Object.freeze({
   enabled: true,
+  // Independent from LIVE risk rules: controls same-match builder combos
+  // in both prematch and LIVE, never ordinary multi-match tickets.
+  combosEnabled: true,
   leaderRules: [
     { minute: 60, goals: 3, maxOdds: 1.60 },
     { minute: 65, goals: 2, maxOdds: 1.40 },
@@ -47,6 +50,10 @@ export function validateLiveRiskSettings(value) {
   const fail = message => { throw Object.assign(new Error(message), { status: 400 }); };
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('Konfigurim i pavlefshëm i riskut.');
   if (typeof value.enabled !== 'boolean') fail('Aktivizimi duhet të jetë Po ose Jo.');
+  // Existing persisted JSON predates this switch and keeps its prior behavior.
+  const combosEnabled = value.combosEnabled === undefined
+    ? DEFAULT_LIVE_RISK_SETTINGS.combosEnabled : value.combosEnabled;
+  if (typeof combosEnabled !== 'boolean') fail('Aktivizimi i combove duhet të jetë Po ose Jo.');
   const closureInput = value.marketClosureRules === undefined
     ? DEFAULT_LIVE_RISK_SETTINGS.marketClosureRules : value.marketClosureRules;
   if (!Array.isArray(value.leaderRules) || !Array.isArray(value.lowOddsRules) ||
@@ -104,7 +111,7 @@ export function validateLiveRiskSettings(value) {
       caps.maxLivePayout < caps.maxLiveStake) {
     fail('Pagesa maksimale nuk mund të jetë më e vogël se shuma maksimale.');
   }
-  return { enabled:value.enabled, leaderRules, lowOddsRules, marketClosureRules, limits:caps };
+  return { enabled:value.enabled, combosEnabled, leaderRules, lowOddsRules, marketClosureRules, limits:caps };
 }
 
 export function setLiveRiskSettings(value) {

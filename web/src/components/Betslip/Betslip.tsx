@@ -8,14 +8,21 @@ import TicketReceipt from './TicketReceipt';
 import { apiClient } from '../../api/client';
 import { Ticket } from '../../types';
 import { formatTicketSelection, formatMarketSelectionLabel } from '../../utils/sportsbookLabels';
+import { stakeToCents } from '../../utils/betslipColumns';
+import { useLiveFeed } from '../../api/liveFeed';
+import { isComboMarket } from '../../utils/comboPolicy';
+import { formatOdds } from '../../utils/formatOdds';
 
 export default function Betslip() {
   const { 
-    selections, columns, stake, setStake, ticketType, setTicketType, systemType, setSystemType, 
+    selections, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType,
     removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet 
   } = useBetslip();
   const { t } = useLanguage();
   const { user, refreshUser } = useAuth();
+  const { combosEnabled } = useLiveFeed();
+  const blockedCombos = !combosEnabled && selections.some(s => s.outcomeId.startsWith('BB|') || isComboMarket(s.marketName));
+  const invalidQuote = columnPreviews.some(column => column.invalid);
   
   const [oddsChangedError, setOddsChangedError] = useState(false);
   const [oddsChangeModal, setOddsChangeModal] = useState<{
@@ -31,25 +38,13 @@ export default function Betslip() {
   const [bookingCode, setBookingCode] = useState('');
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]);
+  const [systemReceipt, setSystemReceipt] = useState<{ totalStake: number; count: number } | null>(null);
   const [stakeError, setStakeError] = useState('');
   const [unavailableNotice, setUnavailableNotice] = useState('');
-  // Keep the total field editable while typing; stake remains the per-column amount.
-  const [totalStakeDraft, setTotalStakeDraft] = useState<string | null>(null);
   const placeBetClickLock = useRef(false);
-  const hasMultipleColumns = columns.length > 1;
-  const totalStake = (Number(stake) || 0) * (hasMultipleColumns ? columns.length : 1);
-
-  const changeTotalStake = (value: string) => {
-    setTotalStakeDraft(value);
-    if (!value) {
-      setStake('');
-      return;
-    }
-    const amount = Number(value);
-    if (!Number.isFinite(amount) || amount < 0) return;
-    // Server accepts amounts with at most two decimals, per column.
-    setStake((Math.round((amount / columns.length) * 100) / 100).toFixed(2));
-  };
+  const hasMultipleColumns = ticketType === 'SYSTEM';
+  const perColumnMinimum = Math.min(...columnStakes) / 100;
+  const perColumnMaximum = Math.max(...columnStakes) / 100;
 
   // Ticket search state
   const [ticketSearch, setTicketSearch] = useState('');
@@ -60,9 +55,9 @@ export default function Betslip() {
 
   const handlePlaceBet = async () => {
     if (placeBetClickLock.current) return;
-    const stakeNum = parseFloat(stake) || 0;
-    if (stakeNum < 100) {
-      setStakeError(t('betslip.min_stake'));
+    const stakeCents = stakeToCents(stake);
+    if (stakeCents == null || stakeCents < 10000) {
+      setStakeError(stakeCents == null ? 'Vendos një shumë me maksimumi 2 shifra pas presjes.' : 'Shuma minimale totale është 100 Lek.');
       return;
     }
     setStakeError('');
@@ -70,7 +65,9 @@ export default function Betslip() {
     placeBetClickLock.current = true;
     try {
       const ticket = await placeBet(() => refreshUser());
-      setPlacedTickets(Array.isArray(ticket.tickets) ? ticket.tickets : [ticket]);
+      const tickets: Ticket[] = Array.isArray(ticket.tickets) ? ticket.tickets : [ticket];
+      setPlacedTickets(tickets);
+      setSystemReceipt(tickets.length > 1 ? { count: tickets.length, totalStake: tickets.reduce((sum, row) => sum + Math.round(row.stake * 100), 0) / 100 } : null);
       clearAll();
     } catch (e: any) {
       const errData = e.response?.data;
@@ -178,7 +175,7 @@ export default function Betslip() {
                 </div>
               </div>
               <div className="text-right shrink-0 ml-2">
-                <span className="text-accent-green font-bold">@{line.oddsAtPlacement?.toFixed(2)}</span>
+                <span className="text-accent-green font-bold">@{formatOdds(line.oddsAtPlacement)}</span>
                 <div className="text-[10px] text-text-secondary">{t(`tickets.${line.status.toLowerCase()}`)}</div>
               </div>
             </div>
@@ -217,9 +214,8 @@ export default function Betslip() {
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
           <select
-            disabled={columns.length > 1}
+            disabled
             value={ticketType}
-            onChange={e => setTicketType(e.target.value as 'SINGLE' | 'COMBO' | 'SYSTEM')}
             aria-label="Lloji i skedinës"
             className="max-w-[155px] border border-tertiary bg-[#424e60] px-2 py-1 text-xs font-semibold text-white focus:outline-none focus:border-accent-yellow"
           >
@@ -284,7 +280,7 @@ export default function Betslip() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
-                    <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{s.odds.toFixed(2)}</strong>
+                    <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{formatOdds(s.odds)}</strong>
                     <button type="button" onClick={() => { setUnavailableNotice(''); removeSelection(s.outcomeId); }}
                       title={t('betslip.remove_selection')} aria-label={t('betslip.remove_selection')}
                       className="p-0.5 text-text-secondary hover:text-rose-300"><X size={15}/></button>
@@ -294,19 +290,22 @@ export default function Betslip() {
             ))}
           </div>
 
-          {columns.length > 1 && (
+          {hasMultipleColumns && (
             <div className="shrink-0 border-t border-accent-yellow/30 bg-[#1d2835] px-3 py-2 text-xs">
-              <div className="font-bold text-accent-yellow">{columns.length} kolona automatike</div>
-              <p className="mt-1 text-text-secondary">Një zgjedhje për ndeshje në çdo kolonë. Shuma vendoset për kolonë.</p>
+              <div className="font-bold text-accent-yellow">Sistem · {columnsOverflow ? 'Mbi 24' : columns.length} kolona automatike</div>
+              <p className="mt-1 text-text-secondary">Një zgjedhje për ndeshje në çdo kolonë. Shuma totale ndahet mes kolonave.</p>
               <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
-                {columns.slice(0, 24).map((col, i) => (
+                {columns.map((col, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 border-b border-tertiary/50 py-1">
-                    <span className="min-w-0 truncate text-slate-200">#{i+1} {col.map(s => s.outcomeName).join(' + ')}</span>
-                    <strong className="shrink-0 font-mono text-accent-yellow">{col.reduce((n,s)=>n*s.odds,1).toFixed(2)}</strong>
+                    <span className="min-w-0 text-slate-200">#{i+1} {col.map(s => `${s.matchName}: ${formatMarketSelectionLabel(s.marketName, s.marketLine, t)} · ${formatTicketSelection(s.outcomeName, s.marketName, s.matchName, t, s.outcomeCode, s.marketLine)}`).join(' + ')}</span>
+                    <span className="shrink-0 text-right font-mono text-accent-yellow">
+                      <strong>{columnPreviews[i].invalid ? '—' : formatOdds(columnPreviews[i].odds)}</strong>
+                      <span className="block text-[10px] text-slate-300">{columnPreviews[i].stake.toFixed(2)} Lek → {columnPreviews[i].invalid ? '—' : columnPreviews[i].payout.toFixed(2)} Lek</span>
+                    </span>
                   </div>
                 ))}
               </div>
-              {columns.length > 24 && <p className="text-rose-300">Maksimumi 24 kolona. Hiq disa zgjedhje.</p>}
+              {columnsOverflow && <p role="alert" className="text-rose-300">Maksimumi 24 kolona. Hiq disa zgjedhje.</p>}
             </div>
           )}
 
@@ -322,51 +321,35 @@ export default function Betslip() {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300">{t('betslip.total_odds')}:</span>
                 <strong className="font-mono text-sm font-bold tabular-nums text-accent-yellow">
-                  {columns.length === 1 ? totalOdds.toFixed(2) : 'Sipas kolonave'}
+                  {hasMultipleColumns ? 'Sipas kolonave' : formatOdds(totalOdds)}
                 </strong>
               </div>
-              {ticketType === 'SYSTEM' && (
-                <label className="flex items-center justify-between gap-3 text-xs text-slate-300">
-                  {t('betslip.system_type')}
-                  <select value={systemType} onChange={e => setSystemType(e.target.value)}
-                    className="max-w-[140px] border border-tertiary bg-[#17212c] px-2 py-1.5 text-xs text-white focus:outline-none focus:border-accent-yellow">
-                    <option value="">{t('betslip.select_system')}</option>
-                    {Array.from({length: Math.max(0, selections.length - 1)}).map((_, i) => (
-                      <option key={i} value={`${i+2}/${selections.length}`}>{i+2}/{selections.length}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {hasMultipleColumns && (
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <label htmlFor="betslip-total-stake" className="shrink-0 text-slate-300">Shuma Totale:</label>
-                  <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
-                    <input id="betslip-total-stake" type="number" min={columns.length * 100} step="0.01"
-                      value={totalStakeDraft ?? totalStake.toFixed(2)}
-                      onChange={e => changeTotalStake(e.target.value)}
-                      onBlur={() => setTotalStakeDraft(null)}
-                      className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
-                    />
-                    <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
-                  </div>
-                </div>
-              )}
               <div className="flex items-center justify-between gap-3 text-xs">
                 <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">
-                  {hasMultipleColumns ? 'Shuma Për Kolonë' : t('betslip.stake')}:
+                  Shuma Totale:
                 </label>
                 <div className="flex items-center gap-1.5">
-                  {hasMultipleColumns && <span className="shrink-0 font-mono text-slate-300">{columns.length} ×</span>}
                   <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
                     <input id="betslip-stake" type="number" min="100" step="0.01" value={stake}
-                      onChange={e => { setTotalStakeDraft(null); setStake(e.target.value); }}
+                      onChange={e => setStake(e.target.value)}
                       className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
                     />
                     <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
                   </div>
                 </div>
               </div>
+              {hasMultipleColumns && !columnsOverflow && (
+                <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
+                  <span>Shuma Për Kolonë ({columns.length}):</span>
+                  <strong className="font-mono text-white">{perColumnMinimum === perColumnMaximum ? perColumnMinimum.toFixed(2) : `${perColumnMinimum.toFixed(2)}–${perColumnMaximum.toFixed(2)}`} Lek</strong>
+                </div>
+              )}
+              {hasMultipleColumns && columnStakes.some(amount => amount !== columnStakes[0]) && (
+                <p className="text-[10px] text-text-secondary">Diferenca prej 0.01 Lek ndahet te kolonat e para; totali ruhet saktësisht.</p>
+              )}
               {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
+              {blockedCombos && <p role="alert" className="text-[11px] font-semibold text-rose-300">Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.</p>}
+              {invalidQuote && <p role="alert" className="text-[11px] font-semibold text-rose-300">Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.</p>}
               {unavailableNotice && (
                 <p role="status" className="text-[11px] text-slate-300">{unavailableNotice}</p>
               )}
@@ -379,13 +362,20 @@ export default function Betslip() {
                 ))}
               </div>
               <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
-                <span className="text-slate-300">{t('betslip.potential_payout')}:</span>
-                <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{potentialPayout.toFixed(2)} Lëk</strong>
+                <span className="text-slate-300">{hasMultipleColumns ? 'Shuma e kthimeve të mundshme' : t('betslip.potential_payout')}:</span>
+                <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{invalidQuote ? '—' : potentialPayout.toFixed(2)} Lëk</strong>
               </div>
+              {hasMultipleColumns && !columnsOverflow && (
+                <div className="space-y-1 text-[10px] text-text-secondary">
+                  <div className="flex justify-between"><span>Kthimi më i vogël për kolonë, nëse fiton:</span><strong>{Math.min(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
+                  <div className="flex justify-between"><span>Kthimi më i madh për kolonë, nëse fiton:</span><strong>{Math.max(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
+                  <p>Çdo kolonë vlerësohet veçmas. Mblidhen vetëm kthimet e kolonave fituese; shuma e shfaqur kërkon që të gjitha kolonat të fitojnë.</p>
+                </div>
+              )}
             </div>
             <div className="grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columns.length > 24}
+                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote}
                   aria-busy={isPlacingBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
                   {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
@@ -393,8 +383,8 @@ export default function Betslip() {
               ) : (
                 <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
               )}
-              <button type="button" onClick={handleBook} disabled={columns.length > 1}
-                title={columns.length > 1 ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
+              <button type="button" onClick={handleBook} disabled={hasMultipleColumns || isPlacingBet || blockedCombos || invalidQuote}
+                title={hasMultipleColumns ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
                 className="bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
                 {t('betslip.book_ticket')}
               </button>
@@ -404,11 +394,11 @@ export default function Betslip() {
       )}
 
       {showBookingModal && <BookingModal code={bookingCode} onClose={() => setShowBookingModal(false)} />}
-      {placedTickets.length > 0 && <TicketReceipt ticket={placedTickets[0]} onClose={() => setPlacedTickets(prev => prev.slice(1))} />}
+      {placedTickets.length > 0 && <TicketReceipt ticket={placedTickets[0]} systemColumn={systemReceipt ? { ...systemReceipt, index: systemReceipt.count - placedTickets.length + 1 } : undefined} onClose={() => setPlacedTickets(prev => prev.slice(1))} />}
 
       {/* Modal kur koeficienti ka ndryshuar */}
       {oddsChangeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+        <div role="dialog" aria-modal="true" aria-labelledby="betslip-odds-change-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-secondary border border-tertiary rounded-sm w-full max-w-md overflow-hidden shadow-2xl space-y-0">
             {/* Header */}
             <div className="bg-[#424e60] border-b border-white/10 p-4 flex items-center gap-3">
@@ -416,7 +406,7 @@ export default function Betslip() {
                 <AlertTriangle size={22} className="text-accent-yellow" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm sm:text-base font-black text-white">Koeficienti ka Ndryshuar!</h3>
+                <h3 id="betslip-odds-change-title" className="text-sm sm:text-base font-black text-white">Koeficienti ka Ndryshuar!</h3>
                 <p className="text-xs text-text-secondary truncate">
                   Koeficienti ka lëvizur gjatë vendosjes së bastit.
                 </p>
@@ -460,13 +450,13 @@ export default function Betslip() {
                   <div>
                     <div className="text-[10px] font-bold uppercase text-text-secondary">Koeficienti i vjetër</div>
                     <div className="text-base font-mono font-bold text-rose-400 line-through mt-0.5">
-                      @{oddsChangeModal.oldOdds.toFixed(2)}
+                      @{formatOdds(oddsChangeModal.oldOdds)}
                     </div>
                   </div>
                   <div>
                     <div className="text-[10px] font-bold uppercase text-text-secondary">Koeficienti i ri</div>
                     <div className="text-base font-mono font-black text-accent-green mt-0.5">
-                      @{oddsChangeModal.newOdds.toFixed(2)}
+                      @{formatOdds(oddsChangeModal.newOdds)}
                     </div>
                   </div>
                 </div>

@@ -81,7 +81,8 @@ export interface Market {
   isBase?: boolean;
   period?: number;
   /** Real price identities for the constituent legs of a synthetic Bet Builder. */
-  builderLegs?: { marketId: string; outcomeId: string }[];
+  builderLegs?: { marketId: string; outcomeId: string; odds?: number }[];
+  builderQuotedAt?: string;
 }
 
 export interface Outcome {
@@ -168,4 +169,6 @@ export interface OddsDelta {
   outcomeId: string;
   newOdds: number;
   direction: 'up' | 'down';
+  at?: number;
+  changed?: boolean;
 }

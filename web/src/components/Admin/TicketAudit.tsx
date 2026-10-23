@@ -3,6 +3,7 @@ import { apiClient } from '../../api/client';
 import { ChevronDown, ChevronUp, Ticket as TicketIcon, CheckCircle2, XCircle, Clock, RotateCcw, Search, X, Copy, Check, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatTicketSelection, translateTicketStatus, translateTicketType } from '../../utils/sportsbookLabels';
+import { formatOdds } from '../../utils/formatOdds';
 
 type PendingFixture = {
   matchId: string;
@@ -362,7 +363,7 @@ export default function TicketAudit() {
                             </div>
                             <div className="text-right shrink-0">
                               <span className="font-black text-white px-2 py-0.5 bg-secondary rounded-lg border border-tertiary tabular-nums">
-                                {line.oddsAtPlacement?.toFixed(2) || line.odds?.toFixed(2)}
+                                {formatOdds(line.oddsAtPlacement ?? line.odds)}
                               </span>
                               <div className="mt-1 font-bold text-[10px] uppercase">
                                 <span className={

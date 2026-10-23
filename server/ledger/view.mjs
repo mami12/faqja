@@ -12,6 +12,7 @@ const FOOTBALL = { id: 18, name: 'Football', slug: 'football', iconName: 'Activi
 import * as overrides from './overrides.mjs';
 import { isResultBttsMarket } from './result-btts.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
+import { frozenSelectionPrice } from './system-columns.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -99,9 +100,11 @@ export function toClientMatch(m) {
       .map((o) => {
         // an admin override wins over the feed: a pinned price, or a forced suspension
         const forced = overrides.outcomeOverride(matchId, mk.key, line, o.key);
-        const price = o.price !== null && o.price !== undefined
+        const rawPrice = o.price !== null && o.price !== undefined
           ? (forced?.price ?? Number(o.price))
           : null;
+        const price = Number.isFinite(rawPrice) && rawPrice >= 1 && rawPrice <= 9999999999.9999
+          ? frozenSelectionPrice(rawPrice) : null;
         const providerSuspended = Boolean(
           o.suspended || mk.suspended || matchSuspended || marketOverride?.suspended || forced?.suspended
         );

@@ -6,6 +6,7 @@ import Header from '../components/Layout/Header';
 import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { toDateRange } from '../utils/dateFilters';
+import { formatOdds } from '../utils/formatOdds';
 
 interface Transaction {
   id: string;
@@ -260,13 +261,13 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                                   </div>
                                 </div>
                                 <div className="shrink-0 text-right">
-                                  <div className="font-mono text-amber-200">@{line.oddsAtPlacement.toFixed(2)}</div>
+                                  <div className="font-mono text-amber-200">@{formatOdds(line.oddsAtPlacement)}</div>
                                   <div className={betStatusClass(line.status)}>{BET_STATUS_LABELS[line.status] ?? line.status}</div>
                                 </div>
                               </div>
                             ))}
                             <div className="flex flex-wrap justify-between gap-2 border-t border-tertiary/60 pt-2 text-[11px]">
-                              <span className="text-slate-300">Koeficienti total: <strong>{entry.totalOdds.toFixed(2)}</strong></span>
+                              <span className="text-slate-300">Koeficienti total: <strong>{formatOdds(entry.totalOdds)}</strong></span>
                               <span className="text-slate-300">
                                 {entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme'}:
                                 <strong className="ml-1 text-amber-200">{entry.potentialPayout.toFixed(2)} Lëk</strong>

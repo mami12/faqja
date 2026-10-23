@@ -226,6 +226,21 @@ try {
   await prepare();
   assert.equal(commands.length, 3, 'A frontend source change requires one rebuild');
   assert.deepEqual(commands[2], ['run', 'build:web']);
+  await mkdir(join(installation, 'server/ledger'), { recursive: true });
+  const sharedSource = join(installation, 'server/ledger/shared.mjs');
+  await writeFile(sharedSource, 'export const shared=1;');
+  await prepare();
+  assert.equal(commands.length, 4, 'Adding a shared server helper requires a frontend rebuild');
+  assert.deepEqual(commands[3], ['run', 'build:web']);
+  await prepare();
+  assert.equal(commands.length, 4, 'Unchanged shared helpers preserve the build cache');
+  await writeFile(sharedSource, 'export const shared=2;');
+  await prepare();
+  assert.equal(commands.length, 5, 'Changing a shared server helper invalidates the frontend build cache');
+  assert.deepEqual(commands[4], ['run', 'build:web']);
+  await writeFile(join(installation, 'server/ledger/.env'), 'PRIVATE_TEST_SETTING=not-a-source-file');
+  await prepare();
+  assert.equal(commands.length, 5, 'Private environment files must not enter the source fingerprint');
 
   if (globalThis.process.platform === 'win32') {
     const batchRoot = join(scratch, 'batch copy with spaces');

@@ -16,6 +16,7 @@ import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts, gradeMixedTotal } from './mixed-combos.mjs';
+import { systemColumnPayout } from './system-columns.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -190,8 +191,8 @@ export function gradeLine(line, result) {
  * Runs in a transaction and re-reads the ticket under a lock, so two settlement passes
  * can never pay the same ticket twice.
  */
-export async function recalcTicket(ticketId) {
-  const client = await pool.connect();
+export async function recalcTicket(ticketId, { database = pool } = {}) {
+  const client = await database.connect();
   try {
     await client.query('begin');
 
@@ -211,15 +212,16 @@ export async function recalcTicket(ticketId) {
     const lost = lines.filter((l) => l.status === 'LOST');
     const won = lines.filter((l) => l.status === 'WON');
     const voids = lines.filter((l) => l.status === 'VOID');
-    const activeOdds = lines
-      .filter((l) => l.status !== 'VOID')
-      .reduce((acc, l) => acc * Number(l.odds_at_placement || 1), 1);
 
     let status;
     let payout;
     if (!lost.length && won.length) {
       status = 'WON';
-      payout = round(Number(ticket.stake) * activeOdds);
+      // Honor the accepted ticket quote in full, including legacy rounding.
+      // Only removed VOID legs require recomputing the reduced contract.
+      payout = voids.length
+        ? systemColumnPayout(Number(ticket.stake), won.map(line => line.odds_at_placement))
+        : round(Number(ticket.potential_payout));
     } else if (!lost.length && !won.length && voids.length) {
       status = 'VOID';
       payout = round(Number(ticket.stake)); // full refund

@@ -101,7 +101,7 @@ const distinct = buildMarkets(['g11111', 'g22222'].map(id => ({
 assert.equal(distinct.length, 2, 'retain distinct provider market IDs sharing the same English title');
 
 const require = createRequire(import.meta.url);
-const ts = require('../web/node_modules/typescript/lib/typescript.js');
+const ts = require('typescript');
 const source = readFileSync(new URL('../web/src/utils/marketCatalog.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },

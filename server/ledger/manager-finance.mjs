@@ -1,3 +1,5 @@
+import { moneyCents } from './system-columns.mjs';
+
 export const DEFAULT_COMMISSION_RATES = Object.freeze({ single: 3, double: 5, multi: 7 });
 
 export async function getManagerCommissionRates(executor) {
@@ -22,7 +24,11 @@ export function managerCommissionRate(selectionCount, rates = DEFAULT_COMMISSION
 
 export function managerCommission(stake, selectionCount, rates = DEFAULT_COMMISSION_RATES) {
   const tier = selectionCount <= 1 ? 'single' : selectionCount === 2 ? 'double' : 'multi';
-  return Number((Number(stake) * Number(rates[tier]) / 100).toFixed(2));
+  // Rates are persisted to two decimals. Round the actual column stake once,
+  // using decimal half-up arithmetic (25.10 * 5% is 1.26, never 1.25).
+  const stakeCents = BigInt(moneyCents(stake));
+  const rateHundredths = BigInt(moneyCents(rates[tier]));
+  return Number((stakeCents * rateHundredths + 5000n) / 10000n) / 100;
 }
 
 export function managerCommissionPercent(selectionCount, rates = DEFAULT_COMMISSION_RATES) {

@@ -10,6 +10,7 @@ import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '..
 import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
+import { isComboMarket } from '../../utils/comboPolicy';
 
 export type MatchViewMode = 'all' | 'live' | 'prematch' | 'favorites';
 
@@ -34,7 +35,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
-  const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode } = useLiveFeed();
+  const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled } = useLiveFeed();
   const refreshing = feedMode !== 'live';
 
   const fetchMatches = async () => {
@@ -141,7 +142,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const renderMatchCard = (raw: any) => {
     const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
     const markets: any[] = m.markets ?? [];
-    const visible = (mk: any) => !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets, lockedOutcomes, riskLockedOutcomes) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeDisplayable), mk, m).length > 0;
+    const visible = (mk: any) => (combosEnabled || !isComboMarket(mk)) && !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets, lockedOutcomes, riskLockedOutcomes) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeDisplayable), mk, m).length > 0;
     const findMarket = (pattern: RegExp, type?: string) =>
       markets.find((mk: any) => visible(mk) && (!mk.period || mk.period === 0) &&
         (type && mk.marketType === type || pattern.test(String(mk.name ?? ''))));

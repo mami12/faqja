@@ -6,6 +6,7 @@ import { apiClient } from '../api/client';
 import { Ticket } from '../types';
 import { Ticket as TicketIcon } from 'lucide-react';
 import { formatTicketSelection, formatMarketSelectionLabel, translateTicketType } from '../utils/sportsbookLabels';
+import { formatOdds } from '../utils/formatOdds';
 
 export default function MyBetsPage() {
   const { t } = useLanguage();
@@ -80,7 +81,7 @@ export default function MyBetsPage() {
                 </div>
               </div>
               <div className="sm:text-right shrink-0 flex sm:flex-col justify-between items-baseline sm:items-end">
-                <div className="text-accent-yellow font-mono font-bold text-xs sm:text-sm">@{line.oddsAtPlacement.toFixed(2)}</div>
+                <div className="text-accent-yellow font-mono font-bold text-xs sm:text-sm">@{formatOdds(line.oddsAtPlacement)}</div>
                 <div className="text-[10px] text-text-muted font-bold uppercase">{t(`tickets.${line.status.toLowerCase()}`)}</div>
               </div>
             </div>
@@ -97,7 +98,7 @@ export default function MyBetsPage() {
               <span className="text-text-secondary">{t('tickets.payout')}: </span>
               <span className="font-mono font-black text-accent-yellow text-sm">{ticket.potentialPayout.toFixed(2)} Lëk</span>
             </div>
-            <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{totalOdds.toFixed(2)}</div>
+            <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{formatOdds(totalOdds)}</div>
           </div>
         </div>
 

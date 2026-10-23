@@ -2,6 +2,7 @@ import { Printer, X } from 'lucide-react';
 import { Ticket } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatTicketSelection, formatMarketSelectionLabel, translateTicketType } from '../../utils/sportsbookLabels';
+import { formatOdds } from '../../utils/formatOdds';
 
 const CODE39: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -50,9 +51,10 @@ function Code39Barcode({ value }: { value: string }) {
 interface Props {
   ticket: Ticket;
   onClose: () => void;
+  systemColumn?: { totalStake: number; count: number; index: number };
 }
 
-export default function TicketReceipt({ ticket, onClose }: Props) {
+export default function TicketReceipt({ ticket, onClose, systemColumn }: Props) {
   const { t } = useLanguage();
   const barcodeValue = ticket.id.replace(/-/g, '').slice(0, 10).toUpperCase();
 
@@ -75,6 +77,13 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
           <h2 className="text-lg font-black uppercase tracking-widest">BILETË BASTI</h2>
           <p className="mt-1 text-xs">ID: {ticket.id.toUpperCase()}</p>
           <p className="text-xs">{new Date(ticket.placedAt).toLocaleString('sq-AL')}</p>
+          {systemColumn && (
+            <div className="mt-2 space-y-0.5 text-xs">
+              <p className="font-bold">Sistem · Kolona {systemColumn.index} nga {systemColumn.count}</p>
+              <p>Shuma totale e sistemit: {systemColumn.totalStake.toFixed(2)} Lek</p>
+              <p>Ky dokument i përket vetëm kësaj kolone dhe ID-së së saj.</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 py-3">
@@ -85,7 +94,7 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
                 {formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode, line.marketLine)}</strong>
               </div>
               <div className="mt-0.5 flex justify-between">
-                <span>Kuota</span><strong>{line.oddsAtPlacement.toFixed(2)}</strong>
+                <span>Kuota</span><strong>{formatOdds(line.oddsAtPlacement)}</strong>
               </div>
             </article>
           ))}
@@ -93,8 +102,8 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
 
         <div className="space-y-1 border-y-2 border-dashed border-black/40 py-3 text-sm">
           <div className="flex justify-between"><span>Lloji i biletës</span><strong>{translateTicketType(ticket.ticketType, t)}</strong></div>
-          <div className="flex justify-between"><span>Shuma e luajtur</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
-          <div className="flex justify-between"><span>Koeficienti total</span><strong>{ticket.totalOdds.toFixed(2)}</strong></div>
+          <div className="flex justify-between"><span>{systemColumn ? 'Shuma e kësaj kolone' : 'Shuma e luajtur'}</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
+          <div className="flex justify-between"><span>Koeficienti total</span><strong>{formatOdds(ticket.totalOdds)}</strong></div>
           <div className="flex justify-between text-base"><span>Fitimi i mundshëm</span><strong>{ticket.potentialPayout.toFixed(2)} Lëk</strong></div>
         </div>
 

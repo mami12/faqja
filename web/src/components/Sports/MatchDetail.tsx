@@ -16,6 +16,7 @@ import { formatMarketLine } from '../../utils/sportsbookLabels';
 import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
+import { isComboMarket } from '../../utils/comboPolicy';
 
 // MatchDetail keeps its original tab IDs, but uses the same canonical
 // classification and localized labels as MarketPanel.
@@ -112,7 +113,7 @@ export default function MatchDetail() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
-  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled } = useLiveFeed();
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
@@ -148,13 +149,14 @@ export default function MatchDetail() {
   const filteredMarkets = useMemo(() => {
     if (!liveMarketMatch) return [];
     return markets.flatMap(market => {
+      if (!combosEnabled && isComboMarket(market)) return [];
       if (!isMarketVisible(liveMarketMatch, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) return [];
       const outcomes = filterDecidedOutcomes(
         (market.outcomes ?? []).filter(isOutcomeDisplayable), market, liveMarketMatch,
       );
       return outcomes.length ? [{ ...market, outcomes }] : [];
     });
-  }, [markets, liveMarketMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes]);
+  }, [markets, liveMarketMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled]);
 
   const allGrouped = useMemo(() => groupMarkets(filteredMarkets, lang), [filteredMarkets, lang]);
 

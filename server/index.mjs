@@ -403,6 +403,7 @@ async function broadcastLiveRiskLocks(matchId, matchRow) {
 // Admin edits (and changes made on another instance) immediately re-evaluate
 // already visible odds, including reversibly unlocking old risk-only locks.
 subscribeLiveRiskSettings(() => {
+  if (io) io.emit('combos:settings', {enabled:liveRiskSettings().combosEnabled !== false});
   void (async () => {
     if (!io) return;
     const rows = await getMatches({ service: 'LIVE', limit: 2000 });
@@ -732,6 +733,7 @@ io.on('connection', async (socket) => {
   // `mode` lets the board say "odds are being refreshed" instead of showing an empty list
   // while the first feed cycle is in flight
   socket.emit('hello', { at: new Date().toISOString(), pollMs: config.pollIntervalMs, mode: getFeedMode() });
+  socket.emit('combos:settings', {enabled:liveRiskSettings().combosEnabled !== false});
   socketTasks++;
   try {
     const counts = await getCounts();

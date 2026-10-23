@@ -3,6 +3,7 @@ import { apiClient } from '../../api/client';
 import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp, Edit3, Lock, Unlock, PlayCircle, Search, X, RefreshCw, Trophy, Clock } from 'lucide-react';
 import { translateOutcomeName } from '../../utils/sportsbookLabels';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatOdds } from '../../utils/formatOdds';
 
 export default function MatchControl() {
   const { t } = useLanguage();
@@ -370,7 +371,7 @@ export default function MatchControl() {
                                       {translateOutcomeName(oc.name, t, mk.name, `${m.homeTeam} vs ${m.awayTeam}`, oc.code)}
                                     </span>
                                     <span className="text-sm font-black text-accent-green flex items-center gap-1 tabular-nums mt-0.5">
-                                      {Number(oc.odds).toFixed(2)} <Edit3 size={12} className="text-text-secondary group-hover:text-white" />
+                                      {formatOdds(Number(oc.odds))} <Edit3 size={12} className="text-text-secondary group-hover:text-white" />
                                     </span>
                                   </button>
                                   <button

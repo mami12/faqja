@@ -62,7 +62,7 @@ export default function BetBuilderManager(){
  return <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6">
   <div className="rounded-xl border border-tertiary bg-secondary p-4 text-sm text-text-secondary">
    Zgjidh një kategori, kliko saktësisht 2 zgjedhje nga dy tregje të ndryshme dhe shtyp Save. Emri krijohet automatikisht.
-   <p className="mt-2">Kombinimi shfaqet në ndeshjet me kuotë të kombinuar nga furnizuesi. Kuota ndryshon sipas ndeshjes.</p>
+   <p className="mt-2">Combot standarde krijohen automatikisht. Enable / Disable Combos gjendet te Risk Management. Çdo combo shfaqet vetëm kur të dyja zgjedhjet janë aktive; koeficienti është prodhimi i tyre.</p>
   </div>
   {error&&<div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
   {notice&&<div role="status" className="rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-300">{notice}</div>}

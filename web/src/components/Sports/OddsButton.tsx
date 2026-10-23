@@ -7,12 +7,15 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatOddsButtonLabel, isResultBttsMarket, parseResultBttsOutcome } from '../../utils/sportsbookLabels';
 import { marketSelectionLabel } from '../../utils/marketCatalog';
 import { isMarketExpired, isCompletedCombinationOutcome } from '../../utils/marketExpiry';
+import { isComboMarket } from '../../utils/comboPolicy';
+import { multipliedComboPrice } from '../../../../server/ledger/combo-price.mjs';
+import { formatOdds } from '../../utils/formatOdds';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
 
 export default function OddsButton({ match, market, outcome, isWide, showRawLabel = false }: Props) {
-  const { selections, addSelection, removeSelection, updateOdds } = useBetslip();
-  const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches } = useLiveFeed();
+  const { selections, addSelection, removeSelection } = useBetslip();
+  const { oddsDeltas, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled } = useLiveFeed();
   const { t, lang } = useLanguage();
   const [currentOdds, setCurrentOdds] = useState(outcome.odds);
   const [flashClass, setFlashClass] = useState('');
@@ -31,6 +34,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     lockedOutcomes[part.outcomeId] === true ||
     riskLockedOutcomes[part.outcomeId] === true);
   const isSuspended =
+    (!combosEnabled && isComboMarket(market)) ||
     isMarketExpired(match, market) || isCompletedCombinationOutcome(match, market, outcome) ||
     builderLegLocked ||
     unidentifiedMixedOutcome ||
@@ -41,26 +45,33 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     lockedOutcomes[outcome.id] === true ||
     lockedMarkets[market.id] === true ||
     lockedMatches[String(match.id)] === true ||
-    currentOdds === null || currentOdds === undefined;
+    currentOdds === null || currentOdds === undefined || !Number.isFinite(currentOdds) || currentOdds <= 1 ||
+    (outcome.id.startsWith('BB|') && currentOdds > 1000);
 
   const label = showRawLabel
     ? marketSelectionLabel(String(outcome.name || outcome.code || 'Selection'), lang)
     : formatOddsButtonLabel(outcome.name, market.name, market.line || market.specifier, t, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
   const scoringTimeLabel = !showRawLabel && /\btime\s+of\s+scoring\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(market.name);
 
-  // Synthetic builder quotes are derived on REST refresh, not emitted as
-  // provider outcome deltas. Keep their displayed price in sync with props.
+  // Both real leg identities are carried with an automatic combo. A socket
+  // change updates its product immediately; placement still verifies on server.
   useEffect(() => {
     if (outcome.id.startsWith('BB|')) {
-      setCurrentOdds(outcome.odds);
-      if (isSelected && Number.isFinite(outcome.odds)) updateOdds(outcome.id, outcome.odds);
+      const legs = market.builderLegs ?? [];
+      const quotedAt = Date.parse(market.builderQuotedAt ?? '') || 0;
+      const price = legs.length === 2 && legs.every(p => Number.isFinite(p.odds))
+        ? multipliedComboPrice(legs.map(part => ({price:(oddsDeltas[part.outcomeId]?.at ?? 0) >= quotedAt
+          ? oddsDeltas[part.outcomeId]?.newOdds ?? Number(part.odds) : Number(part.odds)}))) ?? 0
+        : outcome.odds;
+      setCurrentOdds(price);
     }
-  }, [outcome.id, outcome.odds]);
+  }, [outcome.id, outcome.odds, market.builderLegs, market.builderQuotedAt, oddsDeltas]);
 
   useEffect(() => {
     const delta = oddsDeltas[outcome.id];
     if (delta) {
       setCurrentOdds(delta.newOdds);
+      if (delta.changed === false) return;
       setFlashClass(delta.direction === 'up' ? 'animate-flash-green' : 'animate-flash-red');
       const timer = setTimeout(() => setFlashClass(''), 1000);
       return () => clearTimeout(timer);
@@ -113,7 +124,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
       <span className={`shrink-0 font-mono text-xs font-black tabular-nums sm:text-sm ${
         isSuspended ? 'text-slate-400' : isSelected ? 'text-white' : 'text-accent-yellow group-hover:text-accent-yellow sm:text-text-primary'
       }`}>
-        {isSuspended ? <Lock size={14} strokeWidth={2.3} className="inline text-slate-400" aria-label="Koeficient i pezulluar" /> : currentOdds !== null && currentOdds !== undefined ? currentOdds.toFixed(2) : '-'}
+        {isSuspended ? <Lock size={14} strokeWidth={2.3} className="inline text-slate-400" aria-label="Koeficient i pezulluar" /> : formatOdds(currentOdds)}
       </span>
     </button>
   );

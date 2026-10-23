@@ -9,12 +9,14 @@ import { query } from '../db.mjs';
 import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
+import { liveRiskSettings } from '../live-risk-settings.mjs';
+import { automaticComboTemplates, comboSignature, isCompatibleComboPair, multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fail = message=>{throw Object.assign(new Error(message),{status:400});};
 
-export async function listTemplates({ activeOnly = false } = {}) {
-  const { rows } = await query(
+export async function listTemplates({ activeOnly = false, executor = query } = {}) {
+  const { rows } = await executor(
     `select id, name, legs, active, updated_at as "updatedAt"
        from app_bet_builder_template
        where ($1::boolean = false or active = true)
@@ -23,8 +25,24 @@ export async function listTemplates({ activeOnly = false } = {}) {
   return rows;
 }
 
+export async function listAvailableTemplates({executor = query, includeAutomatic = true} = {}) {
+  const saved = await listTemplates({activeOnly:true,executor});
+  return mergeComboTemplates(saved,{includeAutomatic});
+}
+
+export function mergeComboTemplates(saved = [], {includeAutomatic = true} = {}) {
+  const byContract = new Map();
+  for (const template of [...saved, ...(includeAutomatic ? automaticComboTemplates() : [])]) {
+    if (!template.active || !isCompatibleComboPair(template.legs)) continue;
+    const key = comboSignature(template.legs);
+    if (!byContract.has(key)) byContract.set(key,template);
+  }
+  return [...byContract.values()];
+}
+
 export async function saveTemplate(input,{executor=query}={}) {
   const {id,name:title,legs:cleaned,active}=normalizeBuilder(input);
+  if (!isCompatibleComboPair(cleaned)) fail('Këto zgjedhje janë të papajtueshme ose njëra përfshihet plotësisht te tjetra.');
   const { rows } = await executor(
     `insert into app_bet_builder_template (id,name,legs,active)
      values (coalesce($1::uuid,gen_random_uuid()),$2,$3::jsonb,$4)
@@ -42,15 +60,13 @@ export async function deleteTemplate(id) {
 }
 
 function matchesMarket(market, kind, line) {
-  const name = String(market.name ?? '').toLowerCase();
-  const type = String(market.marketType ?? '').toUpperCase();
-  if (/corner|card|booking|handicap|half|period|player|first|&|\+/.test(name)) return false;
-  if (kind === '1X2') return /1\s*x\s*2|match result|full time result|winner|moneyline|^result$/.test(name) ||
-    (type === '1X2' && !/total|chance|score|btts|both/.test(name));
-  if (kind === 'DC') return /double chance/.test(name);
-  if (kind === 'BTTS') return /both teams to score|\bbtts\b/.test(name);
+  const name = String(market.name ?? '').toLowerCase().trim();
+  if (Number(market.period ?? 0) !== 0 || /corner|card|booking|handicap|half|period|player|first|second|team total|home total|away total|extra|qualif|penalt|&|\+|\band\b/.test(name)) return false;
+  if (kind === '1X2') return /^(?:1\s*x\s*2|match result|full[ .]*time[ .]*result|winner|moneyline|result)$/.test(name);
+  if (kind === 'DC') return /^(?:full[ .]*time[ .]*)?double chance$/.test(name);
+  if (kind === 'BTTS') return /^(?:full[ .]*time[ .]*)?(?:both teams (?:to )?score|btts)$/.test(name);
   if (kind === 'TOTAL') {
-    if (!/total|over\/?under|goals/.test(name)) return false;
+    if (!/^(?:full[ .]*time[ .]*)?(?:total(?: goals?)?|over\s*\/?\s*under|goals(?: over\s*\/?\s*under)?)$/.test(name)) return false;
     const actual = String(market.line ?? market.specifier ?? '').replace(',', '.');
     // Do not guess a line if the provider has not identified one.
     return actual === line;
@@ -171,10 +187,24 @@ export function parseBuilderId(id) {
   return { matchId: parts[1], templateId: parts[2] };
 }
 
-export async function decorateMatches(matches) {
+export async function decorateMatches(matches, options = {}) {
   if (!matches?.length) return matches;
-  const templates = await listTemplates({ activeOnly: true });
-  if (!templates.length) return matches;
+  // This projection predates the asynchronous catalog read. Later socket
+  // prices must not be discarded merely because the catalog query was slow.
+  const quotedAt = new Date().toISOString();
+  // Decoration may run twice on a cached projection. Never retain stale offers.
+  for (const match of matches) if (Array.isArray(match.markets)) {
+    match.markets = match.markets.filter(m => !String(m.id).startsWith('BB|'));
+  }
+  const settings = options.settings ?? liveRiskSettings();
+  if (settings.combosEnabled === false) {
+    for (const match of matches) if (Array.isArray(match.markets)) {
+      match.markets = match.markets.filter(m => !isSameGameComboLine(m));
+    }
+    return matches;
+  }
+  const templates = (options.templates ?? await listAvailableTemplates(options))
+    .filter(template => options.includeAutomatic !== false || template.automatic !== true);
   for (const match of matches) {
     if (match.isSuspended || match.status === 'ENDED' || match.status === 'CANCELLED') continue;
     for (const template of templates) {
@@ -182,21 +212,19 @@ export async function decorateMatches(matches) {
       // cannot stay sellable through the synthetic Bet Builder market.
       const resolved = template.legs.map(leg => findLeg(match,leg));
       if (resolved.some(r => !r)) continue;
-      // Do not expose a synthetic quote if no exact provider joint price exists.
-      const providerQuote = findProviderBuilderQuote(match,template.legs);
-      if (!providerQuote) continue;
-      const price = Number(providerQuote.outcome.odds);
-      if (!Number.isFinite(price) || price <= 1 || price > 1000) continue;
+      if (!isCompatibleComboPair(template.legs)) continue;
+      const price = multipliedComboPrice(resolved);
+      if (price === null) continue;
       const id = builderId(match.id,template.id);
       match.markets ??= [];
       match.markets.push({
         id: `BB|${match.id}|${template.id}|market`,
         matchId: match.id, marketType: 'OTHER', name: `Bet Builder: ${template.name}`,
-        status: 'ACTIVE', sortOrder: 9000, line: '',
+        status: 'ACTIVE', sortOrder: 9000, line: '', builderQuotedAt: quotedAt,
         // Real constituent IDs let the browser respond to immediate socket
         // suspensions, even before the next REST refresh.
-        builderLegs: [...resolved,providerQuote].map(part => ({
-          marketId: part.market.id, outcomeId: part.outcome.id,
+        builderLegs: resolved.map(part => ({
+          marketId: part.market.id, outcomeId: part.outcome.id, odds: Number(part.outcome.odds),
         })),
         outcomes: [{
           id, marketId: `BB|${match.id}|${template.id}|market`,

@@ -10,6 +10,7 @@ type MarketClosureRule = { minute: number; market: MarketCategory; score: ScoreC
 type LimitKey = 'maxLiveStake' | 'maxLivePayout' | 'maxMatchExposure';
 type RiskSettings = {
   enabled: boolean;
+  combosEnabled: boolean;
   leaderRules: LeaderRule[];
   lowOddsRules: LowOddsRule[];
   marketClosureRules: MarketClosureRule[];
@@ -97,6 +98,19 @@ export default function LiveRiskManager() {
         <label className="flex cursor-pointer items-center gap-3 rounded bg-primary px-3 py-2 text-sm text-white">
           <input type="checkbox" checked={value.enabled} onChange={e=>setValue({...value,enabled:e.target.checked})}/>
           {value.enabled ? 'Aktiv' : 'Joaktiv'}
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-tertiary bg-secondary p-4">
+        <div>
+          <h3 className="font-bold text-white">Combos / Bet Builder</h3>
+          <p className="mt-1 text-xs text-text-secondary">Aktivizo ose çaktivizo combot me dy zgjedhje brenda së njëjtës ndeshje, për PREMATCH dhe LIVE.</p>
+          <p className="mt-1 text-xs text-text-secondary">Ky opsion ruhet veçmas nga aktivizimi i riskut LIVE. Biletat me disa ndeshje dhe kolonat e sistemit nuk preken.</p>
+        </div>
+        <label className="flex cursor-pointer items-center gap-3 rounded bg-primary px-3 py-2 text-sm text-white">
+          <input type="checkbox" aria-label="Enable / Disable Combos" checked={value.combosEnabled}
+            onChange={e=>setValue({...value,combosEnabled:e.target.checked})}/>
+          {value.combosEnabled ? 'Enable Combos' : 'Disable Combos'}
         </label>
       </div>
 

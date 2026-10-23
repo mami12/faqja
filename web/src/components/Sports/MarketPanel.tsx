@@ -11,6 +11,7 @@ import {
 } from '../../utils/marketExpiry';
 import { betBuilderGroup, marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
 import type { MarketCategory } from '../../utils/marketCatalog';
+import { isComboMarket } from '../../utils/comboPolicy';
 
 /* ------------------------------------------------------------------ */
 /* Kategoritë                                                          */
@@ -159,7 +160,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
 
 export default function MarketPanel({ match }: { match: Match }) {
   const { t, lang } = useLanguage();
-  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, livePatches } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, livePatches, combosEnabled } = useLiveFeed();
   // Apply pushed goal/period changes immediately, without waiting for REST.
   const patch = livePatches[String(match.id)];
   const liveMatch = useMemo(() => ({ ...match, ...(patch ?? {}) }), [
@@ -179,6 +180,7 @@ export default function MarketPanel({ match }: { match: Match }) {
 
     const query = marketSearch.trim().toLowerCase();
     for (const market of match.markets ?? []) {
+      if (!combosEnabled && isComboMarket(market)) continue;
       if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).map(o => o.name)]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
@@ -203,7 +205,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     return { categorized: result, counts: c };
-  }, [liveMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, marketSearch, lang]);
+  }, [liveMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, marketSearch, lang, combosEnabled]);
 
   const totalMarkets = Object.values(counts).reduce((sum, n) => sum + n, 0);
 

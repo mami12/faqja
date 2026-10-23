@@ -6,6 +6,8 @@
  */
 import { getMatchById } from '../matches.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
+import { isSameGameComboLine } from './automatic-combos.mjs';
+import { config } from '../config.mjs';
 
 const fail = (message, code = 'LIVE_RISK_LIMIT') => {
   throw Object.assign(new Error(message), { status: 400, code });
@@ -32,6 +34,11 @@ export function assertLiveMatchExposure(newLiability, pending, maxMatchExposure)
 }
 
 export async function assertLiveBetRisk(client, columns, settings) {
+  // This switch applies to prematch too, independently of LIVE risk controls.
+  // Read under the persisted settings row lock to close the disable/place race.
+  if (settings.combosEnabled === false && columns.some(c => c.lines.some(isSameGameComboLine))) {
+    fail('Combot janë çaktivizuar nga administrata.', 'COMBOS_DISABLED');
+  }
   if (!settings.enabled) return;
   const liveMatches = new Map();
   const newLiability = new Map();
@@ -44,7 +51,9 @@ export async function assertLiveBetRisk(client, columns, settings) {
       const id = String(line.matchId);
       let match = liveMatches.get(id);
       if (match === undefined) {
-        match = await getMatchById(Number(id));
+        match = config.matchStore === 'db'
+          ? (await client.query('select * from matches where match_id = $1',[Number(id)])).rows[0] ?? null
+          : await getMatchById(Number(id));
         // The match may be prematch; it still has a sentinel in the map.
         liveMatches.set(id, match ?? null);
       }

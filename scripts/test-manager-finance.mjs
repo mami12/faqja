@@ -48,6 +48,11 @@ assert.equal(managerCommissionPercent(2), 5);
 assert.equal(managerCommissionPercent(3), 7);
 assert.equal(managerCommissionPercent(8), 7);
 assert.equal(managerCommission(150, 1), 4.5);
+assert.equal(managerCommission(25.10, 2), 1.26, 'fractional system stake rounds an exact half-cent up');
+assert.equal(managerCommission(33.34, 2), 1.67);
+assert.equal(managerCommission(33.33, 2), 1.67);
+assert.equal(managerCommission(2, 1, { single: 0.25 }), 0.01, 'configured fractional percentage keeps decimal accuracy');
+assert.equal(managerCommission(100, 1, { single: 0 }), 0);
 assert.equal(managerCommission(100, 1, { single: 4, double: 6, multi: 8 }), 4);
 assert.equal(managerCommissionPercent(2, { single: 4, double: 6, multi: 8 }), 6);
 

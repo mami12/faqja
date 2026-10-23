@@ -14,12 +14,14 @@ import crypto from 'node:crypto';
 import { pool, query } from '../db.mjs';
 import { config } from '../config.mjs';
 import { getOddsForMatches } from '../odds-store.mjs';
-import { withOdds } from '../collector.mjs';
+import { serializeMatch } from '../collector.mjs';
 import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
 import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.mjs';
-import { parseBuilderId, findLeg, findProviderBuilderQuote, listTemplates } from './bet-builders.mjs';
+import { parseBuilderId, findLeg, listAvailableTemplates } from './bet-builders.mjs';
+import { multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
+import { liveRiskSettings } from '../live-risk-settings.mjs';
 import { isDecidedLiveOutcome } from './decided-markets.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
@@ -29,6 +31,7 @@ import { liveRiskReason } from '../live-risk.mjs';
 import { lockLiveRiskSettings } from './live-risk-store.mjs';
 import { assertLiveBetRisk } from './bet-risk.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
+import { buildSystemColumns, splitSystemStake, moneyCents, frozenSelectionPrice, systemColumnPayout } from './system-columns.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -36,19 +39,27 @@ const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not be
 // about to start, so they are allowed to be older - but not unbounded: a price the feed has
 // stopped refreshing must not be sold, so the window is the hourly tier plus a margin.
 const STALE_PREMATCH_ODDS_MS = Number(config.prematchStaleMs) || 90 * 60 * 1000;
-const PRICE_TOLERANCE = 0.1; // 10% drift between the shown price and the server's
+const PRICE_TOLERANCE = 0.0000001; // Any quoted-price change requires explicit acceptance.
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
 
 const bookingCode = () => crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
 
+// Under wallet locks, database-backed feed modes must use the SAME connection.
+const loadMatch = async (id, executor) => config.matchStore === 'db'
+  ? (await executor('select * from matches where match_id = $1',[id])).rows[0] ?? null
+  : getMatchById(id);
+const loadOdds = async (id, executor) => config.oddsStore === 'db'
+  ? (await executor('select * from odds_current where match_id = $1 order by is_base desc, grp_order, period, market_key, line, outcome_key',[id])).rows
+  : getOddsForMatches([id]);
+
 /**
  * Turns one selection from the client ({ outcomeId, oddsAtPlacement }) into the row we
  * will store, using our own live price. Throws a 400 with a user-facing message.
  */
-async function resolveSelection(selection) {
+export async function resolveSelection(selection, {executor = query} = {}) {
   const builder = parseBuilderId(selection?.outcomeId);
-  if (builder) return resolveBuilderSelection(selection,builder);
+  if (builder) return resolveBuilderSelection(selection,builder,{executor});
   // idle mode: while the feed is paused (or starting again) the prices on the board have not
   // been refreshed since before the pause - selling one of them would be selling a stale price
   if (feedIsRefreshing()) {
@@ -59,13 +70,19 @@ async function resolveSelection(selection) {
   if (!parsed) throw badRequest('Zgjedhja nuk u njoh. Rifresko faqen dhe provo përsëri.');
 
   const matchId = Number(parsed.matchId);
-  const match = await getMatchById(matchId);
+  const match = await loadMatch(matchId,executor);
   if (!match) throw badRequest('Ndeshja nuk është më e disponueshme.');
+  if (match.active === false || ['ended','finished','cancelled'].includes(String(match.status ?? '').toLowerCase())) {
+    throw badRequest('Ndeshja ka përfunduar ose është anuluar.');
+  }
 
-  const row = (await getOddsForMatches([matchId])).find(
+  const row = (await loadOdds(matchId,executor)).find(
     (o) => o.market_key === parsed.marketKey && String(o.line ?? '') === String(parsed.line ?? '') && o.outcome_key === parsed.outcomeKey,
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
+  if (liveRiskSettings().combosEnabled === false && isSameGameComboLine({marketName:row.market_name})) {
+    throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
+  }
   // Never accept an expired contract even if a stale client still shows it.
   if (isDecidedLiveOutcome(match, {
     name: row.market_name, line: row.line, period: row.period,
@@ -101,8 +118,9 @@ async function resolveSelection(selection) {
     throw badRequest('Ndeshja ose kuota është pezulluar nga administrata.');
   }
 
-  const price = outcomeOverride?.price ?? (row.price === null || row.price === undefined ? null : Number(row.price));
-  if (price === null) throw badRequest('Kjo kuotë nuk ka çmim.');
+  const rawPrice = outcomeOverride?.price ?? (row.price === null || row.price === undefined ? null : Number(row.price));
+  if (!Number.isFinite(Number(rawPrice)) || Number(rawPrice) <= 1) throw badRequest('Kjo kuotë nuk ka çmim të vlefshëm.');
+  const price = frozenSelectionPrice(rawPrice);
 
   // Never trust a disabled button as protection: enforce the same reversible
   // live-risk suspension here, before balance deduction AND booking creation.
@@ -162,29 +180,25 @@ function assertDistinctMatches(lines) {
 
 // Resolve each template leg through the exact same price, lock, freshness and
 // risk checks as a normal ticket. Never trust browser-provided composite odds.
-async function resolveBuilderSelection(selection, { matchId, templateId }) {
+async function resolveBuilderSelection(selection, { matchId, templateId }, {executor = query} = {}) {
+  if (liveRiskSettings().combosEnabled === false) {
+    throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
+  }
   if (feedIsRefreshing()) throw badRequest('Kuotat po rifreskohen.');
-  const template = (await listTemplates({ activeOnly: true })).find(t => t.id === templateId);
+  const template = (await listAvailableTemplates({executor})).find(t => t.id === templateId);
   if (!template) throw badRequest('Bet Builder nuk është më aktiv.');
-  const match = await getMatchById(Number(matchId));
+  const match = await loadMatch(Number(matchId),executor);
   if (!match) throw badRequest('Ndeshja nuk është e disponueshme.');
-  const [raw] = await withOdds([match]);
+  const raw = serializeMatch(match,await loadOdds(Number(matchId),executor));
   const projected = toClientMatch(raw);
-  if (projected.isSuspended || projected.status === 'ENDED') throw badRequest('Ndeshja është pezulluar.');
+  if (projected.isSuspended || ['ENDED','CANCELLED'].includes(projected.status)) throw badRequest('Ndeshja është pezulluar.');
   const parts = template.legs.map(leg => findLeg(projected,leg));
   if (parts.some(p => !p)) throw badRequest('Një market i Bet Builder është pezulluar ose mungon.');
   const lines = await Promise.all(parts.map(part => resolveSelection({
     outcomeId: part.outcome.id, oddsAtPlacement: part.outcome.odds,
-  })));
-  // Re-validate the native joint quote with the SAME freshness, suspension,
-  // admin override and live-risk rules as an ordinary provider selection.
-  const quote = findProviderBuilderQuote(projected,template.legs);
-  if (!quote) throw badRequest('API-ja nuk ofron koeficient për këtë kombinim.');
-  const quotedLine = await resolveSelection({
-    outcomeId: quote.outcome.id, oddsAtPlacement: quote.outcome.odds,
-  });
-  const price = quotedLine.price;
-  if (!Number.isFinite(price) || price <= 1 || price > 1000) throw badRequest('Koeficienti i Bet Builder është jashtë kufirit.');
+  },{executor})));
+  const price = multipliedComboPrice(lines);
+  if (price === null) throw badRequest('Koeficienti i Bet Builder është jashtë kufirit.');
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds);
   if (Number.isFinite(shown) && shown > 0 && Math.abs(price-shown)/shown > PRICE_TOLERANCE) {
     const err = badRequest('Koeficienti i Bet Builder ka ndryshuar.');
@@ -198,12 +212,38 @@ async function resolveBuilderSelection(selection, { matchId, templateId }) {
     matchId: String(matchId), marketKey: `BB:${templateId}`, line: '',
     outcomeKey: 'builder', outcomeName: template.name, marketName: 'Bet Builder',
     matchName: `${match.home} vs ${match.away}`, price,
-    builderLegs: lines.map(({ matchId: _matchId, ...rest }) => ({
-      ...rest, match_id: Number(matchId), market_key: rest.marketKey,
-      outcome_key: rest.outcomeKey, outcome_name: rest.outcomeName,
-      market_name: rest.marketName,
-    })),
+    builderLegs: lines.map(({ matchId: _matchId, ...rest }, index) => {
+      // Freeze the verified contract, not an opaque provider display alias.
+      // Provenance remains recorded for audits and source lock checks.
+      const leg = template.legs[index];
+      const marketName = {'1X2':'1X2',DC:'Double Chance',BTTS:'Both Teams to Score',TOTAL:'Total Goals'}[leg.market];
+      return {
+        ...rest, match_id:Number(matchId), market_key:rest.marketKey,
+        source_outcome_key:rest.outcomeKey,source_market_name:rest.marketName,
+        outcomeKey:leg.outcome,outcomeName:leg.outcome,marketName,line:leg.line,
+        outcome_key:leg.outcome,outcome_name:leg.outcome,market_name:marketName,
+      };
+    }),
   };
+}
+
+/** Recheck after wallet/settings lock waits, before any money movement. */
+export async function revalidateSelections(selections, lines, resolve = resolveSelection, {executor = query} = {}) {
+  // Drain every read before rollback/releasing the shared transaction client.
+  const results = await Promise.allSettled(selections.map(async (selection,index) => {
+    const old = lines[index];
+    const current = await resolve({...selection,oddsAtPlacement:old.price,odds:old.price},{executor});
+    const changed = frozenSelectionPrice(current.price) !== frozenSelectionPrice(old.price) ||
+      JSON.stringify(current.builderLegs ?? null) !== JSON.stringify(old.builderLegs ?? null);
+    if (changed) {
+      throw Object.assign(badRequest('Koeficienti ka ndryshuar gjatë vendosjes së bastit.'), {
+        code:'ODDS_CHANGED', outcomeId:selection.outcomeId, oldOdds:old.price,newOdds:current.price,
+        outcomeName:current.outcomeName,marketName:current.marketName,matchName:current.matchName,
+      });
+    }
+  }));
+  const rejected = results.find(result => result.status === 'rejected');
+  if (rejected) throw rejected.reason;
 }
 
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
@@ -270,8 +310,8 @@ export function betRequestHash({ stake, selections, ticketType, systemType }) {
     ticketType: ticketType ?? null,
     systemType: systemType ?? null,
     selections: selections.map(s => ({
-      outcomeId: String(s.outcomeId ?? ''),
-      odds: Number(s.oddsAtPlacement ?? s.odds),
+      outcomeId: String(s?.outcomeId ?? ''),
+      odds: Number(s?.oddsAtPlacement ?? s?.odds),
     })),
   };
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -282,7 +322,11 @@ async function existingRequestTicket(userId, requestId, payloadHash, db = { quer
     'select id, request_payload_hash from app_ticket where user_id = $1 and client_request_id = $2',
     [userId, requestId],
   );
-  if (!rows.length) return null;
+  if (!rows.length) {
+    const batch = await db.query('select client_request_id from app_ticket_batch where user_id=$1 and client_request_id=$2', [userId, requestId]);
+    if (batch.rows.length) throw Object.assign(new Error('Kjo kërkesë është përdorur për një biletë sistemi.'), { status: 409 });
+    return null;
+  }
   if (rows[0].request_payload_hash !== payloadHash) {
     throw Object.assign(new Error('Kjo kërkesë basti është përdorur me të dhëna të tjera.'), { status: 409 });
   }
@@ -294,13 +338,18 @@ async function existingRequestTicket(userId, requestId, payloadHash, db = { quer
  * the ticket (with its frozen lines) and the money movement are written in ONE database
  * transaction - a failure can never leave money and tickets out of step.
  */
-export async function placeBet({ user, stake, selections = [], ticketType = null, systemType = null, clientRequestId = null }) {
-  const amount = Number(stake) || 0;
+export async function placeBet({ user, stake, selections = [], ticketType = null, systemType = null, clientRequestId = null }, {
+  database = pool, runQuery = query, getTicket = getTicketWithLines, resolve = resolveSelection,
+} = {}) {
+  const amount = moneyCents(stake) / 100;
   if (amount < MIN_STAKE) throw badRequest(`Shuma minimale për të vendosur një bast është ${MIN_STAKE} Lek`);
+  if (amount > 100000000) throw badRequest('Shuma totale është shumë e madhe.');
   if (user.status !== 'ACTIVE') {
     throw Object.assign(new Error('Llogaria juaj nuk është aktive ose është e pezulluar'), { status: 403 });
   }
-  if (!selections.length) throw badRequest('Bileta është bosh: zgjidh të paktën një kuotë.');
+  if (!Array.isArray(selections) || !selections.length || selections.length > 20) {
+    throw badRequest('Bileta duhet të ketë 1–20 zgjedhje.');
+  }
 
   if (clientRequestId != null && !requestIdPattern.test(String(clientRequestId))) {
     throw badRequest('Identifikues i pavlefshëm i kërkesës së bastit.');
@@ -308,19 +357,20 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   const requestId = clientRequestId == null ? null : String(clientRequestId).toLowerCase();
   const payloadHash = requestId ? betRequestHash({ stake: amount, selections, ticketType, systemType }) : null;
   if (requestId) {
-    const previous = await existingRequestTicket(user.id, requestId, payloadHash);
-    if (previous) return getTicketWithLines(previous);
+    const previous = await existingRequestTicket(user.id, requestId, payloadHash, { query: runQuery });
+    if (previous) return getTicket(previous);
   }
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   // Independent odds checks can be awaited together instead of serially.
-  const lines = await Promise.all(selections.map(resolveSelection));
+  const lines = (await Promise.all(selections.map(resolve))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
 
   assertDistinctMatches(lines);
   const totalOdds = totalOddsForSelections(lines);
-  const payout = calculatePotentialPayout(amount, totalOdds);
+  if (!Number.isFinite(totalOdds) || totalOdds > 9999999999.9999) throw badRequest('Koeficienti i biletës është shumë i madh.');
+  const payout = systemColumnPayout(amount, lines.map(line => line.price));
 
-  const client = await pool.connect();
+  const client = await database.connect();
   try {
     await client.query('begin');
 
@@ -333,12 +383,13 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
       const previous = await existingRequestTicket(user.id, requestId, payloadHash, client);
       if (previous) {
         await client.query('commit');
-        return getTicketWithLines(previous);
+        return getTicket(previous);
       }
     }
     // Serialize risk/exposure calculations globally. This lock is shared
     // across all players and is acquired BEFORE any ticket insertion.
     const riskSettings = await lockLiveRiskSettings(client);
+    await revalidateSelections(selections, lines, resolve, {executor:client.query.bind(client)});
     await assertLiveBetRisk(client, [{ stake: amount, payout, lines }], riskSettings);
     const balance = Number(locked.rows[0].balance);
     await assertPlayerCanBet(client, user.id, amount);
@@ -388,7 +439,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     });
 
     await client.query('commit');
-    return getTicketWithLines(ticketId);
+    return getTicket(ticketId);
   } catch (e) {
     await client.query('rollback').catch(() => {});
     throw e;
@@ -398,53 +449,105 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
 }
 
 /**
- * Places 2–24 columns atomically. Stake is PER COLUMN, not the total.
- * The server resolves every leg, rejects same-match multiplications, and charges
- * all columns together under one wallet lock and one idempotency key.
+ * Places the full Cartesian expansion of same-event alternatives atomically.
+ * totalStake is the WHOLE slip (minimum 100 LEK), shared exactly across columns.
+ * Dependency injection lets isolated SQL tests exercise this production transaction.
  */
-export async function placeColumns({ user, stake, columns, clientRequestId }) {
-  const amount = Number(stake);
-  if (!Number.isFinite(amount) || amount < MIN_STAKE || round(amount) !== amount) {
-    throw badRequest(`Shuma minimale për kolonë është ${MIN_STAKE} Lek.`);
-  }
+export function createColumnsPlacer({
+  database = pool, runQuery = query, resolve = resolveSelection,
+  getTicket = getTicketWithLines, lockRisk = lockLiveRiskSettings,
+  assertRisk = assertLiveBetRisk, assertPlayer = assertPlayerCanBet,
+  chargeCommission = chargeManagerCommission,
+} = {}) {
+return async function placeSystemColumns({ user, totalStake, stake, selections, columns, clientRequestId }) {
   if (user.role !== 'PLAYER' || user.status !== 'ACTIVE') {
     throw Object.assign(new Error('Llogaria nuk mund të vendosë baste.'), { status: 403 });
-  }
-  if (!Array.isArray(columns) || columns.length < 2 || columns.length > 24 ||
-      columns.some(col => !Array.isArray(col) || col.length < 1 || col.length > 20)) {
-    throw badRequest('Numër i pavlefshëm kolonash (2–24).');
   }
   if (!requestIdPattern.test(String(clientRequestId ?? ''))) {
     throw badRequest('Identifikues i pavlefshëm i kërkesës.');
   }
+  // Older clients used `stake` PER COLUMN. Never silently reinterpret an old
+  // preview as a different financial contract after a deployment.
+  if (totalStake == null || stake != null) throw badRequest('Rifresko faqen: bileta e sistemit kërkon shumën totale (totalStake).');
+  const amount = moneyCents(totalStake) / 100;
+  let picks = selections;
+  // If explicit columns are supplied with totalStake, require the exact full
+  // expansion. A client may never omit or duplicate a column to change risk.
+  if (picks == null && Array.isArray(columns)) {
+    if (columns.length < 2 || columns.length > 24 || columns.some(col => !Array.isArray(col) || !col.length || col.length > 20)) {
+      throw badRequest('Numër i pavlefshëm kolonash (2–24).');
+    }
+    const unique = new Map();
+    for (const selection of columns.flat()) {
+      const id = String(selection?.outcomeId ?? '');
+      const old = unique.get(id);
+      if (old && Number(old.oddsAtPlacement ?? old.odds) !== Number(selection.oddsAtPlacement ?? selection.odds)) {
+        throw badRequest('Koeficientë të ndryshëm për të njëjtën zgjedhje.');
+      }
+      if (!old) unique.set(id, selection);
+    }
+    picks = [...unique.values()];
+  }
+  const grouped = buildSystemColumns(picks, { matchIdOf: selection => {
+    const builder = parseBuilderId(selection?.outcomeId);
+    const parsed = builder ?? parseOutcomeId(selection?.outcomeId);
+    if (!parsed || !/^\d+$/.test(String(parsed.matchId))) throw badRequest('Zgjedhja nuk u identifikua.');
+    return parsed.matchId;
+  } });
+  const stakes = splitSystemStake(amount, grouped.length);
+  if (columns != null) {
+    if (!Array.isArray(columns) || columns.length !== grouped.length) throw badRequest('Kolonat nuk përputhen me sistemin.');
+    const fingerprint = col => {
+      if (!Array.isArray(col)) throw badRequest('Kolonë e pavlefshme.');
+      return col.map(pick => String(pick?.outcomeId ?? '')).sort().join('\u0000');
+    };
+    const expected = grouped.map(fingerprint).sort();
+    const received = columns.map(fingerprint).sort();
+    if (JSON.stringify(expected) !== JSON.stringify(received)) throw badRequest('Kolonat nuk përputhen me sistemin.');
+  }
   const requestId = String(clientRequestId).toLowerCase();
-  const payloadHash = crypto.createHash('sha256').update(JSON.stringify({ amount, columns })).digest('hex');
+  const payloadHash = crypto.createHash('sha256').update(JSON.stringify({ amount, selections: picks.map(pick => ({
+    outcomeId: String(pick.outcomeId), odds: Number(pick.oddsAtPlacement ?? pick.odds),
+  })) })).digest('hex');
   const getPrevious = async (db) => {
     const { rows } = await db.query(
       'select request_payload_hash, ticket_ids from app_ticket_batch where user_id = $1 and client_request_id = $2',
       [user.id, requestId],
     );
-    if (!rows.length) return null;
+    if (!rows.length) {
+      const ticket = await db.query('select id from app_ticket where user_id=$1 and client_request_id=$2', [user.id, requestId]);
+      if (ticket.rows.length) throw Object.assign(new Error('Kjo kërkesë është përdorur për një biletë tjetër.'), { status: 409 });
+      return null;
+    }
     if (rows[0].request_payload_hash !== payloadHash) {
       throw Object.assign(new Error('Kjo kërkesë është përdorur me të dhëna të tjera.'), { status: 409 });
     }
     return rows[0].ticket_ids;
   };
-  const previous = await getPrevious({ query });
-  if (previous) return { tickets: await Promise.all(previous.map(getTicketWithLines)) };
+  const response = async ids => ({
+    tickets: await Promise.all(ids.map(getTicket)),
+    totalStake: amount, columnCount: stakes.length, stakes,
+  });
+  const previous = await getPrevious({ query: runQuery });
+  if (previous) return response(previous);
 
-  const resolved = await Promise.all(columns.map(async col => {
-    const lines = await Promise.all(col.map(resolveSelection));
-    assertDistinctMatches(lines);
-    return lines;
+  // Every underlying selection is resolved exactly once, so repeated legs across
+  // columns cannot acquire different prices while the feed changes.
+  const linesById = new Map(await Promise.all(picks.map(async pick => {
+    const line = await resolve(pick);
+    return [String(pick.outcomeId), { ...line, price: frozenSelectionPrice(line.price) }];
+  })));
+  const resolved = grouped.map(column => column.map(pick => linesById.get(String(pick.outcomeId))));
+  resolved.forEach(assertDistinctMatches);
+  const priced = resolved.map((lines, i) => ({
+    stake: stakes[i], odds: totalOddsForSelections(lines),
+    payout: systemColumnPayout(stakes[i], lines.map(line => line.price)), lines,
   }));
-  // Identical columns are not a legitimate split and would duplicate the charge.
-  const fingerprints = resolved.map(lines => lines.map(l => outcomeIdOf(l.matchId,l.marketKey,l.line,l.outcomeKey)).sort().join(';'));
-  if (new Set(fingerprints).size !== fingerprints.length) throw badRequest('Kolona të përsëritura.');
-  const totalStake = round(amount * resolved.length);
-  if (!Number.isFinite(totalStake) || totalStake > 100000000) throw badRequest('Shuma totale është shumë e madhe.');
+  if (priced.some(column => !Number.isFinite(column.odds) || column.odds > 9999999999.9999)) {
+    throw badRequest('Koeficienti i kolonës është shumë i madh.');
+  }
 
-  const client = await pool.connect();
+  const client = await database.connect();
   let ids = [];
   try {
     await client.query('begin');
@@ -453,46 +556,50 @@ export async function placeColumns({ user, stake, columns, clientRequestId }) {
     const retry = await getPrevious(client);
     if (retry) {
       await client.query('commit');
-      return { tickets: await Promise.all(retry.map(getTicketWithLines)) };
+      return response(retry);
     }
-    const riskSettings = await lockLiveRiskSettings(client);
-    await assertLiveBetRisk(client, resolved.map(lines => ({
-      stake: amount, payout: calculatePotentialPayout(amount, totalOddsForSelections(lines)), lines,
-    })), riskSettings);
+    const riskSettings = await lockRisk(client);
+    await revalidateSelections(picks, picks.map(pick => linesById.get(String(pick.outcomeId))), resolve, {executor:client.query.bind(client)});
+    await assertRisk(client, priced, riskSettings);
     const balance = Number(locked.rows[0].balance);
-    await assertPlayerCanBet(client, user.id, totalStake);
-    if (balance < totalStake) throw badRequest('Bilanci nuk mjafton për të gjitha kolonat.');
+    await assertPlayer(client, user.id, amount);
+    if (moneyCents(balance) < moneyCents(amount)) throw badRequest('Bilanci nuk mjafton për të gjitha kolonat.');
+    let debitedCents = 0;
     for (let i = 0; i < resolved.length; i++) {
-      const lines = resolved[i];
-      const odds = totalOddsForSelections(lines);
-      const type = lines.length > 1 ? 'COMBO' : 'SINGLE';
+      const { lines, stake: columnStake, odds, payout } = priced[i];
+      const type = 'SYSTEM';
       const inserted = await client.query(
-        `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, status)
-         values ($1,$2,$3,$4,$5,'PENDING') returning id`,
-        [user.id, amount, odds, calculatePotentialPayout(amount, odds), type],
+        `insert into app_ticket (user_id, stake, total_odds, potential_payout, ticket_type, system_type, status)
+         values ($1,$2,$3,$4,$5,$6,'PENDING') returning id`,
+        [user.id, columnStake, odds, payout, type, `AUTO:${i+1}/${resolved.length}`],
       );
       const id = inserted.rows[0].id;
       ids.push(id);
-      for (const line of lines) {
-        await client.query(
-          `insert into app_ticket_line
-           (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status,builder_legs)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING',$10::jsonb)`,
-          [id,line.matchId,line.marketKey,line.line,line.outcomeKey,line.outcomeName,line.marketName,line.matchName,line.price,JSON.stringify(line.builderLegs ?? null)],
-        );
-      }
-      const after = round(balance - amount * (i + 1));
+      // One insert per column avoids up to 480 individual database round trips.
+      const params = [];
+      const tuples = lines.map((line, index) => {
+        const base = index * 10;
+        params.push(id,line.matchId,line.marketKey,line.line,line.outcomeKey,line.outcomeName,line.marketName,line.matchName,line.price,JSON.stringify(line.builderLegs ?? null));
+        return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},'PENDING',$${base+10}::jsonb)`;
+      });
+      await client.query(
+        `insert into app_ticket_line
+         (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status,builder_legs)
+         values ${tuples.join(',')}`, params,
+      );
+      debitedCents += moneyCents(columnStake);
+      const after = (moneyCents(balance) - debitedCents) / 100;
       await client.query(
         `insert into app_transaction (user_id,amount,type,reference_id,balance_after,description)
          values ($1,$2,'BET_PLACED',$3,$4,$5)`,
-        [user.id,-amount,id,after,`Kolona ${i+1}/${resolved.length} - ${type}`],
+        [user.id,-columnStake,id,after,`Sistem - Kolona ${i+1}/${resolved.length} - ${type}`],
       );
-      await chargeManagerCommission(client, {
+      await chargeCommission(client, {
         managerId: locked.rows[0].manager_id, ticketId: id,
-        username: locked.rows[0].username, stake: amount, selectionCount: lines.length,
+        username: locked.rows[0].username, stake: columnStake, selectionCount: lines.length,
       });
     }
-    await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [user.id, round(balance-totalStake)]);
+    await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [user.id, (moneyCents(balance)-moneyCents(amount))/100]);
     await client.query(
       'insert into app_ticket_batch (user_id,client_request_id,request_payload_hash,ticket_ids) values ($1,$2,$3,$4)',
       [user.id,requestId,payloadHash,ids],
@@ -504,21 +611,25 @@ export async function placeColumns({ user, stake, columns, clientRequestId }) {
   } finally {
     client.release();
   }
-  return { tickets: await Promise.all(ids.map(getTicketWithLines)) };
+  return response(ids);
+};
 }
+
+export const placeColumns = createColumnsPlacer();
 
 /**
  * "Book" a ticket: same validation, but no stake and no account - just a shareable code
  * that anyone can look up (the app's booking-code flow).
  */
 export async function bookTicket({ stake, selections = [], ticketType = null, systemType = null }) {
-  const amount = Number(stake) || 0;
+  const amount = moneyCents(stake) / 100;
   if (amount < MIN_STAKE) throw badRequest(`Shuma minimale për të prenotuar një skedinë është ${MIN_STAKE} Lek`);
-  if (!selections.length) throw badRequest('Bileta është bosh: zgjidh të paktën një kuotë.');
+  if (!Array.isArray(selections) || selections.length < 1 || selections.length > 20) throw badRequest('Zgjidh 1–20 kuota për kolonë.');
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
   const lines = [];
   for (const selection of selections) lines.push(await resolveSelection(selection));
+  assertDistinctMatches(lines);
 
   const totalOdds = totalOddsForSelections(lines);
   const code = bookingCode();
@@ -526,7 +637,7 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
   const inserted = await query(
     `insert into app_ticket (booking_code, stake, total_odds, potential_payout, ticket_type, system_type, status)
      values ($1, $2, $3, $4, $5, $6, 'PENDING') returning id`,
-    [code, amount, totalOdds, calculatePotentialPayout(amount, totalOdds), type, systemType],
+    [code, amount, totalOdds, systemColumnPayout(amount,lines.map(line => line.price)), type, systemType],
   );
   const ticketId = inserted.rows[0].id;
 
@@ -602,8 +713,8 @@ export async function getBookingTicket(code) {
 }
 
 /** Refunds an open ticket and its placement-time manager commission atomically. */
-export async function revertTicket(ticketId, managerId = null) {
-  const client = await pool.connect();
+export async function revertTicket(ticketId, managerId = null, { database = pool } = {}) {
+  const client = await database.connect();
   try {
     await client.query('begin');
     const found = await client.query(

@@ -2,21 +2,21 @@
  * Durable and auditable live risk settings. All actual wallet debits take the
  * same singleton row lock, serializing match-exposure checks across users.
  */
-import { query, pool } from '../db.mjs';
+import { pool } from '../db.mjs';
 import {
   DEFAULT_LIVE_RISK_SETTINGS, liveRiskSettings,
   validateLiveRiskSettings, setLiveRiskSettings,
 } from '../live-risk-settings.mjs';
 
-export async function refreshLiveRiskSettings({ initialize = false } = {}) {
+export async function refreshLiveRiskSettings({ initialize = false, database = pool } = {}) {
   if (initialize) {
-    await query(
+    await database.query(
       `insert into app_live_risk_settings (id,settings)
        values (1,$1::jsonb) on conflict (id) do nothing`,
       [JSON.stringify(DEFAULT_LIVE_RISK_SETTINGS)],
     );
   }
-  const { rows } = await query('select settings from app_live_risk_settings where id=1');
+  const { rows } = await database.query('select settings from app_live_risk_settings where id=1');
   if (!rows.length) throw new Error('Live risk settings are not initialized.');
   const settings = validateLiveRiskSettings(rows[0].settings);
   if (JSON.stringify(liveRiskSettings()) !== JSON.stringify(settings)) setLiveRiskSettings(settings);
@@ -31,11 +31,19 @@ export async function lockLiveRiskSettings(client) {
   return validateLiveRiskSettings(rows[0].settings);
 }
 
-export async function writeLiveRiskSettings(value, actor) {
-  const settings = validateLiveRiskSettings(value);
-  const client = await pool.connect();
+export async function writeLiveRiskSettings(value, actor, { database = pool } = {}) {
+  const candidate = validateLiveRiskSettings(value);
+  const client = await database.connect();
   try {
     await client.query('begin');
+    const persisted = await lockLiveRiskSettings(client);
+    // A previously opened admin screen may omit the new switch. Preserve the
+    // locked value so saving unrelated rules cannot accidentally enable combos.
+    const settings = {
+      ...candidate,
+      combosEnabled: value.combosEnabled === undefined
+        ? persisted.combosEnabled : candidate.combosEnabled,
+    };
     const { rows } = await client.query(
       `update app_live_risk_settings
          set settings=$1::jsonb, updated_by=$2, updated_at=now()

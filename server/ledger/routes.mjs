@@ -57,7 +57,7 @@ const placementGuard = (fn) => guard(async (req, res, next) => {
       try {
         await betHistory.recordRejectedBet({
           userId: req.user.id, requestId: body.clientRequestId,
-          stake: body.stake, selectionCount: count, reason: e?.message,
+          stake: body.totalStake ?? body.stake, selectionCount: count, reason: e?.message,
         });
       } catch (auditError) {
         console.warn('[bet rejection audit] write failed:', auditError?.message);
@@ -208,6 +208,8 @@ ledgerRouter.post('/bets/place-columns', requireLedger, requireAuth, placementGu
   res.json(await bets.placeColumns({
     user: req.user,
     stake: req.body?.stake,
+    totalStake: req.body?.totalStake,
+    selections: req.body?.selections,
     columns: req.body?.columns,
     clientRequestId: req.body?.clientRequestId,
   }));
@@ -295,7 +297,9 @@ ledgerRouter.get(
     if (tournamentId) rows = rows.filter((r) => String(r.tournament_id) === String(tournamentId));
 
     const matches = toClientMatches(await withOdds(rows));
-    res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches) : matches);
+    // Board cards show base odds; build the complete automatic menu when a
+    // visitor opens /matches/:id rather than sending it for 500 matches per poll.
+    res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
   }),
 );
 
@@ -358,6 +362,6 @@ ledgerRouter.get(
     if (String(req.params.sportId) !== '18') return res.json([]);
     const rows = await getMatchRows({ limit: asLimit(req.query.limit, 500, 2000) });
     const matches = toClientMatches(await withOdds(rows));
-    return res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches) : matches);
+    return res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
   }),
 );
