@@ -1,5 +1,3 @@
-import { isPossibleLiveCombo, isPossibleResultUnder, type ComboLeg } from '../../../server/ledger/live-combo-possibility.mjs';
-
 /**
  * Live market visibility policy. A market disappears only when its contract is
  * irreversible from the *available* live facts. In particular a current 1X2
@@ -37,6 +35,32 @@ const scoreOf = (home: unknown, away: unknown): Score | null => {
   const h = number(home), a = number(away);
   return h !== null && a !== null ? { home: h, away: a } : null;
 };
+type ComboLeg = {market:'1X2'|'DC'|'BTTS'|'TOTAL';outcome:string;line?:string};
+const isPossibleResultUnder = (home:number, away:number, result:string, line:string):boolean => {
+  const minimum = result==='1' ? Math.max(home,away+1)+away
+    : result==='2' ? home+Math.max(away,home+1)
+    : result==='X' ? 2*Math.max(home,away) : null;
+  return minimum===null || minimum<Number(line);
+};
+const comboWins = (leg:ComboLeg, home:number, away:number):boolean => {
+  const result=home>away?'1':home<away?'2':'X';
+  if(leg.market==='1X2')return leg.outcome===result;
+  if(leg.market==='DC')return leg.outcome.includes(result);
+  if(leg.market==='BTTS')return (leg.outcome==='Yes')===(home>0&&away>0);
+  if(leg.market==='TOTAL')return leg.outcome==='Over'
+    ?home+away>Number(leg.line):home+away<Number(leg.line);
+  return false;
+};
+const isPossibleLiveCombo = (legs:ComboLeg[], m:{homeScore:number;awayScore:number}):boolean => {
+  const home=m.homeScore,away=m.awayScore;
+  const bound=Math.max(12,home+3,away+3,
+    ...legs.filter(l=>l.market==='TOTAL').map(l=>Math.ceil(Number(l.line))+2));
+  if(!Number.isFinite(bound)||bound>40)return false;
+  for(let h=home;h<=bound;h++)for(let a=away;a<=bound;a++)
+    if(legs.every(l=>comboWins(l,h,a)))return true;
+  return false;
+};
+
 const isLive = (m: MatchLike) => norm(m.status) === 'live';
 
 export const isFirstHalfMarket = (name: string): boolean =>
