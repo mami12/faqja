@@ -34,8 +34,8 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const pendingBet = useRef<{ requestId: string; fingerprint: string } | null>(null);
   // Every chosen market is a separate line on ONE ticket, even for the same match.
   // System tickets remain a separate backend feature; never generate them implicitly.
-  const columns = useMemo(() => selections.length ? [selections] : [], [selections]);
-  const columnsOverflow = false;
+  const columnsOverflow = selections.length > 20;
+  const columns = useMemo(() => selections.length && selections.length <= 20 ? [selections] : [], [selections]);
   const effectiveTicketType = selections.length > 1 ? 'COMBO' : 'SINGLE';
   const stakeCents = stakeToCents(stake);
   const columnStakes = useMemo(() => splitStakeCents(stakeCents ?? 0, columns.length), [stakeCents, columns.length]);
@@ -71,7 +71,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     if (!selections.length) return Promise.reject(new Error('Zgjidh të paktën një kuotë.'));
     if (stakeCents == null) return Promise.reject(new Error('Shuma duhet të ketë maksimumi 2 shifra pas presjes.'));
     if (stakeCents < MIN_TOTAL_STAKE_CENTS) return Promise.reject(new Error('Shuma minimale totale është 100 Lek'));
-    if (columnsOverflow) return Promise.reject(new Error('Maksimumi 24 kolona për kupon.'));
+    if (columnsOverflow) return Promise.reject(new Error('Maksimumi 20 zgjedhje për kupon.'));
     if (columnPreviews.some(column => column.invalid)) return Promise.reject(new Error('Një kuotë ose pagesë është e pavlefshme. Rifresko zgjedhjet.'));
     const stakeNum = stakeCents / 100;
 
@@ -116,6 +116,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
 
   const bookTicket = async () => {
     if (!selections.length) throw new Error('Zgjidh të paktën një kuotë.');
+    if (columnsOverflow) throw new Error('Maksimumi 20 zgjedhje për kupon.');
     if (columnPreviews.some(column => column.invalid)) throw new Error('Një kuotë ose pagesë është e pavlefshme. Rifresko zgjedhjet.');
     if (stakeCents == null) throw new Error('Shuma duhet të ketë maksimumi 2 shifra pas presjes.');
     const stakeNum = stakeCents / 100;
