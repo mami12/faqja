@@ -112,8 +112,6 @@ export interface BetSelection {
   marketLine?: string;
   matchName: string;
   odds: number;
-  /** Constituent IDs of an independently server-verified same-match builder. */
-  sourceOutcomeIds?: string[];
 }
 
 export interface TicketLine {
