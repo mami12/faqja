@@ -46,7 +46,8 @@ export default function CasinoSettings(){
         <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">RTP i vëzhguar</p><p className="mt-1 font-bold text-white">{totals?.casinoStake ? (100*totals.casinoPayout/totals.casinoStake).toFixed(2)+"%" : "Pa spins"}</p><p className="text-[10px] text-text-secondary">Nga {totals?.casinoSpins||0} spins (nuk është RTP teorike)</p></div>
       </div>
       <div className="mt-4 space-y-3 rounded-lg border border-tertiary bg-primary p-4">
-        <h4 className="font-bold text-white">RTP</h4>
+        <h4 className="font-bold text-white">RTP · Vetëm Sizzling Hot Deluxe</h4>
+        <p className="text-xs text-text-secondary">Ky kontroll ndryshon shumën e fitimeve, jo sa shpesh shfaqen kombinime fituese në animacion. Nuk ndikon lojërat e tjera të kazinosë.</p>
         <label className="block space-y-2 text-sm text-white">
           <span>RTP: {selectedProfile.startsWith('SCHOOL_RTP_') ? selectedProfile.split('_').slice(-1)[0] : Math.round(data?.theoreticalRtp ?? 0)}%</span>
           <input aria-label="RTP nga 0 deri në 100" type="range" min="0" max="100" step="1"
