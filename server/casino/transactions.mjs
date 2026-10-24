@@ -12,7 +12,10 @@ import {pool} from '../db.mjs';
 import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
 import {randomProfileGrid} from './rtp-profiles.mjs';
 import {getPaidGameProfile} from './game-rtp-profiles.mjs';
+import {casinoControls,assertCasinoMathAcknowledged} from './casino-controls.mjs';
+import {selectCustomRound} from './custom-math.mjs';
 import {gradeGrid,symbolMatrix} from './sizzling-demo.mjs';
+import {validateWalletPixiBet} from './bet-limits.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -83,12 +86,10 @@ export async function settlePendingWin(userId,{roundId=null,database=pool}={}){
   finally{db.release();}
 }
 
-export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5},{database=pool,random,checkBet=assertPlayerCanBet}={}){
+export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5,mathVersion},{database=pool,random,checkBet=assertPlayerCanBet,chooseRound=selectCustomRound}={}){
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(requestId)))
     throw fault(400,'Unique UUID required');
   bet=Number(bet);denomination=Number(denomination);lines=Number(lines);
-  if(![1,2,3,5,10,20,30,50,100].includes(bet)||![.5,1,2,5,10].includes(denomination)||lines!==5)
-    throw fault(400,'Invalid Sizzling bet, lines or denomination');
   const stake=money(bet*denomination*lines),client=await database.connect();
   try{
     await client.query('begin');
@@ -104,7 +105,7 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     if(player.manager_id!==lookup.rows[0].manager_id)throw fault(409,'Manager changed: retry');
     const manager=player.manager_id?accounts.get(player.manager_id):null;
     if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw fault(409,'Manager unavailable');
-    const settings=await client.query('select enabled,game_profiles from app_casino_settings where id=1 for share');
+    const settings=await client.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
     const previous=await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',
       [userId,requestId]);
     if(previous.rows.length){
@@ -116,6 +117,11 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
         balance:Number(old.balance_after),result:old.result,profile:old.game_version,replayed:true};
     }
     if(!settings.rows[0]?.enabled)throw fault(403,'Casino disabled by administrator');
+    if(lines!==5)throw fault(400,'Invalid Sizzling bet, lines or denomination');
+    validateWalletPixiBet(bet,denomination,lines);
+    const activeBonus=await client.query('select left_spins from app_casino_freespin_state where user_id=$1 for update',[userId]);
+    if(Number(activeBonus.rows[0]?.left_spins)>0)throw fault(409,'FREE_SPINS_PENDING');
+    assertCasinoMathAcknowledged('sizzling',settings.rows[0],mathVersion);
     // A pending win from an earlier spin is credited before the new wager, so a
     // player can never lose it by spinning (or reloading) without collecting.
     const pendingState=await client.query(
@@ -128,13 +134,16 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     }
     if(Number(player.balance)<stake)throw fault(400,'Insufficient balance');
     await checkBet(client,userId,stake);
-    const profile=getPaidGameProfile('sizzling',settings.rows[0].game_profiles);
-    const grid=randomProfileGrid(profile.id,random);
-    const grading=gradeGrid(grid,bet,denomination);
+    const controls=casinoControls(settings.rows[0].game_controls,'sizzling');
+    const customRound=controls.mode==='custom'?chooseRound('sizzling',{stakeCents:Math.round(stake*100),lines,controls},random):null;
+    const profile=customRound?.mathProfile??getPaidGameProfile('sizzling',settings.rows[0].game_profiles);
+    const grid=customRound?customRound.spins[0].grid:randomProfileGrid(profile.id,random);
+    const grading=customRound?customRound.spins[0].graded:gradeGrid(grid,bet,denomination);
     const lineWins=grading.line_wins;
     const payout=money(lineWins.reduce((sum,win)=>sum+Number(win.amount),0));
-    const result={symbols:symbolMatrix(grid),line_wins:lineWins,total:payout.toFixed(2),mathProfile:{id:profile.id,theoreticalRtp:profile.theoreticalRtp}};
-    const version=profile.id;
+    const customMath=customRound?{version:customRound.version,rtp:customRound.rtp,hitFrequency:customRound.hitFrequency,maxPayoutCents:customRound.maxPayoutCents}:null;
+    const result={symbols:symbolMatrix(grid),line_wins:lineWins,total:payout.toFixed(2),mathProfile:{id:profile.id,theoreticalRtp:customRound?.rtp??profile.theoreticalRtp},...(customMath?{customMath}:{})};
+    const version=customRound?.version??profile.id;
     // Only the stake leaves the wallet on a spin; the win is credited on collect.
     const balance=money(Number(player.balance)-stake);
     const round=await client.query(

@@ -6,9 +6,10 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {config} from '../server/config.mjs';
-import {createBookOfRaRealRouter} from '../server/casino/bookofra.mjs';
+import {createBookOfRaRealRouter,createBookOfRaSessionRouter} from '../server/casino/bookofra.mjs';
 import {placeBookOfRaSpin,bookOfRaFreeState} from '../server/casino/bookofra-transactions.mjs';
-import {settlePendingWin} from '../server/casino/transactions.mjs';
+import {placeCasinoSpin,settlePendingWin} from '../server/casino/transactions.mjs';
+import {casinoGambleAction} from '../server/casino/gamble.mjs';
 import {getGameProfile,getPaidGameProfile,publicGameProfiles} from '../server/casino/game-rtp-profiles.mjs';
 process.env.BOOKOFRA_FREE_SPINS='1';
 const sql=new PGlite();await sql.exec(LEDGER_SQL);
@@ -31,6 +32,7 @@ const place=async args=>{
 };
 const app=express();app.use('/play',createBookOfRaRealRouter({getUserById:async id=>(await sql.query('select * from app_user where id=$1',[id])).rows[0],isLedgerReady:()=>true,
  settlePendingWin:id=>settlePendingWin(id,{database}),bookOfRaFreeState:()=>state(),placeBookOfRaSpin:place}));
+app.use(createBookOfRaSessionRouter({runQuery:(...args)=>sql.query(...args),bookOfRaFreeState:()=>state(),auth:(req,_res,next)=>{req.user={id:user,role:'PLAYER',status:'ACTIVE'};next();}}));
 const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const origin=`http://127.0.0.1:${server.address().port}/play/play`;
 const token=()=>jwt.sign({sub:user,jti:randomUUID(),kind:'casino-bookofra-wallet'},config.jwtSecret,{expiresIn:600});let cookie=`casino_bookofra_session=${token()}`;
 const post=async body=>{const r=await fetch(origin,{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify(body)});assert.equal(r.status,200);const result=await r.json();assert.equal(result.error,undefined,JSON.stringify(result));return result;};
@@ -42,11 +44,19 @@ try{
  const paid=(await sql.query("select * from app_casino_round where game_id='bookofra'")).rows[0];assert.equal(paid.game_version,actualDefault.id);
  assert.deepEqual(await post(command),trigger,'a lost trigger response must replay the complete original bonus handshake');
  const afterStake=await balance(),initialPending=Number((await state()).pending);
+ await assert.rejects(placeCasinoSpin({userId:user,requestId:randomUUID(),bet:1,lines:5},{database}),error=>error.message==='FREE_SPINS_PENDING');
+ for(const action of ['get_double','set_double'])await assert.rejects(casinoGambleAction({userId:user,requestId:randomUUID(),action,choice:0},{database}),error=>error.message==='FREE_SPINS_PENDING');
+ assert.equal(await balance(),afterStake,'another slot or Gamble must not replace an accepted Book bonus');
+ assert.equal(Number((await state()).pending),initialPending);
  cookie=`casino_bookofra_session=${token()}`; // reopening the game issues a new authenticated nonce
  const init=await post({action:'init',request_id:1});assert.deepEqual(init.available_actions,['initfreespin']);
  assert.equal(await balance(),afterStake,'bonus-resume init must not silently collect the active chain');
  const start=await post({action:'initfreespin',request_id:2});assert.equal(start.initfreespin.freespins.left,10);assert.equal(start.initfreespin.freespins.wins.total,initialPending);
  await sql.query("update app_casino_settings set enabled=false,game_profiles=$1::jsonb where id=1",[JSON.stringify({bookofra:'unsupported-profile'})]);
+ const reopen=await fetch(origin.replace('/play/play','/casino/bookofra/session'),{method:'POST'});
+ assert.equal(reopen.status,200);assert.equal((await reopen.json()).ready,true,'an owed bonus must reopen with a fresh cookie even while OFF and future math is invalid');
+ cookie=reopen.headers.get('set-cookie').split(';')[0];
+ assert.deepEqual((await post({action:'init',request_id:300})).available_actions,['initfreespin']);
  for(let i=0;i<10;i++){
   const action={action:'freespin',request_id:i+3,bet:2,denomination:.5,lines:10};
   const response=await post(action);assert.deepEqual(await post(action),response,'free-spin retries must not consume a second spin');

@@ -8,6 +8,9 @@ import {vikingsConfig,mapVikingsRound} from './vikings-ct-router.mjs';
 import {spin as vikingSpin,spinRound} from './vikings-engine.mjs';
 import {DENOMS} from './clover-ct-config.mjs';
 import {getGameProfile,getPaidGameProfile} from './game-rtp-profiles.mjs';
+import {casinoControls,assertCasinoMathAcknowledged} from './casino-controls.mjs';
+import {selectCustomRound} from './custom-math.mjs';
+import {casinoStakeCents,walletCtDenoms} from './bet-limits.mjs';
 
 export const ORIGINAL_GAMES={
  'lucky-clover-x3':{title:'Lucky Clover X3',kind:'ct',folder:'lucky-clover-x3',app:'LuckyCloverX3'},
@@ -24,7 +27,7 @@ const uuid=x=>/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
 
 // All account, round, pending-win and protocol changes commit together. The same
 // account locks serialize sportsbook wagers, cashier transfers and casino tabs.
-export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),agt=createAgtProtocol()}={}){
+export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),agt=createAgtProtocol(),chooseRound=selectCustomRound}={}){
  const protocol=id=>id==='vikings-fun'?vikings:ORIGINAL_GAMES[id]?.kind==='ct'?ct:agt;
  const hydrate=s=>({...s,results:new Map()});
  const encode=s=>JSON.stringify({...s,results:undefined});
@@ -41,9 +44,9 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw walletFault(403,'Player account disabled');
    if(player.manager_id!==lookup.rows[0].manager_id)throw walletFault(409,'Manager changed. Retry.');
    if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw walletFault(409,'Manager unavailable');
-   const settings=await db.query('select enabled,game_profiles from app_casino_settings where id=1 for share');
+   const settings=await db.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
    const saved=(await db.query('select * from app_casino_original_state where user_id=$1 and game_id=$2 for update',[userId,gameId])).rows[0];
-   const context={db,player,manager,game,saved,enabled:!!settings.rows[0]?.enabled,gameProfiles:settings.rows[0]?.game_profiles??{}};
+   const context={db,player,manager,game,saved,enabled:!!settings.rows[0]?.enabled,gameProfiles:settings.rows[0]?.game_profiles??{},settings:settings.rows[0]??{}};
    const answer=await fn(context);
    await db.query('commit');return answer;
   }catch(error){await db.query('rollback').catch(()=>{});throw error;}finally{db.release();}
@@ -69,23 +72,28 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    if(!ctx.saved||ctx.saved.session_id!==sessionId||ctx.saved.state.closed)throw walletFault(401,'Game session expired');
    return {balance:Number(ctx.player.balance)};
   });},
-  async launch(userId,gameId){return transaction(userId,gameId,async ctx=>{
+  async launch(userId,gameId,{mathVersion}={}){return transaction(userId,gameId,async ctx=>{
    const old=ctx.saved?hydrate(ctx.saved.state):null;
    // Awarded free games survive a reload, explicit close, process restart and
    // later profile changes. A fresh session invalidates the older game frame.
    if(ctx.game.kind==='agt'&&Number(old?.remaining)>0){
+    if(mathVersion)old.mathVersion=assertCasinoMathAcknowledged(gameId,ctx.settings,mathVersion);
     await settle(ctx,old);
     Object.assign(old,{credit:cents(ctx.player.balance),cash:cents(ctx.player.balance),currency:ctx.player.currency||'LEK',closed:false});
     if(!old.mathProfile)old.mathProfile={...getGameProfile(gameId)};
-    const sessionId=randomUUID();await writeState(ctx,old,sessionId);return {sessionId};
+    const sessionId=randomUUID();await writeState(ctx,old,sessionId);return {sessionId,mathVersion:old.mathVersion};
    }
    if(!ctx.enabled)throw walletFault(403,'Casino disabled');
+   const acknowledged=assertCasinoMathAcknowledged(gameId,ctx.settings,mathVersion);
    // A new launch invalidates the earlier frame. Closing/reloading never loses
    // an already awarded win, including the precalculated CT free-game chain.
    if(old)await settle(ctx,old);
-   const s=protocol(gameId).initialState(ORIGINAL_GAMES[gameId].app,{mathProfile:getPaidGameProfile(gameId,ctx.gameProfiles)}),sessionId=randomUUID();
-   Object.assign(s,{credit:cents(ctx.player.balance),cash:cents(ctx.player.balance),currency:ctx.player.currency||'LEK',gameId,maxSequence:-1});
-   await writeState(ctx,s,sessionId);return {sessionId};
+   const originalProfiles=casinoControls(ctx.settings.game_controls,gameId).mode==='custom'?{}:ctx.gameProfiles;
+   const control=casinoControls(ctx.settings.game_controls,gameId),initialProfile={...getPaidGameProfile(gameId,originalProfiles),
+    ...(control.mode==='custom'?{customMath:{rtp:control.rtp,hitFrequency:control.hitFrequency}}:{})};
+   const s=protocol(gameId).initialState(ORIGINAL_GAMES[gameId].app,{mathProfile:initialProfile,walletLimits:true}),sessionId=randomUUID();
+   Object.assign(s,{credit:cents(ctx.player.balance),cash:cents(ctx.player.balance),currency:ctx.player.currency||'LEK',gameId,maxSequence:-1,mathVersion:mathVersion?acknowledged:undefined});
+   await writeState(ctx,s,sessionId);return {sessionId,mathVersion:acknowledged};
   });},
   async close(userId,gameId,sessionId){return transaction(userId,gameId,async ctx=>{
    if(!ctx.saved||ctx.saved.session_id!==sessionId)throw walletFault(401,'Game session expired');
@@ -115,17 +123,29 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
     s.credit=before;s.cash=before;
     const paidSpin=isCt?action==='play':action==='spin';
     const gambling=isCt?action==='continue'&&command.continue_params?.double_betpart!=='skip':action==='double';
-    let stake=paidSpin?(isCt?Number(command.total_bet)*DENOMS.find(d=>d.id===command.game_denom)?.cents:cents(command.amount)):0;
+    // Replayed events above retain their original unit. New paid spins use the
+    // current total limits even if the browser held a pre-update session open.
+    if(paidSpin)s.walletLimits=true;
+    const denoms=isCt?(s.walletLimits?walletCtDenoms(gameId==='vikings-fun'?25:5):DENOMS):null;
+    let stake=paidSpin?casinoStakeCents(isCt?Number(command.total_bet)*denoms.find(d=>d.id===command.game_denom)?.cents/100:command.amount):0;
     if(paidSpin||gambling){
      if(!ctx.enabled)throw walletFault(403,'Casino disabled');
+     if(paidSpin)assertCasinoMathAcknowledged(gameId,ctx.settings,s.mathVersion);
      if(paidSpin&&(!Number.isSafeInteger(stake)||stake<=0||stake>9e13))throw walletFault(400,'Invalid stake');
      await checkBet(ctx.db,userId,money(stake));
     }
     // The administrator's profile affects the next paid round only. Awarded
     // wins and AGT free-game sequences retain the paid round's original math.
-    if(paidSpin)s.mathProfile={...getPaidGameProfile(gameId,ctx.gameProfiles)};
+    let customRound;
+    if(paidSpin){
+     const controls=casinoControls(ctx.settings.game_controls,gameId);
+     if(controls.mode==='custom'){
+      customRound=chooseRound(gameId,{stakeCents:stake,lines:Number(command.lines??command.li),controls});
+      s.mathProfile={...customRound.mathProfile,customMath:{version:customRound.version,rtp:customRound.rtp,hitFrequency:customRound.hitFrequency,maxPayoutCents:customRound.maxPayoutCents}};
+     }else{s.mathProfile={...getPaidGameProfile(gameId,ctx.gameProfiles)};s.customRound=null;}
+    }
     else if(!isCt&&Number(s.remaining)>0&&!s.mathProfile)s.mathProfile={...getGameProfile(gameId)};
-    const response=isCt?protocol(gameId).run(s,[command],{mathProfile:s.mathProfile})[0]:agt.run(s,command,{mathProfile:s.mathProfile});
+    const response=isCt?protocol(gameId).run(s,[command],{mathProfile:s.mathProfile,customRound})[0]:agt.run(s,command,{mathProfile:s.mathProfile,customRound});
     if(isCt&&response.status?.status!=='ok')throw walletFault(400,response.status?.msg||'Game action rejected');
     const after=isCt?s.credit:s.cash,credited=after-before+stake;
     if(!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(s.pending)||s.pending<0||s.pending>9e13||credited<0)throw walletFault(400,'Invalid game settlement');
@@ -135,7 +155,7 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
      if(balance<0)throw walletFault(400,'Insufficient balance');
      const result=await ctx.db.query(`insert into app_casino_round(user_id,client_request_id,game_id,game_version,bet,denomination,lines,stake,payout,balance_after,result)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) returning id`,
-      [userId,randomUUID(),gameId,s.mathProfile.id,isCt?command.line_bet:money(stake),isCt?money(DENOMS.find(d=>d.id===command.game_denom).cents):1,isCt?command.lines:command.li,money(stake),money(s.pending),money(balance),JSON.stringify({...response,mathProfile:s.mathProfile})]);
+      [userId,randomUUID(),gameId,customRound?customRound.version:s.mathProfile.id,isCt?command.line_bet:money(stake),isCt?money(denoms.find(d=>d.id===command.game_denom).cents):1,isCt?command.lines:command.li,money(stake),money(s.pending),money(balance),JSON.stringify({...response,mathProfile:s.mathProfile})]);
      s.roundId=result.rows[0].id;
      await ctx.db.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,money(balance)]);ctx.player.balance=money(balance);
      await ctx.db.query("insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",[userId,-money(stake),s.roundId,money(balance),ctx.game.title+' · spin']);

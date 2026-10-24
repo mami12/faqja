@@ -144,10 +144,10 @@ await ctBonusStore.act(user,'vikings-fun',ctSession,[{command:'create_session',s
 const beforeCt=await balance(user),ctPaid=(await ctBonusStore.act(user,'vikings-fun',ctSession,[{command:'play',sequence_number:2,game_denom:1,lines:25,line_bet:1,total_bet:25}]))[0];
 const ctState=await saved(user,'vikings-fun'),ctPending=ctState.pending/100;assert.equal(ctPaid.result.filter(result=>result.type==='slot_subgame').length,16);assert(ctPending>0);
 await apply('vikings-fun',paidProfiles('vikings-fun').at(-1));await sql.query('update app_casino_settings set enabled=false where id=1');
-await ctBonusStore.close(user,'vikings-fun',ctSession);assertMoney(await balance(user),beforeCt-.25+ctPending);
-await ctBonusStore.close(user,'vikings-fun',ctSession);assertMoney(await balance(user),beforeCt-.25+ctPending);
+await ctBonusStore.close(user,'vikings-fun',ctSession);assertMoney(await balance(user),beforeCt-.20+ctPending);
+await ctBonusStore.close(user,'vikings-fun',ctSession);assertMoney(await balance(user),beforeCt-.20+ctPending);
 await sql.query('update app_casino_settings set enabled=true where id=1');ctSession=(await ctBonusStore.launch(user,'vikings-fun')).sessionId;
-assertMoney(await balance(user),beforeCt-.25+ctPending);assert.equal((await saved(user,'vikings-fun')).mathProfile.id,paidProfiles('vikings-fun').at(-1).id);
+assertMoney(await balance(user),beforeCt-.20+ctPending);assert.equal((await saved(user,'vikings-fun')).mathProfile.id,paidProfiles('vikings-fun').at(-1).id);
 assert.equal(Number((await sql.query('select payout from app_casino_round where id=$1',[ctState.roundId])).rows[0].payout),ctPending);
 await ctBonusStore.close(user,'vikings-fun',ctSession);
 

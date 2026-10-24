@@ -13,6 +13,7 @@ import {query} from '../db.mjs';
 import {decodeRequest,initResponse} from './sizzling-demo.mjs';
 import {placeCasinoSpin,settlePendingWin} from './transactions.mjs';
 import {casinoGambleAction} from './gamble.mjs';
+import {assertCasinoMathAcknowledged} from './casino-controls.mjs';
 
 const COOKIE='casino_pixi_wallet_session',MAX_AGE=60*60*2;
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -36,8 +37,9 @@ function uuidFromId(nonce,requestId){
   return [a.slice(0,8),a.slice(8,12),a.slice(12,16),a.slice(16,20),a.slice(20)].join('-');
 }
 async function ensureAdminEnabled(){
-  const {rows}=await query('select enabled from app_casino_settings where id=1');
+  const {rows}=await query('select enabled,game_profiles,game_controls from app_casino_settings where id=1');
   if(!rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
+  return rows[0];
 }
 async function getWalletPlayer(req,getUser=getUserById){
   const token=cookieValue(req);
@@ -47,7 +49,7 @@ async function getWalletPlayer(req,getUser=getUserById){
   if(claim.kind!=='casino-pixi-wallet'||typeof claim.jti!=='string')throw fault(401,'CASINO_SESSION_INVALID');
   const user=await getUser(claim.sub);
   if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
-  return {user,nonce:claim.jti};
+  return {user,nonce:claim.jti,mathVersion:claim.mathVersion};
 }
 function spinProtocol(round,bet,lines,denomination,reqId){
   // The win is PENDING (paid on collect), so the wallet only lost the stake.
@@ -78,7 +80,7 @@ export function createSizzlingRealRouter(dependencies={}){
         const origin=new URL(req.headers.origin);
         if(origin.host!==req.headers.host)throw fault(403,'CROSS_ORIGIN_DENIED');
       }
-      const {user,nonce}=await getWalletPlayer(req,getUser);
+      const {user,nonce,mathVersion}=await getWalletPlayer(req,getUser);
       const request=decodeRequest(req);
       action=String(request.action||'init');
       const rawId=request.request_id;
@@ -90,7 +92,7 @@ export function createSizzlingRealRouter(dependencies={}){
         await settle(user.id);
         const fresh=await getUser(user.id);
         const credits=Number(fresh?.balance ?? user.balance);
-        const init=initResponse({credits, requestId:id==null?1:id+1});
+        const init=initResponse({credits, requestId:id==null?1:id+1,walletLimits:true});
         init.init.currency='LEK';
         return res.json(init);
       }
@@ -98,7 +100,7 @@ export function createSizzlingRealRouter(dependencies={}){
         if(id==null)throw fault(400,'SPIN_REQUEST_ID_REQUIRED');
         const bet=Number(request.bet),lines=Number(request.lines),denomination=Number(request.denomination??1);
         const round=await place({userId:user.id,requestId:uuidFromId(nonce,id),
-          bet,denomination,lines});
+          bet,denomination,lines,mathVersion});
         return res.json(spinProtocol(round,bet,lines,denomination,id));
       }
       if(action==='collect'||action==='get_double'||action==='set_double'){
@@ -118,14 +120,15 @@ casinoSessionRouter.post('/casino/session',requireAuth,async(req,res)=>{
   try{
     if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
     if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
-    await ensureAdminEnabled();
-    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet'};
+    const settings=await ensureAdminEnabled();
+    const mathVersion=assertCasinoMathAcknowledged('sizzling',settings,req.body?.mathVersion);
+    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet',mathVersion};
     const token=jwt.sign(claim,config.jwtSecret,{expiresIn:MAX_AGE});
     res.cookie(COOKIE,token,{
       httpOnly:true,sameSite:'strict',secure:req.secure||req.headers['x-forwarded-proto']==='https',
       path:'/app/api/casino/sizzlinghotdeluxe/real',maxAge:MAX_AGE*1000,
     });
     res.set('Cache-Control','no-store');
-    res.json({ready:true,gameUrl:'/app/casino-original/sizzling/index-real.html',expiresIn:MAX_AGE});
+    res.json({ready:true,gameUrl:'/app/casino-original/sizzling/index-real.html',expiresIn:MAX_AGE,mathVersion});
   }catch(error){deny(res,error);}
 });

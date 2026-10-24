@@ -11,6 +11,7 @@ import { Router, raw } from 'express';
 import { randomBytes, randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import {walletPixiRanges} from './bet-limits.mjs';
 
 const SESSION_COOKIE = 'sizzling_demo_session';
 const SESSION_TTL = 4 * 3600 * 1000;
@@ -188,7 +189,7 @@ function initResponse(state) {
     init: {
       bet: '1', lines: 5, multiplier: 1, currency: 'EUR',
       restorestate: false, next_request_id: state.requestId,
-      ranges: {
+      ranges: state.walletLimits ? walletPixiRanges(5) : {
         bet: Object.fromEntries(Object.values(DENOMINATIONS).map(value => [value, [...BET_OPTIONS]])),
         denomination: DENOMINATIONS,
       },

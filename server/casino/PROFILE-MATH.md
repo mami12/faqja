@@ -1,6 +1,6 @@
 # Casino reel profiles
 
-The administrator selects one supported reel profile per game. The persisted
+In Original mode the administrator selects one supported reel profile per game. The persisted
 `app_casino_settings.game_profiles` map applies to every player and is locked
 alongside each paid wager. It contains profile identifiers, not an arbitrary
 requested percentage. Future paid rounds use the new choice; pending payouts,
@@ -11,6 +11,43 @@ used for new rounds. `SCHOOL_RTP_0` through `SCHOOL_RTP_100` were payout scaling
 options for one adapter and did not control the other five engines. These names
 are rejected by the new API. There is no payout scalar or result-dependent
 reroll in the profile selection path.
+
+## Custom RTP and paid-round hit frequency
+
+Custom mode is a separate probability model, visibly identified to players
+before launch. `app_casino_settings.game_controls` stores the global RTP and
+hit-frequency targets for each game. Hit frequency means a paid round has a
+positive payout, including its full bonus chain, before optional Gamble.
+It is not the probability of net profit. Zero RTP and zero hit frequency are
+supported together; a positive value paired with zero is impossible.
+
+The immutable, offline-generated `custom-catalog-v1.json` contains complete
+trajectories of original reel stops, including awarded free games and Book's
+expanding symbol. Production scanners grade these stops at the accepted stake
+and line count. Each wager samples one trajectory from exact rational weights
+using unbiased cryptographic integers. No balance, player identity, recent
+results or house liability participates in the draw. Nothing rescales a
+paytable award or searches for a replacement outcome during a wager.
+
+For target return R and hit probability H, the mean return among positive
+rounds must be R/H. Losses and two pools of native winning trajectories are
+weighted to satisfy both targets exactly. Unsupported pairs are rejected.
+The catalog includes conservative bounds that cover every allowed stake and
+line count, including cent rounding. This distribution changes the original
+prize probabilities and available maximum, so Original mode's theoretical RTP
+is not claimed for Custom mode.
+
+Players acknowledge the current custom contract before session creation.
+A fingerprint checked again under the paid wager's SQL settings lock prevents
+new paid spins under undisclosed settings. Cached accepted replies bypass this
+check. Accepted bonus trajectories and their settings remain frozen; changing
+settings or switching wagering off cannot replace or forfeit an owed bonus.
+
+All six real-wallet games accept total paid-spin stakes from 0.20 through
+5,000 ALL. These are total limits, not per-line minimums. CT's Viking credit
+unit is 0.008 ALL to represent 0.20 on 25 lines; persisted denomination uses
+six decimals while wallet debits and awards remain integer cents. Historical
+accepted request identifiers and awarded free games keep their original terms.
 
 ## Four original Slotopol engines
 

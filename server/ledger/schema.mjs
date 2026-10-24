@@ -212,7 +212,7 @@ create table if not exists app_casino_round (
  game_id text not null,
  game_version text not null,
  bet numeric(14,2) not null check (bet > 0),
- denomination numeric(14,2) not null check (denomination > 0),
+ denomination numeric(18,6) not null check (denomination > 0),
  lines int not null check (lines > 0),
  stake numeric(14,2) not null check (stake > 0),
  payout numeric(14,2) not null check (payout >= 0),
@@ -222,6 +222,14 @@ create table if not exists app_casino_round (
  unique(user_id,client_request_id)
 );
 create index if not exists app_casino_round_user_date_idx on app_casino_round(user_id,created_at desc);
+-- Credit units can be sub-cent while every wallet debit remains whole cents.
+-- Avoid repeating a table type change and its lock on subsequent startups.
+do $$ begin
+ if exists(select 1 from information_schema.columns where table_schema=current_schema()
+   and table_name='app_casino_round' and column_name='denomination' and numeric_scale<6) then
+  alter table app_casino_round alter column denomination type numeric(18,6);
+ end if;
+end $$;
 -- The original cabinet can gamble an already credited spin win. Persist the
 -- current pending win and card so restarts and concurrent requests remain safe.
 create table if not exists app_casino_gamble_state (
@@ -254,6 +262,7 @@ create table if not exists app_casino_settings (
 );
 alter table app_casino_settings add column if not exists wallet_rollout_applied boolean not null default false;
 alter table app_casino_settings add column if not exists game_profiles jsonb not null default '{}';
+alter table app_casino_settings add column if not exists game_controls jsonb not null default '{}';
 create table if not exists app_casino_freespin_state (
   user_id uuid primary key references app_user(id) on delete cascade,
   round_id uuid not null references app_casino_round(id) on delete cascade,
@@ -265,6 +274,7 @@ create table if not exists app_casino_freespin_state (
   updated_at timestamptz not null default now()
 );
 alter table app_casino_freespin_state add column if not exists math_profile text;
+alter table app_casino_freespin_state add column if not exists custom_round jsonb;
 
 ${ORIGINAL_WALLET_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;

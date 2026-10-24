@@ -1,11 +1,12 @@
 import { createCtProtocolRouter } from './clover-ct-router.mjs';
 import { ctConfig, DENOMS } from './clover-ct-config.mjs';
 import { DATA, PAY, SPRITES, spin, spinRound } from './vikings-engine.mjs';
+import {walletCtDenoms} from './bet-limits.mjs';
 const symbol=s=>SPRITES[s-1];
 const rows=grid=>Array.from({length:3},(_,y)=>grid.map(r=>symbol(r[y])));
 export function vikingsConfig(grid,options={}){
  const requested=options.mathProfile?options.mathProfile.rtp:DATA.defaultRtp,key=Object.keys(DATA.reels).find(value=>Number(value)===Number(requested));if(!key)throw Error('Unknown Vikings reel profile');
- const config=ctConfig(grid),paytable={};
+ const config=ctConfig(grid,{walletLimits:options.walletLimits,selectedLines:25}),paytable={};
  for(let s=1;s<=11;s++){if(s===2)continue;paytable[symbol(s)]={};PAY[s-1].forEach((factor,n)=>{if(factor)paytable[symbol(s)][n+1]={factor};});}
  const scatter=Object.fromEntries([3,4,5].map(n=>[n,{factor:[0,0,7,20,100][n-1],bonus_type:'free_games',bonus_value:15}]));
  const table=wilds=>({paytable,paytable_wilds:Object.fromEntries(wilds.map(s=>[symbol(s),paytable[symbol(s)]])),paytable_scatters:{1:scatter}});
@@ -14,7 +15,7 @@ export function vikingsConfig(grid,options={}){
   reels_sets:Object.fromEntries(['main','free'].map(k=>[k,{reels:DATA.reels[key].map(r=>r.map(symbol)),symbols:Array.from({length:11},(_,i)=>i+1)}])),
   paytables:{main:table([1]),free:table([1,3,4])},
   lines:DATA.lines.slice(0,25),lines_min_number:25,lines_max_number:25,lines_step_numbers:[25],
-  RTP:Object.fromEntries(DENOMS.map(d=>[d.label,[{percent:key}]]))});
+  RTP:Object.fromEntries((options.walletLimits?walletCtDenoms(25):DENOMS).map(d=>[d.label,[{percent:String(options.mathProfile?.customMath?.rtp??key)}]]))});
  return config;
 }
 export function mapVikingsRound(round,c,d){

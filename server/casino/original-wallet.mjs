@@ -42,11 +42,11 @@ export function createOriginalWalletRouter({store=createOriginalWalletStore(),au
  router.post('/:id/session',auth,safe(async(req,res)=>{
   sameOrigin(req);const id=req.params.id;
   if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw walletFault(403,'Player account required');
-  const {sessionId}=await store.launch(req.user.id,id);
+  const {sessionId,mathVersion}=await store.launch(req.user.id,id,{mathVersion:req.body?.mathVersion});
   res.cookie(cookieName(id),jwt.sign({kind:'casino-original-wallet',sub:req.user.id,game:id,jti:sessionId},config.jwtSecret,{expiresIn:MAX_AGE}),{httpOnly:true,sameSite:'strict',secure:req.secure||req.get('x-forwarded-proto')==='https',path:prefix(id),maxAge:MAX_AGE*1000});
   const url=new URL(prefix(id)+'/launch','http://local');
   if(ORIGINAL_GAMES[id].kind==='ct')url.search=new URLSearchParams({locale:'en-GB',lang:'en_GB',game_id:'wallet',serverurl:prefix(id)+'/rgsm',exitAllow:'0',video:'0'});
-  res.json({ready:true,gameUrl:url.pathname+url.search});
+  res.json({ready:true,gameUrl:url.pathname+url.search,mathVersion});
  }));
  router.post('/:id/close',auth,safe(async(req,res)=>{
   sameOrigin(req);const c=claim(req,req.params.id);if(c.sub!==req.user.id)throw walletFault(403,'Wrong player');

@@ -1,6 +1,7 @@
 import {randomInt} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {DATA,spin} from './agt-engine.mjs';
+import {casinoStakeCents,walletAgtBets} from './bet-limits.mjs';
 const META=Object.fromEntries(Object.keys(DATA.games).map(id=>[id,JSON.parse(readFileSync(new URL('./agt-metadata/'+id+'.json',import.meta.url),'utf8'))]));
 const money=cents=>cents/100;
 export function formatAgtSpin(id,result,options={}){
@@ -14,8 +15,9 @@ export function formatAgtSpin(id,result,options={}){
 }
 export function createAgtProtocol({spinFn=spin,cardRandom=randomInt}={}){
  return {
- initialState(id,options={}){const d=DATA.games[id];return ({cash:200000,pending:0,lines:d.lines.length,denom:1,bet:50,remaining:0,totalFree:0,bonusWin:0,history:Array.from({length:5},()=>cardRandom(4)),round:0,last:formatAgtSpin(id,spinFn(id,50,d.lines.length,options),options),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})});},
- run(s,params,options={}){const id=String(params.gamename||''),d=DATA.games[id],meta=META[id];if(!d)throw Error('Invalid game');
+ initialState(id,options={}){const d=DATA.games[id];return ({cash:200000,pending:0,lines:d.lines.length,denom:1,bet:50,remaining:0,totalFree:0,bonusWin:0,history:Array.from({length:5},()=>cardRandom(4)),round:0,last:formatAgtSpin(id,spinFn(id,50,d.lines.length,options),options),...(options.walletLimits?{walletLimits:true}:{}),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})});},
+ run(s,params,options={}){const id=String(params.gamename||''),d=DATA.games[id],originalMeta=META[id];if(!d)throw Error('Invalid game');
+  const meta=s.walletLimits?{...originalMeta,start:{...originalMeta.start,full_bets:walletAgtBets(originalMeta.start.full_bets)}}:originalMeta;
   const settle=()=>{s.cash+=s.pending;s.pending=0;};
   const snapshot=()=>({...meta.restore,...s.last,balance:money(s.cash),win:money(s.pending),li:s.lines,di:s.denom,amount:money(s.bet),bonus:s.remaining,bonus_all:s.totalFree,bonus_win:0,session_total_win_free:money(s.bonusWin),gamble_suit_history:s.history,last_bet_id:s.round});
 
@@ -26,13 +28,23 @@ export function createAgtProtocol({spinFn=spin,cardRandom=randomInt}={}){
     case 'spin':case 'freespin':{
      const free=s.remaining>0,lines=Number(params.li),bet=Number(params.amount),cents=Math.round(bet*100),denom=Number(params.di);
      if((free?params.action!=='freespin':params.action!=='spin')||!Number.isSafeInteger(lines)||lines<1||lines>d.lines.length||!Number.isSafeInteger(denom)||denom<0||denom>=meta.start.k_list.length||!Number.isFinite(bet)||!Number.isSafeInteger(cents)||Math.abs(cents/100-bet)>1e-8||!meta.start.full_bets?.[lines]?.includes(bet)||(free&&(lines!==s.lines||cents!==s.bet||denom!==s.denom)))throw Error('Invalid bet');
+     if(s.walletLimits&&!free)casinoStakeCents(bet);
      if(!free&&s.cash+s.pending<cents)throw Error('Insufficient credits');
      // Keep the paid round's immutable reel profile throughout its free games.
      const mathProfile=free?s.mathProfile:(options.mathProfile??s.mathProfile),spinOptions={mathProfile};
-     const result=spinFn(id,cents,lines,spinOptions);if(mathProfile)s.mathProfile={...mathProfile};
+     let result;
+     if(!free&&options.customRound){
+      const spins=structuredClone(options.customRound.spins);
+      if(!spins.length)throw Error('Custom round is incomplete');
+      result=spins.shift();s.customRound={version:options.customRound.version,spins};
+     }else if(free&&s.customRound){
+      result=s.customRound.spins.shift();if(!result)throw Error('Awarded custom bonus is incomplete');
+     }else result=spinFn(id,cents,lines,spinOptions);
+     if(mathProfile)s.mathProfile={...mathProfile};
      settle();if(!free){s.cash-=cents;s.totalFree=0;s.bonusWin=0;}else s.remaining--;
      s.pending=result.winCents;s.lines=lines;s.denom=denom;s.bet=cents;s.round++;
      s.remaining+=result.freeSpins;s.totalFree+=result.freeSpins;if(free)s.bonusWin+=result.winCents;
+     if(s.customRound&&s.remaining===0){if(s.customRound.spins.length)throw Error('Unexpected custom bonus remainder');s.customRound=null;}
      s.last=formatAgtSpin(id,result,spinOptions);
      return ({...snapshot(),bonus_win:result.freeSpins});
     }

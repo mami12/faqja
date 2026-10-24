@@ -1,9 +1,10 @@
 import {useEffect,useRef,useState} from 'react';
 import {AlertTriangle,RefreshCw} from 'lucide-react';
 import {apiClient} from '../api/client';
+import {casinoPercent,casinoStakeLimits,casinoTermsKey,type CasinoGameSettings,type CasinoSettingsData,type CasinoGameId} from '../types/casino';
 
 
-export type CasinoGame = 'sizzling' | 'bookofra' | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot';
+export type CasinoGame = CasinoGameId;
 
 const original=(id:CasinoGame,title:string)=>({title,session:`/casino/original/${id}/session`,prefix:`/app/api/casino/original/${id}/launch`});
 const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; prefix: string}> = {
@@ -47,11 +48,23 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   const [progress,setProgress]=useState('');
   const [stalled,setStalled]=useState(false);
   const [error,setError]=useState('');
+  const [terms,setTerms]=useState<{game:CasinoGameSettings;limits:CasinoSettingsData['stakeLimits']}|null>(null);
+  const [awaitingTerms,setAwaitingTerms]=useState(false);
+  const [termsChanged,setTermsChanged]=useState(false);
+  const acceptedTerms=useRef('');
   const connect=async()=>{
     setLoading(true);setError('');setReady(false);setStalled(false);setProgress('');
-    setUrl('');
+    setUrl('');setAwaitingTerms(false);setTermsChanged(false);
     try{
-      const response=await apiClient.post<{ready:boolean;gameUrl:string}>(cfg.session);
+      const settings=await apiClient.get<CasinoSettingsData>('/casino/status');
+      const current=settings.data.games.find(item=>item.gameId===game);
+      if(!current||!settings.data.stakeLimits)throw new Error('Kushtet e lojës nuk u verifikuan. Provo përsëri.');
+      const currentTerms={game:current,limits:settings.data.stakeLimits};
+      setTerms(currentTerms);
+      if(current.controls.mode==='custom'&&acceptedTerms.current!==casinoTermsKey(current,settings.data.stakeLimits)){
+        setAwaitingTerms(true);return;
+      }
+      const response=await apiClient.post<{ready:boolean;gameUrl:string;mathVersion?:string}>(cfg.session,{mathVersion:current.mathVersion});
       if(!response.data.ready||!response.data.gameUrl.startsWith(cfg.prefix))
         throw new Error('Sesioni i lojës nuk u krijua');
       if(cfg.play){
@@ -79,6 +92,19 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   };
   useEffect(()=>{void connect();},[game]);
   useEffect(()=>{
+    if(!url||!terms)return;
+    let disposed=false;
+    const check=async()=>{
+      try{
+        const response=await apiClient.get<CasinoSettingsData>('/casino/status');
+        const current=response.data.games.find(item=>item.gameId===game);
+        if(!disposed&&current)setTermsChanged(casinoTermsKey(current,response.data.stakeLimits)!==casinoTermsKey(terms.game,terms.limits));
+      }catch{/* A network failure does not interrupt an accepted round or bonus. */}
+    };
+    const timer=window.setInterval(()=>void check(),30000);
+    return()=>{disposed=true;window.clearInterval(timer);};
+  },[url,game,terms]);
+  useEffect(()=>{
     if(!url||ready)return;
     const check=()=>{
       try{
@@ -98,12 +124,31 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   // The provider updates its own wallet meter. CasinoPage refreshes the sports
   // balance on Back, so background account polling need not compete with spins.
   if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">Po verifikohet lidhja me bilancin e llogarisë...</div>;
+  if(awaitingTerms&&terms)return <div className="max-h-full w-full overflow-y-auto bg-black p-4 text-white sm:p-6">
+    <section aria-label="Kushtet e lojës" className="mx-auto max-w-xl space-y-4 rounded-xl border border-amber-400/50 bg-slate-950 p-4 sm:p-6">
+      <h2 className="text-lg font-bold">{cfg.title} · Custom mode</h2>
+      <p className="text-sm text-slate-200">This game uses a custom outcome distribution. The original provider RTP does not apply to new paid rounds in this mode.</p>
+      <dl className="grid grid-cols-2 gap-3"><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">Target RTP</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveRtp)}</dd></div><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">Hit frequency</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveHitFrequency)}</dd></div></dl>
+      <p className="text-sm text-slate-300">RTP is the average long-term return. Hit frequency counts paid rounds returning any amount above zero, including their bonus, before optional Gamble / Double Up. A return below the stake also counts as a hit.</p>
+      {terms.game.effectiveRtp===0&&<p role="alert" className="rounded-lg border border-rose-400/50 bg-rose-500/10 p-3 font-bold text-rose-200">RTP 0%: new paid rounds cannot win. Every new stake will be lost.</p>}
+      <p className="text-sm text-white">Bet limits: {casinoStakeLimits(terms.limits)}.</p>
+      {terms.game.effectiveRtp>0&&terms.game.maxPayoutMultiplier!=null&&<p className="text-sm text-slate-300">Payout ceiling: up to {terms.game.maxPayoutMultiplier}× stake. The maximum available at your selected bet and line count can be lower.</p>}
+      <p className="text-xs text-slate-400">Previously accepted bonuses keep their accepted terms.</p>
+      <button type="button" onClick={()=>{acceptedTerms.current=casinoTermsKey(terms.game,terms.limits);void connect();}} className="min-h-11 w-full rounded-lg bg-amber-400 px-4 font-bold text-black">I understand · Open game</button>
+    </section>
+  </div>;
   if(error||!url)return <div className="flex min-h-56 flex-col items-center justify-center gap-4 bg-black p-8 text-center">
     <AlertTriangle className="text-amber-300" size={30}/>
     <p role="alert" className="max-w-xl text-sm text-rose-200">{error||'Loja nuk është e disponueshme'}</p>
     <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rilidhu me bilancin</button>
   </div>;
-  return <>
+  return <div className="casino-session-layout">
+    {terms&&<div className="casino-session-terms flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-white/10 bg-slate-950 px-2 py-1 text-center text-[11px] text-slate-300" aria-label="Active game terms">
+      <span>Bet: {casinoStakeLimits(terms.limits)}</span>
+      {terms.game.controls.mode==='custom'&&<span className="font-semibold text-amber-200">Custom · RTP {casinoPercent(terms.game.effectiveRtp)} · Hit {casinoPercent(terms.game.effectiveHitFrequency)}{terms.game.effectiveRtp===0?' · No wins':''}</span>}
+      {termsChanged&&<button type="button" onClick={()=>void connect()} className="min-h-8 rounded border border-amber-400/60 px-2 font-bold text-amber-200">Settings changed · Review before next paid spin</button>}
+    </div>}
+    <div className="casino-session-stage">
     <div className="casino-wallet-surface relative">
       <iframe ref={frame} title={cfg.title+' · bilanci i llogarisë'}
         src={url} className="casino-wallet-frame block h-full min-h-0 w-full border-0"
@@ -117,5 +162,6 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
         <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rifresko lojën</button>
       </div>}
     </div>
-  </>;
+    </div>
+  </div>;
 }

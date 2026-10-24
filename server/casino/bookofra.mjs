@@ -11,6 +11,7 @@ import {createHash} from 'node:crypto';
  * expanding symbol. Server-authoritative grading; the client only animates.
  */
 import { Router, raw } from 'express';
+import {walletPixiRanges} from './bet-limits.mjs';
 import { randomInt, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -144,6 +145,9 @@ export function gradeGrid(grid, perLine, lines = 10, mud = null) {
 /* --------------------------------------------------------------- helpers --- */
 
 export function decodeRequest(req) {
+  if(req.body&&!Buffer.isBuffer(req.body)&&typeof req.body==='object'){
+    return typeof req.body.data==='string'?JSON.parse(req.body.data):req.body;
+  }
   const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : (req.body || '');
   const ctype = String(req.headers['content-type'] ?? '').toLowerCase();
   if (ctype.includes('multipart/form-data')) {
@@ -161,7 +165,7 @@ export function decodeRequest(req) {
   return {};
 }
 
-export function initResponse({ credits, requestId = 1 }) {
+export function initResponse({ credits, requestId = 1, walletLimits = false }) {
   const grid = randomGrid();
   return {
     balance: { before: money(credits), after: money(credits) },
@@ -170,7 +174,7 @@ export function initResponse({ credits, requestId = 1 }) {
     init: {
       bet: '1', lines: LINES.length, multiplier: 1, currency: 'EUR',
       restorestate: false, next_request_id: requestId,
-      ranges: {
+      ranges: walletLimits ? walletPixiRanges(LINES.length) : {
         bet: Object.fromEntries(Object.values(DENOMINATIONS).map(v => [v, [...BET_OPTIONS]])),
         denomination: DENOMINATIONS,
       },
@@ -373,6 +377,7 @@ const WALLET_TTL=60*60*2;
 
 const cookieValue=req=>String(req.headers.cookie||'').split(';').map(s=>s.trim())
   .find(s=>s.startsWith(WALLET_COOKIE+'='))?.slice(WALLET_COOKIE.length+1);
+const fault=(status,message)=>Object.assign(new Error(message),{status});
 const deny=(res,error,action='unknown')=>{
   const status=Number(error?.status)||500;
   const message=status>=500?'CASINO_SERVICE_ERROR':String(error.message||'CASINO_REQUEST_REJECTED');
@@ -419,13 +424,13 @@ export function createBookOfRaRealRouter(dependencies={}){
       if(action==='init'){
         const fs=await bookOfRaFreeState(user.id);
         if(Number(fs?.left_spins)>0){
-          const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1});
+          const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1,walletLimits:true});
           init.init.currency='LEK';init.available_actions=['initfreespin'];
           return res.json(init);
         }
         await settlePendingWin(user.id);
         const fresh=await getUserById(user.id);
-        const init=initResponse({credits:Number(fresh?.balance??user.balance),requestId:id==null?1:id+1});
+        const init=initResponse({credits:Number(fresh?.balance??user.balance),requestId:id==null?1:id+1,walletLimits:true});
         init.init.currency='LEK';
         return res.json(init);
       }
@@ -434,7 +439,7 @@ export function createBookOfRaRealRouter(dependencies={}){
         if(!fs)throw fault(409,'NO_FREE_SPINS');
         const symbols=fs.paid_result?.symbols??symbolMatrix(randomGrid());
         return res.json({
-          ...initResponse({credits:Number(user.balance),requestId:id==null?1:id+1}),
+          ...initResponse({credits:Number(user.balance),requestId:id==null?1:id+1,walletLimits:true}),
           available_actions:['freespin'],
           initfreespin:{
             symbols,
@@ -448,7 +453,7 @@ export function createBookOfRaRealRouter(dependencies={}){
         const bet=Number(request.bet??1),lines=Number(request.lines??LINES.length);
         const denomination=Number(request.denomination??1);
         const round=await placeBookOfRaSpin({userId:user.id,requestId:uuidFromId(claim.jti,id),
-          bet,denomination,lines,mode:action==='freespin'?'freespin':'spin'});
+          bet,denomination,lines,mode:action==='freespin'?'freespin':'spin',mathVersion:claim.mathVersion});
         if(action==='freespin'){
           return res.json(freespinResponse({
             credits:round.balance,payout:round.pending,bet,lines:lines,
@@ -477,19 +482,30 @@ export function createBookOfRaRealRouter(dependencies={}){
 }
 
 
-export const casinoBookOfRaSessionRouter=Router();
-casinoBookOfRaSessionRouter.post('/casino/bookofra/session',requireAuth,async(req,res)=>{
+export function createBookOfRaSessionRouter(dependencies={}){
+const router=Router();
+router.post('/casino/bookofra/session',dependencies.auth??requireAuth,async(req,res)=>{
   try{
     if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
-    const {rows}=await query('select enabled from app_casino_settings where id=1');
-    if(!rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
-    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-bookofra-wallet'};
+    const {bookOfRaFreeState}=dependencies.bookOfRaFreeState?dependencies:await import('./bookofra-transactions.mjs');
+    const owed=await bookOfRaFreeState(req.user.id);
+    const {rows}=await (dependencies.runQuery??query)('select enabled,game_profiles,game_controls from app_casino_settings where id=1');
+    if(!rows[0]?.enabled&&!Number(owed?.left_spins))throw fault(403,'CASINO_DISABLED');
+    const {assertCasinoMathAcknowledged}=await import('./casino-controls.mjs');
+    let mathVersion;
+    if(Number(owed?.left_spins)>0){
+      if(req.body?.mathVersion)try{mathVersion=assertCasinoMathAcknowledged('bookofra',rows[0],req.body.mathVersion);}catch{}
+    }else mathVersion=assertCasinoMathAcknowledged('bookofra',rows[0],req.body?.mathVersion);
+    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-bookofra-wallet',mathVersion};
     const token=jwt.sign(claim,config.jwtSecret,{expiresIn:WALLET_TTL});
     res.cookie(WALLET_COOKIE,token,{
       httpOnly:true,sameSite:'strict',secure:req.secure||req.headers['x-forwarded-proto']==='https',
       path:'/app/api/casino/bookofra/real',maxAge:WALLET_TTL*1000,
     });
     res.set('Cache-Control','no-store');
-    res.json({ready:true,gameUrl:'/app/casino-original/bookofra/index-real.html',expiresIn:WALLET_TTL});
+    res.json({ready:true,gameUrl:'/app/casino-original/bookofra/index-real.html',expiresIn:WALLET_TTL,mathVersion});
   }catch(error){deny(res,error);}
 });
+return router;
+}
+export const casinoBookOfRaSessionRouter=createBookOfRaSessionRouter();

@@ -39,14 +39,14 @@ await assert.rejects(store.act(user,'lucky-clover-x3',session,[
 ]),/one command/);
 assert.equal(await count(),0);assert.equal(await balance(user),1000);
 const play=command('play',{game_denom:1,lines:5,line_bet:1,total_bet:5});
-const [a,b]=await Promise.all([ctAct(play),ctAct(play)]);assert.deepEqual(a,b);assert.equal(await count(),1);assert.equal(await balance(user),999.95);assert.equal(await balance(manager),10000.05);
+const [a,b]=await Promise.all([ctAct(play),ctAct(play)]);assert.deepEqual(a,b);assert.equal(await count(),1);assert.equal(await balance(user),999.8);assert.equal(await balance(manager),10000.2);
 await assert.rejects(ctAct({...play,total_bet:10}),/reused/);
 const gamble=command('continue',{gameplay_id:a.gameplay_id,step_number:1,continue_params:{double_betpart:'all',double_key:'red'}});
 await assert.rejects(store.act(user,'lucky-clover-x3',session,[gamble,{command:'continue',sequence_number:902,gameplay_id:a.gameplay_id,step_number:3,continue_params:{double_betpart:'skip'}}]),/one command/);
-const doubled=await ctAct(gamble);assert.equal(doubled.result[0].win,90000);assert.deepEqual(await ctAct(gamble),doubled);assert.equal(await balance(user),999.95);
+const doubled=await ctAct(gamble);assert.equal(doubled.result[0].win,90000);assert.deepEqual(await ctAct(gamble),doubled);assert.equal(await balance(user),999.8);
 // Recreate the complete router store, as after a process restart.
-store=makeStore();await store.close(user,'lucky-clover-x3',session);assert.equal(await balance(user),1899.95);assert.equal(await balance(manager),9100.05);
-await store.close(user,'lucky-clover-x3',session);assert.equal(await balance(user),1899.95);
+store=makeStore();await store.close(user,'lucky-clover-x3',session);assert.equal(await balance(user),4599.8);assert.equal(await balance(manager),6400.2);
+await store.close(user,'lucky-clover-x3',session);assert.equal(await balance(user),4599.8);
 await assert.rejects(ctAct(command('play',play)),/expired/);
 const old=(await store.launch(user,'lucky-clover-x3')).sessionId;
 await store.launch(user,'lucky-clover-x3');await assert.rejects(ctAct(command('poll'),old),/expired/);
@@ -71,9 +71,9 @@ const va=async c=>(await store.act(user,'vikings-fun',vs,[c]))[0];
 await va({command:'create_session',sequence_number:1});
 const beforeV=await balance(user),rounds=await count();
 const free=await va({command:'play',sequence_number:2,game_denom:1,lines:25,line_bet:1,total_bet:25});
-assert.equal(free.result.filter(x=>x.type==='slot_subgame').length,16);assert.equal(await count(),rounds+1);assert.equal(await balance(user),Math.round((beforeV-.25)*100)/100);
+assert.equal(free.result.filter(x=>x.type==='slot_subgame').length,16);assert.equal(await count(),rounds+1);assert.equal(await balance(user),Math.round((beforeV-.20)*100)/100);
 store=makeStore();await store.close(user,'vikings-fun',vs);
-assert.equal(await balance(user),Math.round((beforeV-.25+free.result.at(-2).total_win/100)*100)/100);
+assert.equal(await balance(user),Math.round((beforeV-.20+free.result.at(-2).total_win*.008)*100)/100);
 
 const restricted=(await store.launch(other,'fruit-queen')).sessionId;
 const restrictedSpin=()=>store.act(other,'fruit-queen',restricted,{action:'spin',gamename:'fruitqueen',li:18,di:1,amount:.5,request_id:randomUUID()});

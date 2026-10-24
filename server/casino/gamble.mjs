@@ -49,6 +49,8 @@ export async function casinoGambleAction({userId,requestId,action,choice},{datab
     if(action!=='collect'){
       const settings=await db.query('select enabled from app_casino_settings where id=1 for share');
       if(!settings.rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
+      const bonus=await db.query('select left_spins from app_casino_freespin_state where user_id=$1 for update',[userId]);
+      if(Number(bonus.rows[0]?.left_spins)>0)throw fault(409,'FREE_SPINS_PENDING');
     }
     const result=await db.query(
       'select round_id,pending,step,player_card from app_casino_gamble_state where user_id=$1 for update',
