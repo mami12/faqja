@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { Match, MatchEvent, OddsDelta } from '../types';
 import { frozenSelectionPrice } from '../../../server/ledger/system-columns.mjs';
@@ -25,6 +25,7 @@ export interface LivePatch {
   period?: string | null;
   homeScore?: number;
   awayScore?: number;
+  scoreAt?: string;
   /** Optional team names used by the favorites alert view. */
   homeTeam?: string;
   awayTeam?: string;
@@ -55,6 +56,7 @@ interface LiveFeedValue {
   lockedMarkets: Record<string, boolean>;
   lockedMatches: Record<string, boolean>;
   combosEnabled: boolean;
+  invalidateSelections: (outcomeIds: string[]) => void;
 }
 
 export type FeedMode = 'live' | 'idle' | 'waking';
@@ -70,6 +72,7 @@ const EMPTY: LiveFeedValue = {
   lockedMarkets: {},
   lockedMatches: {},
   combosEnabled: true,
+  invalidateSelections: () => {},
 };
 
 const LiveFeedContext = createContext<LiveFeedValue>(EMPTY);
@@ -107,6 +110,11 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const [feedMode, setFeedMode] = useState<FeedMode>('live');
   const [combosEnabled, setCombosEnabled] = useState(true);
+  const [rejectedOutcomes,setRejectedOutcomes] = useState<Record<string,number>>({});
+  const invalidateSelections = useCallback((ids:string[]) => {
+    const at=Date.now();
+    setRejectedOutcomes(previous=>({...previous,...Object.fromEntries(ids.filter(Boolean).map(id=>[id,at]))}));
+  },[]);
   const prevOdds = useRef<Record<string, number>>({});
   const prevOddsAt = useRef<Record<string, number>>({});
   const prevMarketAt = useRef<Record<string, number>>({});
@@ -170,6 +178,13 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
       if (Object.keys(outcomeLocks).length) setLockedOutcomes(prev => ({ ...prev, ...outcomeLocks }));
       if (Object.keys(marketLocks).length) setLockedMarkets(prev => ({ ...prev, ...marketLocks }));
+      // Reopen a locally refused choice only after a newer, explicitly active
+      // provider price. A mere render or an old REST quote cannot reopen it.
+      if (Object.keys(deltas).length) setRejectedOutcomes(previous=> {
+        const next={...previous}; let changed=false;
+        for(const [id,at] of Object.entries(previous)) if((deltas[id]?.at??0)>=at && outcomeLocks[id]===false) {delete next[id];changed=true;}
+        return changed?next:previous;
+      });
 
       // also update the live clock when odds arrive (minute + phase travel with odds:update now)
       const minute = (payload as any).minute;
@@ -213,6 +228,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           period: m.phase ?? null,
           homeScore: Number.isFinite(home) ? home : undefined,
           awayScore: Number.isFinite(away) ? away : undefined,
+          scoreAt: typeof m.scoreAt==='string'?m.scoreAt:undefined,
           corners: cornersOf(m.stats),
           cards: cardsOf(m.stats),
           isSuspended: m.suspended === true,
@@ -242,6 +258,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         period: info.feed_status ?? null,
         homeScore: info.home_score === null || info.home_score === undefined ? undefined : Number(info.home_score),
         awayScore: info.away_score === null || info.away_score === undefined ? undefined : Number(info.away_score),
+        scoreAt: info.home_score!=null&&info.away_score!=null?new Date().toISOString():undefined,
         corners: cornersOf(info.stats),
         cards: cardsOf(info.stats),
         updatedAt: new Date().toISOString(),
@@ -265,40 +282,18 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       ]);
     });
 
-    // Live clock ticker: every second, advance active live matches so clock never freezes
-    const clockTicker = setInterval(() => {
-      setLivePatches(prev => {
-        let changed = false;
-        const next = { ...prev };
-        for (const [id, patch] of Object.entries(next)) {
-          if (patch.status === 'LIVE' && patch.currentMinute !== undefined) {
-            // Don't tick during halftime break
-            if (patch.period === 'HT' || patch.period === 'Break Time') continue;
-            let sec = (patch.currentSecond ?? 0) + 1;
-            let min = patch.currentMinute;
-            if (sec >= 60) {
-              sec = 0;
-              min += 1;
-            }
-            next[id] = { ...patch, currentMinute: min, currentSecond: sec };
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 1000);
-
     socket.on('connect_error', (e: Error) => console.warn('[socket] connect_error:', e.message));
 
     return () => {
-      clearInterval(clockTicker);
       socket.close();
     };
   }, []);
 
   const value = useMemo<LiveFeedValue>(
-    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled }),
-    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled],
+    () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode,
+      lockedOutcomes:{...lockedOutcomes,...Object.fromEntries(Object.keys(rejectedOutcomes).map(id=>[id,true]))},
+      riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, invalidateSelections }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, rejectedOutcomes,invalidateSelections],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;

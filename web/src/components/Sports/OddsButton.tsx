@@ -10,6 +10,7 @@ import { isMarketExpired, isCompletedCombinationOutcome } from '../../utils/mark
 import { isComboMarket } from '../../utils/comboPolicy';
 import { multipliedComboPrice } from '../../../../server/ledger/combo-price.mjs';
 import { formatOdds } from '../../utils/formatOdds';
+import { comboOutcomeLegs } from '../../../../server/ledger/combo-feasibility.mjs';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
 
@@ -90,9 +91,14 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
         outcomeName: outcome.name,
         outcomeCode: outcome.code,
         marketName: market.name,
+        marketType: market.marketType,
         marketLine: market.line || market.specifier,
         matchName: `${match.homeTeam} vs ${match.awayTeam}`,
-        odds: currentOdds
+        odds: currentOdds,
+        builderLegs: market.builderLegs,
+        comboLegs: comboOutcomeLegs(match,{...market,outcomeName:outcome.name,outcomeCode:outcome.code})??undefined,
+        period: market.period,
+        matchSnapshot: {status:match.status,homeScore:match.homeScore,awayScore:match.awayScore,scoreAt:match.scoreAt,period:match.period,currentMinute:match.currentMinute},
       });
     }
   };

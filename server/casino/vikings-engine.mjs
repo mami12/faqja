@@ -25,19 +25,24 @@ export function evaluate(grid,betCents,selected=25,free=false){
  if(scat.length>=3)wins.push({line:0,symbol:2,count:scat.length,factor:[0,0,7,20,100][scat.length-1],amount:betCents*[0,0,7,20,100][scat.length-1],cells:scat,freeSpins:15});
  return {wins,winCents:Math.round(wins.reduce((sum,w)=>sum+w.amount,0)),freeSpins:scat.length>=3?15:0};
 }
-export function spin(betCents,selected=25,free=false,random=randomInt){
- const reels=DATA.reels[String(DATA.defaultRtp)];
+export function spin(betCents,selected=25,free=false,random=randomInt,options={}){
+ if(typeof random==='object'&&random!==null){options=random;random=randomInt;}
+ const requested=options.mathProfile?options.mathProfile.rtp:DATA.defaultRtp;
+ const key=Object.keys(DATA.reels).find(value=>Number(value)===Number(requested));
+ if(!key)throw Error('Unknown Vikings reel profile');
+ const reels=DATA.reels[key];
  const stops=reels.map(r=>random(r.length));
  const grid=reels.map((r,x)=>Array.from({length:3},(_,y)=>r[(stops[x]+y)%r.length]));
- return {grid,stops,...evaluate(grid,betCents,selected,free)};
+ return {grid,stops,...evaluate(grid,betCents,selected,free),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})};
 }
-export function spinRound(betCents,selected=25,spinFn=spin){
+export function spinRound(betCents,selected=25,spinFn=spin,options={}){
+ if(typeof spinFn==='object'&&spinFn!==null){options=spinFn;spinFn=spin;}
  const games=[];let remaining=0,totalFree=0,played=0,totalWin=0;
  do{
-  const free=remaining>0,result=spinFn(betCents,selected,free);
+  const free=remaining>0,result=spinFn(betCents,selected,free,options);
   if(free){remaining--;played++;}
   remaining+=result.freeSpins;totalFree+=result.freeSpins;totalWin+=result.winCents;
   games.push({...result,free,freeGameNumber:played,freeGameTotal:totalFree,totalWin});
  }while(remaining>0);
- return {grid:games.at(-1).grid,winCents:totalWin,games};
+ return {grid:games.at(-1).grid,winCents:totalWin,games,...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})};
 }

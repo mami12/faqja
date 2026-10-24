@@ -6,6 +6,7 @@
  *
  * Score/phase facts must be real (not odds, labels or browser input).
  */
+import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
 const norm = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 const safeNumber = value => {
   if (value === '' || value == null) return null;
@@ -64,6 +65,7 @@ export function isDecidedLiveMarket(match, market) {
  * provider contracts. This protects placement even from stale browser tabs.
  */
 export function isDecidedLiveOutcome(match, market) {
+  if (isImpossibleLiveCombination(match,market)) return true;
   const score = currentScore(match);
   if (!score) return false;
   if (isDecidedLiveMarket(match, market)) return true;

@@ -23,7 +23,7 @@ export default function SportsbookPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { selections, totalOdds } = useBetslip();
+  const { selections, totalOdds, ticketType, columns } = useBetslip();
   const [selectedTournament, setSelectedTournament] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSport, setSelectedSport] = useState<string>('');
@@ -248,7 +248,7 @@ export default function SportsbookPage() {
             )}
             {selections.length > 0 && (
               <span className="text-[10px] font-mono font-black bg-primary/20 rounded px-1.5 py-0.5">
-                @{formatOdds(totalOdds)}
+                {ticketType==='SYSTEM' ? `Sistem · ${columns.length} kolona` : `@${formatOdds(totalOdds)}`}
               </span>
             )}
           </button>

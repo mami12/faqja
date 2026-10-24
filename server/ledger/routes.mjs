@@ -16,6 +16,7 @@ import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
 import { getPlayerControls, requestSelfExclusion, updatePlayerLimits } from './player-controls.mjs';
 import { refreshLiveRiskSettings, writeLiveRiskSettings } from './live-risk-store.mjs';
 import { DEFAULT_LIVE_RISK_SETTINGS } from '../live-risk-settings.mjs';
+import { projectBoardMatches } from './board-projection.mjs';
 
 export const ledgerRouter = express.Router();
 
@@ -32,6 +33,7 @@ const guard = (fn) => (req, res, next) =>
     const body = { message: e?.message ?? 'error', error: e?.message ?? 'error' };
     if (e?.code) body.code = e.code;
     if (e?.outcomeId) body.outcomeId = e.outcomeId;
+    if (e?.sourceOutcomeId) body.sourceOutcomeId = e.sourceOutcomeId;
     if (e?.oldOdds !== undefined) body.oldOdds = e.oldOdds;
     if (e?.newOdds !== undefined) body.newOdds = e.newOdds;
     if (e?.outcomeName) body.outcomeName = e.outcomeName;
@@ -296,10 +298,12 @@ ledgerRouter.get(
     if (categoryId) rows = rows.filter((r) => r.category_slug === String(categoryId));
     if (tournamentId) rows = rows.filter((r) => String(r.tournament_id) === String(tournamentId));
 
-    const matches = toClientMatches(await withOdds(rows));
+    const board = req.query.view === 'board';
+    const serialized = await withOdds(rows);
+    const matches = toClientMatches(board?projectBoardMatches(serialized):serialized);
     // Board cards show base odds; build the complete automatic menu when a
     // visitor opens /matches/:id rather than sending it for 500 matches per poll.
-    res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
+    res.json(!board&&ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
   }),
 );
 
@@ -361,7 +365,9 @@ ledgerRouter.get(
   guard(async (req, res) => {
     if (String(req.params.sportId) !== '18') return res.json([]);
     const rows = await getMatchRows({ limit: asLimit(req.query.limit, 500, 2000) });
-    const matches = toClientMatches(await withOdds(rows));
-    return res.json(ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
+    const board = req.query.view === 'board';
+    const serialized = await withOdds(rows);
+    const matches = toClientMatches(board?projectBoardMatches(serialized):serialized);
+    return res.json(!board&&ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
   }),
 );

@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Ticket } from '../types';
+import SystemTicketSummary from '../components/Betslip/SystemTicketSummary';
 import { Ticket as TicketIcon } from 'lucide-react';
 import { formatTicketSelection, formatMarketSelectionLabel, translateTicketType } from '../utils/sportsbookLabels';
 import { formatOdds } from '../utils/formatOdds';
@@ -95,14 +96,15 @@ export default function MyBetsPage() {
           </div>
           <div className="text-right">
             <div>
-              <span className="text-text-secondary">{t('tickets.payout')}: </span>
-              <span className="font-mono font-black text-accent-yellow text-sm">{ticket.potentialPayout.toFixed(2)} Lëk</span>
+              <span className="text-text-secondary">{ticket.system ? (isPending ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : t('tickets.payout')}: </span>
+              <span className="font-mono font-black text-accent-yellow text-sm">{(ticket.system && !isPending ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} Lëk</span>
             </div>
-            <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{formatOdds(totalOdds)}</div>
+            {!ticket.system && <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{formatOdds(totalOdds)}</div>}
           </div>
         </div>
 
-        {ticket.status === 'PENDING' && ticket.settledAt && (
+        <SystemTicketSummary ticket={ticket} />
+        {ticket.status !== 'PENDING' && ticket.settledAt && (
           <div className="text-[11px] text-text-muted">
             {t('tickets.settled_at')}: {formatDate(ticket.settledAt)}
           </div>

@@ -3,7 +3,7 @@
  * REJECTED attempts are not tickets and never debit a wallet.
  */
 import { query } from '../db.mjs';
-import { withLines } from './bets.mjs';
+import { listLogicalTickets } from './bets.mjs';
 
 const fail = message => { throw Object.assign(new Error(message), { status: 400 }); };
 const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,7 +33,7 @@ function validHistoryDate(value, field) {
 const TICKET_COLUMNS = 't.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout, ' +
   't.ticket_type, t.system_type, t.status, t.placed_at, t.settled_at';
 
-export async function listPlayerBetActivity({ userId, status = 'ALL', from = null, to = null, limit = 200 } = {}) {
+export async function listPlayerBetActivity({ userId, status = 'ALL', from = null, to = null, limit = 200 } = {}, {runQuery = query} = {}) {
   const { key, statuses } = playerBetStatuses(status);
   const start = validHistoryDate(from, 'nga');
   const end = validHistoryDate(to, 'deri');
@@ -55,20 +55,8 @@ export async function listPlayerBetActivity({ userId, status = 'ALL', from = nul
 
   let tickets = [];
   if (key !== 'REJECTED') {
-    const params = [userId];
-    const conditions = ['t.user_id = $1'];
-    if (statuses !== null) {
-      params.push(statuses);
-      conditions.push('t.status = any($' + params.length + '::text[])');
-    }
-    conditions.push(...dateConditions('t', 'placed_at', params));
-    params.push(max);
-    const { rows } = await query(
-      'select ' + TICKET_COLUMNS + ' from app_ticket t where ' + conditions.join(' and ') +
-      ' order by t.placed_at desc, t.id desc limit $' + params.length,
-      params,
-    );
-    tickets = (await withLines(rows)).map(ticket => ({ ...ticket, kind: 'TICKET' }));
+    tickets = (await listLogicalTickets({userId,statuses,from:start,to:end,limit:max},{runQuery}))
+      .map(ticket => ({ ...ticket, kind: 'TICKET' }));
   }
 
   let rejected = [];
@@ -76,7 +64,7 @@ export async function listPlayerBetActivity({ userId, status = 'ALL', from = nul
     const params = [userId];
     const conditions = ['r.user_id = $1', ...dateConditions('r', 'created_at', params)];
     params.push(max);
-    const { rows } = await query(
+    const { rows } = await runQuery(
       'select r.id, r.stake, r.selection_count, r.reason, r.created_at from app_bet_rejection r where ' +
       conditions.join(' and ') + ' order by r.created_at desc, r.id desc limit $' + params.length,
       params,

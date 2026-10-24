@@ -39,13 +39,13 @@ async function ensureAdminEnabled(){
   const {rows}=await query('select enabled from app_casino_settings where id=1');
   if(!rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
 }
-async function getWalletPlayer(req){
+async function getWalletPlayer(req,getUser=getUserById){
   const token=cookieValue(req);
   if(!token)throw fault(401,'CASINO_SESSION_REQUIRED');
   let claim;
   try{claim=jwt.verify(token,config.jwtSecret);}catch{throw fault(401,'CASINO_SESSION_EXPIRED');}
   if(claim.kind!=='casino-pixi-wallet'||typeof claim.jti!=='string')throw fault(401,'CASINO_SESSION_INVALID');
-  const user=await getUserById(claim.sub);
+  const user=await getUser(claim.sub);
   if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
   return {user,nonce:claim.jti};
 }
@@ -62,19 +62,23 @@ function spinProtocol(round,bet,lines,denomination,reqId){
       wins:{line_wins:round.result.line_wins,total}},
   };
 }
-export function createSizzlingRealRouter(){
+export function createSizzlingRealRouter(dependencies={}){
+  const ready=dependencies.isLedgerReady??isLedgerReady;
+  const getUser=dependencies.getUserById??getUserById;
+  const settle=dependencies.settlePendingWin??settlePendingWin;
+  const place=dependencies.placeCasinoSpin??placeCasinoSpin;
+  const gamble=dependencies.casinoGambleAction??casinoGambleAction;
   const router=Router();
   router.post('/play',raw({type:()=>true,limit:'128kb'}),async(req,res)=>{
     res.set('Cache-Control','no-store');
     let action='unknown';
     try{
-      if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
+      if(!ready())throw fault(503,'LEDGER_UNAVAILABLE');
       if(req.headers.origin){
         const origin=new URL(req.headers.origin);
         if(origin.host!==req.headers.host)throw fault(403,'CROSS_ORIGIN_DENIED');
       }
-      const {user,nonce}=await getWalletPlayer(req);
-      await ensureAdminEnabled();
+      const {user,nonce}=await getWalletPlayer(req,getUser);
       const request=decodeRequest(req);
       action=String(request.action||'init');
       const rawId=request.request_id;
@@ -83,8 +87,8 @@ export function createSizzlingRealRouter(){
       if(action==='init'){
         // A pending win survives page reloads/tab closes: credit it first so
         // the casino meter and the sportsbook balance stay in sync.
-        await settlePendingWin(user.id);
-        const fresh=await getUserById(user.id);
+        await settle(user.id);
+        const fresh=await getUser(user.id);
         const credits=Number(fresh?.balance ?? user.balance);
         const init=initResponse({credits, requestId:id==null?1:id+1});
         init.init.currency='LEK';
@@ -93,13 +97,13 @@ export function createSizzlingRealRouter(){
       if(action==='spin'){
         if(id==null)throw fault(400,'SPIN_REQUEST_ID_REQUIRED');
         const bet=Number(request.bet),lines=Number(request.lines),denomination=Number(request.denomination??1);
-        const round=await placeCasinoSpin({userId:user.id,requestId:uuidFromId(nonce,id),
+        const round=await place({userId:user.id,requestId:uuidFromId(nonce,id),
           bet,denomination,lines});
         return res.json(spinProtocol(round,bet,lines,denomination,id));
       }
       if(action==='collect'||action==='get_double'||action==='set_double'){
         if(id==null)throw fault(400,'ACTION_REQUEST_ID_REQUIRED');
-        const reply=await casinoGambleAction({
+        const reply=await gamble({
           userId:user.id,requestId:uuidFromId(nonce,id),action,choice:request.choice,
         });
         return res.json(reply);

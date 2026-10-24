@@ -23,8 +23,13 @@ export function evaluate(id,grid,betCents,selected){
  if(hit)wins.push({line:0,symbol:d.scatter,count:id==='zeus'?1:scat.length,amount:betCents*(d.scatterPay[scat.length-1]||0),cells:scat,freeSpins:d.freeSpins});
  return {wins,winCents:Math.round(wins.reduce((sum,w)=>sum+w.amount,0)),freeSpins:hit?d.freeSpins:0};
 }
-export function spin(id,betCents,selected,random=randomInt){
- const d=DATA.games[id],reels=d.reels[String(d.rtp)],stops=reels.map(r=>random(r.length));
+export function spin(id,betCents,selected,random=randomInt,options={}){
+ if(typeof random==='object'&&random!==null){options=random;random=randomInt;}
+ const d=DATA.games[id];if(!d)throw Error('Invalid AGT game');
+ const requested=options.mathProfile?options.mathProfile.rtp:d.rtp;
+ const key=Object.keys(d.reels).find(value=>Number(value)===Number(requested));
+ if(!key)throw Error('Unknown AGT reel profile');
+ const reels=d.reels[key],stops=reels.map(r=>random(r.length));
  const grid=reels.map((r,x)=>Array.from({length:d.sy},(_,y)=>r[(stops[x]+y)%r.length]));
- return {grid,stops,...evaluate(id,grid,betCents,selected)};
+ return {grid,stops,...evaluate(id,grid,betCents,selected),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})};
 }

@@ -208,9 +208,9 @@ export async function moveManagerFunds(managerId, playerId, amount, direction) {
   }
 }
 
-export async function managerFinancials(managerId = null) {
-  const commissionRates = await getManagerCommissionRates(query);
-  const managers = await query(
+export async function managerFinancials(managerId = null, {runQuery = query} = {}) {
+  const commissionRates = await getManagerCommissionRates(runQuery);
+  const managers = await runQuery(
     `select m.id, m.username, m.balance,
             coalesce(p.player_balance, 0) as player_balance,
             coalesce(t.total_stake, 0) as total_stake,
@@ -228,8 +228,9 @@ export async function managerFinancials(managerId = null) {
          select coalesce(sum(t.stake) filter (where t.status not in ('REVERTED', 'VOID')), 0) as total_stake,
                 coalesce(sum(t.potential_payout) filter (where t.status = 'WON'), 0) as won_payouts,
                 coalesce(sum(t.stake) filter (where t.status = 'LOST'), 0) as lost_stake,
-                count(t.id)::int as ticket_count
+                count(distinct coalesce('SYS-'||b.id::text,t.id::text))::int as ticket_count
            from app_ticket t
+           left join app_ticket_batch b on b.ticket_ids @> ARRAY[t.id] and t.user_id=b.user_id
            join app_user u on u.id = t.user_id
           where u.manager_id = m.id
        ) t on true
@@ -263,7 +264,7 @@ export async function managerFinancials(managerId = null) {
     };
   });
   if (managerId) {
-    const playerRows = await query(
+    const playerRows = await runQuery(
       `select u.id, u.username, u.balance,
               coalesce(t.ticket_count, 0) as "ticketCount",
               coalesce(t.total_stake, 0) as "totalStake",
@@ -275,11 +276,12 @@ export async function managerFinancials(managerId = null) {
               coalesce(c.multi_commission, 0) as multi_commission
          from app_user u
          left join lateral (
-           select count(*)::int as ticket_count,
+           select count(distinct coalesce('SYS-'||b.id::text,t.id::text))::int as ticket_count,
                   coalesce(sum(t.stake) filter (where t.status not in ('REVERTED', 'VOID')), 0) as total_stake,
                   coalesce(sum(t.potential_payout) filter (where t.status = 'WON'), 0) as won_payouts,
                   coalesce(sum(t.stake) filter (where t.status = 'LOST'), 0) as lost_stake
-             from app_ticket t where t.user_id = u.id
+             from app_ticket t left join app_ticket_batch b on b.ticket_ids @> ARRAY[t.id] and t.user_id=b.user_id
+             where t.user_id = u.id
          ) t on true
          left join lateral (
            select coalesce(sum(-x.amount), 0) as commission,
@@ -420,7 +422,7 @@ function transactionDateConditions(from, to) {
   return { start, end };
 }
 
-export async function listTransactions({ role = 'PLAYER', userId = null, from = null, to = null, limit = 100 } = {}) {
+export async function listTransactions({ role = 'PLAYER', userId = null, from = null, to = null, limit = 100 } = {}, {runQuery = query} = {}) {
   const { start, end } = transactionDateConditions(from, to);
   const params = [];
   const conditions = [];
@@ -441,14 +443,30 @@ export async function listTransactions({ role = 'PLAYER', userId = null, from = 
   }
   params.push(Math.min(Math.max(Number(limit) || 100, 1), 500));
   const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
-  const res = await query(
-    `select tx.id, tx.user_id as "userId", u.username, u.role as "userRole",
-            tx.amount, tx.type, tx.reference_id as "referenceId",
-            tx.balance_after as "balanceAfter", tx.description, tx.created_at as "createdAt"
+  const res = await runQuery(
+    `with source as (
+      select tx.*,u.username,u.role as user_role,b.id as batch_id
        from app_transaction tx
        join app_user u on u.id = tx.user_id
+       left join app_ticket_batch b on b.ticket_ids @> ARRAY[tx.reference_id]
        ${where}
-      order by tx.created_at desc limit $${params.length}`,
+    ), visible as (
+      select id::text,user_id,username,user_role,amount,type,
+        coalesce('SYS-'||batch_id::text,reference_id::text) as reference_id,
+        balance_after,description,created_at,
+        case when batch_id is not null then 'SYS-'||batch_id::text end as system_ticket_id,
+        jsonb_build_array(id::text) as raw_transaction_ids
+      from source where type<>'BET_PLACED' or batch_id is null
+      union all
+      select 'SYS-'||batch_id::text||':BET_PLACED',user_id,username,user_role,sum(amount),'BET_PLACED',
+        'SYS-'||batch_id::text,min(balance_after),'Sistem - '||count(*)::text||' kolona - shuma totale',min(created_at),
+        'SYS-'||batch_id::text,jsonb_agg(id::text order by created_at,id)
+      from source where type='BET_PLACED' and batch_id is not null
+      group by batch_id,user_id,username,user_role
+    ) select id,user_id as "userId",username,user_role as "userRole",amount,type,
+      reference_id as "referenceId",balance_after as "balanceAfter",description,created_at as "createdAt",
+      system_ticket_id as "systemTicketId",raw_transaction_ids as "rawTransactionIds"
+      from visible order by created_at desc,id desc limit $${params.length}`,
     params,
   );
   return res.rows.map((row) => ({ ...row, amount: Number(row.amount), balanceAfter: Number(row.balanceAfter) }));
@@ -513,8 +531,8 @@ export async function listAdminAudit({ from = null, to = null, actorId = null, l
 }
 
 /** headline numbers for the admin/manager dashboards */
-export async function ledgerStats(managerId = null) {
-  const res = await query(
+export async function ledgerStats(managerId = null, {runQuery = query} = {}) {
+  const res = await runQuery(
     `select
         count(*)::int                                   as users,
         count(*) filter (where role = 'PLAYER')::int     as players,
@@ -524,11 +542,12 @@ export async function ledgerStats(managerId = null) {
       where ($1::uuid is null or manager_id = $1::uuid)`,
     [managerId],
   );
-  const tickets = await query(
-    `select count(*)::int as total,
-            count(*) filter (where t.status = 'PENDING')::int as pending,
+  const tickets = await runQuery(
+    `select count(distinct coalesce('SYS-'||b.id::text,t.id::text))::int as total,
+            count(distinct coalesce('SYS-'||b.id::text,t.id::text)) filter (where t.status = 'PENDING')::int as pending,
             coalesce(sum(t.stake) filter (where t.status = 'PENDING'), 0) as pending_stake
        from app_ticket t
+       left join app_ticket_batch b on b.ticket_ids @> ARRAY[t.id] and t.user_id=b.user_id
       where ($1::uuid is null or t.user_id in (select id from app_user where manager_id = $1::uuid))`,
     [managerId],
   );

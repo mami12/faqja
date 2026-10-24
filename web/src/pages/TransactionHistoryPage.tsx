@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Ticket } from '../types';
+import SystemTicketSummary from '../components/Betslip/SystemTicketSummary';
 import { formatMarketSelectionLabel, formatTicketSelection } from '../utils/sportsbookLabels';
 import { useLanguage } from '../context/LanguageContext';
 import Header from '../components/Layout/Header';
@@ -267,12 +268,13 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                               </div>
                             ))}
                             <div className="flex flex-wrap justify-between gap-2 border-t border-tertiary/60 pt-2 text-[11px]">
-                              <span className="text-slate-300">Koeficienti total: <strong>{formatOdds(entry.totalOdds)}</strong></span>
+                              <span className="text-slate-300">{entry.system ? `Sistem · ${entry.system.columnCount} kolona` : <>Koeficienti total: <strong>{formatOdds(entry.totalOdds)}</strong></>}</span>
                               <span className="text-slate-300">
-                                {entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme'}:
-                                <strong className="ml-1 text-amber-200">{entry.potentialPayout.toFixed(2)} Lëk</strong>
+                                {entry.system ? (entry.status === 'PENDING' ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme'}:
+                                <strong className="ml-1 text-amber-200">{(entry.system && entry.status !== 'PENDING' ? entry.actualPayout ?? 0 : entry.potentialPayout).toFixed(2)} Lëk</strong>
                               </span>
                             </div>
+                            <SystemTicketSummary ticket={entry} />
                           </div>
                         )}
                       </details>

@@ -32,6 +32,8 @@ import { lockLiveRiskSettings } from './live-risk-store.mjs';
 import { assertLiveBetRisk } from './bet-risk.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 import { buildSystemColumns, splitSystemStake, moneyCents, frozenSelectionPrice, systemColumnPayout } from './system-columns.mjs';
+import { aggregateSystemTicket, parseSystemTicketId, systemTicketId, SYSTEM_STATUS_SQL } from './system-ticket-view.mjs';
+import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -57,7 +59,7 @@ const loadOdds = async (id, executor) => config.oddsStore === 'db'
  * Turns one selection from the client ({ outcomeId, oddsAtPlacement }) into the row we
  * will store, using our own live price. Throws a 400 with a user-facing message.
  */
-export async function resolveSelection(selection, {executor = query} = {}) {
+async function resolveSelectionInternal(selection, {executor = query} = {}) {
   const builder = parseBuilderId(selection?.outcomeId);
   if (builder) return resolveBuilderSelection(selection,builder,{executor});
   // idle mode: while the feed is paused (or starting again) the prices on the board have not
@@ -170,6 +172,20 @@ export async function resolveSelection(selection, {executor = query} = {}) {
   };
 }
 
+export async function resolveSelection(selection, options = {}) {
+  try { return await resolveSelectionInternal(selection,options); }
+  catch (error) {
+    const unavailable = ['MARKET_DECIDED','LIVE_RISK_SUSPENDED','SELECTION_UNAVAILABLE'].includes(error.code) ||
+      (error.status === 400 && !error.code && /disponueshme|përfunduar|anuluar|pezulluar|më aktiv|mungon|çmim të vlefshëm|jashtë kufirit|nuk.*identifiku|nuk u njoh/i.test(error.message));
+    if (unavailable && error.code !== 'ODDS_CHANGED') {
+      if (error.outcomeId && error.outcomeId !== selection?.outcomeId) error.sourceOutcomeId = error.outcomeId;
+      error.outcomeId = selection?.outcomeId;
+      error.code ||= 'SELECTION_UNAVAILABLE';
+    }
+    throw error;
+  }
+}
+
 // A regular ticket must never multiply correlated picks from one match.
 function assertDistinctMatches(lines) {
   const ids = lines.map(line => String(line.matchId));
@@ -191,12 +207,19 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   if (!match) throw badRequest('Ndeshja nuk është e disponueshme.');
   const raw = serializeMatch(match,await loadOdds(Number(matchId),executor));
   const projected = toClientMatch(raw);
+  if (isImpossibleLiveCombination(projected,{name:`Bet Builder: ${template.name}`,comboLegs:template.legs})) {
+    throw Object.assign(badRequest('Ky kombinim nuk mund të fitojë më nga rezultati live.'),{code:'MARKET_DECIDED',outcomeId:selection.outcomeId});
+  }
   if (projected.isSuspended || ['ENDED','CANCELLED'].includes(projected.status)) throw badRequest('Ndeshja është pezulluar.');
   const parts = template.legs.map(leg => findLeg(projected,leg));
   if (parts.some(p => !p)) throw badRequest('Një market i Bet Builder është pezulluar ose mungon.');
-  const lines = await Promise.all(parts.map(part => resolveSelection({
-    outcomeId: part.outcome.id, oddsAtPlacement: part.outcome.odds,
-  },{executor})));
+  // Drain both source reads before a shared transaction can roll back/release.
+  // Consent is checked against the composite quote below, rather than showing a
+  // source-leg price as if it were the user's accepted Bet Builder price.
+  const resolvedParts = await Promise.allSettled(parts.map(part => resolveSelection({outcomeId:part.outcome.id},{executor})));
+  const rejectedPart=resolvedParts.find(result=>result.status==='rejected');
+  if(rejectedPart)throw rejectedPart.reason;
+  const lines = resolvedParts.map(result=>result.value);
   const price = multipliedComboPrice(lines);
   if (price === null) throw badRequest('Koeficienti i Bet Builder është jashtë kufirit.');
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds);
@@ -285,13 +308,28 @@ export const toClientTicket = (row, lines = [], username = null) => ({
   lines: (lines ?? []).map(toClientLine),
 });
 
-async function linesOf(ticketId) {
-  const res = await query('select * from app_ticket_line where ticket_id = $1 order by id', [ticketId]);
+async function linesOf(ticketId, runQuery = query) {
+  const res = await runQuery('select * from app_ticket_line where ticket_id = $1 order by id', [ticketId]);
   return res.rows;
 }
 
-export async function getTicketWithLines(ticketId) {
-  const res = await query(
+export async function getTicketWithLines(ticketId, {runQuery = query, consolidate = true} = {}) {
+  const batchId = parseSystemTicketId(ticketId);
+  if (batchId || consolidate) {
+    if (!batchId && !requestIdPattern.test(String(ticketId))) return null;
+    const batch = (await runQuery(batchId
+      ? 'select * from app_ticket_batch where id=$1::uuid'
+      : 'select * from app_ticket_batch where ticket_ids @> ARRAY[$1::uuid]', [batchId ?? ticketId])).rows[0];
+    if (batch) {
+      const rows = (await runQuery(`select ${TICKET_COLUMNS}, u.username from app_ticket t
+        left join app_user u on u.id=t.user_id where t.id=any($1::uuid[]) and t.user_id=$2`, [batch.ticket_ids,batch.user_id])).rows;
+      const tickets = await withLines(rows, {runQuery, consolidate:false});
+      const byId = new Map(tickets.map(ticket => [ticket.id,ticket]));
+      return aggregateSystemTicket(batch,batch.ticket_ids.map(id => byId.get(id)));
+    }
+    if (batchId) return null;
+  }
+  const res = await runQuery(
     `select ${TICKET_COLUMNS}, u.username
        from app_ticket t
        left join app_user u on u.id = t.user_id
@@ -299,7 +337,7 @@ export async function getTicketWithLines(ticketId) {
     [ticketId],
   );
   if (!res.rows.length) return null;
-  return toClientTicket(res.rows[0], await linesOf(ticketId), res.rows[0].username ?? null);
+  return toClientTicket(res.rows[0], await linesOf(ticketId,runQuery), res.rows[0].username ?? null);
 }
 
 const requestIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -455,7 +493,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
  */
 export function createColumnsPlacer({
   database = pool, runQuery = query, resolve = resolveSelection,
-  getTicket = getTicketWithLines, lockRisk = lockLiveRiskSettings,
+  getTicket = id => getTicketWithLines(id,{consolidate:false}), lockRisk = lockLiveRiskSettings,
   assertRisk = assertLiveBetRisk, assertPlayer = assertPlayerCanBet,
   chargeCommission = chargeManagerCommission,
 } = {}) {
@@ -511,7 +549,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   })) })).digest('hex');
   const getPrevious = async (db) => {
     const { rows } = await db.query(
-      'select request_payload_hash, ticket_ids from app_ticket_batch where user_id = $1 and client_request_id = $2',
+      'select * from app_ticket_batch where user_id = $1 and client_request_id = $2',
       [user.id, requestId],
     );
     if (!rows.length) {
@@ -522,12 +560,9 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
     if (rows[0].request_payload_hash !== payloadHash) {
       throw Object.assign(new Error('Kjo kërkesë është përdorur me të dhëna të tjera.'), { status: 409 });
     }
-    return rows[0].ticket_ids;
+    return rows[0];
   };
-  const response = async ids => ({
-    tickets: await Promise.all(ids.map(getTicket)),
-    totalStake: amount, columnCount: stakes.length, stakes,
-  });
+  const response = async batch => aggregateSystemTicket(batch,await Promise.all(batch.ticket_ids.map(getTicket)));
   const previous = await getPrevious({ query: runQuery });
   if (previous) return response(previous);
 
@@ -548,7 +583,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   }
 
   const client = await database.connect();
-  let ids = [];
+  let ids = [], placedBatch;
   try {
     await client.query('begin');
     const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
@@ -600,10 +635,12 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
       });
     }
     await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [user.id, (moneyCents(balance)-moneyCents(amount))/100]);
-    await client.query(
-      'insert into app_ticket_batch (user_id,client_request_id,request_payload_hash,ticket_ids) values ($1,$2,$3,$4)',
-      [user.id,requestId,payloadHash,ids],
-    );
+    placedBatch = (await client.query(
+      'insert into app_ticket_batch (user_id,client_request_id,request_payload_hash,ticket_ids,selection_order) values ($1,$2,$3,$4,$5) returning *',
+      [user.id,requestId,payloadHash,ids,picks.map(pick=>{
+        const line=linesById.get(String(pick.outcomeId));return outcomeIdOf(line.matchId,line.marketKey,line.line,line.outcomeKey);
+      })],
+    )).rows[0];
     await client.query('commit');
   } catch (error) {
     await client.query('rollback').catch(() => {});
@@ -611,7 +648,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   } finally {
     client.release();
   }
-  return response(ids);
+  return response(placedBatch);
 };
 }
 
@@ -654,61 +691,113 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
 }
 
 /** attaches lines to ticket rows with one extra query (no N+1) */
-export async function withLines(rows) {
+export async function withLines(rows, {runQuery = query, consolidate = true} = {}) {
   if (!rows.length) return [];
-  const ids = rows.map((r) => r.id);
-  const res = await query('select * from app_ticket_line where ticket_id = any($1::uuid[]) order by id', [ids]);
+  let completeRows = rows;
+  const batches = consolidate ? (await runQuery('select * from app_ticket_batch where ticket_ids && $1::uuid[]', [rows.map(row => row.id)])).rows : [];
+  if (batches.length) {
+    const missing = [...new Set(batches.flatMap(batch => batch.ticket_ids))].filter(id => !rows.some(row => row.id === id));
+    if (missing.length) completeRows = [...rows,...(await runQuery(`select ${TICKET_COLUMNS}, u.username from app_ticket t
+      left join app_user u on u.id=t.user_id where t.id=any($1::uuid[])`,[missing])).rows];
+  }
+  const ids = completeRows.map((r) => r.id);
+  const res = await runQuery('select * from app_ticket_line where ticket_id = any($1::uuid[]) order by id', [ids]);
   const byTicket = new Map();
   for (const line of res.rows) {
     if (!byTicket.has(line.ticket_id)) byTicket.set(line.ticket_id, []);
     byTicket.get(line.ticket_id).push(line);
   }
-  return rows.map((row) => toClientTicket(row, byTicket.get(row.id) ?? [], row.username ?? null));
+  const byId = new Map(completeRows.map(row => [row.id,toClientTicket(row,byTicket.get(row.id)??[],row.username??null)]));
+  const batchByChild = new Map(batches.flatMap(batch => batch.ticket_ids.map(id => [id,batch])));
+  const emitted = new Set(), result = [];
+  for (const row of rows) {
+    const batch = batchByChild.get(row.id);
+    if (!batch) result.push(byId.get(row.id));
+    else if (!emitted.has(batch.id)) {
+      emitted.add(batch.id);
+      result.push(aggregateSystemTicket(batch,batch.ticket_ids.map(id => byId.get(id))));
+    }
+  }
+  return result;
+}
+
+/** Select one representative per logical ticket; filter its COMPLETE status before LIMIT. */
+export async function listLogicalTickets({userId = null, managerId = null, statuses = null, from = null, to = null, limit = 200} = {}, {runQuery = query} = {}) {
+  const params = [], conditions = [], batchConditions = [];
+  if (userId) {
+    params.push(userId); conditions.push(`t.user_id=$${params.length}`); batchConditions.push(`b.user_id=$${params.length}`);
+  }
+  if (managerId) {
+    params.push(managerId);
+    conditions.push(`t.user_id in(select id from app_user where manager_id=$${params.length})`);
+    batchConditions.push(`b.user_id in(select id from app_user where manager_id=$${params.length})`);
+  }
+  if (statuses) { params.push(statuses); conditions.push(`coalesce(b.logical_status,t.status)=any($${params.length}::text[])`); }
+  if (from) { params.push(from); conditions.push(`coalesce(b.created_at,t.placed_at)>=$${params.length}::timestamptz`); }
+  if (to) { params.push(to); conditions.push(`coalesce(b.created_at,t.placed_at)<=$${params.length}::timestamptz`); }
+  params.push(Math.min(Math.max(Number(limit)||200,1),500));
+  const result = await runQuery(`with batch_state as (
+    select b.id,b.user_id,b.ticket_ids,b.created_at,${SYSTEM_STATUS_SQL} as logical_status
+    from app_ticket_batch b join app_ticket c on c.id=any(b.ticket_ids) and c.user_id=b.user_id
+    ${batchConditions.length?'where '+batchConditions.join(' and '):''}
+    group by b.id,b.user_id,b.ticket_ids,b.created_at
+  ), representatives as (
+    select distinct on(coalesce('SYS-'||b.id::text,t.id::text)) t.id,
+      coalesce(b.created_at,t.placed_at) as logical_placed_at,
+      coalesce('SYS-'||b.id::text,t.id::text) as logical_id
+    from app_ticket t left join batch_state b on t.id=any(b.ticket_ids) and t.user_id=b.user_id
+    ${conditions.length?'where '+conditions.join(' and '):''}
+    order by coalesce('SYS-'||b.id::text,t.id::text),t.id
+  ) select ${TICKET_COLUMNS},u.username from representatives r join app_ticket t on t.id=r.id
+    left join app_user u on u.id=t.user_id order by r.logical_placed_at desc,r.logical_id desc limit $${params.length}`,params);
+  return withLines(result.rows,{runQuery});
 }
 
 /** open tickets (My Bets -> active) */
-export async function listActive(userId) {
-  const res = await query(
-    `select ${TICKET_COLUMNS} from app_ticket t where t.user_id = $1 and t.status = 'PENDING' order by t.placed_at desc`,
-    [userId],
-  );
-  return withLines(res.rows);
+export async function listActive(userId, options = {}) {
+  return listLogicalTickets({userId,statuses:['PENDING'],limit:500},options);
 }
 
 /** settled tickets (My Bets -> history): the last 50 */
-export async function listHistory(userId) {
-  const res = await query(
-    `select ${TICKET_COLUMNS} from app_ticket t
-      where t.user_id = $1 and t.status <> 'PENDING'
-      order by t.placed_at desc limit 50`,
-    [userId],
-  );
-  return withLines(res.rows);
+export async function listHistory(userId, options = {}) {
+  return listLogicalTickets({userId,statuses:['WON','LOST','VOID','REVERTED','CANCELLED'],limit:50},options);
 }
 
 /** booking code (public) or a ticket id fragment, as the betslip's search box does */
-export async function searchTickets(term) {
+export async function searchTickets(term, {runQuery = query} = {}) {
   const raw = String(term ?? '').trim();
   if (!raw) return null;
-  const res = await query(
+  const systemPrefix=/^SYS-?/i.test(raw);
+  const compact=raw.replace(/^SYS-?/i,'').replace(/-/g,'').toLowerCase();
+  const validCompact=/^[0-9a-f]{7,32}$/.test(compact);
+  const findBatch=async()=>{
+    if(!validCompact)return null;
+    const batches=(await runQuery("select id from app_ticket_batch where replace(id::text,'-','') like $1 order by created_at desc limit 2",[compact+'%'])).rows;
+    if(batches.length>1)throw badRequest('Kodi është i paqartë. Përdor ID-në e plotë të biletës.');
+    return batches[0]?getTicketWithLines(systemTicketId(batches[0].id),{runQuery}):null;
+  };
+  if(systemPrefix)return findBatch();
+  const res = await runQuery(
     `select ${TICKET_COLUMNS}, u.username
        from app_ticket t left join app_user u on u.id = t.user_id
-      where t.booking_code = $1 or t.id::text like $2
-      order by t.placed_at desc limit 1`,
-    [raw.toUpperCase(), `%${raw.toLowerCase()}%`],
+      where t.booking_code = $1 or t.id::text like $2 or ($3::text is not null and replace(t.id::text,'-','') like $3)
+      order by case when t.booking_code=$1 then 0 else 1 end,t.placed_at desc limit 2`,
+    [raw.toUpperCase(), `%${raw.toLowerCase()}%`,validCompact?compact+'%':null],
   );
-  if (!res.rows.length) return null;
-  const [ticket] = await withLines(res.rows);
-  return ticket;
+  if(res.rows.length){
+    if(res.rows.length>1&&res.rows[0].booking_code!==raw.toUpperCase())throw badRequest('Kodi është i paqartë. Përdor ID-në e plotë të biletës.');
+    const [ticket]=await withLines([res.rows[0]],{runQuery});return ticket;
+  }
+  return findBatch();
 }
 
 /** a shared booking code, no login needed */
-export async function getBookingTicket(code) {
-  const res = await query(`select ${TICKET_COLUMNS} from app_ticket t where t.booking_code = $1`, [
+export async function getBookingTicket(code, {runQuery = query} = {}) {
+  const res = await runQuery(`select ${TICKET_COLUMNS} from app_ticket t where t.booking_code = $1`, [
     String(code ?? '').toUpperCase(),
   ]);
   if (!res.rows.length) return null;
-  const [ticket] = await withLines(res.rows);
+  const [ticket] = await withLines(res.rows,{runQuery});
   return ticket;
 }
 
@@ -717,43 +806,62 @@ export async function revertTicket(ticketId, managerId = null, { database = pool
   const client = await database.connect();
   try {
     await client.query('begin');
+    const publicBatchId = parseSystemTicketId(ticketId);
+    if (!publicBatchId && !requestIdPattern.test(String(ticketId))) throw Object.assign(new Error('ticket not found'),{status:404});
+    const batch = (await client.query(publicBatchId
+      ? 'select * from app_ticket_batch where id=$1::uuid for update'
+      : 'select * from app_ticket_batch where ticket_ids @> ARRAY[$1::uuid] for update',[publicBatchId??ticketId])).rows[0];
+    if (publicBatchId && !batch) throw Object.assign(new Error('ticket not found'),{status:404});
+    const ids = batch ? batch.ticket_ids : [ticketId];
     const found = await client.query(
       `select t.*, u.manager_id, u.username as player_username
          from app_ticket t
          left join app_user u on u.id = t.user_id
-        where t.id = $1
+        where t.id = any($1::uuid[]) order by t.id
         for update of t`,
-      [ticketId],
+      [ids],
     );
     const ticket = found.rows[0];
     if (!ticket) throw Object.assign(new Error('ticket not found'), { status: 404 });
-    if (ticket.status !== 'PENDING') throw badRequest('only pending tickets can be reverted');
-    if (!ticket.user_id) throw badRequest('a booked (guest) ticket has no stake to refund');
-    if (managerId && ticket.manager_id !== managerId) {
+    if (found.rows.length !== ids.length || found.rows.some(row => row.user_id !== ticket.user_id) ||
+        (batch && ticket.user_id !== batch.user_id)) throw new Error('System ticket ownership mismatch.');
+    if (managerId && found.rows.some(row => row.manager_id !== managerId)) {
       throw Object.assign(new Error('this ticket belongs to another manager'), { status: 403 });
     }
+    if (found.rows.some(row => row.status !== 'PENDING')) throw badRequest('only completely pending tickets can be reverted');
+    if (!ticket.user_id) throw badRequest('a booked (guest) ticket has no stake to refund');
 
     const player = await client.query('select balance from app_user where id = $1 for update', [ticket.user_id]);
     if (!player.rows.length) throw Object.assign(new Error('player not found'), { status: 404 });
-    const stake = Number(ticket.stake);
-    const balanceAfter = round(Number(player.rows[0].balance) + stake);
+    // A player may have changed manager since placement. Refund the actors who
+    // were actually debited, while authorization above uses current ownership.
+    const commissionActors=(await client.query(`select distinct user_id,reference_id from app_transaction
+      where reference_id=any($1::uuid[]) and type='MANAGER_COMMISSION_DEBIT' order by user_id,reference_id`,[ids])).rows;
+    const actorIds=[...new Set(commissionActors.map(row=>row.user_id))].sort();
+    if(actorIds.length)await client.query('select id from app_user where id=any($1::uuid[]) order by id for update',[actorIds]);
+    const stakeCents = found.rows.reduce((sum,row) => sum+moneyCents(Number(row.stake)),0);
+    const stake = stakeCents/100;
+    const balanceAfter = (moneyCents(Number(player.rows[0].balance))+stakeCents)/100;
 
-    await client.query(`update app_ticket set status = 'REVERTED', settled_at = now() where id = $1`, [ticketId]);
-    await client.query(`update app_ticket_line set status = 'VOID' where ticket_id = $1`, [ticketId]);
+    await client.query(`update app_ticket set status = 'REVERTED', settled_at = now() where id = any($1::uuid[])`, [ids]);
+    await client.query(`update app_ticket_line set status = 'VOID' where ticket_id = any($1::uuid[])`, [ids]);
     await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [ticket.user_id, balanceAfter]);
-    await client.query(
-      `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-       values ($1, $2, 'TICKET_REVERT', $3, $4, $5)`,
-      [ticket.user_id, stake, ticketId, balanceAfter, 'Bileta u anulua nga paneli'],
-    );
-    await refundManagerCommission(client, {
-      managerId: ticket.manager_id,
-      ticketId,
-      username: ticket.player_username,
-    });
+    let refundedCents = 0;
+    for (const column of found.rows) {
+      refundedCents += moneyCents(Number(column.stake));
+      await client.query(
+        `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
+         values ($1, $2, 'TICKET_REVERT', $3, $4, $5)`,
+        [ticket.user_id,Number(column.stake),column.id,(moneyCents(Number(player.rows[0].balance))+refundedCents)/100,
+          batch?'Bileta e sistemit u anulua nga paneli':'Bileta u anulua nga paneli'],
+      );
+      for(const actor of commissionActors.filter(row=>row.reference_id===column.id)){
+        await refundManagerCommission(client,{managerId:actor.user_id,ticketId:column.id,username:column.player_username});
+      }
+    }
 
     await client.query('commit');
-    return { success: true, refunded: stake };
+    return { success: true, refunded: stake, ticketId: batch?systemTicketId(batch.id):ticket.id, refundedColumns:ids.length };
   } catch (e) {
     await client.query('rollback').catch(() => {});
     throw e;

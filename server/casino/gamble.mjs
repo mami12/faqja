@@ -7,7 +7,7 @@
  */
 import {randomInt} from 'node:crypto';
 import {pool} from '../db.mjs';
-import {creditPendingWin} from './transactions.mjs';
+import {creditPendingWin,syncCasinoRoundPayout} from './transactions.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -19,10 +19,10 @@ const basic=(before,after)=>({
 });
 
 /** Action IDs are derived from the authenticated Pixi session and request_id. */
-export async function casinoGambleAction({userId,requestId,action,choice}){
+export async function casinoGambleAction({userId,requestId,action,choice},{database=pool}={}){
   if(!uuid.test(String(requestId)))throw fault(400,'INVALID_REQUEST_ID');
   if(!['get_double','set_double','collect'].includes(action))throw fault(400,'INVALID_ACTION');
-  const db=await pool.connect();
+  const db=await database.connect();
   try{
     await db.query('begin');
     // Match the exact lock order used for sportsbook and slot spins.
@@ -44,6 +44,12 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
       await db.query('commit');
       return cached.rows[0].response;
     }
+    // OFF stops new gambling, while committed replies and owed collection
+    // remain available. Keep this check under the same transaction lock.
+    if(action!=='collect'){
+      const settings=await db.query('select enabled from app_casino_settings where id=1 for share');
+      if(!settings.rows[0]?.enabled)throw fault(403,'CASINO_DISABLED');
+    }
     const result=await db.query(
       'select round_id,pending,step,player_card from app_casino_gamble_state where user_id=$1 for update',
       [userId]);
@@ -56,8 +62,7 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
       const after=pending>0
         ? await creditPendingWin(db,{userId,player,manager,pending,roundId:state.round_id})
         : previous;
-      if(pending>0&&state?.round_id)await db.query(
-        'update app_casino_round set payout=$2 where id=$1',[state.round_id,pending]);
+      if(pending>0)await syncCasinoRoundPayout(db,userId,state?.round_id);
       await db.query(
         'update app_casino_gamble_state set pending=0,step=0,player_card=null,updated_at=now() where user_id=$1',
         [userId]);
@@ -87,8 +92,7 @@ export async function casinoGambleAction({userId,requestId,action,choice}){
       await db.query(
         'update app_casino_gamble_state set pending=$2,step=$3,player_card=$4::jsonb,updated_at=now() where user_id=$1',
         [userId,newPending,step,JSON.stringify(dealer)]);
-      if(state.round_id)await db.query(
-        'update app_casino_round set payout=$2 where id=$1',[state.round_id,newPending]);
+      await syncCasinoRoundPayout(db,userId,state.round_id,newPending);
       answer={...basic(previous,previous),
         available_actions:newPending>0?
           ['collect',...(step<5?['get_double']:[]),'spin']:['spin'],

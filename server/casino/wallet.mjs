@@ -2,48 +2,47 @@ import express from 'express';
 import { pool, query } from '../db.mjs';
 import { requireAuth } from '../ledger/auth.mjs';
 import { isLedgerReady } from '../ledger/store.mjs';
-import { publicRtpProfiles, profileById } from './rtp-profiles.mjs';
+import {publicGameProfiles,validateGameProfile} from './game-rtp-profiles.mjs';
 
 // Sizzling uses the same authenticated PostgreSQL balance as sports betting.
 // The admin may suspend wagering at any time; math remains uncertified.
-export const casinoWalletRouter = express.Router();
-const money = value => Number(Number(value).toFixed(2));
 const fault = (status, message) => Object.assign(new Error(message), { status });
 const safe = handler => (req, res) => Promise.resolve(handler(req, res)).catch(error => {
   if (!error.status || error.status >= 500) console.error('[casino wallet]', error);
   return res.status(error.status || 500).json({ message: error.status ? error.message : 'Casino service unavailable' });
 });
-const access = [requireAuth, (req, res, next) => isLedgerReady()
-  ? next() : res.status(503).json({ message: 'Ledger database unavailable' })];
 const isAdmin = (req, res, next) => req.user.role === 'ADMIN'
   ? next() : res.status(403).json({ message: 'Administrator only' });
-async function getSettings(executor = query) {
-  const { rows } = await executor('select enabled, profile from app_casino_settings where id = 1');
+export async function getCasinoSettings(executor = query) {
+  const { rows } = await executor('select enabled, profile, game_profiles from app_casino_settings where id = 1');
   const setting = rows[0] || { enabled: false, profile: 'SIZZLING_STANDARD_V1' };
-  const profiles = publicRtpProfiles();
-  const profile = profiles.find(p => p.id === setting.profile);
+  const games=publicGameProfiles(setting.game_profiles),sizzling=games.find(game=>game.gameId==='sizzling');
   return {
     enabled: Boolean(setting.enabled),
     deploymentEnabled: true,
     realMoneyAvailable: true,
-    profile: setting.profile,
-    profiles, mathApproved: false, certified: false, theoreticalRtp: profile?.theoreticalRtp ?? null,
-    warning: null,
+    profile:sizzling.profile,profiles:sizzling.profiles,games,
+    mathApproved:false,certified:false,theoreticalRtp:sizzling.theoreticalRtp,
+    legacyProfileIgnored:setting.profile!=='SIZZLING_STANDARD_V1',
+    warning: setting.profile!=='SIZZLING_STANDARD_V1'?'Konfigurimi i vjetër me përqindje nuk kontrollonte të gjitha lojërat. Aktiv janë vetëm profilet për lojë të shfaqura më poshtë.':null,
   };
 }
 
+export function createCasinoWalletRouter({database=pool,runQuery=query,auth=requireAuth,ready=isLedgerReady}={}){
+const casinoWalletRouter=express.Router();
+const access=[auth,(_req,res,next)=>ready()?next():res.status(503).json({message:'Ledger database unavailable'})];
+
 casinoWalletRouter.get('/casino/status', ...access, safe(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ ...await getSettings(), balance: req.user.balance });
+  res.json({ ...await getCasinoSettings(runQuery), balance: req.user.balance });
 }));
 
-// The wallet-backed casino spin route is intentionally not exposed.
-// Sizzling Hot Deluxe runs on standalone virtual demo credits.
+// Game-specific protocol routes own wagering; these endpoints manage global settings.
 
-casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getSettings())));
+casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getCasinoSettings(runQuery))));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
   if(typeof req.body?.enabled !== 'boolean') throw fault(400, 'enabled must be boolean');
-  const client=await pool.connect();
+  const client=await database.connect();
   try {
     await client.query('begin');
     const update=await client.query('update app_casino_settings set enabled=$1,updated_by=$2,updated_at=now() where id=1 returning enabled,profile',[req.body.enabled,req.user.id]);
@@ -51,7 +50,7 @@ casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(asyn
       "insert into app_admin_audit (actor_id,actor_name,actor_role,action,target_type,target_id,details) values ($1,$2,$3,'PATCH /admin/casino/settings','casino','sizzling',$4::jsonb)",
       [req.user.id,req.user.username,req.user.role,JSON.stringify({enabled:req.body.enabled,profile:update.rows[0].profile})]);
     await client.query('commit');
-    res.json(await getSettings());
+    res.json(await getCasinoSettings(client.query.bind(client)));
   } catch(error) { await client.query('rollback').catch(()=>{});throw error; }
   finally {client.release();}
 }));
@@ -60,21 +59,26 @@ casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(asyn
 // Switch only between published, immutable profiles; no per-player RTP.
 // Active rounds hold FOR SHARE; this update takes an exclusive row lock.
 casinoWalletRouter.patch('/admin/casino/profile', ...access, isAdmin, safe(async(req,res)=>{
-  const profile=String(req.body?.profile||'');
-  if(!profileById(profile)) throw fault(400,'Unknown RTP profile');
-  const client=await pool.connect();
+  if(!req.body||Object.keys(req.body).some(key=>!['gameId','profile'].includes(key)))throw fault(400,'Select a supported global game profile');
+  const profile=String(req.body?.profile||''),gameId=String(req.body?.gameId||'');
+  validateGameProfile(gameId,profile);
+  const client=await database.connect();
   try {
     await client.query('begin');
-    const settings=await client.query('select enabled,profile from app_casino_settings where id=1 for update');
-    // A row lock serializes RTP changes with active spins. This project uses virtual credits.
-    const previous=settings.rows[0]?.profile;
-    await client.query('update app_casino_settings set profile=$1,updated_by=$2,updated_at=now() where id=1',
-      [profile,req.user.id]);
+    const settings=await client.query('select game_profiles from app_casino_settings where id=1 for update');
+    if(!settings.rows.length)throw fault(503,'Casino settings unavailable');
+    const previous=settings.rows[0].game_profiles?.[gameId]??null;
+    const next={...settings.rows[0].game_profiles,[gameId]:profile};
+    await client.query('update app_casino_settings set game_profiles=$1::jsonb,updated_by=$2,updated_at=now() where id=1',
+      [JSON.stringify(next),req.user.id]);
     await client.query(
-      "insert into app_admin_audit(actor_id,actor_name,actor_role,action,target_type,target_id,details) values($1,$2,$3,'PATCH /admin/casino/profile','casino','sizzling',$4::jsonb)",
-      [req.user.id,req.user.username,req.user.role,JSON.stringify({from:previous,to:profile})]);
+      "insert into app_admin_audit(actor_id,actor_name,actor_role,action,target_type,target_id,details) values($1,$2,$3,'PATCH /admin/casino/profile','casino',$4,$5::jsonb)",
+      [req.user.id,req.user.username,req.user.role,gameId,JSON.stringify({from:previous,to:profile,scope:'all players; future paid rounds only'})]);
     await client.query('commit');
-    res.json(await getSettings());
+    res.json(await getCasinoSettings(client.query.bind(client)));
   } catch(error){await client.query('rollback').catch(()=>{});throw error;}
   finally {client.release();}
 }));
+return casinoWalletRouter;
+}
+export const casinoWalletRouter=createCasinoWalletRouter();

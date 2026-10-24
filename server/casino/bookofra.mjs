@@ -61,9 +61,10 @@ const cell = code => ({ code });
 export const symbolMatrix = grid => Object.fromEntries(grid.map((reel, c) =>
   [c, Object.fromEntries(reel.map((code, r) => [r, cell(code)]))]));
 
-export function randomGrid(random = bound => randomInt(bound)) {
-  return REELS.map(reel => {
+export function randomGrid(random = bound => randomInt(bound),reels=REELS) {
+  return reels.map(reel => {
     const stop = random(reel.length);
+    if(!Number.isInteger(stop)||stop<0||stop>=reel.length)throw new Error('Invalid reel stop');
     return [reel[stop], reel[(stop + 1) % reel.length], reel[(stop + 2) % reel.length]];
   });
 }
@@ -387,16 +388,16 @@ function uuidFromId(nonce,requestId){
   return [a.slice(0,8),a.slice(8,12),a.slice(12,16),a.slice(16,20),a.slice(20)].join('-');
 }
 
-export function createBookOfRaRealRouter(){
+export function createBookOfRaRealRouter(dependencies={}){
   const router=Router();
   router.post('/play',raw({type:()=>true,limit:'128kb'}),async(req,res)=>{
     res.set('Cache-Control','no-store');
     let action='unknown';
     try{
-      const {getUserById,isLedgerReady}=await import('../ledger/store.mjs');
-      const {settlePendingWin}=await import('./transactions.mjs');
-      const {casinoGambleAction}=await import('./gamble.mjs');
-      const {bookOfRaFreeState,placeBookOfRaSpin}=await import('./bookofra-transactions.mjs');
+      const ledger=await import('../ledger/store.mjs'),wallet=await import('./transactions.mjs'),gamble=await import('./gamble.mjs'),book=await import('./bookofra-transactions.mjs');
+      const getUserById=dependencies.getUserById??ledger.getUserById,isLedgerReady=dependencies.isLedgerReady??ledger.isLedgerReady;
+      const settlePendingWin=dependencies.settlePendingWin??wallet.settlePendingWin,casinoGambleAction=dependencies.casinoGambleAction??gamble.casinoGambleAction;
+      const bookOfRaFreeState=dependencies.bookOfRaFreeState??book.bookOfRaFreeState,placeBookOfRaSpin=dependencies.placeBookOfRaSpin??book.placeBookOfRaSpin;
       if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
       if(req.headers.origin){
         const origin=new URL(req.headers.origin);
@@ -416,6 +417,12 @@ export function createBookOfRaRealRouter(){
       if(rawId!=null&&(!Number.isSafeInteger(id)||id<0||id>1e9))throw fault(400,'INVALID_REQUEST_ID');
 
       if(action==='init'){
+        const fs=await bookOfRaFreeState(user.id);
+        if(Number(fs?.left_spins)>0){
+          const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1});
+          init.init.currency='LEK';init.available_actions=['initfreespin'];
+          return res.json(init);
+        }
         await settlePendingWin(user.id);
         const fresh=await getUserById(user.id);
         const init=initResponse({credits:Number(fresh?.balance??user.balance),requestId:id==null?1:id+1});
@@ -425,14 +432,14 @@ export function createBookOfRaRealRouter(){
       if(action==='initfreespin'){
         const fs=await bookOfRaFreeState(user.id);
         if(!fs)throw fault(409,'NO_FREE_SPINS');
-        const grid=randomGrid();
+        const symbols=fs.paid_result?.symbols??symbolMatrix(randomGrid());
         return res.json({
           ...initResponse({credits:Number(user.balance),requestId:id==null?1:id+1}),
           available_actions:['freespin'],
           initfreespin:{
-            symbols:symbolMatrix(grid),
+            symbols,
             freespins:{left:Number(fs.left_spins),done:Number(fs.done_spins),add:0,mud:Number(fs.mud),
-              wins:{total:0,win_before_chain:0},type:'freespins'},
+              wins:{total:Number(fs.pending??0),win_before_chain:0},type:'freespins'},
           },
         });
       }
@@ -448,13 +455,6 @@ export function createBookOfRaRealRouter(){
             grid:round.grid,grading:round.graded,
             left:round.free.left,done:round.free.done,mud:round.free.mud,requestId:id,
           }));
-        }
-        if(round.replayed){
-          return res.json({balance:{before:round.balance+round.stake,after:round.balance},
-            denomination:1,available_actions:round.payout>0?['collect','gamble','spin']:['spin'],
-            macro_round:{wins:{total:Number(round.payout).toFixed(2)}},
-            spin:{bet,lines,multiplier:1,next_multiplier:1,next_request_id:id+1,type:'spin',
-              symbols:round.result.symbols,wins:{line_wins:round.result.line_wins,total:Number(round.payout).toFixed(2)}}});
         }
         const body=spinResponse({
           credits:round.balance+round.stake,stake:round.stake,payout:round.payout,bet,lines,

@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
-const file = readFileSync(new URL('../web/src/utils/marketExpiry.ts', import.meta.url), 'utf8');
+const sourceUrl = new URL('../web/src/utils/marketExpiry.ts', import.meta.url);
+const file = readFileSync(sourceUrl, 'utf8');
 const compiled = ts.transpileModule(file, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
-}).outputText;
+}).outputText.replace(/from\s+(['"])(\.[^'"]+)\1/g, (_match, quote, path) => `from ${quote}${new URL(path, sourceUrl).href}${quote}`);
 const { isMarketExpired, filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable, isOutcomeDisplayable, isCompletedCombinationOutcome } =
   await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 
@@ -64,7 +65,8 @@ const builder = (name, label, links = []) => ({
   outcomes: [{ id: 'BB|123|template', name: label, odds: 4.5, status: 'ACTIVE' }],
 });
 const dcGoals = builder('X/2&P_2.5', 'DC X2 + TOTAL Under 2.5');
-open(match(2,0), dcGoals);
+open(match(1,0), dcGoals);
+closed(match(2,0), dcGoals); // X2 now requires at least 2-2, beyond Under 2.5.
 closed(match(2,1), dcGoals);
 closed(match(3,0), builder('1/2&L_2.5', 'DC 12 + TOTAL Over 2.5'));
 open(match(1,0), builder('1&G/G', '1X2 1 + BTTS Yes'));
@@ -94,8 +96,8 @@ const resultTotal = providerCombo('Result and Total', [
   'Away And Over 3.5','Draw And Under 3.5',
 ]);
 assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(2,1)).map(o=>o.name),
-  ['Away And Over 3.5','Draw And Under 3.5'],
-  '2.5 result-and-goals outcomes disappear at 3 total goals, while 3.5 remains');
+  ['Away And Over 3.5'],
+  '2.5 lines are settled and Draw + Under 3.5 is impossible at 2-1; Away + Over 3.5 remains');
 assert.deepEqual(filterDecidedOutcomes(resultTotal.outcomes,resultTotal,match(3,1)),[],
   'every settled line disappears at four goals');
 closed(match(3,1),resultTotal);

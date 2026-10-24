@@ -6,6 +6,7 @@
  * Presentation-only: placement/settlement continue to rely on server rules.
  */
 
+import { isImpossibleLiveCombination } from '../../../server/ledger/combo-feasibility.mjs';
 type Score = { home: number; away: number };
 type MarketLike = {
   name?: string; line?: string; specifier?: string; marketType?: string;
@@ -195,6 +196,7 @@ const elapsedWindow = (m: MatchLike, market: MarketLike): boolean => {
  * Synthetic builders use "DC X2 + TOTAL Under 2.5" etc.
  */
 export function isCompletedCombinationOutcome(m: MatchLike, market: MarketLike, outcome: OutcomeLike): boolean {
+  if (isImpossibleLiveCombination(m,{...market,outcomeName:outcome.name,outcomeCode:outcome.code})) return true;
   if (!isLive(m)) return false;
   const score = scoreOf(m.homeScore, m.awayScore);
   if (!score) return false;

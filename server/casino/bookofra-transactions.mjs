@@ -6,8 +6,9 @@
  */
 import {pool} from '../db.mjs';
 import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
-import {creditPendingWin} from './transactions.mjs';
+import {creditPendingWin,syncCasinoRoundPayout} from './transactions.mjs';
 import {FREE_SPINS, LINES, PAYTABLE, gradeGrid, pickMudSymbol, randomGrid} from './bookofra.mjs';
+import {getGameProfile,getPaidGameProfile} from './game-rtp-profiles.mjs';
 
 const money=n=>Number(Number(n).toFixed(2));
 const fault=(status,message)=>Object.assign(new Error(message),{status});
@@ -36,32 +37,42 @@ async function flushPending(db,userId,player,manager){
   const pending=Number(state.rows[0]?.pending||0);
   if(pending>0){
     await creditPendingWin(db,{userId,player,manager,pending,roundId:state.rows[0].round_id,label:LABEL+' · auto-collect'});
-    if(state.rows[0]?.round_id)await db.query('update app_casino_round set payout=$2 where id=$1',[state.rows[0].round_id,pending]);
+    await syncCasinoRoundPayout(db,userId,state.rows[0]?.round_id);
   }
   await db.query('update app_casino_gamble_state set pending=0,step=0,player_card=null,updated_at=now() where user_id=$1',[userId]);
 }
 
-export async function bookOfRaFreeState(userId){
-  const {rows}=await pool.query(
-    'select left_spins,done_spins,mud,bet,lines from app_casino_freespin_state where user_id=$1',[userId]);
+export async function bookOfRaFreeState(userId,{database=pool}={}){
+  const {rows}=await database.query(
+    `select f.*,coalesce(g.pending,0) as pending,r.result as paid_result
+       from app_casino_freespin_state f
+       left join app_casino_gamble_state g on g.user_id=f.user_id and g.round_id=f.round_id
+       join app_casino_round r on r.id=f.round_id where f.user_id=$1`,[userId]);
   return rows[0]||null;
 }
 
-export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lines=10,mode='spin'}){
+export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lines=10,mode='spin'},{database=pool,random,checkBet=assertPlayerCanBet}={}){
+  if(!/^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(String(requestId)))throw fault(400,'Unique UUID required');
+  if(!['spin','freespin'].includes(mode))throw fault(400,'Invalid spin mode');
   bet=Number(bet);denomination=Number(denomination);lines=Number(lines);
-  const db=await pool.connect();
+  const db=await database.connect();
   try{
     await db.query('begin');
     const {player,manager}=await lockAccounts(db,userId);
-    const settings=await db.query('select enabled from app_casino_settings where id=1 for share');
-    if(!settings.rows[0]?.enabled)throw fault(403,'Casino disabled by administrator');
+    const settings=await db.query('select enabled,game_profiles from app_casino_settings where id=1 for share');
 
     if(mode==='freespin'){
+      const cached=await db.query('select action,response from app_casino_gamble_event where user_id=$1 and request_id=$2',[userId,requestId]);
+      if(cached.rows.length){
+        if(cached.rows[0].action!=='bookofra:freespin')throw fault(409,'Request key was used for another action');
+        await db.query('commit');return cached.rows[0].response;
+      }
       const state=await db.query(
-        'select round_id,left_spins,done_spins,mud,bet,lines from app_casino_freespin_state where user_id=$1 for update',[userId]);
+        'select round_id,left_spins,done_spins,mud,bet,lines,math_profile from app_casino_freespin_state where user_id=$1 for update',[userId]);
       const fs=state.rows[0];
       if(!fs)throw fault(409,'NO_FREE_SPINS');
-      const grid=randomGrid();
+      const profile=getGameProfile('bookofra',{bookofra:fs.math_profile??'BOOKOFRA_ORIGINAL_REELS_V2'});
+      const grid=randomGrid(random,profile.reels);
       const graded=gradeGrid(grid,Number(fs.bet),Number(fs.lines),Number(fs.mud));
       const left=Number(fs.left_spins)-1, done=Number(fs.done_spins)+1;
       const pending=await db.query('select pending from app_casino_gamble_state where user_id=$1 for update',[userId]);
@@ -75,8 +86,11 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
       if(left>0)await db.query('update app_casino_freespin_state set left_spins=$2,done_spins=$3,updated_at=now() where user_id=$1',
         [userId,left,done]);
       else await db.query('delete from app_casino_freespin_state where user_id=$1',[userId]);
+      await syncCasinoRoundPayout(db,userId,fs.round_id,total);
+      const answer={grid,graded,balance:Number(player.balance),pending:total,free:{left,done,mud:Number(fs.mud)},mathProfile:{id:profile.id,theoreticalRtp:profile.theoreticalRtp}};
+      await db.query('insert into app_casino_gamble_event(user_id,request_id,action,response) values($1,$2,$3,$4::jsonb)',[userId,requestId,'bookofra:freespin',JSON.stringify(answer)]);
       await db.query('commit');
-      return {grid,graded,balance:Number(player.balance),pending:total,free:{left,done,mud:Number(fs.mud)}};
+      return answer;
     }
 
     if(!BETS.includes(bet)||![...DENOM].includes(denomination)||lines!==LINES.length)
@@ -85,22 +99,38 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
     const previous=await db.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',[userId,requestId]);
     if(previous.rows.length){
       const old=previous.rows[0];
+      if(old.game_id!=='bookofra'||Number(old.bet)!==bet||Number(old.denomination)!==denomination||Number(old.lines)!==lines)throw fault(409,'Request key was used for a different wager');
+      let accepted=old.result.acceptedSpin;
+      if(!accepted){
+        const grid=Array.from({length:5},(_,x)=>Array.from({length:3},(_,y)=>Number(old.result.symbols[x][y].code)));
+        const fs=(await db.query('select * from app_casino_freespin_state where user_id=$1 and round_id=$2',[userId,old.id])).rows[0];
+        accepted={stake:Number(old.stake),payout:Number(old.result.total),balance:Number(old.balance_after),grid,
+          graded:{line_wins:old.result.line_wins,total:Number(old.result.total)},
+          free:fs?{left:Number(fs.left_spins),done:Number(fs.done_spins),add:0,mud:Number(fs.mud),wins:{total:Number(old.result.total),win_before_chain:0},type:'freespins'}:null};
+      }
       await db.query('commit');
-      return {roundId:old.id,stake:Number(old.stake),payout:Number(old.payout),
-        balance:Number(old.balance_after),result:old.result,replayed:true,grid:null};
+      return {...accepted,roundId:old.id,result:old.result,replayed:true};
     }
+    if(!settings.rows[0]?.enabled)throw fault(403,'Casino disabled by administrator');
+    const activeFree=await db.query('select left_spins from app_casino_freespin_state where user_id=$1 for update',[userId]);
+    if(Number(activeFree.rows[0]?.left_spins)>0)throw fault(409,'FREE_SPINS_PENDING');
     await flushPending(db,userId,player,manager);
     if(Number(player.balance)<stake)throw fault(400,'Insufficient balance');
-    await assertPlayerCanBet(db,userId,stake);
-    const grid=randomGrid();
-    const graded=gradeGrid(grid,bet,lines);
+    await checkBet(db,userId,stake);
+    const profile=getPaidGameProfile('bookofra',settings.rows[0]?.game_profiles);
+    const grid=randomGrid(random,profile.reels);
+    const graded=gradeGrid(grid,money(bet*denomination),lines);
     const balance=money(Number(player.balance)-stake);
+    const books=grid.flat().filter(s=>s===0).length;
+    const mud=books>=3&&process.env.BOOKOFRA_FREE_SPINS==='1'?pickMudSymbol():null;
+    const free=mud==null?null:{left:FREE_SPINS,done:0,add:0,mud,wins:{total:graded.total,win_before_chain:0},type:'freespins'};
+    const acceptedSpin={stake,payout:graded.total,balance,grid,graded,free};
     const round=await db.query(
       `insert into app_casino_round(user_id,client_request_id,game_id,game_version,bet,denomination,lines,stake,payout,balance_after,result)
-       values($1,$2,'bookofra','BOOKOFRA_V1',$3,$4,$5,$6,$7,$8,$9::jsonb) returning id`,
-      [userId,requestId,bet,denomination,lines,stake,graded.total,balance,
+       values($1,$2,'bookofra',$3,$4,$5,$6,$7,$8,$9,$10::jsonb) returning id`,
+      [userId,requestId,profile.id,bet,denomination,lines,stake,graded.total,balance,
         JSON.stringify({symbols:Object.fromEntries(grid.map((c,i)=>[i,Object.fromEntries(c.map((s,r)=>[r,{code:s}]))])),
-          line_wins:graded.line_wins,total:graded.total.toFixed(2)})]);
+          line_wins:graded.line_wins,total:graded.total.toFixed(2),mathProfile:{id:profile.id,theoreticalRtp:profile.theoreticalRtp},acceptedSpin})]);
     const roundId=round.rows[0].id;
     await db.query(
       `insert into app_casino_gamble_state(user_id,round_id,pending,step,player_card)
@@ -118,18 +148,14 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
         "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",
         [manager.id,stake,roundId,managerAfter,'Casino stake · '+player.username]);
     }
-    const books=grid.flat().filter(s=>s===0).length;
-    let free=null;
     // Free spins stay OFF until the client FS handshake is finished.
-    if(books>=3 && process.env.BOOKOFRA_FREE_SPINS==='1'){
-      const mud=pickMudSymbol();
+    if(free){
       await db.query(
-        `insert into app_casino_freespin_state(user_id,round_id,left_spins,done_spins,mud,bet,lines)
-         values($1,$2,$3,0,$4,$5,$6)
+        `insert into app_casino_freespin_state(user_id,round_id,left_spins,done_spins,mud,bet,lines,math_profile)
+         values($1,$2,$3,0,$4,$5,$6,$7)
          on conflict(user_id) do update set round_id=excluded.round_id,left_spins=excluded.left_spins,
-           done_spins=0,mud=excluded.mud,bet=excluded.bet,lines=excluded.lines,updated_at=now()`,
-        [userId,roundId,FREE_SPINS,mud,bet,lines]);
-      free={left:FREE_SPINS,done:0,add:0,mud,wins:{total:graded.total,win_before_chain:0},type:'freespins'};
+           done_spins=0,mud=excluded.mud,bet=excluded.bet,lines=excluded.lines,math_profile=excluded.math_profile,updated_at=now()`,
+        [userId,roundId,FREE_SPINS,mud,money(bet*denomination),lines,profile.id]);
     }
     await db.query('commit');
     return {roundId,stake,payout:graded.total,balance,grid,graded,free,replayed:false};

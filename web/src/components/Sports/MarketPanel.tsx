@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers, Search, UserRound } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
+import LiveMatchTime from './LiveMatchTime';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLiveFeed } from '../../api/liveFeed';
 import {
@@ -229,7 +230,7 @@ export default function MarketPanel({ match }: { match: Match }) {
         {match.status === 'LIVE' && (
           <span className="font-bold text-accent-red flex items-center gap-1 sm:gap-1.5 bg-rose-500/10 px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md border border-rose-500/20">
             <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-accent-red animate-ping"></span>
-            {match.currentMinute || 0}:{String((match as any).currentSecond ?? 0).padStart(2, '0')}'{match.period ? ` · ${match.period}` : ''}
+            <LiveMatchTime minute={match.currentMinute} second={(match as any).currentSecond} period={match.period} seconds />{match.period ? ` · ${match.period}` : ''}
           </span>
         )}
         {match.corners && (

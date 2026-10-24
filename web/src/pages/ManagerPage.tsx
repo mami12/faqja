@@ -3,6 +3,7 @@ import Header from '../components/Layout/Header';
 import { useLanguage } from '../context/LanguageContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
+import SystemTicketSummary from '../components/Betslip/SystemTicketSummary';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, RotateCcw, Users as UsersIcon, Ticket as TicketIcon, ChevronDown, ChevronUp, Search, Wallet, BarChart3, RefreshCw, X } from 'lucide-react';
 import FinancialChart from '../components/Finance/FinancialChart';
 import CasinoFinanceCenter from '../components/Finance/CasinoFinanceCenter';
@@ -596,7 +597,7 @@ export default function ManagerPage() {
                           <div className="text-right">
                             <div className="text-xs text-text-secondary">Shuma / Fitimi</div>
                             <div className="text-sm font-bold text-white">
-                              {ticket.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green">{ticket.potentialPayout.toFixed(2)} Lëk</span>
+                              {ticket.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green">{(ticket.system && ticket.status !== 'PENDING' ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} Lëk</span>
                             </div>
                           </div>
                           {ticket.status === 'PENDING' && (
@@ -618,6 +619,7 @@ export default function ManagerPage() {
                       </div>
                       {expanded && (
                         <div className="mt-4 pt-4 border-t border-tertiary/60 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div className="md:col-span-2"><SystemTicketSummary ticket={ticket} /></div>
                           {ticket.lines.map((line) => (
                             <div key={line.id} className="rounded-lg border border-tertiary bg-primary p-3 text-xs">
                               <div className="text-text-secondary">{line.matchName}</div>

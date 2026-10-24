@@ -12,6 +12,9 @@ import { stakeToCents } from '../../utils/betslipColumns';
 import { useLiveFeed } from '../../api/liveFeed';
 import { isComboMarket } from '../../utils/comboPolicy';
 import { formatOdds } from '../../utils/formatOdds';
+import SystemTicketSummary from './SystemTicketSummary';
+import { filterDecidedOutcomes } from '../../utils/marketExpiry';
+import { isImpossibleLiveCombination } from '../../../../server/ledger/combo-feasibility.mjs';
 
 export default function Betslip() {
   const { 
@@ -20,7 +23,16 @@ export default function Betslip() {
   } = useBetslip();
   const { t } = useLanguage();
   const { user, refreshUser } = useAuth();
-  const { combosEnabled } = useLiveFeed();
+  const { combosEnabled, lockedOutcomes, lockedMarkets, lockedMatches, riskLockedOutcomes, livePatches, invalidateSelections } = useLiveFeed();
+  const unavailableSelections = selections.filter(s=> {
+    const match={...s.matchSnapshot,...livePatches[s.matchId]};
+    const outcome={name:s.outcomeName,code:s.outcomeCode};
+    const market={name:s.marketName,marketType:s.marketType,line:s.marketLine,period:s.period,comboLegs:s.comboLegs,outcomes:[outcome]};
+    const locked=lockedOutcomes[s.outcomeId]||riskLockedOutcomes[s.outcomeId]||lockedMarkets[s.marketId]||lockedMatches[s.matchId]||
+      s.builderLegs?.some(leg=>lockedOutcomes[leg.outcomeId]||riskLockedOutcomes[leg.outcomeId]||lockedMarkets[leg.marketId]);
+    return locked||isImpossibleLiveCombination(match,market)||filterDecidedOutcomes([outcome],market,match).length===0;
+  });
+  const hasUnavailable = unavailableSelections.length>0;
   const blockedCombos = !combosEnabled && selections.some(s => s.outcomeId.startsWith('BB|') || isComboMarket(s.marketName));
   const invalidQuote = columnPreviews.some(column => column.invalid);
   
@@ -37,8 +49,7 @@ export default function Betslip() {
   } | null>(null);
   const [bookingCode, setBookingCode] = useState('');
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [placedTickets, setPlacedTickets] = useState<Ticket[]>([]);
-  const [systemReceipt, setSystemReceipt] = useState<{ totalStake: number; count: number } | null>(null);
+  const [placedTicket, setPlacedTicket] = useState<Ticket | null>(null);
   const [stakeError, setStakeError] = useState('');
   const [unavailableNotice, setUnavailableNotice] = useState('');
   const placeBetClickLock = useRef(false);
@@ -65,9 +76,7 @@ export default function Betslip() {
     placeBetClickLock.current = true;
     try {
       const ticket = await placeBet(() => refreshUser());
-      const tickets: Ticket[] = Array.isArray(ticket.tickets) ? ticket.tickets : [ticket];
-      setPlacedTickets(tickets);
-      setSystemReceipt(tickets.length > 1 ? { count: tickets.length, totalStake: tickets.reduce((sum, row) => sum + Math.round(row.stake * 100), 0) / 100 } : null);
+      setPlacedTicket(ticket);
       clearAll();
     } catch (e: any) {
       const errData = e.response?.data;
@@ -84,10 +93,10 @@ export default function Betslip() {
           matchName: errData?.matchName || foundSel?.matchName || '',
         });
       } else if (errData?.code === 'LIVE_RISK_SUSPENDED' ||
-                 errData?.code === 'MARKET_DECIDED' ||
+                 errData?.code === 'MARKET_DECIDED' || errData?.code === 'SELECTION_UNAVAILABLE' ||
                  /pezulluar|përfunduar|nuk është më e disponueshme/i.test(String(errData?.message ?? ''))) {
-        // No blocking risk modal. The server still refuses invalid bets.
-        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
+        invalidateSelections([errData?.outcomeId,errData?.sourceOutcomeId].filter(Boolean));
+        setUnavailableNotice('Kuota joaktive u pezullua. Hiqe nga kuponi për të vazhduar.');
       } else {
         alert(errData?.message || e.message || t('common.error'));
       }
@@ -111,9 +120,10 @@ export default function Betslip() {
       clearAll();
     } catch (e: any) {
       const detail = e.response?.data;
-      if (detail?.code === 'LIVE_RISK_SUSPENDED' || detail?.code === 'MARKET_DECIDED' ||
+      if (detail?.code === 'LIVE_RISK_SUSPENDED' || detail?.code === 'MARKET_DECIDED' || detail?.code === 'SELECTION_UNAVAILABLE' ||
           /pezulluar|përfunduar/i.test(String(detail?.message ?? ''))) {
-        setUnavailableNotice('Një zgjedhje nuk është më aktive. Hiqe nga kuponi ose rifresko ndeshjen.');
+        invalidateSelections([detail?.outcomeId,detail?.sourceOutcomeId].filter(Boolean));
+        setUnavailableNotice('Kuota joaktive u pezullua. Hiqe nga kuponi për të vazhduar.');
       } else {
         alert(detail?.message || e.message || t('common.error'));
       }
@@ -189,9 +199,10 @@ export default function Betslip() {
           </div>
           <div className="text-right">
             <span className="text-text-secondary">{t('tickets.payout')}: </span>
-            <span className="font-bold text-accent-yellow">{ticket.potentialPayout?.toFixed(2)} Lëk</span>
+            <span className="font-bold text-accent-yellow">{(ticket.system && ticket.status !== 'PENDING' ? ticket.actualPayout ?? 0 : ticket.potentialPayout)?.toFixed(2)} Lëk</span>
           </div>
         </div>
+        <SystemTicketSummary ticket={ticket} />
       </div>
     );
   };
@@ -280,7 +291,9 @@ export default function Betslip() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
-                    <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{formatOdds(s.odds)}</strong>
+                    {unavailableSelections.some(row=>row.outcomeId===s.outcomeId)
+                      ? <strong className="pt-0.5 text-[11px] font-bold text-rose-300">Pezulluar</strong>
+                      : <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{formatOdds(s.odds)}</strong>}
                     <button type="button" onClick={() => { setUnavailableNotice(''); removeSelection(s.outcomeId); }}
                       title={t('betslip.remove_selection')} aria-label={t('betslip.remove_selection')}
                       className="p-0.5 text-text-secondary hover:text-rose-300"><X size={15}/></button>
@@ -349,6 +362,7 @@ export default function Betslip() {
               )}
               {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
               {blockedCombos && <p role="alert" className="text-[11px] font-semibold text-rose-300">Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.</p>}
+              {hasUnavailable && <p role="status" className="text-[11px] font-semibold text-rose-300">Ka kuota të pezulluara. Hiqi nga kuponi ose prit rihapjen e tyre.</p>}
               {invalidQuote && <p role="alert" className="text-[11px] font-semibold text-rose-300">Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.</p>}
               {unavailableNotice && (
                 <p role="status" className="text-[11px] text-slate-300">{unavailableNotice}</p>
@@ -375,7 +389,7 @@ export default function Betslip() {
             </div>
             <div className="grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote}
+                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote || hasUnavailable}
                   aria-busy={isPlacingBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
                   {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
@@ -383,7 +397,7 @@ export default function Betslip() {
               ) : (
                 <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
               )}
-              <button type="button" onClick={handleBook} disabled={hasMultipleColumns || isPlacingBet || blockedCombos || invalidQuote}
+              <button type="button" onClick={handleBook} disabled={hasMultipleColumns || isPlacingBet || blockedCombos || invalidQuote || hasUnavailable}
                 title={hasMultipleColumns ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
                 className="bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
                 {t('betslip.book_ticket')}
@@ -394,7 +408,7 @@ export default function Betslip() {
       )}
 
       {showBookingModal && <BookingModal code={bookingCode} onClose={() => setShowBookingModal(false)} />}
-      {placedTickets.length > 0 && <TicketReceipt ticket={placedTickets[0]} systemColumn={systemReceipt ? { ...systemReceipt, index: systemReceipt.count - placedTickets.length + 1 } : undefined} onClose={() => setPlacedTickets(prev => prev.slice(1))} />}
+      {placedTicket && <TicketReceipt ticket={placedTicket} onClose={() => setPlacedTicket(null)} />}
 
       {/* Modal kur koeficienti ka ndryshuar */}
       {oddsChangeModal && (

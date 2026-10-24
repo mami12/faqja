@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Ticket as TicketIcon, CheckCircle2, XCircle, Cl
 import { useLanguage } from '../../context/LanguageContext';
 import { formatTicketSelection, translateTicketStatus, translateTicketType } from '../../utils/sportsbookLabels';
 import { formatOdds } from '../../utils/formatOdds';
+import SystemTicketSummary from '../Betslip/SystemTicketSummary';
 
 type PendingFixture = {
   matchId: string;
@@ -320,7 +321,7 @@ export default function TicketAudit() {
                       <div className="text-left md:text-right">
                         <div className="text-[10px] sm:text-xs text-text-secondary uppercase">{translate('tickets.stake_payout')}</div>
                         <div className="text-xs sm:text-sm font-bold text-white tabular-nums">
-                          {t.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green font-black text-sm sm:text-base">{t.potentialPayout.toFixed(2)} Lëk</span>
+                          {t.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green font-black text-sm sm:text-base">{(t.system && t.status !== 'PENDING' ? t.actualPayout ?? 0 : t.potentialPayout).toFixed(2)} Lëk</span>
                         </div>
                       </div>
 
@@ -349,6 +350,7 @@ export default function TicketAudit() {
                   {/* EXPANDED LINES */}
                   {isExpanded && (
                     <div className="mt-3.5 pt-3.5 border-t border-tertiary/60 space-y-2.5">
+                      <SystemTicketSummary ticket={t} />
                       <div className="text-xs font-bold uppercase text-text-secondary tracking-wider">
                         {translate('tickets.selections')} ({t.lines?.length || 0})
                       </div>

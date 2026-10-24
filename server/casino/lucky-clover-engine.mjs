@@ -30,9 +30,13 @@ export function evaluate(grid, betCents, selected=5) {
   if(scat) wins.push({line:0,symbol:scat.symbol,count:scat.cells.length,amount:betCents*scat.pay*multiplier,cells:scat.cells});
   return {wins,winCents:Math.round(wins.reduce((n,w)=>n+w.amount,0)),multiplier,wildReels};
 }
-export function spin(betCents,selected=5,random=randomInt) {
-  const reels=DATA.reels[String(DATA.defaultRtp)];
+export function spin(betCents,selected=5,random=randomInt,options={}) {
+  if(typeof random==='object'&&random!==null){options=random;random=randomInt;}
+  const requested=options.mathProfile?options.mathProfile.rtp:DATA.defaultRtp;
+  const key=Object.keys(DATA.reels).find(value=>Number(value)===Number(requested));
+  if(!key)throw new Error('Unknown Lucky Clover reel profile');
+  const reels=DATA.reels[key];
   const stops=reels.map(r=>random(r.length));
   const grid=reels.map((r,x)=>Array.from({length:3},(_,y)=>r[(stops[x]+y)%r.length]));
-  return {grid,stops,...evaluate(grid,betCents,selected)};
+  return {grid,stops,...evaluate(grid,betCents,selected),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})};
 }

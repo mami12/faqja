@@ -10,6 +10,7 @@ import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
 import { liveRiskSettings } from '../live-risk-settings.mjs';
+import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
 import { automaticComboTemplates, comboSignature, isCompatibleComboPair, multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -195,6 +196,7 @@ export async function decorateMatches(matches, options = {}) {
   // Decoration may run twice on a cached projection. Never retain stale offers.
   for (const match of matches) if (Array.isArray(match.markets)) {
     match.markets = match.markets.filter(m => !String(m.id).startsWith('BB|'));
+    match.markets = match.markets.map(m => ({...m,outcomes:(m.outcomes??[]).filter(o=>!isDecidedLiveOutcome(match,{...m,outcomeName:o.name,outcomeCode:o.code}))})).filter(m=>m.outcomes.length);
   }
   const settings = options.settings ?? liveRiskSettings();
   if (settings.combosEnabled === false) {
@@ -208,6 +210,7 @@ export async function decorateMatches(matches, options = {}) {
   for (const match of matches) {
     if (match.isSuspended || match.status === 'ENDED' || match.status === 'CANCELLED') continue;
     for (const template of templates) {
+      if (isImpossibleLiveCombination(match,{name:'Bet Builder: '+template.name,comboLegs:template.legs})) continue;
       // Every constituent must still be open; an already-completed goal line
       // cannot stay sellable through the synthetic Bet Builder market.
       const resolved = template.legs.map(leg => findLeg(match,leg));
@@ -221,6 +224,7 @@ export async function decorateMatches(matches, options = {}) {
         id: `BB|${match.id}|${template.id}|market`,
         matchId: match.id, marketType: 'OTHER', name: `Bet Builder: ${template.name}`,
         status: 'ACTIVE', sortOrder: 9000, line: '', builderQuotedAt: quotedAt,
+        comboLegs: template.legs,
         // Real constituent IDs let the browser respond to immediate socket
         // suspensions, even before the next REST refresh.
         builderLegs: resolved.map(part => ({

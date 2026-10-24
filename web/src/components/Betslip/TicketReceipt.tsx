@@ -51,12 +51,15 @@ function Code39Barcode({ value }: { value: string }) {
 interface Props {
   ticket: Ticket;
   onClose: () => void;
-  systemColumn?: { totalStake: number; count: number; index: number };
 }
 
-export default function TicketReceipt({ ticket, onClose, systemColumn }: Props) {
+export default function TicketReceipt({ ticket, onClose }: Props) {
   const { t } = useLanguage();
-  const barcodeValue = ticket.id.replace(/-/g, '').slice(0, 10).toUpperCase();
+  const barcodeValue = ticket.system ? `SYS-${ticket.system.batchId.replace(/-/g,'').slice(0,12)}`.toUpperCase()
+    : ticket.id.replace(/-/g, '').slice(0, 10).toUpperCase();
+  const system = ticket.system;
+  const stakes = system?.columns.map(column => column.stake) ?? [];
+  const minStake = Math.min(...stakes), maxStake = Math.max(...stakes);
 
   return (
     <div className="ticket-print-overlay fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-6">
@@ -77,11 +80,10 @@ export default function TicketReceipt({ ticket, onClose, systemColumn }: Props) 
           <h2 className="text-lg font-black uppercase tracking-widest">BILETË BASTI</h2>
           <p className="mt-1 text-xs">ID: {ticket.id.toUpperCase()}</p>
           <p className="text-xs">{new Date(ticket.placedAt).toLocaleString('sq-AL')}</p>
-          {systemColumn && (
+          {system && (
             <div className="mt-2 space-y-0.5 text-xs">
-              <p className="font-bold">Sistem · Kolona {systemColumn.index} nga {systemColumn.count}</p>
-              <p>Shuma totale e sistemit: {systemColumn.totalStake.toFixed(2)} Lek</p>
-              <p>Ky dokument i përket vetëm kësaj kolone dhe ID-së së saj.</p>
+              <p className="font-bold">Sistem · {system.columnCount} kolona</p>
+              <p>Një biletë me të gjitha zgjedhjet. Një zgjedhje për ndeshje në çdo kolonë.</p>
             </div>
           )}
         </div>
@@ -102,9 +104,17 @@ export default function TicketReceipt({ ticket, onClose, systemColumn }: Props) 
 
         <div className="space-y-1 border-y-2 border-dashed border-black/40 py-3 text-sm">
           <div className="flex justify-between"><span>Lloji i biletës</span><strong>{translateTicketType(ticket.ticketType, t)}</strong></div>
-          <div className="flex justify-between"><span>{systemColumn ? 'Shuma e kësaj kolone' : 'Shuma e luajtur'}</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
-          <div className="flex justify-between"><span>Koeficienti total</span><strong>{formatOdds(ticket.totalOdds)}</strong></div>
-          <div className="flex justify-between text-base"><span>Fitimi i mundshëm</span><strong>{ticket.potentialPayout.toFixed(2)} Lëk</strong></div>
+          <div className="flex justify-between"><span>{system ? 'Shuma totale' : 'Shuma e luajtur'}</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
+          {system ? <>
+            <div className="flex justify-between"><span>Shuma për kolonë</span><strong>{minStake.toFixed(2)}{minStake !== maxStake ? `–${maxStake.toFixed(2)}` : ''} Lëk</strong></div>
+            <div className="flex justify-between"><span>Pagesa minimale për kolonë fituese</span><strong>{system.minColumnPayout.toFixed(2)} Lëk</strong></div>
+            <div className="flex justify-between"><span>Pagesa maksimale për kolonë fituese</span><strong>{system.maxColumnPayout.toFixed(2)} Lëk</strong></div>
+            <div className="flex justify-between text-base"><span>{ticket.status === 'PENDING' ? 'Pagesa nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer'}</span><strong>{(ticket.status === 'PENDING' ? ticket.potentialPayout : ticket.actualPayout ?? 0).toFixed(2)} Lëk</strong></div>
+            <p className="pt-1 text-[10px]">Pagesa llogaritet nga kolonat fituese. Pagesa minimale është 0 nëse humbin të gjitha kolonat.</p>
+          </> : <>
+            <div className="flex justify-between"><span>Koeficienti total</span><strong>{formatOdds(ticket.totalOdds)}</strong></div>
+            <div className="flex justify-between text-base"><span>Fitimi i mundshëm</span><strong>{ticket.potentialPayout.toFixed(2)} Lëk</strong></div>
+          </>}
         </div>
 
         <div className="pt-4 text-center">

@@ -208,6 +208,25 @@ try {
   matches.applyInfo({matchId,matchTimeMs:20*60000,homeScore:2,awayScore:1,feedStatus:'First Half'});
   await rejectWithoutMoney(() => placeBet(request()), error => error.status === 400,
     'LIVE score evidence prunes a completed total during actual placement');
+  // Both legs remain individually possible, but their combination cannot win:
+  // at 1-2, a home win needs at least two more goals while Under3.5 needs none.
+  seed('LIVE');await persist();
+  matches.applyInfo({matchId,matchTimeMs:30*60000,homeScore:1,awayScore:2,feedStatus:'First Half'});
+  odds.applyRows([
+    {matchId,marketKey:'total35',marketName:'Total',line:'3.5',outcomeKey:'Under',outcomeName:'Under',price:1.9,column:'total'},
+    {matchId,marketKey:'native-impossible',marketName:'Result and Total Goals',line:'3.5',outcomeKey:'1&U3.5',outcomeName:'Home And Under 3.5',price:3.5,column:'other'},
+  ]);
+  const impossiblePair=[{market:'1X2',outcome:'1',line:''},{market:'TOTAL',outcome:'Under',line:'3.5'}];
+  const impossibleTemplate=automaticComboTemplates().find(t=>comboSignature(t.legs)===comboSignature(impossiblePair));
+  assert.ok(impossibleTemplate);
+  const impossibleBuilder=builderId(matchId,impossibleTemplate.id);
+  await rejectWithoutMoney(()=>placeBet(request([{outcomeId:impossibleBuilder,oddsAtPlacement:4.18}])),
+    error=>error.code==='MARKET_DECIDED'&&error.outcomeId===impossibleBuilder,
+    'synthetic home+Under3.5 at 1-2 is rejected before any funds move');
+  const impossibleNative=`${matchId}|native-impossible|3.5|1&U3.5`;
+  await rejectWithoutMoney(()=>placeBet(request([{outcomeId:impossibleNative,oddsAtPlacement:3.5}])),
+    error=>error.code==='MARKET_DECIDED'&&error.outcomeId===impossibleNative,
+    'native home+Under3.5 at 1-2 is rejected before any funds move');
   seed('LIVE');
   matches.applyInfo({matchId,matchTimeMs:90*60000,homeScore:0,awayScore:0,feedStatus:'Second Half'});
   await rejectWithoutMoney(() => placeBet(request()), error => error.status === 400,

@@ -109,9 +109,14 @@ export interface BetSelection {
   /** The provider's untouched outcome code, used only to disambiguate combined labels. */
   outcomeCode?: string;
   marketName: string;
+  marketType?: string;
   marketLine?: string;
   matchName: string;
   odds: number;
+  builderLegs?: { marketId: string; outcomeId: string }[];
+  comboLegs?: { market: string; outcome: string; line?: string }[];
+  period?: number;
+  matchSnapshot?: { status: string; homeScore?: number; awayScore?: number; scoreAt?: string | null; period?: string | null; currentMinute?: number };
 }
 
 export interface TicketLine {
@@ -140,6 +145,17 @@ export interface Ticket {
   stake: number;
   totalOdds: number;
   potentialPayout: number;
+  actualPayout?: number;
+  system?: {
+    batchId: string;
+    columnCount: number;
+    columns: Ticket[];
+    minColumnPayout: number;
+    maxColumnPayout: number;
+    paidOut: number;
+    refunded: number;
+    pendingColumns: number;
+  };
   status: 'PENDING' | 'WON' | 'LOST' | 'CANCELLED' | 'VOID' | 'REVERTED';
   placedAt: string;
   settledAt?: string;

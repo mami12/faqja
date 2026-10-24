@@ -18,7 +18,8 @@ import {AuthProvider} from '/src/context/AuthContext.tsx';
 import {LiveFeedProvider,useLiveFeed} from '/src/api/liveFeed.tsx';
 import Betslip from '/src/components/Betslip/Betslip.tsx';
 import OddsButton from '/src/components/Sports/OddsButton.tsx';
-function Probe(){window.slip=useBetslip();window.feed=useLiveFeed();return null;}
+import LiveMatchTime from '/src/components/Sports/LiveMatchTime.tsx';
+function Probe(){window.probeRenders=(window.probeRenders??0)+1;window.slip=useBetslip();window.feed=useLiveFeed();return null;}
 function BuilderButtonFixture(){
   const [quote,setQuote]=React.useState(()=>({
     match:{id:'C',tournamentId:1,homeTeam:'Arsenal',awayTeam:'Chelsea',status:'PREMATCH',startTime:new Date(Date.now()+3600000).toISOString(),isSuspended:false},
@@ -33,7 +34,7 @@ function BuilderButtonFixture(){
 }
 createRoot(document.getElementById('root')).render(React.createElement(LanguageProvider,null,
   React.createElement(AuthProvider,null,React.createElement(BetslipProvider,null,
-    React.createElement(LiveFeedProvider,null,React.createElement(Probe),React.createElement(BuilderButtonFixture),React.createElement(Betslip))))));
+    React.createElement(LiveFeedProvider,null,React.createElement(Probe),React.createElement(BuilderButtonFixture),React.createElement('span',{id:'fixture-clock'},React.createElement(LiveMatchTime,{minute:12,second:10,seconds:true})),React.createElement(Betslip))))));
 </script></body></html>`;
 // Resolve React through Vite's dependency optimizer rather than a fixed cache filename.
 const html = fixture.replace("'/src/../node_modules/.vite/deps/react.js'", "'react'")
@@ -77,7 +78,14 @@ try {
       failNextPlacement = false;
       return response.status(500).json({ message: 'Test response lost; retry safely.' });
     }
-    response.json({ tickets: makeTickets(request.body) });
+    const columns = makeTickets(request.body);
+    const uniqueLines = [...new Map(columns.flatMap(column => column.lines).map(line => [line.outcomeId, line])).values()];
+    response.json({ id:'SYS-00000000-0000-4000-8000-000000000001', ticketType:'SYSTEM',
+      placedAt:columns[0].placedAt, status:'PENDING', stake:request.body.totalStake, totalOdds:0,
+      potentialPayout:columns.reduce((sum,column)=>sum+column.potentialPayout,0), lines:uniqueLines,
+      system:{batchId:'00000000-0000-4000-8000-000000000001',columnCount:columns.length,columns,
+        minColumnPayout:Math.min(...columns.map(column=>column.potentialPayout)),
+        maxColumnPayout:Math.max(...columns.map(column=>column.potentialPayout)),paidOut:0,refunded:0,pendingColumns:columns.length} });
   });
   app.post('/app/api/bets/place', (request, response) => {
     plainRequests.push(request.body);
@@ -127,8 +135,13 @@ try {
     total: window.slip.potentialPayout, overflow: window.slip.columnsOverflow,
   }));
   const add = async rows => {
-    await page.evaluate(rows => rows.forEach(row => window.slip.addSelection(row)), rows);
-    await page.waitForFunction(count => window.slip.selections.length === count, {}, await page.evaluate(() => window.slip.selections.length));
+    const expected=await page.evaluate(rows => {
+      const ids=new Set(window.slip.selections.map(row=>row.outcomeId));
+      rows.forEach(row=>{if(ids.has(row.outcomeId))ids.delete(row.outcomeId);else ids.add(row.outcomeId);window.slip.addSelection(row);});
+      return [...ids];
+    }, rows);
+    await page.waitForFunction(ids => JSON.stringify(window.slip.selections.map(row=>row.outcomeId))===JSON.stringify(ids)&&
+      (!ids.length||[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Vendos Bastin')), {}, expected);
   };
   const waitType = type => page.waitForFunction(type => window.slip.ticketType === type, {}, type);
   await add([fixtureSelections[0], fixtureSelections[2]]);
@@ -181,13 +194,15 @@ try {
   assert.equal(requests[0].columns, undefined);
   assert.equal(requests[0].stake, undefined);
   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin').click());
-  await page.waitForFunction(() => document.body.innerText.includes('Sistem · Kolona 1 nga 2'));
+  await page.waitForFunction(() => document.querySelector('.ticket-print-panel')?.innerText.includes('Sistem · 2 kolona'));
   assert.equal(requests.length, 2);
   assert.equal(requests[0].clientRequestId, requests[1].clientRequestId, 'uncertain failure preserves idempotency key');
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('Shuma totale e sistemit: 100.00 Lek'));
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('Shuma e kësaj kolone'));
-  await page.click('button[aria-label="Mbyll"]');
-  await page.waitForFunction(() => document.body.innerText.includes('Sistem · Kolona 2 nga 2'));
+  const receiptText = await page.$eval('.ticket-print-panel', panel => panel.innerText);
+  assert.ok(receiptText.includes('100.00 Lëk') && receiptText.includes('50.00 Lëk'));
+  assert.equal(await page.$$eval('.ticket-print-panel article', rows=>rows.length),3,'one receipt contains every original selection exactly once');
+  assert.equal((receiptText.match(/Al Arabi vs Al Nejmeh/g)??[]).length,2,'same match appears twice with its two independent markets on one ticket');
+  assert.ok(receiptText.includes('1593.90') && receiptText.includes('3795.00'));
+  assert.ok(!receiptText.includes('Koeficienti total') && !receiptText.includes('vetëm kësaj kolone'));
   await page.click('button[aria-label="Mbyll"]');
   await page.waitForFunction(() => !document.body.innerText.includes('BILETË BASTI'));
   // Actual mobile layout uses the same total and allocations.
@@ -273,10 +288,12 @@ try {
   assert.equal(await page.evaluate(() => window.slip.selections[0].odds), 7.5);
   socketServer.emit('risk:locks', { locks: { 'C|result||1': true } });
   await page.waitForFunction(() => document.querySelector('#fixture-combo button').disabled);
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),true,'a source lock must block a combo already in the slip');
   await page.$eval('#fixture-combo button', button => button.click());
   assert.equal(await page.evaluate(() => window.slip.selections.length), 1, 'risk-locked combo ignores clicks');
   socketServer.emit('risk:locks', { locks: { 'C|result||1': false } });
   await page.waitForFunction(() => !document.querySelector('#fixture-combo button').disabled);
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),false);
   legUpdate('result', '', '1', 3.5, 6500, true);
   await page.waitForFunction(() => document.querySelector('#fixture-combo button').disabled);
   legUpdate('result', '', '1', 3.5, 7000, false);
@@ -336,6 +353,37 @@ try {
   assert.ok((await page.$eval('.ticket-print-panel', receipt => receipt.innerText)).includes('818.90'));
   await page.click('button[aria-label="Mbyll"]');
   await page.waitForFunction(() => !document.querySelector('.ticket-print-panel'));
+  // Definitive rejection suspends the real selection and every combo using it;
+  // do not leave a repeatedly clickable stale quote behind the warning.
+  await add([{...fixtureSelections[0],outcomeId:'C|result||1',matchId:'C',marketId:'C|result|',odds:4.31}]);
+  oddsChangedResponse={code:'SELECTION_UNAVAILABLE',message:'Selection unavailable',outcomeId:'C|result||1'};
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').click());
+  await page.waitForFunction(()=>document.body.innerText.includes('Kuota joaktive u pezullua')&&document.querySelector('#fixture-combo button').disabled);
+  assert.ok((await page.$eval('body',body=>body.innerText)).includes('Pezulluar'));
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),true);
+  const beforeRetry=plainRequests.length;
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').click());
+  assert.equal(plainRequests.length,beforeRetry,'refused quote cannot be submitted again');
+  socketServer.emit('odds:update',{matchId:'C',at:new Date(Math.max(Date.now()+1000,quoteTime+10000)).toISOString(),markets:[{key:'result',line:'',outcomes:[{key:'1',price:4.31,suspended:false}]}]});
+  await page.waitForFunction(()=>!document.querySelector('#fixture-combo button').disabled&&!document.body.innerText.includes('Ka kuota të pezulluara'));
+  // A live score invalidates a jointly impossible combination immediately,
+  // even though both source markets would be independently undecided.
+  await page.evaluate(()=>window.setBuilderQuote(previous=>({...previous,
+    match:{...previous.match,status:'LIVE',homeScore:1,awayScore:2},
+    market:{...previous.market,name:'Bet Builder: 1 + Under 3.5'},
+    outcome:{...previous.outcome,name:'1X2 1 + TOTAL Under 3.5'}})));
+  await page.waitForFunction(()=>document.querySelector('#fixture-combo button').disabled);
+  await page.evaluate(()=>window.slip.clearAll());
+  await page.waitForFunction(()=>window.slip.selections.length===0);
+  await add([{...fixtureSelections[0],matchId:'D',outcomeId:'D|total|2.5|Under',marketId:'D|total|2.5',marketName:'Total Goals',marketType:'OVER_UNDER',marketLine:'2.5',outcomeName:'Under',matchSnapshot:{status:'LIVE',homeScore:0,awayScore:0}}]);
+  socketServer.emit('match:info',{match_id:'D',home_score:1,away_score:2,feed_status:'2H',match_time_ms:3600000});
+  await page.waitForFunction(()=>document.body.innerText.includes('Ka kuota të pezulluara'));
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),true,'a settled total already in the slip must close on the live score push');
+  // Seconds continue advancing without refreshing the shared feed consumers.
+  await socketBarrier();
+  const idleClock=await page.evaluate(()=>({text:document.querySelector('#fixture-clock').textContent,renders:window.probeRenders}));
+  await page.waitForFunction(text=>document.querySelector('#fixture-clock').textContent!==text,{},idleClock.text);
+  assert.equal(await page.evaluate(()=>window.probeRenders),idleClock.renders,'clock ticks must not redraw the shared odds/slip consumers');
   const explosive = Array.from({ length: 12 }, (_, index) => [selection(`M${index}`, `M${index}1`, 2), selection(`M${index}`, `M${index}2`, 3)]).flat();
   await page.evaluate(rows => { window.slip.clearAll(); rows.forEach(row => window.slip.addSelection(row)); }, explosive);
   await page.waitForFunction(() => window.slip.columnsOverflow);

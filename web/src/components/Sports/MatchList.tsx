@@ -38,28 +38,27 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled } = useLiveFeed();
   const refreshing = feedMode !== 'live';
 
-  const fetchMatches = async () => {
-    try {
-      setLoading(true);
-      const params: any = {};
-      if (tournamentId) params.tournamentId = tournamentId;
-      if (categoryId) params.categoryId = categoryId;
-      if (sportId) params.sportId = sportId;
-      if (isLiveOnly) params.status = 'LIVE';
-
-      const res = await apiClient.get('/matches', { params });
-      setMatches(res.data);
-    } catch (e) {
-      console.error('Failed to fetch matches:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchMatches();
-    const interval = setInterval(fetchMatches, 15000);
-    return () => clearInterval(interval);
+    const controller=new AbortController();
+    let active=true, busy=false;
+    const refresh=async()=> {
+      if(busy||!active) return;
+      busy=true;
+      try {
+        const params:any={view:'board'};
+        if(tournamentId) params.tournamentId=tournamentId;
+        if(categoryId) params.categoryId=categoryId;
+        if(sportId) params.sportId=sportId;
+        if(isLiveOnly) params.status='LIVE';
+        const res=await apiClient.get('/matches',{params,signal:controller.signal});
+        if(active) setMatches(res.data);
+      } catch(error) {if(active) console.error('Failed to fetch matches:',error);}
+      finally {busy=false;if(active) setLoading(false);}
+    };
+    setLoading(true);
+    void refresh();
+    const interval=window.setInterval(()=>void refresh(),15000);
+    return ()=>{active=false;controller.abort();window.clearInterval(interval);};
   }, [tournamentId, categoryId, sportId, isLiveOnly]);
 
   const mainLeagueMatches = matches.filter(isMainFootballMatch);

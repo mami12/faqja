@@ -204,6 +204,7 @@ export function toClientMatch(m) {
           }
         : null,
     watchUrl: m.watchUrl ?? null,
+    marketCount: m.marketCount ?? m.markets?.length ?? 0,
     tournament: {
       id: m.tournament?.id ?? 0,
       name: m.tournament?.name ?? leagueName,

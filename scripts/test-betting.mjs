@@ -9,8 +9,9 @@ const suites = [
   'test-live-risk.mjs', 'test-live-money-risk.mjs', 'test-result-btts.mjs',
   'test-mixed-combos.mjs', 'test-bet-builder-admin.mjs', 'test-bet-builder.mjs',
   'test-system-columns.mjs', 'test-system-columns-ledger.mjs', 'test-system-columns-feed.mjs',
-  'test-automatic-combos.mjs', 'test-combo-risk-settings.mjs', 'test-combo-placement.mjs',
-  'test-betslip-columns.mjs', 'test-format-odds.mjs', 'test-betslip-browser.mjs',
+  'test-automatic-combos.mjs', 'test-combo-risk-settings.mjs', 'test-combo-placement.mjs', 'test-combo-feasibility.mjs',
+  'test-betslip-columns.mjs', 'test-format-odds.mjs', 'test-betslip-browser.mjs', 'test-board-projection.mjs', 'test-static-cache.mjs',
+  'test-market-expiry.mjs', 'test-market-identity.mjs', 'test-settlement-results.mjs', 'test-mobile-betslip-badge.mjs',
 ];
 for (const suite of suites) {
   process.stdout.write(`\n[betting] ${suite}\n`);

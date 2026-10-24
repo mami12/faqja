@@ -53,7 +53,7 @@ async function rejected(prepare, check) {
 }
 try {
   refresh();
-  const batch = await place(input()); assert.deepEqual(batch.tickets.map(ticket => ticket.potentialPayout), [3795, 1593.9]);
+  const batch = await place(input()); assert.deepEqual(batch.system.columns.map(ticket => ticket.potentialPayout), [3795, 1593.9]);
   await rejected(() => applyRows([{ ...rows[1], suspended: true }]), /pezulluar/);
   await rejected(() => applyRows([{ ...rows[1], price: 2.11 }]), error => error.code === 'ODDS_CHANGED');
   await rejected(() => { getOddsForMatches([1101]).find(row => row.market_key === 'total').updated_at = new Date(0); }, /rifreskohen/);
@@ -75,8 +75,8 @@ try {
   // contract as the preview and stored line, including a decimal half-tie.
   refresh(); applyRows([{ ...rows[1], price: 2.10005 }]);
   const precision = await place({ ...input(), selections: selections.map((pick, index) => index === 1 ? { ...pick, oddsAtPlacement: 2.1001 } : pick) });
-  assert.equal(precision.tickets[1].potentialPayout, 1593.98);
-  assert.equal(precision.tickets[1].lines.find(line => line.marketName === 'Total Goals').oddsAtPlacement, 2.1001);
+  assert.equal(precision.system.columns[1].potentialPayout, 1593.98);
+  assert.equal(precision.system.columns[1].lines.find(line => line.marketName === 'Total Goals').oddsAtPlacement, 2.1001);
   // One under-lock resolver rejects immediately while another still owns a
   // queued transaction read. Rollback/release must wait until that read drains.
   let unblockRead, enteredRead;

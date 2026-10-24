@@ -420,19 +420,7 @@ adminRouter.post('/manager/users/:id/withdraw', ...manager, moveBalance(-1, 'WIT
 const listTickets = (scoped) =>
   guard(async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 200, 500);
-    const params = [];
-    let where = '';
-    if (scoped) {
-      params.push(req.user.id);
-      where = 'where t.user_id in (select id from app_user where manager_id = $1)';
-    }
-    const { rows } = await query(
-      `select t.id from app_ticket t ${where} order by t.placed_at desc limit ${limit}`,
-      params,
-    );
-    const tickets = [];
-    for (const row of rows) tickets.push(await bets.getTicketWithLines(row.id));
-    res.json(tickets);
+    res.json(await bets.listLogicalTickets({managerId:scoped?req.user.id:null,limit}));
   });
 
 adminRouter.get('/admin/tickets', ...admin, listTickets(false));

@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
+import { staticCacheHeaders } from './static-cache.mjs';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
 import { initSchema, dbHealth, getOddsHistory, getOddsForMatches as getDbOddsForMatches, recentRawFrames, closePool, logRawFrame } from './db.mjs';
 import { initLedgerSchema } from './ledger/store.mjs';
@@ -676,26 +677,23 @@ if (existsSync(webDist)) {
   // Serve the original game files (demo entry index.html AND real-wallet entry
   // index-real.html) without SPA fallback. If an asset is missing, return a
   // real 404 instead of React's index.html with a misleading 200.
-  // The entry/assembler must never be cached across Railway deployments.
+  // Reuse large media on repeat launches; boot code always reloads after updates.
   app.use('/app/casino-original/bookofra',
     express.static(path.join(webDist,'casino-original/bookofra'),{
       fallthrough:false,
-      setHeaders:(res,file)=>{
-        if(/(?:index|index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
-          res.setHeader('Cache-Control','no-store, max-age=0');
-      },
+      setHeaders:staticCacheHeaders,
     }));
   app.use('/app/casino-original/sizzling',
     express.static(path.join(webDist,'casino-original/sizzling'),{
       fallthrough:false,
-      setHeaders:(res,file)=>{
-        if(/(?:index|index-real|head|body)\.html$|\/libs\/assembler\.js$|\/manifest\.json$/.test(file))
-          res.setHeader('Cache-Control','no-store, max-age=0');
-      },
+      setHeaders:staticCacheHeaders,
     }));
-  app.use('/app', express.static(webDist));
+  app.use('/app', express.static(webDist,{setHeaders:staticCacheHeaders}));
   // deep links (/app/login, /app/admin, ...) fall through to the SPA shell
-  app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+  app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => {
+    res.setHeader('Cache-Control','no-store, max-age=0');
+    return res.sendFile(path.join(webDist, 'index.html'));
+  });
   console.log(`[app] serving the React app from ${webDist}`);
 } else {
   app.get('/app', (_req, res) =>

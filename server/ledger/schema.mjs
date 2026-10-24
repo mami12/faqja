@@ -107,6 +107,7 @@ create unique index if not exists app_ticket_user_request_uidx
 
 create index if not exists app_ticket_user_idx   on app_ticket (user_id, placed_at desc);
 create index if not exists app_ticket_status_idx on app_ticket (status);
+create index if not exists app_ticket_compact_id_idx on app_ticket ((replace(id::text,'-','')) text_pattern_ops);
 
 -- Rejected placement attempts are not tickets: no balance movement occurs.
 -- Saved separately so "Refuzuarat" shows real server refusals, not fabricated
@@ -135,6 +136,12 @@ create table if not exists app_ticket_batch (
   created_at timestamptz not null default now(),
   primary key (user_id, client_request_id)
 );
+-- One globally unique public ticket identity, including historical column batches.
+alter table app_ticket_batch add column if not exists id uuid not null default gen_random_uuid();
+alter table app_ticket_batch add column if not exists selection_order text[];
+create unique index if not exists app_ticket_batch_id_uidx on app_ticket_batch(id);
+create index if not exists app_ticket_batch_members_idx on app_ticket_batch using gin(ticket_ids);
+create index if not exists app_ticket_batch_compact_id_idx on app_ticket_batch ((replace(id::text,'-','')) text_pattern_ops);
 
 -- Universal admin-defined same-game builders. Each leg is a supported outcome contract.
 create table if not exists app_bet_builder_template (
@@ -246,6 +253,7 @@ create table if not exists app_casino_settings (
  wallet_rollout_applied boolean not null default false
 );
 alter table app_casino_settings add column if not exists wallet_rollout_applied boolean not null default false;
+alter table app_casino_settings add column if not exists game_profiles jsonb not null default '{}';
 create table if not exists app_casino_freespin_state (
   user_id uuid primary key references app_user(id) on delete cascade,
   round_id uuid not null references app_casino_round(id) on delete cascade,
@@ -256,6 +264,7 @@ create table if not exists app_casino_freespin_state (
   lines integer not null,
   updated_at timestamptz not null default now()
 );
+alter table app_casino_freespin_state add column if not exists math_profile text;
 
 ${ORIGINAL_WALLET_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
