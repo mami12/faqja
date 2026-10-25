@@ -10,7 +10,9 @@ export const MAX_ADMIN_ODDS = 9_999_999_999.9999;
 export const searchText = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 export const competitionKey = (match: Match) => String(match.tournament?.id ?? match.tournament?.name ?? '');
 export const matchStatus = (match: Match): string => !match.status || String(match.status) === 'UPCOMING' ? 'PREMATCH' : match.status;
-export const statusLabel = (match: Match) => ({ LIVE: 'Në lojë', ENDED: 'Përfunduar', CANCELLED: 'Anuluar', PREMATCH: 'Para ndeshjes' }[matchStatus(match)] ?? 'Para ndeshjes');
+export const statusLabel = (match: Match, lang: string = 'al') => lang === 'en'
+  ? ({ LIVE: 'Live', ENDED: 'Finished', CANCELLED: 'Cancelled', PREMATCH: 'Prematch' }[matchStatus(match)] ?? 'Prematch')
+  : ({ LIVE: 'Në lojë', ENDED: 'Përfunduar', CANCELLED: 'Anuluar', PREMATCH: 'Para ndeshjes' }[matchStatus(match)] ?? 'Para ndeshjes');
 export const fixtureName = (match: Match) => `${match.homeTeam} vs ${match.awayTeam}`;
 export const eligibleOutcomes = (outcomes: Outcome[]) => outcomes.filter(outcome => Number.isFinite(Number(outcome.odds)) && Number(outcome.odds) > 1 && Number(outcome.odds) <= MAX_ADMIN_ODDS);
 export function previewAdjustments(outcomes: Outcome[], percentage: number) {

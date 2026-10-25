@@ -16,7 +16,7 @@ export default function BookingModal({ code, onClose }: { code: string, onClose:
     <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
       <div className="bg-secondary/95 p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center border border-tertiary/90 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary">KUPONI I BASTIT</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("KUPONI I BASTIT")}</span>
           <button onClick={onClose} className="p-1 rounded-lg text-text-muted hover:text-white hover:bg-tertiary transition">
             <X size={18} />
           </button>

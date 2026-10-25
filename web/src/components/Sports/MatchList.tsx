@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
 import { Match } from '../../types';
@@ -12,6 +12,7 @@ import { isMainFootballMatch } from '../../utils/sportsbookFilters';
 import { isHandicapMarket } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 import { isComboMarket } from '../../utils/comboPolicy';
+import { compareMatchDisplay } from '../../utils/matchOrder';
 
 export type MatchViewMode = 'all' | 'live' | 'prematch' | 'favorites';
 
@@ -38,12 +39,15 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled, refreshVersion, acceptMatches } = useLiveFeed();
   const refreshing = feedMode !== 'live';
+  const refreshRef = useRef<(() => void) | null>(null);
+  const lastRefreshVersion = useRef(refreshVersion);
 
   useEffect(() => {
     const controller=new AbortController();
-    let active=true, busy=false;
+    let active=true, busy=false, queued=false;
     const refresh=async()=> {
-      if(busy||!active) return;
+      if(!active) return;
+      if(busy) {queued=true;return;}
       busy=true;
       try {
         const params:any={view:'board', _snapshot:Date.now()};
@@ -58,16 +62,32 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           setMatches(snapshot);
         }
       } catch(error) {if(active) console.error('Failed to fetch matches:',error);}
-      finally {busy=false;if(active) setLoading(false);}
+      finally {
+        busy=false;
+        if(active) {
+          setLoading(false);
+          if(queued) {queued=false;void refresh();}
+        }
+      }
     };
+    refreshRef.current=()=>void refresh();
     setLoading(true);
     void refresh();
     const interval=window.setInterval(()=>void refresh(),30000);
-    return ()=>{active=false;controller.abort();window.clearInterval(interval);};
-  }, [tournamentId, categoryId, sportId, isLiveOnly, refreshVersion, acceptMatches]);
+    return ()=>{active=false;refreshRef.current=null;controller.abort();window.clearInterval(interval);};
+  }, [tournamentId, categoryId, sportId, isLiveOnly, acceptMatches]);
+
+  // A collector cycle must not cancel a slow request. Coalesce changes behind
+  // its response; only an actual filter change or unmount aborts that request.
+  useEffect(() => {
+    if(lastRefreshVersion.current===refreshVersion) return;
+    lastRefreshVersion.current=refreshVersion;
+    refreshRef.current?.();
+  }, [refreshVersion]);
 
   const currentMatches = matches.map(match => liveMatch(match, livePatches[String(match.id)]))
-    .filter(match => match.status !== 'ENDED' && match.status !== 'CANCELLED');
+    .filter(match => match.status !== 'ENDED' && match.status !== 'CANCELLED')
+    .sort(compareMatchDisplay);
   const mainLeagueMatches = currentMatches.filter(isMainFootballMatch);
   const searchFiltered = searchTerm.trim()
     ? currentMatches.filter(m => {
@@ -196,15 +216,15 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex w-[39px] shrink-0 flex-col items-center justify-center border-r border-[#111922] px-0.5 text-center font-mono tabular-nums" aria-label={m.status === 'LIVE' ? `Minuta ${liveMinute || 'nuk dihet'}` : `Ora e ndeshjes ${scheduledTime}`}>
             {m.status === 'LIVE' ? (
               <>
-                <span className="text-[8px] font-bold leading-tight text-[#35cf68]">NË LOJË</span>
+                <span className="text-[8px] font-bold leading-tight text-[#35cf68]">{t("NË LOJË")}</span>
                 <span className="text-[11px] font-black leading-tight text-[#f0d06c]">{liveMinute ? `${liveMinute.replace(/['′]/g, '')}′` : '—'}</span>
               </>
             ) : (
               <span className="text-[10px] font-semibold leading-tight text-[#cbd5e1]">{scheduledTime}</span>
             )}
           </div>
-          <button type="button" title={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
-            aria-label={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+          <button type="button" title={isFavorite(String(m.id)) ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
+            aria-label={isFavorite(String(m.id)) ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
             onClick={() => toggleFavorite(String(m.id))}
             className={`absolute bottom-1 left-[41px] z-[1] p-0.5 ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-[#748093]'}`}>
             <Star size={12} fill={isFavorite(String(m.id)) ? 'currentColor' : 'none'}/>
@@ -243,7 +263,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="w-9 sm:w-11 shrink-0 text-center text-[9px] font-semibold text-text-secondary tabular-nums">
               {m.status === 'LIVE' ? (
-                <span className="text-accent-red">NË LOJË<br />{m.currentMinute ?? 0}'</span>
+                <span className="text-accent-red">{t("NË LOJË")}<br />{m.currentMinute ?? 0}'</span>
               ) : (
                 <span>{new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
@@ -259,11 +279,11 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
                 {m.status === 'LIVE' && <span className="text-accent-yellow font-mono">{m.awayScore ?? 0}</span>}
               </span>
             </button>
-            <button type="button" onClick={() => toggleFavorite(String(m.id))} title={isFavorite(String(m.id)) ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+            <button type="button" onClick={() => toggleFavorite(String(m.id))} title={isFavorite(String(m.id)) ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
               className={`shrink-0 p-0.5 rounded-sm text-text-secondary hover:text-white ${isFavorite(String(m.id)) ? 'text-amber-400' : 'text-text-secondary hover:text-white'}`}>
               <Star size={14} className={isFavorite(String(m.id)) ? 'fill-amber-400' : ''} />
             </button>
-            <button type="button" onClick={() => toggleAlert(String(m.id))} title={isAlertEnabled(String(m.id)) ? 'Çaktivizo njoftimet' : 'Aktivizo njoftimet'}
+            <button type="button" onClick={() => toggleAlert(String(m.id))} title={isAlertEnabled(String(m.id)) ? t("Çaktivizo njoftimet") : t("Aktivizo njoftimet")}
               className={`shrink-0 p-0.5 rounded-sm text-text-secondary hover:text-white ${isAlertEnabled(String(m.id)) ? 'text-accent-green' : 'text-text-secondary hover:text-white'}`}>
               {isAlertEnabled(String(m.id)) ? <BellRing size={14} /> : <Bell size={14} />}
             </button>
@@ -275,8 +295,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               {oddsGroup(main, oneXtwo, ['1', 'X', '2'])}
             </div>
             <div className="hidden lg:block w-[128px]">
-              <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">Lart / Poshtë {goals?.line ? String(goals.line) : ''}</div>
-              {oddsGroup(goals, total, ['Lart', 'Poshtë'])}
+              <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">{t("Lart / Poshtë") + " "}{goals?.line ? String(goals.line) : ''}</div>
+              {oddsGroup(goals, total, [t("Lart"), t("Poshtë")])}
             </div>
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
               title={t('sections.view_markets')}
@@ -309,10 +329,10 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             <div className="grid grid-cols-3 text-center leading-4"><span>1</span><span>X</span><span>2</span></div>
           </div>
           <div className="flex w-[128px] shrink-0 flex-col items-stretch justify-center border-r border-[#193f25]">
-            <span className="text-center leading-4">TG_L/P</span>
-            <div className="grid grid-cols-2 text-center leading-4"><span>Lart</span><span>Poshtë</span></div>
+            <span className="text-center leading-4">{t("TG_L/P")}</span>
+            <div className="grid grid-cols-2 text-center leading-4"><span>{t("Lart")}</span><span>{t("Poshtë")}</span></div>
           </div>
-          <div className="flex w-9 shrink-0 items-center justify-center" title="Tregjet e tjera">+</div>
+          <div className="flex w-9 shrink-0 items-center justify-center" title={t("Tregjet e tjera")}>+</div>
         </div>
         <div className="grid h-[35px] grid-cols-[minmax(0,1fr)_repeat(3,53px)_38px] min-[400px]:grid-cols-[minmax(0,1fr)_repeat(3,58px)_42px] items-stretch border-b border-[#101a23] bg-[#285d31] text-[12px] text-[#e4f1e8] md:hidden">
           <div className="flex min-w-0 items-center justify-between gap-1 border-r border-[#16281b] px-1.5">
@@ -323,7 +343,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="flex items-center justify-center border-r border-[#16281b] font-semibold">X</span>
           <span className="flex items-center justify-center border-r border-[#16281b] font-semibold">2</span>
           <button type="button" onClick={() => setMobileDateOpen(v => !v)}
-            aria-label="Filtro ndeshjet sipas datës" aria-expanded={mobileDateOpen}
+            aria-label={t("Filtro ndeshjet sipas datës")} aria-expanded={mobileDateOpen}
             className="flex items-center justify-center bg-[#33753c] hover:bg-[#448b4d]">
             <Filter size={19} fill="#e7efe8"/>
           </button>
@@ -333,7 +353,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
             {(['all','today','tomorrow'] as DateFilter[]).map(value => (
               <button type="button" key={value} onClick={() => setDateFilter(value)}
                 className={`flex-1 rounded-sm px-2 py-1 text-xs font-semibold ${dateFilter === value ? 'bg-[#e0ad27] text-[#152336]' : 'bg-[#273346] text-white'}`}>
-                {value === 'all' ? 'Të gjitha' : value === 'today' ? 'Sot' : 'Nesër'}
+                {value === 'all' ? t("Të gjitha") : value === 'today' ? t("Sot") : t("Nesër")}
               </button>
             ))}
           </div>
@@ -345,13 +365,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <span className="shrink-0 text-[11px] text-text-secondary tabular-nums">{fixtures.length}</span>
         </div>
         <div className="hidden lg:flex xl:hidden items-center gap-px px-2 py-1 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-          <span className="flex-1 min-w-0">Ndeshja</span>
+          <span className="flex-1 min-w-0">{t("Ndeshja")}</span>
           <span className="w-[147px] text-center">1X2</span>
-          <span className="w-[128px] text-center">Lart / Poshtë</span>
+          <span className="w-[128px] text-center">{t("Lart / Poshtë")}</span>
           <span className="w-9 text-center">+</span>
         </div>
         <div className="hidden md:flex lg:hidden items-center bg-[#424e60] px-2 py-1 text-[10px] font-semibold text-slate-200">
-          <span className="flex-1 min-w-0">Ndeshja</span>
+          <span className="flex-1 min-w-0">{t("Ndeshja")}</span>
           <span className="w-[126px] sm:w-[147px] shrink-0 text-center">1 X 2</span>
           <span className="w-7 sm:w-9 shrink-0 text-center">›</span>
         </div>
@@ -408,7 +428,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {renderCompetitionBoards(liveMatches, 'Futboll në lojë')}
+            {renderCompetitionBoards(liveMatches, t("Futboll në lojë"))}
           </div>
         </div>
       )}
@@ -426,20 +446,18 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {renderCompetitionBoards(prematchMatches, 'Futboll')}
+            {renderCompetitionBoards(prematchMatches, t("Futboll"))}
           </div>
         </div>
       )}
       {viewMode === 'favorites' && (
         <div className="space-y-2.5">
           <div className="flex items-center gap-2 px-1 text-xs font-bold text-white">
-            <Star size={14} className="text-amber-400" /> Të Preferuarat
-            <span className="text-text-secondary">{favoriteMatches.length}</span>
+            <Star size={14} className="text-amber-400" /> {" " + t("Të Preferuarat")}<span className="text-text-secondary">{favoriteMatches.length}</span>
           </div>
-          {favoriteMatches.length ? renderCompetitionBoards(favoriteMatches, 'Favoritet') : (
+          {favoriteMatches.length ? renderCompetitionBoards(favoriteMatches, t("Favoritet")) : (
             <div className="rounded-md border border-tertiary bg-secondary p-8 text-center text-xs text-text-secondary">
-              Nuk ka ndeshje të preferuara.
-            </div>
+              {t("Nuk ka ndeshje të preferuara.")}</div>
           )}
         </div>
       )}

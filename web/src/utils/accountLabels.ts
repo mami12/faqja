@@ -5,12 +5,16 @@ const TRANSACTION_LABELS: Record<string,string> = {
   MANAGER_PLAYER_FUNDING:'Fonde dhënë lojtarit', MANAGER_PLAYER_RETURN:'Fonde të kthyera nga lojtari',
   MANAGER_COMMISSION_DEBIT:'Komision i zbritur', MANAGER_COMMISSION_REFUND:'Komision i kthyer',
   MANAGER_PAYOUT_DEDUCTION:'Pagesë fitimi', MANAGER_LOST_COLLECTED:'Fonde nga bast humbës',
+  PLAYER_DELETE_TRANSFER_OUT:'Kalimi i bilancit pas fshirjes', PLAYER_DELETE_TRANSFER_IN:'Bilanc nga lojtar i fshirë',
 };
 export const transactionLabel=(type:string):string=>TRANSACTION_LABELS[type]??'Lëvizje financiare';
 
 /** Old ledger descriptions stay intact; translate only known system phrasing. */
-export function transactionDescription(description:string|null|undefined,type:string):string {
+export function transactionDescription(description:string|null|undefined,type:string,lang:'al'|'en'='al'):string {
   if(!description)return transactionLabel(type);
+  if(lang==='en')return description
+    .replace(/^Kalimi i bilancit pas fshirjes te /,'Balance transferred after deletion to ')
+    .replace(/^Bilanc nga lojtari i fshirë /,'Balance from deleted player ');
   return description.replace(/^Casino stake · /,'Bast kazinoje · ')
     .replace(/ · spin$/,' · rrotullim')
     .replace(/ · payout(?= |$)/,' · pagesë fitimi')

@@ -8,6 +8,7 @@ import { staticCacheHeaders } from './static-cache.mjs';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
 import { initSchema, dbHealth, getOddsHistory, getOddsForMatches as getDbOddsForMatches, recentRawFrames, closePool, logRawFrame } from './db.mjs';
 import { initLedgerSchema } from './ledger/store.mjs';
+import { purgeDeletedPlayerHistory } from './ledger/user-removal.mjs';
 import * as overrides from './ledger/overrides.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
@@ -182,6 +183,7 @@ function broadcastFeedState() {
  * it safe to skip while the feed is stopped (no database round trips when nobody is looking)
  * and to run once on wake, where it catches up on everything that ended while we were asleep.
  */
+let lastDeletedHistoryCleanup = 0;
 async function runSettlement(why = 'periodic') {
   if (shuttingDown || !ledgerReady || settlementBusy) return null;
   settlementBusy = true;
@@ -207,6 +209,13 @@ async function runSettlement(why = 'periodic') {
       } catch (error) {
         console.error('[settle] unresolved review failed:', error.message);
       }
+    }
+    if (Date.now() - lastDeletedHistoryCleanup >= 5 * 60 * 1000) {
+      lastDeletedHistoryCleanup = Date.now();
+      try {
+        const cleaned = await purgeDeletedPlayerHistory();
+        if (cleaned.purged) console.log('[ledger] removed-player history cleanup:', cleaned.purged, 'cutoff:', cleaned.cutoff);
+      } catch (error) { console.error('[ledger] removed-player history cleanup failed:', error.message); }
     }
     settlementBusy = false;
   }

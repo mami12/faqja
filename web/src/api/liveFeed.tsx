@@ -19,6 +19,9 @@ import { mergeMatchFacts, snapshotTime, timestamp } from './matchSync';
 
 /** the pushed state of one match, already in the client's field names */
 export interface LivePatch {
+  displayOrder?: number;
+  competitionOrder?: number;
+  listingStale?: boolean;
   status?: Match['status'];
   currentMinute?: number;
   /** seconds within the current minute (0-59), from the feed clock */
@@ -142,6 +145,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       const at = snapshotTime(match);
       const id = String(match.id);
       patches[id] = compact({
+        displayOrder: match.displayOrder, competitionOrder: match.competitionOrder, listingStale: match.listingStale,
         status: match.status, currentMinute: match.currentMinute, currentSecond: (match as any).currentSecond,
         homeScore: match.homeScore, awayScore: match.awayScore, scoreAt: match.scoreAt ?? undefined,
         clockAt: match.clockAt, phaseAt: match.phaseAt, snapshotAt: match.snapshotAt, updatedAt: match.updatedAt ?? match.snapshotAt ?? '',
@@ -311,6 +315,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         const home = Number(m?.score?.home);
         const away = Number(m?.score?.away);
         patches[String(m.id)] = compact({
+          displayOrder: m.displayOrder, competitionOrder: m.competitionOrder, listingStale: m.listingStale,
           status: m.status === 'live' ? 'LIVE' : m.status === 'ended' ? 'ENDED' : undefined,
           currentMinute: Number.isFinite(minute) ? minute : undefined,
           currentSecond: Number.isFinite(Number(m.currentSecond)) ? Number(m.currentSecond) : 0,

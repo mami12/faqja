@@ -69,21 +69,20 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-bold text-white"
           >
-            <Printer size={16} /> Printo biletën
-          </button>
-          <button onClick={onClose} aria-label="Mbyll" className="rounded-lg border border-black/20 p-2">
+            <Printer size={16} /> {" " + t("Printo biletën")}</button>
+          <button onClick={onClose} aria-label={t("Mbyll")} className="rounded-lg border border-black/20 p-2">
             <X size={16} />
           </button>
         </div>
 
         <div className="border-b-2 border-dashed border-black/40 pb-3 text-center">
-          <h2 className="text-lg font-black uppercase tracking-widest">BILETË BASTI</h2>
+          <h2 className="text-lg font-black uppercase tracking-widest">{t("BILETË BASTI")}</h2>
           <p className="mt-1 text-xs">ID: {ticket.id.toUpperCase()}</p>
           <p className="text-xs">{new Date(ticket.placedAt).toLocaleString('sq-AL')}</p>
           {system && (
             <div className="mt-2 space-y-0.5 text-xs">
-              <p className="font-bold">Sistem · {system.columnCount} kolona</p>
-              <p>Një biletë me të gjitha zgjedhjet. Një zgjedhje për ndeshje në çdo kolonë.</p>
+              <p className="font-bold">{t("Sistem ·") + " "}{system.columnCount} {" " + t("kolona")}</p>
+              <p>{t("Një biletë me të gjitha zgjedhjet. Një zgjedhje për ndeshje në çdo kolonë.")}</p>
             </div>
           )}
         </div>
@@ -96,31 +95,31 @@ export default function TicketReceipt({ ticket, onClose }: Props) {
                 {formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <strong>{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode, line.marketLine)}</strong>
               </div>
               <div className="mt-0.5 flex justify-between">
-                <span>Kuota</span><strong>{formatOdds(line.oddsAtPlacement)}</strong>
+                <span>{t("Kuota")}</span><strong>{formatOdds(line.oddsAtPlacement)}</strong>
               </div>
             </article>
           ))}
         </div>
 
         <div className="space-y-1 border-y-2 border-dashed border-black/40 py-3 text-sm">
-          <div className="flex justify-between"><span>Lloji i biletës</span><strong>{translateTicketType(ticket.ticketType, t)}</strong></div>
-          <div className="flex justify-between"><span>{system ? 'Shuma totale' : 'Shuma e luajtur'}</span><strong>{ticket.stake.toFixed(2)} Lëk</strong></div>
+          <div className="flex justify-between"><span>{t("Lloji i biletës")}</span><strong>{translateTicketType(ticket.ticketType, t)}</strong></div>
+          <div className="flex justify-between"><span>{system ? 'Shuma totale' : 'Shuma e luajtur'}</span><strong>{ticket.stake.toFixed(2)} {" " + t("Lëk")}</strong></div>
           {system ? <>
-            <div className="flex justify-between"><span>Shuma për kolonë</span><strong>{minStake.toFixed(2)}{minStake !== maxStake ? `–${maxStake.toFixed(2)}` : ''} Lëk</strong></div>
-            <div className="flex justify-between"><span>Pagesa minimale për kolonë fituese</span><strong>{system.minColumnPayout.toFixed(2)} Lëk</strong></div>
-            <div className="flex justify-between"><span>Pagesa maksimale për kolonë fituese</span><strong>{system.maxColumnPayout.toFixed(2)} Lëk</strong></div>
-            <div className="flex justify-between text-base"><span>{ticket.status === 'PENDING' ? 'Pagesa nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer'}</span><strong>{(ticket.status === 'PENDING' ? ticket.potentialPayout : ticket.actualPayout ?? 0).toFixed(2)} Lëk</strong></div>
-            <p className="pt-1 text-[10px]">Pagesa llogaritet nga kolonat fituese. Pagesa minimale është 0 nëse humbin të gjitha kolonat.</p>
+            <div className="flex justify-between"><span>{t("Shuma për kolonë")}</span><strong>{minStake.toFixed(2)}{minStake !== maxStake ? `–${maxStake.toFixed(2)}` : ''} {" " + t("Lëk")}</strong></div>
+            <div className="flex justify-between"><span>{t("Pagesa minimale për kolonë fituese")}</span><strong>{system.minColumnPayout.toFixed(2)} {" " + t("Lëk")}</strong></div>
+            <div className="flex justify-between"><span>{t("Pagesa maksimale për kolonë fituese")}</span><strong>{system.maxColumnPayout.toFixed(2)} {" " + t("Lëk")}</strong></div>
+            <div className="flex justify-between text-base"><span>{ticket.status === 'PENDING' ? 'Pagesa nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer'}</span><strong>{(ticket.status === 'PENDING' ? ticket.potentialPayout : ticket.actualPayout ?? 0).toFixed(2)} {" " + t("Lëk")}</strong></div>
+            <p className="pt-1 text-[10px]">{t("Pagesa llogaritet nga kolonat fituese. Pagesa minimale është 0 nëse humbin të gjitha kolonat.")}</p>
           </> : <>
-            <div className="flex justify-between"><span>Koeficienti total</span><strong>{formatOdds(ticket.totalOdds)}</strong></div>
-            <div className="flex justify-between text-base"><span>Fitimi i mundshëm</span><strong>{ticket.potentialPayout.toFixed(2)} Lëk</strong></div>
+            <div className="flex justify-between"><span>{t("Koeficienti total")}</span><strong>{formatOdds(ticket.totalOdds)}</strong></div>
+            <div className="flex justify-between text-base"><span>{t("Fitimi i mundshëm")}</span><strong>{ticket.potentialPayout.toFixed(2)} {" " + t("Lëk")}</strong></div>
           </>}
         </div>
 
         <div className="pt-4 text-center">
           <Code39Barcode value={barcodeValue} />
           <p className="mt-1 font-mono text-xs tracking-[0.25em]">{barcodeValue}</p>
-          <p className="mt-2 text-[10px]">Ruajeni biletën për verifikim.</p>
+          <p className="mt-2 text-[10px]">{t("Ruajeni biletën për verifikim.")}</p>
         </div>
       </section>
     </div>

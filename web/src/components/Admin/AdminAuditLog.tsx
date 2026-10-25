@@ -1,3 +1,4 @@
+import { useLanguage } from '../../context/LanguageContext';
 import { FormEvent, useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { toDateRange } from '../../utils/dateFilters';
@@ -16,6 +17,8 @@ interface AuditEntry {
 }
 
 export default function AdminAuditLog() {
+  const { t, lang } = useLanguage();
+  const locale = lang === 'en' ? 'en-GB' : 'sq-AL';
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -71,9 +74,9 @@ export default function AdminAuditLog() {
     return (
       entry.actorName.toLowerCase().includes(q) ||
       entry.action.toLowerCase().includes(q) ||
-      auditActionLabel(entry.action).toLowerCase().includes(q) ||
+      t(auditActionLabel(entry.action)).toLowerCase().includes(q) ||
       entry.targetType.toLowerCase().includes(q) ||
-      auditTargetLabel(entry.targetType).toLowerCase().includes(q) ||
+      t(auditTargetLabel(entry.targetType)).toLowerCase().includes(q) ||
       (entry.targetId && entry.targetId.toLowerCase().includes(q))
     );
   });
@@ -82,17 +85,16 @@ export default function AdminAuditLog() {
     <div className="mx-auto max-w-7xl space-y-4 p-3 sm:p-6">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">Regjistri i veprimeve</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-white">{t("Regjistri i veprimeve")}</h2>
           <p className="mt-0.5 text-xs sm:text-sm text-text-secondary">
-            Regjistron ndryshimet financiare, llogaritë, kuotat dhe rezultatet e kryera nga administratori ose menaxherët.
-          </p>
+            {t("Regjistron ndryshimet financiare, llogaritë, kuotat dhe rezultatet e kryera nga administratori ose menaxherët.")}</p>
         </div>
         <button
           onClick={() => void fetchEntries()}
           className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 bg-tertiary/80 hover:bg-tertiary text-white rounded-xl text-xs sm:text-sm font-bold transition active:scale-95"
         >
           <RefreshCw size={15} className={loading ? 'animate-spin text-accent-green' : ''} />
-          <span>Rifresko</span>
+          <span>{t("Rifresko")}</span>
         </button>
       </header>
 
@@ -105,7 +107,7 @@ export default function AdminAuditLog() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Kërko me autor, veprim ose objekt..."
+            placeholder={t("Kërko me autor, veprim ose objekt...")}
             className="w-full bg-primary border border-tertiary rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green"
           />
           {searchQuery && (
@@ -122,8 +124,7 @@ export default function AdminAuditLog() {
         {/* Date Inputs & Quick Chips */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-2.5">
           <label className="flex-1 text-xs font-semibold text-text-secondary">
-            Nga data
-            <input 
+            {t("Nga data")}<input
               type="date" 
               value={from} 
               onChange={(e) => setFrom(e.target.value)} 
@@ -131,8 +132,7 @@ export default function AdminAuditLog() {
             />
           </label>
           <label className="flex-1 text-xs font-semibold text-text-secondary">
-            Deri më
-            <input 
+            {t("Deri më")}<input
               type="date" 
               value={to} 
               onChange={(e) => setTo(e.target.value)} 
@@ -144,13 +144,12 @@ export default function AdminAuditLog() {
             type="submit" 
             className="w-full sm:w-auto rounded-xl bg-accent-green hover:bg-emerald-600 px-5 py-2.5 text-xs sm:text-sm font-black text-primary transition active:scale-95 shadow-md shadow-accent-green/20"
           >
-            Filtro datat
-          </button>
+            {t("Filtro datat")}</button>
         </div>
 
         {/* Quick Date Presets */}
         <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-tertiary/40">
-          <span className="text-[11px] text-text-secondary font-semibold">Periudha:</span>
+          <span className="text-[11px] text-text-secondary font-semibold">{t("Periudha:")}</span>
           {(['today', 'week', 'month', 'all'] as const).map((preset) => (
             <button
               key={preset}
@@ -158,12 +157,11 @@ export default function AdminAuditLog() {
               onClick={() => setDatePreset(preset)}
               className="px-2.5 py-1 rounded-lg bg-tertiary hover:bg-tertiary/80 text-text-secondary hover:text-white text-xs font-bold transition active:scale-95"
             >
-              {preset === 'today' ? 'Sot' : preset === 'week' ? '7 ditë' : preset === 'month' ? '30 ditë' : 'Të gjitha'}
+              {preset === 'today' ? t("Sot") : preset === 'week' ? t('7 ditë') : preset === 'month' ? t('30 ditë') : t("Të gjitha")}
             </button>
           ))}
           <span className="ml-auto text-[11px] text-text-secondary font-medium">
-            {filteredEntries.length} veprime
-          </span>
+            {filteredEntries.length} {" " + t("veprime")}</span>
         </div>
       </form>
 
@@ -172,15 +170,15 @@ export default function AdminAuditLog() {
         {loading ? (
           <div className="p-16 text-center text-text-secondary flex flex-col items-center justify-center gap-3">
             <RefreshCw size={26} className="animate-spin text-accent-green" />
-            <span className="text-sm font-semibold">Duke ngarkuar regjistrin…</span>
+            <span className="text-sm font-semibold">{t("Duke ngarkuar regjistrin…")}</span>
           </div>
         ) : error ? (
-          <div role="alert" className="p-8 text-center text-rose-300 text-sm">{error}</div>
+          <div role="alert" className="p-8 text-center text-rose-300 text-sm">{t(error)}</div>
         ) : filteredEntries.length === 0 ? (
           <div className="p-12 text-center text-text-secondary flex flex-col items-center gap-2">
             <ClipboardList size={32} className="opacity-30 text-white" />
-            <div className="text-sm font-bold text-white">Nuk ka veprime të regjistruara</div>
-            <p className="text-xs">Nuk u gjet asnjë veprim për këtë kërkim ose periudhë.</p>
+            <div className="text-sm font-bold text-white">{t("Nuk ka veprime të regjistruara")}</div>
+            <p className="text-xs">{t("Nuk u gjet asnjë veprim për këtë kërkim ose periudhë.")}</p>
           </div>
         ) : (
           <>
@@ -198,21 +196,21 @@ export default function AdminAuditLog() {
                         <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
                           entry.actorRole === 'ADMIN' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         }`}>
-                          {entry.actorRole === 'ADMIN' ? 'Administrator' : 'Menaxher'}
+                          {entry.actorRole === 'ADMIN' ? t("Administrator") : t("Menaxher")}
                         </span>
                         <span className="font-bold text-white text-xs">{entry.actorName}</span>
                       </div>
                       <span className="text-[11px] text-text-secondary tabular-nums">
-                        {new Date(entry.createdAt).toLocaleString('sq-AL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(entry.createdAt).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs px-2 py-0.5 rounded bg-primary text-accent-yellow font-bold border border-tertiary">
-                        {auditActionLabel(entry.action)}
+                        {t(auditActionLabel(entry.action))}
                       </span>
                       <span className="text-xs text-text-secondary font-medium">
-                        {auditTargetLabel(entry.targetType)}{entry.targetId ? ` · ${entry.targetId}` : ''}
+                        {t(auditTargetLabel(entry.targetType))}{entry.targetId ? ` · ${entry.targetId}` : ''}
                       </span>
                     </div>
 
@@ -223,7 +221,7 @@ export default function AdminAuditLog() {
                           onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                           className="flex items-center gap-1 text-[11px] text-accent-blue hover:underline font-semibold"
                         >
-                          <span>{isExpanded ? 'Fshih detajet' : 'Shiko detajet'}</span>
+                          <span>{t(isExpanded ? 'Fshih detajet' : 'Shiko detajet')}</span>
                           {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         </button>
                         {isExpanded && (
@@ -243,29 +241,29 @@ export default function AdminAuditLog() {
               <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="bg-tertiary/60 text-[11px] uppercase text-text-secondary font-bold tracking-wider">
                   <tr>
-                    <th className="p-3.5">Data & Ora</th>
-                    <th className="p-3.5">Autori</th>
-                    <th className="p-3.5">Veprimi</th>
-                    <th className="p-3.5">Objekti</th>
-                    <th className="p-3.5">Detajet</th>
+                    <th className="p-3.5">{t("Data & Ora")}</th>
+                    <th className="p-3.5">{t("Autori")}</th>
+                    <th className="p-3.5">{t("Veprimi")}</th>
+                    <th className="p-3.5">{t("Objekti")}</th>
+                    <th className="p-3.5">{t("Detajet")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-tertiary/60">
                   {filteredEntries.map((entry) => (
                     <tr key={entry.id} className="text-white hover:bg-primary/40 transition">
                       <td className="p-3.5 whitespace-nowrap text-xs text-text-secondary tabular-nums">
-                        {new Date(entry.createdAt).toLocaleString('sq-AL')}
+                        {new Date(entry.createdAt).toLocaleString(locale)}
                       </td>
                       <td className="p-3.5 font-semibold">
                         {entry.actorName}{' '}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-black uppercase ${
                           entry.actorRole === 'ADMIN' ? 'bg-purple-500/20 text-purple-400' : 'bg-amber-500/20 text-amber-400'
                         }`}>
-                          {entry.actorRole === 'ADMIN' ? 'Administrator' : 'Menaxher'}
+                          {entry.actorRole === 'ADMIN' ? t("Administrator") : t("Menaxher")}
                         </span>
                       </td>
-                      <td className="p-3.5 text-xs text-accent-yellow font-bold">{auditActionLabel(entry.action)}</td>
-                      <td className="p-3.5 text-xs">{auditTargetLabel(entry.targetType)}{entry.targetId ? ` · ${entry.targetId}` : ''}</td>
+                      <td className="p-3.5 text-xs text-accent-yellow font-bold">{t(auditActionLabel(entry.action))}</td>
+                      <td className="p-3.5 text-xs">{t(auditTargetLabel(entry.targetType))}{entry.targetId ? ` · ${entry.targetId}` : ''}</td>
                       <td className="p-3.5 text-xs text-text-secondary max-w-xs truncate font-mono">
                         {JSON.stringify(entry.details?.input ?? {})}
                       </td>

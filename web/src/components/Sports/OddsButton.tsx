@@ -36,6 +36,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     lockedOutcomes[part.outcomeId] === true ||
     riskLockedOutcomes[part.outcomeId] === true);
   const isSuspended =
+    outcome.decided === true ||
     (!combosEnabled && isComboMarket(market)) ||
     isMarketExpired(match, market) || isCompletedCombinationOutcome(match, market, outcome) ||
     builderLegLocked ||
@@ -132,7 +133,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
       <span className={`shrink-0 font-mono text-xs font-black tabular-nums sm:text-sm ${
         isSuspended ? 'text-slate-400' : isSelected ? 'text-white' : 'text-accent-yellow group-hover:text-accent-yellow sm:text-text-primary'
       }`}>
-        {isSuspended ? <Lock size={14} strokeWidth={2.3} className="inline text-slate-400" aria-label="Koeficient i pezulluar" /> : formatOdds(currentOdds)}
+        {isSuspended ? <Lock size={14} strokeWidth={2.3} className="inline text-slate-400" aria-label={t("Koeficient i pezulluar")} /> : formatOdds(currentOdds)}
       </span>
     </button>
   );

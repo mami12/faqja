@@ -40,6 +40,8 @@ const FEED_COLUMNS = {
 const byId = new Map(); // match_id -> row (snake_case, same shape the board serializer reads)
 let lastUpdatedAt = null;
 let upserts = 0;
+const competitionOrder = new Map();
+const competitionKey = row => `${row.sport_id ?? ''}|${row.tournament_id ?? row.category_slug ?? ''}`;
 
 const time = (v) => (v instanceof Date ? v.getTime() : v ? new Date(v).getTime() : 0);
 
@@ -64,6 +66,12 @@ export function upsert(rows) {
     }
 
     for (const col of MATCH_COLUMNS) match[col] = row[col] ?? null;
+    if (match.service === 'LIVE' && !match.live_first_seen_at) match.live_first_seen_at = at;
+    if (match.service === 'PREMATCH' && !match.prematch_first_seen_at) match.prematch_first_seen_at = at;
+    const phaseKey = `${match.service}|${competitionKey(match)}`;
+    if (!competitionOrder.has(phaseKey)) competitionOrder.set(phaseKey, at);
+    match.competition_first_seen_at = competitionOrder.get(phaseKey);
+    match.listing_stale = false;
     match.raw = row.raw ?? {};
     match.active = true;
     match.last_seen_at = at;
@@ -76,16 +84,21 @@ export function upsert(rows) {
   return written;
 }
 
-/** Marks matches that vanished from the feed as finished/inactive. */
+/** Missing one poll page is not a final result. Keep fresh pushed matches and
+ * retain temporarily missing fixtures as suspended instead of declaring FT. */
 export function expireStale(graceSeconds = 150, at = Date.now()) {
   const cutoff = at - graceSeconds * 1000;
   const expired = [];
 
   for (const match of byId.values()) {
     if (!match.active) continue;
-    if (time(match.last_seen_at) >= cutoff) continue;
+    const freshAt = Math.max(time(match.last_seen_at), time(match.updated_at), time(match.score_at), time(match.clock_at), time(match.feed_status_at));
+    if (freshAt >= cutoff) continue;
+    match.listing_stale = true;
+    const confirmedEnd = match.status === 'ended' || /^(?:finished|ended|ft|full time)$/i.test(String(match.feed_status ?? ''));
+    if (!confirmedEnd && freshAt >= at - 6 * 60 * 60 * 1000) continue;
     match.active = false;
-    if (match.status === 'live' || match.status === 'scheduled') match.status = 'ended';
+    if (confirmedEnd) match.status = 'ended';
     match.updated_at = new Date(at);
     expired.push(match.match_id);
   }
@@ -93,7 +106,7 @@ export function expireStale(graceSeconds = 150, at = Date.now()) {
   return expired;
 }
 
-/** same filters/order as the old SQL: active, service/league/q, live first, then kickoff */
+/** Server-owned order is immutable while a fixture stays in its section. */
 export function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false } = {}) {
   const wantService = service ? String(service).toUpperCase() : null;
   const needle = q ? String(q).toLowerCase() : null;
@@ -116,7 +129,9 @@ export function getMatches({ service = null, league = null, tournamentId = null,
   out.sort(
     (a, b) =>
       (b.service === 'LIVE' ? 1 : 0) - (a.service === 'LIVE' ? 1 : 0) ||
-      time(a.start_at) - time(b.start_at) || Number(a.match_id) - Number(b.match_id),
+      time(a.competition_first_seen_at ?? a.first_seen_at) - time(b.competition_first_seen_at ?? b.first_seen_at) ||
+      Number(a.tournament_id ?? a.category_id ?? 0) - Number(b.tournament_id ?? b.category_id ?? 0) ||
+      time(a.service === 'LIVE' ? a.live_first_seen_at : a.prematch_first_seen_at ?? a.first_seen_at) - time(b.service === 'LIVE' ? b.live_first_seen_at : b.prematch_first_seen_at ?? b.first_seen_at) || Number(a.match_id) - Number(b.match_id),
   );
 
   const from = Math.max(0, Number(offset) || 0);
@@ -255,6 +270,7 @@ export function applyInfo(info) {
   const at = new Date();
   const hasClock = Number.isFinite(info.matchTimeMs);
   const hasScore = Number.isFinite(info.homeScore) && Number.isFinite(info.awayScore);
+  if (hasClock || hasScore || info.feedStatus != null) { match.listing_stale = false; match.active = true; }
 
   if (hasScore) {
     match.home_score = info.homeScore;
@@ -322,4 +338,5 @@ export function clear() {
   byId.clear();
   lastUpdatedAt = null;
   upserts = 0;
+  competitionOrder.clear();
 }

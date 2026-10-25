@@ -111,12 +111,13 @@ interface GroupCardProps {
 }
 
 function GroupCard({ group, match, title }: GroupCardProps) {
+  const { t } = useLanguage();
   const { lang } = useLanguage();
   return (
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
       <div className="flex items-center justify-between bg-[#424d60] px-2 py-1.5">
         <span className="text-xs font-semibold text-white">{title}</span>
-        <span className="text-[10px] text-slate-300">{group.markets.length} linja</span>
+        <span className="text-[10px] text-slate-300">{group.markets.length} {" " + t("linja")}</span>
       </div>
       <div className="divide-y divide-tertiary/70">
         {group.markets.map(market => {
@@ -254,9 +255,9 @@ export default function MarketPanel({ match }: { match: Match }) {
       <label className="flex items-center gap-2 border border-tertiary/70 bg-secondary px-3 py-2 text-text-secondary">
         <Search size={16} className="shrink-0" />
         <input value={marketSearch} onChange={e => setMarketSearch(e.target.value)}
-          placeholder="Kërko tregje, linja, zgjedhje..."
+          placeholder={t("Kërko tregje, linja, zgjedhje...")}
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-text-secondary" />
-        {marketSearch && <button type="button" onClick={() => setMarketSearch('')} className="text-xs underline">Pastro</button>}
+        {marketSearch && <button type="button" onClick={() => setMarketSearch('')} className="text-xs underline">{t("Pastro")}</button>}
       </label>
 
       {/* Filtrat e kategorive — më kompakt në mobile */}
@@ -270,7 +271,7 @@ export default function MarketPanel({ match }: { match: Match }) {
           }`}
         >
           <ListOrdered size={14} />
-          <span>Të gjitha tregjet</span>
+          <span>{t("Të gjitha tregjet")}</span>
           <span className={`px-1 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${
             activeCategory === 'all' ? 'bg-primary/20 text-primary' : 'bg-primary/60 text-text-secondary'
           }`}>
@@ -306,8 +307,7 @@ export default function MarketPanel({ match }: { match: Match }) {
 
       {totalMarkets === 0 && (
         <div className="border border-tertiary/60 p-4 text-center text-sm text-text-secondary">
-          Nuk ka tregje të disponueshme për këtë kërkim.
-        </div>
+          {t("Nuk ka tregje të disponueshme për këtë kërkim.")}</div>
       )}
 
       {/* Seksionet e kategorive */}

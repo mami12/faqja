@@ -1,3 +1,4 @@
+import { useLanguage } from '../context/LanguageContext';
 import {useEffect,useRef,useState} from 'react';
 import {AlertTriangle,RefreshCw} from 'lucide-react';
 import {apiClient} from '../api/client';
@@ -42,6 +43,7 @@ function walletError(status:number,details:string):string {
  * No demo fallback is possible: the game always plays for the player balance.
  */
 export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame}){
+  const { t } = useLanguage();
   const {user,refreshUser}=useAuth();
   const cfg=GAMES[game]??GAMES.sizzling;
   const frame=useRef<HTMLIFrameElement>(null);
@@ -146,32 +148,32 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
     void refresh();
     return()=>{disposed=true;window.removeEventListener('message',changed);window.removeEventListener('focus',visible);document.removeEventListener('visibilitychange',visible);};
   },[url,game,refreshUser]);
-  if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">Po verifikohet lidhja me bilancin e llogarisë...</div>;
+  if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">{t("Po verifikohet lidhja me bilancin e llogarisë...")}</div>;
   if(awaitingTerms&&terms)return <div className="max-h-full w-full overflow-y-auto bg-black p-4 text-white sm:p-6">
-    <section aria-label="Kushtet e lojës" className="mx-auto max-w-xl space-y-4 rounded-xl border border-amber-400/50 bg-slate-950 p-4 sm:p-6">
-      <h2 className="text-lg font-bold">{cfg.title} · Modalitet i personalizuar</h2>
-      <p className="text-sm text-slate-200">Kjo lojë përdor një shpërndarje të personalizuar të rezultateve. RTP origjinale e ofruesit nuk zbatohet për rrotullimet e reja me pagesë në këtë modalitet.</p>
-      <dl className="grid grid-cols-2 gap-3"><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">RTP e caktuar</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveRtp)}</dd></div><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">Shpeshtësia e fitimit</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveHitFrequency)}</dd></div></dl>
-      <p className="text-sm text-slate-300">RTP është kthimi mesatar afatgjatë. Shpeshtësia e fitimit përfshin rrotullimet me pagesë që kthejnë një shumë mbi zero, përfshirë bonusin e tyre, përpara dyfishimit opsional të fitimit. Edhe një kthim më i vogël se basti llogaritet si rrotullim që paguan.</p>
-      {terms.game.effectiveRtp===0&&<p role="alert" className="rounded-lg border border-rose-400/50 bg-rose-500/10 p-3 font-bold text-rose-200">RTP 0%: rrotullimet e reja me pagesë nuk mund të fitojnë. Çdo bast i ri do të humbet.</p>}
-      <p className="text-sm text-white">Kufijtë e bastit: {casinoStakeLimits(terms.limits)}.</p>
-      {terms.game.effectiveRtp>0&&terms.game.maxPayoutMultiplier!=null&&<p className="text-sm text-slate-300">Kufiri i pagesës: deri në {terms.game.maxPayoutMultiplier}× basti. Maksimumi i mundshëm me bastin dhe numrin e linjave që ke zgjedhur mund të jetë më i ulët.</p>}
-      <p className="text-xs text-slate-400">Bonusët e pranuar më parë ruajnë kushtet e tyre.</p>
-      <button type="button" onClick={()=>{acceptedTerms.current=casinoTermsKey(terms.game,terms.limits);void connect();}} className="min-h-11 w-full rounded-lg bg-amber-400 px-4 font-bold text-black">E kuptova · Hap lojën</button>
+    <section aria-label={t("Kushtet e lojës")} className="mx-auto max-w-xl space-y-4 rounded-xl border border-amber-400/50 bg-slate-950 p-4 sm:p-6">
+      <h2 className="text-lg font-bold">{cfg.title} {" " + t("· Modalitet i personalizuar")}</h2>
+      <p className="text-sm text-slate-200">{t("Kjo lojë përdor një shpërndarje të personalizuar të rezultateve. RTP origjinale e ofruesit nuk zbatohet për rrotullimet e reja me pagesë në këtë modalitet.")}</p>
+      <dl className="grid grid-cols-2 gap-3"><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">{t("RTP e caktuar")}</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveRtp)}</dd></div><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">{t("Shpeshtësia e fitimit")}</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveHitFrequency)}</dd></div></dl>
+      <p className="text-sm text-slate-300">{t("RTP është kthimi mesatar afatgjatë. Shpeshtësia e fitimit përfshin rrotullimet me pagesë që kthejnë një shumë mbi zero, përfshirë bonusin e tyre, përpara dyfishimit opsional të fitimit. Edhe një kthim më i vogël se basti llogaritet si rrotullim që paguan.")}</p>
+      {terms.game.effectiveRtp===0&&<p role="alert" className="rounded-lg border border-rose-400/50 bg-rose-500/10 p-3 font-bold text-rose-200">{t("RTP 0%: rrotullimet e reja me pagesë nuk mund të fitojnë. Çdo bast i ri do të humbet.")}</p>}
+      <p className="text-sm text-white">{t("Kufijtë e bastit:") + " "}{casinoStakeLimits(terms.limits)}.</p>
+      {terms.game.effectiveRtp>0&&terms.game.maxPayoutMultiplier!=null&&<p className="text-sm text-slate-300">{t("Kufiri i pagesës: deri në") + " "}{terms.game.maxPayoutMultiplier}{t("× basti. Maksimumi i mundshëm me bastin dhe numrin e linjave që ke zgjedhur mund të jetë më i ulët.")}</p>}
+      <p className="text-xs text-slate-400">{t("Bonusët e pranuar më parë ruajnë kushtet e tyre.")}</p>
+      <button type="button" onClick={()=>{acceptedTerms.current=casinoTermsKey(terms.game,terms.limits);void connect();}} className="min-h-11 w-full rounded-lg bg-amber-400 px-4 font-bold text-black">{t("E kuptova · Hap lojën")}</button>
     </section>
   </div>;
   if(error||!url)return <div className="flex min-h-56 flex-col items-center justify-center gap-4 bg-black p-8 text-center">
     <AlertTriangle className="text-amber-300" size={30}/>
     <p role="alert" className="max-w-xl text-sm text-rose-200">{error||'Loja nuk është e disponueshme'}</p>
-    <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rilidhu me bilancin</button>
+    <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>{t("Rilidhu me bilancin")}</button>
   </div>;
   return <div className="casino-session-layout">
-    {terms&&<div className="casino-session-terms flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-white/10 bg-slate-950 px-2 py-1 text-center text-[11px] text-slate-300" aria-label="Kushtet aktive të lojës">
-      <span>Basti: {casinoStakeLimits(terms.limits)}</span>
-      {user&&<span className="font-semibold text-white" aria-label="Bilanci i llogarisë">Bilanci: {Number(user.balance).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} lekë</span>}
-      {pendingWin>0&&<span className="text-amber-200">Fitim në pritje: {pendingWin.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} lekë · Arkëtoje në lojë për ta kaluar në bilanc</span>}
-      {terms.game.controls.mode==='custom'&&<span className="font-semibold text-amber-200">I personalizuar · RTP {casinoPercent(terms.game.effectiveRtp)} · Shpeshtësia {casinoPercent(terms.game.effectiveHitFrequency)}{terms.game.effectiveRtp===0?' · Pa fitime':''}</span>}
-      {termsChanged&&<button type="button" onClick={()=>void connect()} className="min-h-8 rounded border border-amber-400/60 px-2 font-bold text-amber-200">Cilësimet ndryshuan · Kontrolloji para rrotullimit tjetër me pagesë</button>}
+    {terms&&<div className="casino-session-terms flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-white/10 bg-slate-950 px-2 py-1 text-center text-[11px] text-slate-300" aria-label={t("Kushtet aktive të lojës")}>
+      <span>{t("Basti:") + " "}{casinoStakeLimits(terms.limits)}</span>
+      {user&&<span className="font-semibold text-white" aria-label={t("Bilanci i llogarisë")}>{t("Bilanci:") + " "}{Number(user.balance).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} {" " + t("lekë")}</span>}
+      {pendingWin>0&&<span className="text-amber-200">{t("Fitim në pritje:") + " "}{pendingWin.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} {" " + t("lekë · Arkëtoje në lojë për ta kaluar në bilanc")}</span>}
+      {terms.game.controls.mode==='custom'&&<span className="font-semibold text-amber-200">{t("I personalizuar · RTP") + " "}{casinoPercent(terms.game.effectiveRtp)} {" " + t("· Shpeshtësia") + " "}{casinoPercent(terms.game.effectiveHitFrequency)}{terms.game.effectiveRtp===0?' · Pa fitime':''}</span>}
+      {termsChanged&&<button type="button" onClick={()=>void connect()} className="min-h-8 rounded border border-amber-400/60 px-2 font-bold text-amber-200">{t("Cilësimet ndryshuan · Kontrolloji para rrotullimit tjetër me pagesë")}</button>}
     </div>}
     <div className="casino-session-stage">
     <div className="casino-wallet-surface relative">
@@ -182,9 +184,9 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       {stalled&&!ready&&<div role="alert"
         className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black/95 p-5 text-center text-white">
         <AlertTriangle className="text-amber-300" size={32}/>
-        <p className="text-base font-bold">{cfg.title} nuk përfundoi ngarkimin {progress&&'('+progress+')'}</p>
-        <p className="max-w-md text-sm text-slate-300">Sesioni i portofolit u verifikua, por klienti i lojës nuk përfundoi. Kontrollo nëse disa skedarë janë bllokuar ose janë ruajtur nga një ngarkim i mëparshëm.</p>
-        <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>Rifresko lojën</button>
+        <p className="text-base font-bold">{cfg.title} {" " + t("nuk përfundoi ngarkimin") + " "}{progress&&'('+progress+')'}</p>
+        <p className="max-w-md text-sm text-slate-300">{t("Sesioni i portofolit u verifikua, por klienti i lojës nuk përfundoi. Kontrollo nëse disa skedarë janë bllokuar ose janë ruajtur nga një ngarkim i mëparshëm.")}</p>
+        <button onClick={()=>void connect()} className="flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-4 font-bold text-black"><RefreshCw size={16}/>{t("Rifresko lojën")}</button>
       </div>}
     </div>
     </div>

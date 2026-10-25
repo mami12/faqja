@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, Loader2, X } from 'lucide-react';
+import { adminUiText, adminUiError } from './adminUiCopy';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatMarketSelectionLabel, translateOutcomeName } from '../../utils/sportsbookLabels';
 import { formatOdds } from '../../utils/formatOdds';
@@ -35,7 +36,8 @@ const exactPrice = (value: number) => {
 };
 
 export default function MatchControlDialog({ dialog, busy, error, onClose, onSaveOdds, onAdjust, onSettle }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const tr = (value: string) => adminUiText(value, lang);
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -52,8 +54,8 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
   closeRef.current = onClose;
   busyRef.current = locked;
 
-  const title = dialog.kind === 'odds' ? 'Ndrysho kuotën'
-    : dialog.kind === 'adjust' ? 'Rregullo kuotat' : 'Vendos rezultatin';
+  const title = dialog.kind === 'odds' ? tr('Ndrysho kuotën')
+    : dialog.kind === 'adjust' ? tr('Rregullo kuotat') : tr('Vendos rezultatin');
   const fixture = `${dialog.match.homeTeam} – ${dialog.match.awayTeam}`;
   const fixtureKey = `${dialog.match.homeTeam} vs ${dialog.match.awayTeam}`;
   const oddsNumber = decimalValue(odds);
@@ -123,17 +125,17 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
     let save: () => Promise<void>;
     if (dialog.kind === 'odds') {
       if (!oddsDraftValid) {
-        setLocalError('Vendos një kuotë të vlefshme më të madhe se 1. Kuota ruhet deri në tri shifra pas presjes.');
+        setLocalError(tr('Vendos një kuotë të vlefshme më të madhe se 1. Kuota ruhet deri në tri shifra pas presjes.'));
         return;
       }
       save = () => onSaveOdds(oddsDraft);
     } else if (dialog.kind === 'adjust') {
       if (!Number.isFinite(percentageNumber) || percentageNumber <= -100 || percentageNumber === 0) {
-        setLocalError('Vendos një përqindje më të madhe se -100 dhe të ndryshme nga zero.');
+        setLocalError(tr('Vendos një përqindje më të madhe se -100 dhe të ndryshme nga zero.'));
         return;
       }
       if (!preview.length || preview.some(item => !item.valid)) {
-        setLocalError('Ndryshimi duhet të lërë çdo kuotë të vlefshme dhe më të madhe se 1. Rregullo përqindjen përpara ruajtjes.');
+        setLocalError(tr('Ndryshimi duhet të lërë çdo kuotë të vlefshme dhe më të madhe se 1. Rregullo përqindjen përpara ruajtjes.'));
         return;
       }
       save = () => onAdjust(percentageNumber);
@@ -141,7 +143,7 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
       const home = scoreValue(homeScore);
       const away = scoreValue(awayScore);
       if (!Number.isFinite(home) || !Number.isFinite(away)) {
-        setLocalError('Golat e të dy ekipeve duhet të jenë numra të plotë, zero ose më shumë.');
+        setLocalError(tr('Golat e të dy ekipeve duhet të jenë numra të plotë, zero ose më shumë.'));
         return;
       }
       save = () => onSettle(home, away);
@@ -162,7 +164,7 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
     }
   };
 
-  const shownError = localError || error;
+  const shownError = adminUiError(localError || error, lang);
   const close = () => {
     if (!busyRef.current && !submittingRef.current) closeRef.current();
   };
@@ -175,21 +177,21 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
         <form className="mc-dialog-form" noValidate onSubmit={submit}>
           <header className="mc-dialog-heading">
             <div><h3>{title}</h3><p id={descriptionId}>{fixture}</p></div>
-            <button type="button" className="mc-icon-button" aria-label="Mbyll dritaren" disabled={locked} onClick={close}><X size={19} /></button>
+            <button type="button" className="mc-icon-button" aria-label={tr("Mbyll dritaren")} disabled={locked} onClick={close}><X size={19} /></button>
           </header>
           <div className="mc-dialog-body">
             {dialog.kind === 'odds' && <>
               <div className="mc-review">
                 <span>{formatMarketSelectionLabel(dialog.market.name, dialog.market.line, t)}</span>
                 <strong>{translateOutcomeName(dialog.outcome.name, t, dialog.market.name, fixtureKey, dialog.outcome.code)}</strong>
-                <p>Kuota aktuale: <b>{exactPrice(Number(dialog.outcome.odds))}</b></p>
+                <p>{tr("Kuota aktuale:")}{' '}<b>{exactPrice(Number(dialog.outcome.odds))}</b></p>
               </div>
-              <label className="mc-field"><span>Kuota e re</span>
-                <input aria-label="Kuota e re" type="text" inputMode="decimal" autoComplete="off" value={odds} disabled={locked}
+              <label className="mc-field"><span>{tr("Kuota e re")}</span>
+                <input aria-label={tr("Kuota e re")} type="text" inputMode="decimal" autoComplete="off" value={odds} disabled={locked}
                   aria-invalid={Boolean(localError)} onChange={event => { setOdds(event.target.value); setLocalError(''); }} />
-                <small>Pranohet edhe presja dhjetore. Ruajtja përdor deri në tri shifra pas presjes.</small>
+                <small>{tr("Pranohet edhe presja dhjetore. Ruajtja përdor deri në tri shifra pas presjes.")}</small>
               </label>
-              <div className="mc-quick-values" aria-label="Ndrysho kuotën me hapa">
+              <div className="mc-quick-values" aria-label={tr("Ndrysho kuotën me hapa")}>
                 {[-0.1, -0.05, 0.05, 0.1].map(step => <button key={step} type="button" className="mc-button" disabled={locked}
                   onClick={() => {
                     const current = decimalValue(odds);
@@ -197,64 +199,64 @@ export default function MatchControlDialog({ dialog, busy, error, onClose, onSav
                     setLocalError('');
                   }}>{step > 0 ? '+' : ''}{step.toFixed(2)}</button>)}
               </div>
-              <div className="mc-preview" aria-label="Kuota aktuale dhe kuota për ruajtje"><div>
-                <div><strong>Për ruajtje</strong><small>Kuota përpara dhe pas ndryshimit</small></div>
+              <div className="mc-preview" aria-label={tr("Kuota aktuale dhe kuota për ruajtje")}><div>
+                <div><strong>{tr("Për ruajtje")}</strong><small>{tr("Kuota përpara dhe pas ndryshimit")}</small></div>
                 <div><span data-admin-preview-before={dialog.outcome.odds}>{exactPrice(Number(dialog.outcome.odds))}</span><ArrowRight size={15} aria-hidden="true" />
-                  <strong data-admin-preview-after={oddsDraft}>{oddsDraftValid ? exactPrice(oddsDraft) : 'E pavlefshme'}</strong>
-                  {oddsDraftValid && <small>Në faqe: {formatOdds(oddsDraft)}</small>}</div>
+                  <strong data-admin-preview-after={oddsDraft}>{oddsDraftValid ? exactPrice(oddsDraft) : tr('E pavlefshme')}</strong>
+                  {oddsDraftValid && <small>{tr("Në faqe:")}{' '}{formatOdds(oddsDraft)}</small>}</div>
               </div></div>
-              <p className="mc-review">Kuota e vendosur këtu ka përparësi ndaj kuotës së furnizuesit.</p>
+              <p className="mc-review">{tr("Kuota e vendosur këtu ka përparësi ndaj kuotës së furnizuesit.")}</p>
             </>}
             {dialog.kind === 'adjust' && <>
-              <div className="mc-review"><strong>{dialog.title}</strong><p>Shiko vlerat e reja përpara se të zbatosh ndryshimin.</p></div>
-              <label className="mc-field"><span>Përqindja e ndryshimit</span>
-                <input aria-label="Përqindja e ndryshimit" type="text" inputMode="decimal" autoComplete="off" value={percentage} disabled={locked}
+              <div className="mc-review"><strong>{dialog.scope === 'match' ? tr('Të gjitha kuotat e ndeshjes') : (() => { const market = dialog.match.markets?.find(item => item.id === dialog.id); return market ? formatMarketSelectionLabel(market.name, market.line, t) : tr(dialog.title); })()}</strong><p>{tr("Shiko vlerat e reja përpara se të zbatosh ndryshimin.")}</p></div>
+              <label className="mc-field"><span>{tr("Përqindja e ndryshimit")}</span>
+                <input aria-label={tr("Përqindja e ndryshimit")} type="text" inputMode="decimal" autoComplete="off" value={percentage} disabled={locked}
                   aria-invalid={Boolean(localError)} onChange={event => { setPercentage(event.target.value); setLocalError(''); }} />
-                <small>Vlerat pozitive rrisin kuotat; vlerat negative i ulin.</small>
+                <small>{tr("Vlerat pozitive rrisin kuotat; vlerat negative i ulin.")}</small>
               </label>
-              <div className="mc-quick-values" aria-label="Përqindjet e shpejta">
+              <div className="mc-quick-values" aria-label={tr("Përqindjet e shpejta")}>
                 {[-10, -5, 5, 10].map(value => <button key={value} type="button" className="mc-button" disabled={locked}
                   aria-pressed={percentageNumber === value} onClick={() => { setPercentage(String(value)); setLocalError(''); }}>{value > 0 ? '+' : ''}{value}%</button>)}
               </div>
-              <div className="mc-review"><strong>{preview.length} kuota për ndryshim</strong>
-                {dialog.outcomes.length > preview.length && <p>{dialog.outcomes.length - preview.length} zgjedhje pa kuotë të vlefshme anashkalohen.</p>}
-                <p>Nëse ruajtja përfundon pjesërisht, riprovimi përdor kuotat fillestare të kësaj dritareje. Ndryshimi nuk grumbullohet dy herë; rihap dritaren për një rregullim të ri.</p>
+              <div className="mc-review"><strong>{preview.length}{' '}{tr("kuota për ndryshim")}</strong>
+                {dialog.outcomes.length > preview.length && <p>{dialog.outcomes.length - preview.length}{' '}{tr("zgjedhje pa kuotë të vlefshme anashkalohen.")}</p>}
+                <p>{tr("Nëse ruajtja përfundon pjesërisht, riprovimi përdor kuotat fillestare të kësaj dritareje. Ndryshimi nuk grumbullohet dy herë; rihap dritaren për një rregullim të ri.")}</p>
               </div>
-              <div className="mc-preview" aria-label="Paraqitja e kuotave para dhe pas ndryshimit">
+              <div className="mc-preview" aria-label={tr("Paraqitja e kuotave para dhe pas ndryshimit")}>
                 {preview.map(item => {
                   const market = outcomeMarkets.get(item.outcome.id);
                   return <div key={item.outcome.id} className={item.valid ? '' : 'mc-preview-invalid'}>
                     <div><strong>{translateOutcomeName(item.outcome.name, t, market?.name, fixtureKey, item.outcome.code)}</strong>
                       {market && <small>{formatMarketSelectionLabel(market.name, market.line, t)}</small>}</div>
                     <div><span data-admin-preview-before={item.previous}>{exactPrice(item.previous)}</span><ArrowRight size={15} aria-hidden="true" />
-                      <strong data-admin-preview-after={item.next}>{item.valid ? exactPrice(item.next) : 'E pavlefshme'}</strong>
-                      {item.valid && <small>Në faqe: {formatOdds(item.next)}</small>}</div>
+                      <strong data-admin-preview-after={item.next}>{item.valid ? exactPrice(item.next) : tr('E pavlefshme')}</strong>
+                      {item.valid && <small>{tr("Në faqe:")}{' '}{formatOdds(item.next)}</small>}</div>
                   </div>;
                 })}
               </div>
             </>}
             {dialog.kind === 'settle' && <>
-              <div className="mc-review"><strong>Kontrollo rezultatin përfundimtar</strong>
-                <p>Rezultati do të përdoret për të përditësuar skedinat dhe pagesat përkatëse. Tregjet që kërkojnë të dhëna të tjera mund të mbeten në pritje.</p>
+              <div className="mc-review"><strong>{tr("Kontrollo rezultatin përfundimtar")}</strong>
+                <p>{tr("Rezultati do të përdoret për të përditësuar skedinat dhe pagesat përkatëse. Tregjet që kërkojnë të dhëna të tjera mund të mbeten në pritje.")}</p>
               </div>
               <div className="mc-score-inputs">
                 {[
                   { team: dialog.match.homeTeam, value: homeScore, change: setHomeScore },
                   { team: dialog.match.awayTeam, value: awayScore, change: setAwayScore },
                 ].map((field, index) => <label key={index} className="mc-field"><span>{field.team}</span>
-                  <input aria-label={`Golat e ${field.team}`} type="text" inputMode="numeric" autoComplete="off" value={field.value} disabled={locked}
+                  <input aria-label={tr(`Golat e ${field.team}`)} type="text" inputMode="numeric" autoComplete="off" value={field.value} disabled={locked}
                     aria-invalid={Boolean(localError)} onChange={event => { field.change(event.target.value); setLocalError(''); }} />
                 </label>)}
               </div>
-              <p className="mc-review">Rezultati për ruajtje: <strong>{dialog.match.homeTeam} {homeScore || '—'} – {awayScore || '—'} {dialog.match.awayTeam}</strong></p>
+              <p className="mc-review">{tr("Rezultati për ruajtje:")}{' '}<strong>{dialog.match.homeTeam} {homeScore || '—'} – {awayScore || '—'} {dialog.match.awayTeam}</strong></p>
             </>}
             {shownError && <div className="mc-error" role="alert">{shownError}</div>}
           </div>
           <footer className="mc-dialog-actions">
-            <button type="button" className="mc-button" disabled={locked} onClick={close}>Anulo</button>
+            <button type="button" className="mc-button" disabled={locked} onClick={close}>{tr("Anulo")}</button>
             <button type="submit" className={`mc-button ${dialog.kind === 'settle' ? 'mc-button-danger' : 'mc-button-primary'}`} disabled={locked}>
               {locked && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
-              {dialog.kind === 'odds' ? 'Ruaj kuotën' : dialog.kind === 'adjust' ? 'Zbato ndryshimin' : 'Ruaj dhe përditëso skedinat'}
+              {dialog.kind === 'odds' ? tr('Ruaj kuotën') : dialog.kind === 'adjust' ? tr('Zbato ndryshimin') : tr('Ruaj dhe përditëso skedinat')}
             </button>
           </footer>
         </form>

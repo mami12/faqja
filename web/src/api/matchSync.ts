@@ -1,6 +1,9 @@
 /** Reconcile source snapshots, never browser arrival order. A goal correction may
  * legitimately lower a score, so compare timestamps rather than goal counts. */
 export interface MatchFacts {
+  displayOrder?: number;
+  competitionOrder?: number;
+  listingStale?: boolean;
   updatedAt?: string;
   snapshotAt?: string;
   scoreAt?: string | null;
@@ -50,7 +53,7 @@ export function mergeMatchFacts<T extends MatchFacts>(previous: T | undefined, i
     [['currentMinute', 'currentSecond', 'clockAt'],
       timestamp(previous.clockAt) || snapshotTime(previous), timestamp(incoming.clockAt) || snapshotTime(incoming)],
     [['status', 'period', 'phaseAt'], ...sourceOrder(previous, incoming, 'phaseAt')],
-    [['corners', 'cards', 'marketCount', 'isSuspended', 'homeTeam', 'awayTeam'],
+    [['corners', 'cards', 'marketCount', 'isSuspended', 'homeTeam', 'awayTeam', 'displayOrder', 'competitionOrder', 'listingStale'],
       snapshotTime(previous), snapshotTime(incoming)],
   ];
   for (const [keys, before, after] of groups) {

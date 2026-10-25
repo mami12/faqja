@@ -61,7 +61,8 @@ const betStatusClass = (status: string) =>
 
 export default function TransactionHistoryPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const locale = lang === 'en' ? 'en-GB' : 'sq-AL';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [from, setFrom] = useState('');
@@ -129,78 +130,70 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
       {!embedded && <Header />}
       <main className={`mx-auto w-full max-w-7xl space-y-3 p-3 sm:p-5 ${embedded ? '' : 'flex-1'}`}>
         <header>
-          <h1 className="text-lg sm:text-xl font-bold">Historiku i transaksioneve</h1>
+          <h1 className="text-lg sm:text-xl font-bold">{t("Historiku i transaksioneve")}</h1>
           <p className="mt-1 text-xs text-text-secondary">
-            {user?.role === 'ADMIN' ? 'Të gjitha lëvizjet financiare në platformë.'
+            {t(user?.role === 'ADMIN' ? 'Të gjitha lëvizjet financiare në platformë.'
               : user?.role === 'MANAGER' ? 'Transaksionet e portofolit tënd dhe të lojtarëve të tu.'
-                : 'Depozitat, bastet dhe pagesat e llogarisë tënde.'}
+                : 'Depozitat, bastet dhe pagesat e llogarisë tënde.')}
           </p>
         </header>
         <form onSubmit={fetchTransactions} className="flex flex-col gap-2 border border-tertiary bg-secondary p-3 sm:flex-row sm:items-end">
-          <label className="flex-1 text-xs font-semibold text-text-secondary">Nga data
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
+          <label className="flex-1 text-xs font-semibold text-text-secondary">{t("Nga data")}<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
           </label>
-          <label className="flex-1 text-xs font-semibold text-text-secondary">Deri më
-            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
+          <label className="flex-1 text-xs font-semibold text-text-secondary">{t("Deri më")}<input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 block w-full border border-tertiary bg-primary px-3 py-2 text-white" />
           </label>
-          <button type="submit" className="bg-accent-yellow px-5 py-2.5 text-sm font-bold text-[#17212c] hover:brightness-110">Filtro</button>
+          <button type="submit" className="bg-accent-yellow px-5 py-2.5 text-sm font-bold text-[#17212c] hover:brightness-110">{t("Filtro")}</button>
         </form>
         {user?.role === 'PLAYER' && summary && (
-          <section aria-label="Përmbledhja e fitimeve dhe humbjeve" className="grid gap-2 sm:grid-cols-3">
+          <section aria-label={t("Përmbledhja e fitimeve dhe humbjeve")} className="grid gap-2 sm:grid-cols-3">
             {[
               { label: 'Fitimet', value: summary.winnings, color: 'text-amber-200' },
               { label: 'Humbjet', value: summary.losses, color: 'text-rose-300' },
               { label: 'Bilanci neto', value: summary.net, color: summary.net >= 0 ? 'text-amber-200' : 'text-rose-300' },
             ].map((item) => (
               <div key={item.label} className="border border-tertiary bg-secondary p-3">
-                <div className="text-xs font-semibold text-text-secondary">{item.label}</div>
+                <div className="text-xs font-semibold text-text-secondary">{t(item.label)}</div>
                 <div className={`mt-1 font-mono text-xl font-black ${item.color}`}>
-                  {item.value.toFixed(2)} Lëk
-                </div>
+                  {item.value.toFixed(2)} {" " + t("Lëk")}</div>
               </div>
             ))}
           </section>
         )}
         {user?.role === 'PLAYER' && (
-          <section aria-label="Bastet e mia sipas statusit" className="border border-tertiary bg-secondary">
+          <section aria-label={t("Bastet e mia sipas statusit")} className="border border-tertiary bg-secondary">
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-tertiary bg-[#303d4d] p-3">
               <div>
-                <h2 className="text-sm font-bold text-white">Bastet e mia</h2>
+                <h2 className="text-sm font-bold text-white">{t("Bastet e mia")}</h2>
                 <p className="mt-1 text-[11px] text-text-secondary">
-                  Shiko kuponët sipas statusit dhe datës së vendosjes.
-                </p>
+                  {t("Shiko kuponët sipas statusit dhe datës së vendosjes.")}</p>
               </div>
               <div className="flex items-end gap-2">
                 <label className="flex flex-col gap-1 text-xs font-semibold text-slate-200">
-                  Statusi
-                  <select value={betFilter} onChange={e => setBetFilter(e.target.value as BetFilter)}
-                    aria-label="Filtro bastet sipas statusit"
+                  {t("Statusi")}<select value={betFilter} onChange={e => setBetFilter(e.target.value as BetFilter)}
+                    aria-label={t("Filtro bastet sipas statusit")}
                     className="min-w-[155px] border border-[#64748b] bg-[#182432] px-2 py-2 text-xs text-white focus:outline-none focus:border-accent-yellow">
                     {(Object.keys(BET_FILTER_LABELS) as BetFilter[]).map(status => (
-                      <option key={status} value={status}>{BET_FILTER_LABELS[status]}</option>
+                      <option key={status} value={status}>{t(BET_FILTER_LABELS[status])}</option>
                     ))}
                   </select>
                 </label>
                 <button type="button" onClick={() => setBetRefresh(n => n + 1)}
                   className="border border-tertiary bg-[#435269] px-3 py-2 text-xs font-semibold text-white hover:bg-[#52647c]">
-                  Rifresko
-                </button>
+                  {t("Rifresko")}</button>
               </div>
             </div>
             {betFilter === 'REJECTED' && (
               <p className="border-b border-tertiary/60 px-3 py-2 text-[11px] text-text-secondary">
-                Këtu shfaqen kërkesat e refuzuara nga serveri pas aktivizimit të këtij regjistrimi.
-                Ato nuk janë bileta të pranuara dhe nuk kanë zbritur para nga llogaria.
-              </p>
+                {t("Këtu shfaqen kërkesat e refuzuara nga serveri pas aktivizimit të këtij regjistrimi. Ato nuk janë bileta të pranuara dhe nuk kanë zbritur para nga llogaria.")}</p>
             )}
-            {betLoading ? <div className="p-8 text-center text-text-secondary text-xs">Duke ngarkuar bastet…</div> :
-              betError ? <div className="p-6 text-center text-rose-300 text-xs" role="alert">{betError}</div> :
+            {betLoading ? <div className="p-8 text-center text-text-secondary text-xs">{t("Duke ngarkuar bastet…")}</div> :
+              betError ? <div className="p-6 text-center text-rose-300 text-xs" role="alert">{t(betError)}</div> :
               betEntries.length === 0 ? (
-                <div className="p-8 text-center text-text-secondary text-xs">Nuk ka baste për këtë filtër dhe periudhë.</div>
+                <div className="p-8 text-center text-text-secondary text-xs">{t("Nuk ka baste për këtë filtër dhe periudhë.")}</div>
               ) : (
                 <>
                   <p className="border-b border-tertiary/60 px-3 py-2 text-[11px] text-text-secondary">
-                    {betEntries.length} rezultate {betEntries.length === 500 ? '(maksimumi 500 më të fundit për filtrin)' : ''}
+                    {betEntries.length} {" " + t("rezultate") + " "}{betEntries.length === 500 ? t('(maksimumi 500 më të fundit për filtrin)') : ''}
                   </p>
                   <div className="max-h-[560px] divide-y divide-tertiary/70 overflow-y-auto">
                     {betEntries.map(entry => (
@@ -210,29 +203,29 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-[11px] font-bold text-white">{entry.id.slice(0,8).toUpperCase()}</span>
                               <span className={'text-[11px] font-bold ' + betStatusClass(entry.status)}>
-                                {BET_STATUS_LABELS[entry.status] ?? entry.status}
+                                {t(BET_STATUS_LABELS[entry.status] ?? entry.status)}
                               </span>
                             </div>
                             <div className="mt-1 truncate text-xs text-slate-200">
                               {entry.kind === 'REJECTED'
-                                ? 'Kërkesë e refuzuar (' + entry.selectionCount + ' zgjedhje)'
-                                : entry.lines?.map(line => line.matchName).filter((name, idx, all) => all.indexOf(name) === idx).join(' · ') || 'Biletë'}
+                                ? `${t('Kërkesë e refuzuar')} (${entry.selectionCount} ${t('zgjedhje')})`
+                                : entry.lines?.map(line => line.matchName).filter((name, idx, all) => all.indexOf(name) === idx).join(' · ') || t('Biletë')}
                             </div>
                             <div className="mt-1 text-[10px] text-text-secondary">
-                              {new Date(entry.placedAt).toLocaleString('sq-AL')}
+                              {new Date(entry.placedAt).toLocaleString(locale)}
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
                             <div className="text-xs font-bold tabular-nums text-amber-200">
-                              {entry.stake == null ? '—' : entry.stake.toFixed(2) + ' Lëk'}
+                              {entry.stake == null ? '—' : entry.stake.toFixed(2) + ' ' + t('Lëk')}
                             </div>
-                            <div className="text-[10px] text-text-secondary">Shuma</div>
-                            <span className="text-[10px] text-text-secondary">Detajet ▾</span>
+                            <div className="text-[10px] text-text-secondary">{t("Shuma")}</div>
+                            <span className="text-[10px] text-text-secondary">{t("Detajet ▾")}</span>
                           </div>
                         </summary>
                         {entry.kind === 'REJECTED' ? (
                           <div className="mt-3 border-t border-tertiary/60 pt-2 text-xs text-rose-200">
-                            Arsyeja: {userError(entry.reason,'Kërkesa për bast nuk u pranua.')}
+                            {t("Arsyeja:") + " "}{t(userError(entry.reason,'Kërkesa për bast nuk u pranua.'))}
                           </div>
                         ) : (
                           <div className="mt-3 space-y-2 border-t border-tertiary/60 pt-2">
@@ -247,15 +240,15 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                                 </div>
                                 <div className="shrink-0 text-right">
                                   <div className="font-mono text-amber-200">@{formatOdds(line.oddsAtPlacement)}</div>
-                                  <div className={betStatusClass(line.status)}>{BET_STATUS_LABELS[line.status] ?? line.status}</div>
+                                  <div className={betStatusClass(line.status)}>{t(BET_STATUS_LABELS[line.status] ?? line.status)}</div>
                                 </div>
                               </div>
                             ))}
                             <div className="flex flex-wrap justify-between gap-2 border-t border-tertiary/60 pt-2 text-[11px]">
-                              <span className="text-slate-300">{entry.system ? `Sistem · ${entry.system.columnCount} kolona` : <>Koeficienti total: <strong>{formatOdds(entry.totalOdds)}</strong></>}</span>
+                              <span className="text-slate-300">{entry.system ? `${t('Sistem')} · ${entry.system.columnCount} ${t('kolona')}` : <>{t("Koeficienti total:") + " "}<strong>{formatOdds(entry.totalOdds)}</strong></>}</span>
                               <span className="text-slate-300">
-                                {entry.system ? (entry.status === 'PENDING' ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme'}:
-                                <strong className="ml-1 text-amber-200">{(entry.system && entry.status !== 'PENDING' ? entry.actualPayout ?? 0 : entry.potentialPayout).toFixed(2)} Lëk</strong>
+                                {t(entry.system ? (entry.status === 'PENDING' ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme')}:
+                                <strong className="ml-1 text-amber-200">{(entry.system && entry.status !== 'PENDING' ? entry.actualPayout ?? 0 : entry.potentialPayout).toFixed(2)} {" " + t("Lëk")}</strong>
                               </span>
                             </div>
                             <SystemTicketSummary ticket={entry} />
@@ -269,10 +262,10 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
           </section>
         )}
         <section className="overflow-hidden border border-tertiary bg-secondary">
-          {!loading && !error && <div className="border-b border-tertiary bg-[#394758] px-3 py-2 text-[11px] font-semibold text-slate-200">{transactions.length} transaksione</div>}
-          {loading ? <div className="p-16 text-center text-text-secondary">Duke ngarkuar transaksionet…</div>
-            : error ? <div role="alert" className="p-8 text-center text-rose-300">{error}</div>
-              : transactions.length === 0 ? <div className="p-12 text-center text-text-secondary">Nuk ka transaksione për këtë periudhë.</div>
+          {!loading && !error && <div className="border-b border-tertiary bg-[#394758] px-3 py-2 text-[11px] font-semibold text-slate-200">{transactions.length} {" " + t("transaksione")}</div>}
+          {loading ? <div className="p-16 text-center text-text-secondary">{t("Duke ngarkuar transaksionet…")}</div>
+            : error ? <div role="alert" className="p-8 text-center text-rose-300">{t(error)}</div>
+              : transactions.length === 0 ? <div className="p-12 text-center text-text-secondary">{t("Nuk ka transaksione për këtë periudhë.")}</div>
                 : (
                   <>
                     {/* MOBILE VIEW: Cards (< md) */}
@@ -284,27 +277,26 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <div className="font-bold text-white text-xs">
-                                  {transactionLabel(transaction.type)}
+                                  {t(transactionLabel(transaction.type))}
                                 </div>
                                 {user?.role !== 'PLAYER' && (
                                   <div className="text-[11px] text-text-secondary font-medium">
-                                    Llogaria: <span className="text-white font-semibold">{transaction.username}</span>
+                                    {t("Llogaria:") + " "}<span className="text-white font-semibold">{transaction.username}</span>
                                   </div>
                                 )}
                               </div>
                               <span className={`text-sm font-black tabular-nums ${isPositive ? 'text-amber-300' : 'text-rose-300'}`}>
-                                {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} Lëk
-                              </span>
+                                {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} {" " + t("Lëk")}</span>
                             </div>
 
                             <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-tertiary/40">
-                              <span>Bilanci pas: <strong className="text-white font-mono">{transaction.balanceAfter.toFixed(2)} Lëk</strong></span>
-                              <span>{new Date(transaction.createdAt).toLocaleString('sq-AL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                              <span>{t("Bilanci pas:") + " "}<strong className="text-white font-mono">{transaction.balanceAfter.toFixed(2)} {" " + t("Lëk")}</strong></span>
+                              <span>{new Date(transaction.createdAt).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
 
                             {transaction.description && (
                               <div className="text-[11px] text-text-secondary bg-primary/50 px-2 py-1 border-l-2 border-tertiary">
-                                {transactionDescription(transaction.description,transaction.type)}
+                                {transactionDescription(transaction.description,transaction.type,lang)}
                               </div>
                             )}
                           </div>
@@ -317,27 +309,26 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                       <table className="w-full min-w-[780px] text-left text-sm">
                         <thead className="bg-[#394758] text-[11px] uppercase text-text-secondary font-bold tracking-wider">
                           <tr>
-                            <th className="p-3">Data & Ora</th>
-                            {user?.role !== 'PLAYER' && <th className="p-3">Llogaria</th>}
-                            <th className="p-3">Lloji</th>
-                            <th className="p-3">Përshkrimi</th>
-                            <th className="p-3 text-right">Shuma</th>
-                            <th className="p-3 text-right">Bilanci pas veprimit</th>
+                            <th className="p-3">{t("Data & Ora")}</th>
+                            {user?.role !== 'PLAYER' && <th className="p-3">{t("Llogaria")}</th>}
+                            <th className="p-3">{t("Lloji")}</th>
+                            <th className="p-3">{t("Përshkrimi")}</th>
+                            <th className="p-3 text-right">{t("Shuma")}</th>
+                            <th className="p-3 text-right">{t("Bilanci pas veprimit")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-tertiary/60">
                           {transactions.map((transaction) => (
                             <tr key={transaction.id} className="text-white hover:bg-primary/40 transition">
                               <td className="p-3 whitespace-nowrap text-xs text-text-secondary tabular-nums">
-                                {new Date(transaction.createdAt).toLocaleString('sq-AL')}
+                                {new Date(transaction.createdAt).toLocaleString(locale)}
                               </td>
                               {user?.role !== 'PLAYER' && <td className="p-3 font-semibold">{transaction.username}</td>}
-                              <td className="p-3 font-semibold text-xs">{transactionLabel(transaction.type)}</td>
-                              <td className="p-3 text-xs text-text-secondary">{transaction.description ? transactionDescription(transaction.description,transaction.type) : '—'}</td>
+                              <td className="p-3 font-semibold text-xs">{t(transactionLabel(transaction.type))}</td>
+                              <td className="p-3 text-xs text-text-secondary">{transaction.description ? transactionDescription(transaction.description,transaction.type,lang) : '—'}</td>
                               <td className={`p-3 text-right font-mono font-black tabular-nums ${transaction.amount >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
-                                {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} Lëk
-                              </td>
-                              <td className="p-3 text-right font-mono tabular-nums text-xs font-bold text-text-secondary">{transaction.balanceAfter.toFixed(2)} Lëk</td>
+                                {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} {" " + t("Lëk")}</td>
+                              <td className="p-3 text-right font-mono tabular-nums text-xs font-bold text-text-secondary">{transaction.balanceAfter.toFixed(2)} {" " + t("Lëk")}</td>
                             </tr>
                           ))}
                         </tbody>

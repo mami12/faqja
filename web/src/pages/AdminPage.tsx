@@ -6,6 +6,7 @@ import MatchControl from '../components/Admin/MatchControl';
 import BetBuilderManager from '../components/Admin/BetBuilderManager';
 import LiveRiskManager from '../components/Admin/LiveRiskManager';
 import TicketAudit from '../components/Admin/TicketAudit';
+import { adminUiText } from '../components/Admin/adminUiCopy';
 import { useLanguage } from '../context/LanguageContext';
 import AdminAuditLog from '../components/Admin/AdminAuditLog';
 import TransactionHistoryPage from './TransactionHistoryPage';
@@ -42,7 +43,8 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
 const allItems = sections.flatMap(section => section.items);
 
 export default function AdminPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const tr = (value: string) => adminUiText(value, lang);
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const active = allItems.find(item => item.id === tab)!;
   const ActiveIcon = active.icon;
@@ -57,14 +59,14 @@ export default function AdminPage() {
               <ShieldCheck size={22} />
             </div>
             <div>
-              <div className="font-black text-white">Administrimi</div>
-              <div className="text-xs text-text-secondary">Qendra e kontrollit</div>
+              <div className="font-black text-white">{tr("Administrimi")}</div>
+              <div className="text-xs text-text-secondary">{tr("Qendra e kontrollit")}</div>
             </div>
           </div>
-          <nav aria-label="Menuja e administratorit" className="mt-5 space-y-5">
+          <nav aria-label={tr("Menuja e administratorit")} className="mt-5 space-y-5">
             {sections.map(section => (
               <div key={section.title}>
-                <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">{section.title}</div>
+                <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">{tr(section.title)}</div>
                 <div className="space-y-1">
                   {section.items.map(item => {
                     const Icon = item.icon;
@@ -79,8 +81,8 @@ export default function AdminPage() {
                       >
                         <Icon size={19} className="shrink-0" />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-bold">{item.label}</span>
-                          <span className="block truncate text-[11px] opacity-75">{item.description}</span>
+                          <span className="block text-sm font-bold">{tr(item.label)}</span>
+                          <span className="block truncate text-[11px] opacity-75">{tr(item.description)}</span>
                         </span>
                         {selected && <ChevronRight size={15} />}
                       </button>
@@ -93,7 +95,7 @@ export default function AdminPage() {
         </aside>
         <div className="min-w-0 flex-1">
           <div className="lg:hidden sticky top-0 z-20 border-b border-tertiary bg-secondary/95 backdrop-blur-md">
-            <nav aria-label="Menuja e administratorit" className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <nav aria-label={tr("Menuja e administratorit")} className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {allItems.map(item => {
                 const Icon = item.icon;
                 const selected = item.id === tab;
@@ -105,7 +107,7 @@ export default function AdminPage() {
                     onClick={() => setTab(item.id)}
                     className={`shrink-0 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold whitespace-nowrap transition-colors ${selected ? 'bg-accent-green text-primary' : 'bg-primary text-text-secondary hover:text-white'}`}
                   >
-                    <Icon size={15} /> {item.label}
+                    <Icon size={15} /> {tr(item.label)}
                   </button>
                 );
               })}
@@ -118,8 +120,8 @@ export default function AdminPage() {
                   <ActiveIcon size={19} />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-black text-white">{active.label}</h1>
-                  <p className="text-xs sm:text-sm text-text-secondary">{active.description}</p>
+                  <h1 className="text-xl sm:text-2xl font-black text-white">{tr(active.label)}</h1>
+                  <p className="text-xs sm:text-sm text-text-secondary">{tr(active.description)}</p>
                 </div>
               </div>
             </div>}

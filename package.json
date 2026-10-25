@@ -50,7 +50,10 @@
     "test:betslip": "node scripts/test-betslip-columns.mjs && node scripts/test-format-odds.mjs && node scripts/test-betslip-browser.mjs && node scripts/test-betslip-layout.mjs",
     "test:betting": "node scripts/test-betting.mjs",
     "test:match-sync": "node scripts/test-match-sync.mjs && node scripts/test-match-sync-browser.mjs",
-    "test:admin-matches": "node scripts/test-admin-match-reads.mjs && node scripts/test-admin-match-control-browser.mjs"
+    "test:admin-matches": "node scripts/test-admin-match-reads.mjs && node scripts/test-admin-match-control-browser.mjs",
+    "test:languages": "node scripts/test-sportsbook-labels.mjs && node scripts/test-language-browser.mjs",
+    "test:user-removal": "node scripts/test-user-removal.mjs",
+    "test:match-order": "node scripts/test-match-order.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -1,15 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
-const source = readFileSync(new URL('../web/src/utils/sportsbookLabels.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText;
-const module = { exports: {} };
-new Function('exports', 'require', 'module', compiled)(module.exports, require, module);
+const require = createRequire(import.meta.url), ts = require('typescript');
+import { loadUiModule } from './fixtures/load-ui-module.mjs';
+const module = { exports: loadUiModule(new URL('../web/src/utils/sportsbookLabels.ts', import.meta.url)) };
 
 const translations = {
   'markets.match_result': 'Rezultati i ndeshjes (1X2)',
@@ -367,8 +361,8 @@ for (const [raw, expected] of [
   ['First Goalscorer', 'Shënuesi i golit të parë'],
   ['Last Goalscorer', 'Shënuesi i golit të fundit'],
   ['Anytime Goalscorer', 'Shënues goli gjatë ndeshjes'],
-  ['First Team to Score', 'Ekipi që shënon i pari'],
-  ['Last Team to Score', 'Ekipi që shënon i fundit'],
+  ['First Team to Score', 'Ekipi Që Shënon I Pari'],
+  ['Last Team to Score', 'Ekipi Që Shënon I Fundit'],
   ['Last Goal Time', 'Koha e golit të fundit'],
   ['Next Goal Time', 'Koha e golit të radhës'],
   ['1st half. Total Goals', 'Pjesa e parë: Totali i golave'],
@@ -378,4 +372,25 @@ assert.equal(module.exports.translateMarketName('Bet Builder: Both Teams to Scor
   'Kombinim ndeshjeje: Shënojnë të dy ekipet & Totali i golave');
 assert.equal(module.exports.translateMatchEventText('Red Star: Goal', 'Red Star', 'Away United'), 'Red Star: Gol',
   'Fixture names remain unchanged in translated events');
+assert.equal(module.exports.translateMatchEventText('Red Star: Goal', 'Red Star', 'Away United', 'en'), 'Red Star: Goal');
 console.log('PASS Albanian combination titles, all user selection examples, scoring/period distinctions and fixture names');
+
+// The real dictionaries, including Fito24 aliases, select presentation only.
+const al = loadUiModule(new URL('../web/src/i18n/al.ts', import.meta.url)).default;
+const en = loadUiModule(new URL('../web/src/i18n/en.ts', import.meta.url)).default;
+const dictionaryTranslator = (dictionary, lang) => Object.assign(key => {
+  const [section, ...rest] = key.split('.'); return dictionary[section]?.[rest.join('.')] ?? key;
+}, { lang });
+const enText = dictionaryTranslator(en, 'en'), alText = dictionaryTranslator(al, 'al');
+assert.deepEqual(Object.keys(en).sort(), Object.keys(al).sort());
+for (const section of Object.keys(al)) assert.deepEqual(Object.keys(en[section]).sort(), Object.keys(al[section]).sort(), 'dictionary key parity: ' + section);
+assert.deepEqual(Object.keys(en.languages).sort(), ['al', 'choose', 'en']);
+assert.equal(module.exports.translateMarketName('Both Teams to Score', alText), 'Shënojnë të dyja skuadrat');
+assert.equal(module.exports.translateMarketName('Both Teams to Score', enText), 'Both Teams to Score');
+assert.equal(module.exports.formatTicketSelection('BTTS No + Over 2.5', 'Bet Builder: Both Teams to Score + Total Goals', fixture, enText), 'No + Over 2.5');
+assert.equal(module.exports.translateOutcomeName('1/Yes', enText, mixedMarket, fixture), '1 & Yes');
+assert.equal(module.exports.translateOutcomeName('Nil', enText, 'Both Teams to Score'), 'No');
+assert.equal(module.exports.translateMarketName('1st Half - Draw No Bet', alText), 'Pjesa e parë: Barazim S\'ka Bast');
+const minute = module.exports.translateMarketName('Both Teams to Score - till the 15th minute of the match', alText);
+assert.match(minute, /15/); assert.doesNotMatch(minute, /10/, 'an erroneous archived Fito24 numeric qualifier must never change the betting contract');
+console.log('PASS English/Albanian dictionaries and Fito24 aliases: exact language choices, Yes/No, market qualifiers and unchanged contract numbers');

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from '../components/Layout/Header';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { User, Ticket } from '../types';
 import SystemTicketSummary from '../components/Betslip/SystemTicketSummary';
@@ -38,7 +39,9 @@ interface FinancialState {
 }
 
 export default function ManagerPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const locale = lang === 'en' ? 'en-GB' : 'sq-AL';
+  const { refreshUser } = useAuth();
   const [tab, setTab] = useState<'users' | 'tickets' | 'finance'>('users');
   const [searchUser, setSearchUser] = useState('');
   const [userStatus, setUserStatus] = useState<'ALL' | 'ACTIVE' | 'FROZEN' | 'BANNED'>('ALL');
@@ -116,7 +119,7 @@ export default function ManagerPage() {
       fetchUsers();
       alert(t('admin.user_created'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.create_failed'));
+      alert(t(e.response?.data?.error || t('admin.create_failed')));
     }
   };
 
@@ -137,18 +140,20 @@ export default function ManagerPage() {
       fetchUsers();
       alert(t('admin.user_updated'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.update_failed'));
+      alert(t(e.response?.data?.error || t('admin.update_failed')));
     }
   };
 
   const handleDeleteUser = async (userId: string, username: string) => {
-    if (!confirm(`Delete user "${username}"? This will permanently remove the account and all related data.`)) return;
+    if (!confirm(`${t('Fshij llogarinë')} "${username}"? ${t('Bilanci i mbetur kalon te llogaria jote. Historiku i lojtarit pastrohet në pastrimin mujor pas datës 2; detyrimet në pritje ruhen.')}`)) return;
     try {
       await apiClient.delete(`/manager/users/${userId}`);
-      fetchUsers();
       alert(t('admin.user_deleted'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.delete_failed'));
+      alert(t(e.response?.data?.error || t('admin.delete_failed')));
+    } finally {
+      await refreshUser();
+      void fetchUsers();
     }
   };
 
@@ -157,7 +162,7 @@ export default function ManagerPage() {
       await apiClient.patch(`/manager/users/${userId}/status`, { status: newStatus });
       fetchUsers();
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.status_failed'));
+      alert(t(e.response?.data?.error || t('admin.status_failed')));
     }
   };
 
@@ -177,7 +182,7 @@ export default function ManagerPage() {
       fetchUsers();
       alert(t('admin.balance_updated'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.transaction_failed'));
+      alert(t(e.response?.data?.error || t('admin.transaction_failed')));
     }
   };
 
@@ -185,11 +190,11 @@ export default function ManagerPage() {
     if (!confirm(t('manager.confirm_revert'))) return;
     try {
       const res = await apiClient.post(`/manager/tickets/${ticketId}/revert`);
-      alert(`${t('manager.ticket_reverted')} ${res.data.refunded.toFixed(2)} Lëk`);
+      alert(`${t('manager.ticket_reverted')} ${res.data.refunded.toFixed(2)} ${t('Lëk')}`);
       fetchTickets();
       fetchUsers(false);
     } catch (e: any) {
-      alert(e.response?.data?.error || t('manager.revert_failed'));
+      alert(t(e.response?.data?.error || t('manager.revert_failed')));
     }
   };
 
@@ -211,16 +216,15 @@ export default function ManagerPage() {
       <div className="border-b border-tertiary bg-secondary px-4 py-4 sm:px-6">
         <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white">Paneli i menaxherit</h1>
-            <p className="mt-1 text-xs sm:text-sm text-text-secondary">Lojtarët, bilancet dhe skedinat në një vend</p>
+            <h1 className="text-xl sm:text-2xl font-black text-white">{t("Paneli i menaxherit")}</h1>
+            <p className="mt-1 text-xs sm:text-sm text-text-secondary">{t("Lojtarët, bilancet dhe skedinat në një vend")}</p>
           </div>
           <button
             type="button"
             onClick={() => tab === 'users' ? void fetchUsers() : void fetchTickets()}
             className="inline-flex items-center gap-2 rounded-xl border border-tertiary bg-primary px-3 py-2.5 text-sm font-bold text-white hover:bg-tertiary"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Rifresko
-          </button>
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> {" " + t("Rifresko")}</button>
         </div>
       </div>
       <div className="bg-secondary/95 border-b border-tertiary px-3 sm:px-6">
@@ -247,8 +251,7 @@ export default function ManagerPage() {
           </button>
           <button type="button" onClick={() => {setFinanceUserId('');setTab('finance');}}
             className={'flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold '+(tab==='finance'?'bg-accent-green text-primary':'text-text-secondary hover:text-white')}>
-            <Wallet size={16}/> Financat Sport + Kazino
-          </button>
+            <Wallet size={16}/> {" " + t("Financat Sport + Kazino")}</button>
         </div>
       </div>
 
@@ -261,20 +264,20 @@ export default function ManagerPage() {
               <div className="mb-6 space-y-4">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><UsersIcon size={15} /> Lojtarë gjithsej</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><UsersIcon size={15} /> {" " + t("Lojtarë gjithsej")}</div>
                     <div className="mt-2 text-2xl font-black text-white">{users.length}</div>
                   </div>
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><CheckCircle size={15} /> Llogari aktive</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><CheckCircle size={15} /> {" " + t("Llogari aktive")}</div>
                     <div className="mt-2 text-2xl font-black text-white">{users.filter(u => u.status === 'ACTIVE').length}</div>
                   </div>
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><Wallet size={15} /> Fonde në dispozicion</div>
-                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{financials.manager.balance.toFixed(2)} Lëk</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><Wallet size={15} /> {" " + t("Fonde në dispozicion")}</div>
+                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{financials.manager.balance.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><BarChart3 size={15} /> Diferenca neto</div>
-                    <div className={`mt-2 text-lg sm:text-xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} Lëk</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><BarChart3 size={15} /> {" " + t("Diferenca neto")}</div>
+                    <div className={`mt-2 text-lg sm:text-xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                 </div>
                 <button
@@ -283,40 +286,40 @@ export default function ManagerPage() {
                   aria-expanded={showFinancialDetails}
                   className="flex w-full items-center justify-between rounded-xl border border-tertiary bg-secondary px-4 py-3 text-left text-sm font-bold text-white hover:bg-tertiary/60"
                 >
-                  <span className="flex items-center gap-2"><BarChart3 size={17} className="text-accent-green" /> Raporti financiar i detajuar</span>
+                  <span className="flex items-center gap-2"><BarChart3 size={17} className="text-accent-green" /> {" " + t("Raporti financiar i detajuar")}</span>
                   {showFinancialDetails ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
                 {showFinancialDetails && <div className="space-y-4">
                 <div className={`rounded-xl border p-5 ${financials.manager.netDifference >= 0 ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-rose-500/30 bg-rose-500/10'}`}>
-                  <div className="text-sm text-text-secondary">Pozicioni financiar</div>
+                  <div className="text-sm text-text-secondary">{t("Pozicioni financiar")}</div>
                   <div className={`mt-1 text-2xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} Lëk {financials.manager.netDifference >= 0 ? 'në PLUS' : 'në MINUS'}
+                    {financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} {" " + t("Lëk") + " "}{t(financials.manager.netDifference >= 0 ? 'në PLUS' : 'në MINUS')}
                   </div>
-                  <div className="mt-1 text-xs text-text-secondary">Diferenca = fonde të luajtura − pagesat fituese</div>
+                  <div className="mt-1 text-xs text-text-secondary">{t("Diferenca = fonde të luajtura − pagesat fituese")}</div>
                 </div>
                 <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
                   {([
-                    ['Fonde në dispozicion', financials.manager.balance],
-                    ['Fonde të luajtura', financials.manager.totalStake],
+                    [t("Fonde në dispozicion"), financials.manager.balance],
+                    [t("Fonde të luajtura"), financials.manager.totalStake],
                     ['Fitime të paguara', financials.manager.wonPayouts],
                     ['Humbje të lojtarëve', financials.manager.lostStake],
-                    ['Bilanci i lojtarëve', financials.manager.playerBalance],
-                    ['Komision i zbritur', financials.manager.commission],
+                    [t("Bilanci i lojtarëve"), financials.manager.playerBalance],
+                    [t("Komision i zbritur"), financials.manager.commission],
                   ] as const).map(([label, value]) => (
-                    <div key={label} className={`rounded-xl border bg-secondary p-4 ${label === 'Fonde në dispozicion' ? 'border-amber-500/30' : 'border-tertiary'}`}>
-                      <div className="text-xs text-text-secondary">{label}</div>
-                      <div className={`mt-1 text-lg font-bold ${label === 'Fonde në dispozicion' ? 'text-amber-300' : 'text-white'}`}>{Number(value).toFixed(2)} Lëk</div>
+                    <div key={label} className={`rounded-xl border bg-secondary p-4 ${label === t('Fonde në dispozicion') ? 'border-amber-500/30' : 'border-tertiary'}`}>
+                      <div className="text-xs text-text-secondary">{t(label)}</div>
+                      <div className={`mt-1 text-lg font-bold ${label === t('Fonde në dispozicion') ? 'text-amber-300' : 'text-white'}`}>{Number(value).toFixed(2)} {" " + t("Lëk")}</div>
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-tertiary bg-secondary px-4 py-3 text-xs text-text-secondary">
-                  <span className="font-semibold text-white">Komisioni zbritet nga bilanci yt kur vendoset basti:</span>
-                  <span>1 zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.single}%</b></span>
-                  <span>2 zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.double}%</b></span>
-                  <span>3+ zgjedhje <b className="text-accent-yellow">{financials.manager.commissionRates.multi}%</b></span>
+                  <span className="font-semibold text-white">{t("Komisioni zbritet nga bilanci yt kur vendoset basti:")}</span>
+                  <span>{t("1 zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.single}%</b></span>
+                  <span>{t("2 zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.double}%</b></span>
+                  <span>{t("3+ zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.multi}%</b></span>
                 </div>
                 <FinancialChart
-                  title="Grafiku financiar"
+                  title={t("Grafiku financiar")}
                   description="Përmbledhje e aktivitetit dhe bilancit aktual të llogarive të tua."
                   items={[
                     { label: 'Fonde të luajtura', value: financials.manager.totalStake, color: 'bg-sky-400' },
@@ -346,36 +349,35 @@ export default function ManagerPage() {
 
             <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-tertiary bg-secondary p-3 sm:flex-row sm:items-center">
               <label className="relative flex-1">
-                <span className="sr-only">Kërko lojtarin</span>
+                <span className="sr-only">{t("Kërko lojtarin")}</span>
                 <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
                 <input
                   type="search"
                   value={searchUser}
                   onChange={event => setSearchUser(event.target.value)}
-                  placeholder="Kërko lojtar sipas emrit..."
+                  placeholder={t("Kërko lojtar sipas emrit...")}
                   className="w-full rounded-xl border border-tertiary bg-primary py-3 pl-10 pr-3 text-sm text-white placeholder:text-text-secondary focus:border-accent-green focus:outline-none"
                 />
               </label>
               <label className="flex items-center gap-2 text-xs text-text-secondary">
-                Statusi
-                <select
+                {t("Statusi")}<select
                   value={userStatus}
                   onChange={event => setUserStatus(event.target.value as typeof userStatus)}
                   className="min-w-40 rounded-xl border border-tertiary bg-primary px-3 py-3 text-sm text-white focus:border-accent-green focus:outline-none"
                 >
-                  <option value="ALL">Të gjithë</option>
-                  <option value="ACTIVE">Aktivë</option>
-                  <option value="FROZEN">Të ngrirë</option>
-                  <option value="BANNED">Të bllokuar</option>
+                  <option value="ALL">{t("Të gjithë")}</option>
+                  <option value="ACTIVE">{t("Aktivë")}</option>
+                  <option value="FROZEN">{t("Të ngrirë")}</option>
+                  <option value="BANNED">{t("Të bllokuar")}</option>
                 </select>
               </label>
-              <span className="text-xs text-text-secondary">Shfaqur: {filteredUsers.length}</span>
+              <span className="text-xs text-text-secondary">{t("Shfaqur:") + " "}{filteredUsers.length}</span>
             </div>
             <div className="bg-secondary rounded-xl border border-tertiary shadow-xl overflow-hidden">
               {loading ? (
                 <div className="p-12 text-center text-text-secondary">{t('admin.loading_accounts')}</div>
               ) : filteredUsers.length === 0 ? (
-                <div className="p-12 text-center text-text-secondary">{users.length === 0 ? t('manager.no_users') : 'Nuk u gjet asnjë lojtar me këta filtra.'}</div>
+                <div className="p-12 text-center text-text-secondary">{users.length === 0 ? t('manager.no_users') : t('Nuk u gjet asnjë lojtar me këta filtra.')}</div>
               ) : (
                 <>
                 <div className="grid gap-3 p-3 lg:hidden">
@@ -386,27 +388,27 @@ export default function ManagerPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="break-words font-bold text-white">{u.username}</div>
-                            <div className="mt-1 text-xs text-text-secondary">Bilanci i lojtarit</div>
-                            <div className="text-lg font-black text-white">{u.balance.toFixed(2)} {u.currency || 'Lëk'}</div>
+                            <div className="mt-1 text-xs text-text-secondary">{t("Bilanci i lojtarit")}</div>
+                            <div className="text-lg font-black text-white">{u.balance.toFixed(2)} {u.currency || t("Lëk")}</div>
                           </div>
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${u.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : u.status === 'FROZEN' ? 'bg-amber-500/15 text-amber-400' : 'bg-rose-500/15 text-rose-400'}`}>
-                            {u.status === 'ACTIVE' ? 'Aktiv' : u.status === 'FROZEN' ? 'I ngrirë' : 'I bllokuar'}
+                            {t(u.status === 'ACTIVE' ? 'Aktiv' : u.status === 'FROZEN' ? 'I ngrirë' : 'I bllokuar')}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary p-3 text-xs">
-                          <div><span className="block text-text-secondary">Fonde të luajtura</span><strong className="mt-1 block text-white">{(finance?.totalStake ?? 0).toFixed(2)} Lëk</strong></div>
-                          <div><span className="block text-text-secondary">Diferenca neto</span><strong className={`mt-1 block ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(finance?.netDifference ?? 0).toFixed(2)} Lëk</strong></div>
+                          <div><span className="block text-text-secondary">{t("Fonde të luajtura")}</span><strong className="mt-1 block text-white">{(finance?.totalStake ?? 0).toFixed(2)} {" " + t("Lëk")}</strong></div>
+                          <div><span className="block text-text-secondary">{t("Diferenca neto")}</span><strong className={`mt-1 block ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(finance?.netDifference ?? 0).toFixed(2)} {" " + t("Lëk")}</strong></div>
                         </div>
-                        <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-300">Financat Sport + Kazino</button>
+                        <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-300">{t("Financat Sport + Kazino")}</button>
                         <div className="grid grid-cols-2 gap-2">
                           <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('deposit'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-400"><ArrowUpRight size={15} /> {t('admin.deposit')}</button>
                           <button type="button" onClick={() => { setSelectedUser(u); setShowBalanceModal('withdraw'); }} className="flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/15 py-2.5 text-xs font-bold text-amber-400"><ArrowDownRight size={15} /> {t('admin.withdraw')}</button>
-                          <button type="button" onClick={() => openEditModal(u)} className="flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue/15 py-2.5 text-xs font-bold text-accent-blue"><Edit3 size={15} /> Ndrysho</button>
-                          <button type="button" onClick={() => handleStatusChange(u.id, u.status === 'ACTIVE' ? 'FROZEN' : 'ACTIVE')} className="flex items-center justify-center gap-1.5 rounded-lg bg-tertiary py-2.5 text-xs font-bold text-white">{u.status === 'ACTIVE' ? 'Ngrij' : 'Aktivizo'}</button>
+                          <button type="button" onClick={() => openEditModal(u)} className="flex items-center justify-center gap-1.5 rounded-lg bg-accent-blue/15 py-2.5 text-xs font-bold text-accent-blue"><Edit3 size={15} /> {" " + t("Ndrysho")}</button>
+                          <button type="button" onClick={() => handleStatusChange(u.id, u.status === 'ACTIVE' ? 'FROZEN' : 'ACTIVE')} className="flex items-center justify-center gap-1.5 rounded-lg bg-tertiary py-2.5 text-xs font-bold text-white">{t(u.status === 'ACTIVE' ? 'Ngrij' : 'Aktivizo')}</button>
                         </div>
                         <div className="flex justify-end gap-4 border-t border-tertiary pt-3">
-                          {u.status !== 'BANNED' && <button type="button" onClick={() => handleStatusChange(u.id, 'BANNED')} className="text-xs font-bold text-rose-400">Blloko</button>}
-                          <button type="button" onClick={() => handleDeleteUser(u.id, u.username)} className="flex items-center gap-1 text-xs font-bold text-rose-400"><Trash2 size={13} /> Fshi</button>
+                          {u.status !== 'BANNED' && <button type="button" onClick={() => handleStatusChange(u.id, 'BANNED')} className="text-xs font-bold text-rose-400">{t("Blloko")}</button>}
+                          <button type="button" onClick={() => handleDeleteUser(u.id, u.username)} className="flex items-center gap-1 text-xs font-bold text-rose-400"><Trash2 size={13} /> {" " + t("Fshi")}</button>
                         </div>
                       </article>
                     );
@@ -419,9 +421,9 @@ export default function ManagerPage() {
                       <th className="p-4">{t('admin.username')}</th>
                       <th className="p-4">{t('admin.status')}</th>
                       <th className="p-4">{t('admin.balance')}</th>
-                      <th className="p-4 text-right">Fonde të luajtura</th>
-                      <th className="p-4 text-right">Fitime / humbje</th>
-                      <th className="p-4 text-right">Komision / diferencë</th>
+                      <th className="p-4 text-right">{t("Fonde të luajtura")}</th>
+                      <th className="p-4 text-right">{t("Fitime / humbje")}</th>
+                      <th className="p-4 text-right">{t("Komision / diferencë")}</th>
                       <th className="p-4 text-right">{t('admin.actions')}</th>
                     </tr>
                   </thead>
@@ -442,38 +444,37 @@ export default function ManagerPage() {
                             {u.status === 'ACTIVE' && <CheckCircle size={12} />}
                             {u.status === 'FROZEN' && <ShieldAlert size={12} />}
                             {u.status === 'BANNED' && <Ban size={12} />}
-                            {u.status}
+                            {t(u.status === 'ACTIVE' ? 'Aktiv' : u.status === 'FROZEN' ? 'I ngrirë' : u.status === 'BANNED' ? 'I bllokuar' : u.status)}
                           </span>
                         </td>
                         <td className="p-4 text-base font-bold text-white">
-                          {u.balance.toFixed(2)} {u.currency || 'Lëk'}
+                          {u.balance.toFixed(2)} {u.currency || t("Lëk")}
                         </td>
                         {(() => {
                           const finance = financials?.players.find((player) => player.id === u.id);
                           return (
                             <>
-                              <td className="p-4 text-right text-white">{(finance?.totalStake ?? 0).toFixed(2)} Lëk</td>
+                              <td className="p-4 text-right text-white">{(finance?.totalStake ?? 0).toFixed(2)} {" " + t("Lëk")}</td>
                               <td className="p-4 text-right text-white">
-                                <div>{(finance?.wonPayouts ?? 0).toFixed(2)} Lëk fitime</div>
-                                <div className="text-xs text-text-secondary">{(finance?.lostStake ?? 0).toFixed(2)} Lëk humbje</div>
+                                <div>{(finance?.wonPayouts ?? 0).toFixed(2)} {" " + t("Lëk fitime")}</div>
+                                <div className="text-xs text-text-secondary">{(finance?.lostStake ?? 0).toFixed(2)} {" " + t("Lëk humbje")}</div>
                               </td>
                               <td className="p-4 text-right">
-                                <div className="font-semibold text-white">{(finance?.commission ?? 0).toFixed(2)} Lëk total</div>
+                                <div className="font-semibold text-white">{(finance?.commission ?? 0).toFixed(2)} {" " + t("Lëk total")}</div>
                                 <div className="mt-1 space-y-0.5 text-[11px] text-text-secondary">
-                                  <div>{finance?.commissionRates.single ?? financials?.manager.commissionRates.single ?? 3}% teke: {(finance?.commissionByTier.single ?? 0).toFixed(2)} Lëk</div>
-                                  <div>{finance?.commissionRates.double ?? financials?.manager.commissionRates.double ?? 5}% dyshe: {(finance?.commissionByTier.double ?? 0).toFixed(2)} Lëk</div>
-                                  <div>{finance?.commissionRates.multi ?? financials?.manager.commissionRates.multi ?? 7}% 3+: {(finance?.commissionByTier.multi ?? 0).toFixed(2)} Lëk</div>
+                                  <div>{finance?.commissionRates.single ?? financials?.manager.commissionRates.single ?? 3}{t("% teke:") + " "}{(finance?.commissionByTier.single ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
+                                  <div>{finance?.commissionRates.double ?? financials?.manager.commissionRates.double ?? 5}{t("% dyshe:") + " "}{(finance?.commissionByTier.double ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
+                                  <div>{finance?.commissionRates.multi ?? financials?.manager.commissionRates.multi ?? 7}% 3+: {(finance?.commissionByTier.multi ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
                                 </div>
                                 <div className={`text-xs font-semibold ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                  {(finance?.netDifference ?? 0) >= 0 ? '+' : ''}{(finance?.netDifference ?? 0).toFixed(2)} Lëk
-                                </div>
+                                  {(finance?.netDifference ?? 0) >= 0 ? '+' : ''}{(finance?.netDifference ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
                               </td>
                             </>
                           );
                         })()}
                         <td className="p-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
-                            <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="rounded-lg bg-emerald-500/15 px-2 py-1.5 text-xs font-bold text-emerald-300">Financat</button>
+                            <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="rounded-lg bg-emerald-500/15 px-2 py-1.5 text-xs font-bold text-emerald-300">{t("Financat")}</button>
                             <button 
                               onClick={() => { setSelectedUser(u); setShowBalanceModal('deposit'); }}
                               className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-semibold flex items-center gap-1"
@@ -576,7 +577,7 @@ export default function ManagerPage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white text-base">Skedina #{ticket.id.substring(0, 8)}</span>
+                              <span className="font-bold text-white text-base">{t("Skedina #")}{ticket.id.substring(0, 8)}</span>
                               {ticket.bookingCode && (
                                 <span className="text-xs bg-accent-blue/20 text-accent-blue font-mono px-2 py-0.5 rounded font-bold">{t('admin.code')}: {ticket.bookingCode}</span>
                               )}
@@ -587,17 +588,17 @@ export default function ManagerPage() {
                               }`}>{translateTicketStatus(ticket.status, t)}</span>
                             </div>
                             <div className="text-xs text-text-secondary mt-1">
-                              <span>Përdoruesi: <strong className="text-white">{ticket.user?.username || 'Vizitor'}</strong></span>
-                              <span> &bull; {new Date(ticket.placedAt).toLocaleString('sq-AL')}</span>
+                              <span>{t("Përdoruesi:") + " "}<strong className="text-white">{ticket.user?.username || 'Vizitor'}</strong></span>
+                              <span> &bull; {new Date(ticket.placedAt).toLocaleString(locale)}</span>
                               <span> &bull; {t('tickets.type')}: {translateTicketType(ticket.ticketType, t)}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <div className="text-xs text-text-secondary">Shuma / Fitimi</div>
+                            <div className="text-xs text-text-secondary">{t("Shuma / Fitimi")}</div>
                             <div className="text-sm font-bold text-white">
-                              {ticket.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green">{(ticket.system && ticket.status !== 'PENDING' ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} Lëk</span>
+                              {ticket.stake.toFixed(2)} {" " + t("Lëk →") + " "}<span className="text-accent-green">{(ticket.system && ticket.status !== 'PENDING' ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} {" " + t("Lëk")}</span>
                             </div>
                           </div>
                           {ticket.status === 'PENDING' && (
@@ -611,7 +612,7 @@ export default function ManagerPage() {
                           <button
                             onClick={() => setExpandedTicketId(expanded ? null : ticket.id)}
                             className="p-2 bg-tertiary hover:bg-tertiary/80 text-text-secondary hover:text-white rounded-lg transition"
-                            title="Shfaq ndeshjet dhe zgjedhjet"
+                            title={t("Shfaq ndeshjet dhe zgjedhjet")}
                           >
                             {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                           </button>
@@ -625,7 +626,7 @@ export default function ManagerPage() {
                               <div className="text-text-secondary">{line.matchName}</div>
                               <div className="mt-1 font-semibold text-white">{formatMarketSelectionLabel(line.marketName, line.marketLine, t)}: <span className="text-accent-green">{formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t)}</span></div>
                               <div className="mt-1 flex justify-between text-text-secondary">
-                                <span>Kuota <b className="text-white">{formatOdds(line.oddsAtPlacement)}</b></span>
+                                <span>{t("Kuota") + " "}<b className="text-white">{formatOdds(line.oddsAtPlacement)}</b></span>
                                 <span className={line.status === 'WON' ? 'text-emerald-400' : line.status === 'LOST' ? 'text-rose-400' : 'text-amber-400'}>{translateTicketStatus(line.status, t)}</span>
                               </div>
                             </div>
@@ -697,7 +698,7 @@ export default function ManagerPage() {
           <div className="bg-secondary border border-tertiary rounded-2xl max-w-sm w-full p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-2 capitalize">{t(`admin.${showBalanceModal}_funds`)}</h3>
             <p className="text-sm text-text-secondary mb-4">
-              {t('admin.player')}: <strong className="text-white">{selectedUser.username}</strong> | {t('admin.current_balance')}: <strong className="text-accent-green">{selectedUser.balance.toFixed(2)} Lëk</strong>
+              {t('admin.player')}: <strong className="text-white">{selectedUser.username}</strong> | {t('admin.current_balance')}: <strong className="text-accent-green">{selectedUser.balance.toFixed(2)} {" " + t("Lëk")}</strong>
             </p>
             <form onSubmit={handleBalanceSubmit} className="space-y-4">
               <div>

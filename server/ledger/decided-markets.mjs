@@ -32,8 +32,16 @@ const firstHalfContract = market =>
 
 function firstHalfElapsed(match) {
   const phase = norm(match?.period ?? match?.phase ?? match?.feed_status);
-  return /^(?:2h|ht|ft|2nd half|second half|break time|half time|halftime|ended|finished)\b/.test(phase)
-    || (safeNumber(match?.currentMinute ?? match?.live_minute) ?? 0) > 45;
+  return /^(?:2h|ht|ft|2nd half|second half|break time|half time|halftime|ended|finished)\b/.test(phase);
+}
+
+// A team total must not be judged using the sum of BOTH teams. Only these
+// explicit whole-match families may consume the whole-match goal counter.
+function simpleGoalTotalName(value) {
+  const name = norm(value).replace(/^(?:full[ .-]*time|match)[ .:-]*/, '')
+    .replace(/\s*\(?\d+(?:[.,]\d+)?\)?\s*$/, '').replace(/[.:-]+$/g, '').trim()
+    .replace(/\s*\/\s*/g, '/').replace(/\s*[-.:]\s*/g, ' ').replace(/\s+/g, ' ');
+  return /^(?:total(?: goals?)?|goals? total|over\/?under|under\/?over|over under|under over|goal line|total(?: goals?)? over\/?under|total(?: goals?)? over under)$/.test(name);
 }
 
 /** True only once a confirmed LIVE fact irreversibly decides the contract. */
@@ -50,9 +58,9 @@ export function isDecidedLiveMarket(match, market) {
     return score.home > 0 && score.away > 0;
   }
 
-  if (!/^(?:total(?:\s+goals?)?|goals?\s+total|over\s*\/?\s*under|under\s*\/?\s*over|goal line)(?:\s|$)/.test(name)) return false;
+  if (!simpleGoalTotalName(name)) return false;
   const rawLine = market?.line ?? market?.specifier;
-  const suffix = name.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\)?$/);
+  const suffix = name.match(/(?:^|[\s(])(\d+(?:[.,]\d+)?)\)?$/);
   const line = safeNumber(rawLine !== '' && rawLine != null ? rawLine : suffix?.[1]);
   // In a whole-goal line, exactly 2 goals at 2.0 is not necessarily final.
   return line !== null && score.home + score.away > line;
@@ -78,6 +86,12 @@ export function isDecidedLiveOutcome(match, market) {
   const rawCode = String(market?.outcomeCode ?? market?.outcome_key ?? '').trim();
   const labels = [rawName, rawCode].filter(Boolean);
   const all = labels.join(' | ').toLowerCase();
+  if (simpleGoalTotalName(name)) {
+    for (const label of labels) {
+      const explicit = label.match(/\b(?:over|under)\s*\(?\s*(\d+(?:[.,]\d+)?)\s*\)?/i);
+      if (explicit && score.home + score.away > Number(explicit[1].replace(',', '.'))) return true;
+    }
+  }
   const namedCombo = /^bet builder\s*:/.test(name) ||
     /\b(?:result|1\s*x\s*2|double chance|total|goals|btts|both teams)\b.*\b(?:and|with)\b.*\b(?:result|total|goals|both teams|btts|score)\b/.test(name) ||
     /\b(?:result|1x2|double chance|total|btts)\s*[&+]\s*(?:total|btts|goals|result|1x2|both)/.test(name);

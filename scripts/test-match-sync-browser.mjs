@@ -61,8 +61,16 @@ try {
   const app=express();app.use('/app/api',freshFeed);
   app.get('/app/api/matches',(request,response)=>{
     requests.push(request.get('x-test-client'));
+    // An offline client cannot recover through the independent REST poll while
+    // its Socket.IO handshake is blocked. Restore both paths together below.
+    if(blocked.has(request.get('x-test-client'))){response.status(503).json({error:'Isolated client is offline'});return;}
     const snapshot=structuredClone(matches);
-    if(holdClient===request.get('x-test-client')){holdClient=null;held={response,snapshot};return;}
+    if(holdClient===request.get('x-test-client')){
+      holdClient=null;
+      const pending={response,snapshot,aborted:false};held=pending;
+      response.once('close',()=>{if(!response.writableEnded)pending.aborted=true;});
+      return;
+    }
     response.json(snapshot);
   });
   app.get('/',async(_request,response)=>response.type('html').send(await vite.transformIndexHtml('/',html)));
@@ -115,6 +123,45 @@ try {
   const cold=await open('cold');await score(cold,1);await displayedScore(cold,1);
   assert.equal(await cold.evaluate(()=>window.feed.lockedMatches.A),true,'cold visitor hydrates the same lock as an existing visitor');
   console.log('PASS delayed snapshot, stale socket and independently opened cold client');
+  // Collector cycles must queue a refresh, rather than repeatedly aborting a
+  // slow REST snapshot. Hold the queued response too so the first snapshot's
+  // membership is observable before the newer authoritative membership wins.
+  const coalesced=await open('coalesced');
+  await coalesced.bringToFront();await coalesced.waitForNetworkIdle({idleTime:150});
+  const coalescedRequests=()=>requests.filter(name=>name==='coalesced').length;
+  const beforeSlow=coalescedRequests();
+  const waitHeld=async label=>{
+    const deadline=Date.now()+10000;
+    while(!held&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,20));
+    assert.ok(held,label);
+    return held;
+  };
+  matches=[...matches,match('H')];stamp();
+  holdClient='coalesced';await resync(coalesced);
+  const firstSlow=await waitHeld('slow board snapshot captured before collector cycles');
+  assert.ok(firstSlow.snapshot.some(item=>item.id==='H'));
+  const beforeCycles=await coalesced.evaluate(()=>window.feed.refreshVersion);
+  matches=[...matches.filter(item=>item.id!=='H'),match('N')];
+  for(let cycle=0;cycle<5;cycle++){stamp();io.emit('matches:live',board());}
+  await coalesced.waitForFunction(before=>window.feed.refreshVersion>=before+5,{polling:100},beforeCycles);
+  await coalesced.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await new Promise(resolve=>setTimeout(resolve,150));
+  assert.equal(firstSlow.aborted,false,'collector cycles cannot abort an in-flight board request');
+  assert.equal(firstSlow.response.destroyed,false,'slow board connection remains usable');
+  assert.equal(coalescedRequests(),beforeSlow+1,'several collector cycles cannot restart the held snapshot');
+  held=null;holdClient='coalesced';firstSlow.response.json(firstSlow.snapshot);
+  const queued=await waitHeld('one queued refresh captures the newer board membership');
+  await visible(coalesced,'H');await visible(coalesced,'N',false);
+  assert.equal(coalescedRequests(),beforeSlow+2,'collector cycles collapse into one follow-up request');
+  assert.ok(queued.snapshot.some(item=>item.id==='N')&&!queued.snapshot.some(item=>item.id==='H'));
+  held=null;queued.response.json(queued.snapshot);
+  await visible(coalesced,'N');await visible(coalesced,'H',false);
+  await coalesced.waitForNetworkIdle({idleTime:150});
+  assert.equal(coalescedRequests(),beforeSlow+2,'the coalesced refresh is not followed by extra discarded cycles');
+  await coalesced.close();
+  matches=matches.filter(item=>item.id!=='N');stamp();io.emit('matches:live',board());
+  await Promise.all([left.waitForNetworkIdle({idleTime:200}),right.waitForNetworkIdle({idleTime:200})]);
+  console.log('PASS slow board refresh: repeated real collector cycles preserve the pending snapshot and coalesce one newer membership refresh');
   // Miss a complete goal while offline, then let actual Socket.IO reconnect.
   blocked.add('right');sockets.get('right').conn.close();
   await right.waitForFunction(()=>window.feed.connected===false);

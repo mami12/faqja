@@ -8,6 +8,7 @@
 import { query, pool } from '../db.mjs';
 import { LEDGER_SQL } from './schema.mjs';
 import { getManagerCommissionRates } from './manager-finance.mjs';
+import { removePlayer } from './user-removal.mjs';
 
 export async function initLedgerSchema() {
   await query(LEDGER_SQL);
@@ -42,12 +43,12 @@ export const publicUser = (row) =>
     : null;
 
 export async function findUserByUsername(username) {
-  const res = await query('select * from app_user where username = $1', [username]);
+  const res = await query('select * from app_user where username = $1 and deleted_at is null', [username]);
   return res.rows[0] ?? null;
 }
 
 export async function getUserById(id) {
-  const res = await query(`select ${USER_COLUMNS} from app_user u where u.id = $1`, [id]);
+  const res = await query(`select ${USER_COLUMNS} from app_user u where u.id = $1 and u.deleted_at is null`, [id]);
   return res.rows[0] ? publicUser(res.rows[0]) : null;
 }
 
@@ -56,10 +57,10 @@ export async function listUsers({ managerId = null, limit = 500 } = {}) {
   const res = await query(
     `select ${USER_COLUMNS},
             m.username as "managerUsername",
-            (select count(*) from app_user c where c.manager_id = u.id) as "managedUsers"
+            (select count(*) from app_user c where c.manager_id = u.id and c.deleted_at is null) as "managedUsers"
        from app_user u
        left join app_user m on m.id = u.manager_id
-      where ($1::uuid is null or u.manager_id = $1::uuid)
+      where u.deleted_at is null and ($1::uuid is null or u.manager_id = $1::uuid)
       order by u.created_at desc
       limit $2`,
     [managerId, Math.min(Number(limit) || 500, 2000)],
@@ -144,7 +145,7 @@ export async function moveManagerFunds(managerId, playerId, amount, direction) {
   try {
     await client.query('begin');
     const rows = await client.query(
-      `select id, balance, role, manager_id from app_user
+      `select id, balance, role, manager_id, deleted_at from app_user
         where id = any($1::uuid[]) order by id for update`,
       [[managerId, playerId]],
     );
@@ -152,7 +153,7 @@ export async function moveManagerFunds(managerId, playerId, amount, direction) {
     const manager = accounts.get(managerId);
     const player = accounts.get(playerId);
     if (!manager || manager.role !== 'MANAGER') throw Object.assign(new Error('manager account not found'), { status: 404 });
-    if (!player || player.manager_id !== managerId) throw Object.assign(new Error('player not found'), { status: 404 });
+    if (!player || player.deleted_at || player.manager_id !== managerId) throw Object.assign(new Error('player not found'), { status: 404 });
 
     const managerBefore = Number(manager.balance);
     const playerBefore = Number(player.balance);
@@ -221,7 +222,7 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
             coalesce(p.player_count, 0) as player_count
        from app_user m
        left join lateral (
-         select count(*)::int as player_count, coalesce(sum(u.balance), 0) as player_balance
+         select count(*) filter(where u.deleted_at is null)::int as player_count, coalesce(sum(u.balance), 0) as player_balance
            from app_user u where u.manager_id = m.id
        ) p on true
        left join lateral (
@@ -344,22 +345,11 @@ export async function updateUser(id, fields = {}) {
   }
   if (!sets.length) return getUserById(id);
   sets.push('updated_at = now()');
-  await query(`update app_user set ${sets.join(', ')} where id = $1`, values);
+  await query(`update app_user set ${sets.join(', ')} where id = $1 and deleted_at is null`, values);
   return getUserById(id);
 }
 
-/** deletes the login; tickets keep their history (user_id becomes null) */
-export async function deleteUser(id) {
-  // Do not cascade financial audit records by deleting a funded player.
-  // The staff UI can freeze or ban the account without losing its ledger.
-  const activity = await query(
-    "select (exists(select 1 from app_ticket where user_id=$1) or exists(select 1 from app_transaction where user_id=$1) or exists(select 1 from app_casino_round where user_id=$1)) as has_activity",
-    [id]);
-  if(activity.rows[0]?.has_activity)
-    throw Object.assign(new Error('Ky përdorues ka histori financiare. Ngrije ose bllokoje; mos fshi transaksionet.'),{status:409});
-  const res = await query('delete from app_user where id = $1 returning id', [id]);
-  return res.rows[0]?.id ?? null;
-}
+export const deleteUser = (id, actor) => removePlayer(id, actor);
 
 /**
  * Moves money and records it. `delta` may be negative (withdrawal, stake).
@@ -369,11 +359,12 @@ export async function moveMoney(userId, delta, { type = 'ADJUSTMENT', descriptio
   const client = await pool.connect();
   try {
     await client.query('begin');
-    const locked = await client.query('select balance from app_user where id = $1 for update', [userId]);
+    const locked = await client.query('select balance, deleted_at from app_user where id = $1 for update', [userId]);
     if (!locked.rows.length) throw new Error('user not found');
 
     const before = Number(locked.rows[0].balance);
     const amount = Number(delta);
+    if (locked.rows[0].deleted_at && amount > 0) throw Object.assign(new Error('Llogaria e fshirë nuk pranon depozita.'), { status: 409 });
     if (!Number.isFinite(amount) || amount === 0) throw new Error('amount must be a non-zero number');
 
     const after = Number((before + amount).toFixed(2));
@@ -534,9 +525,9 @@ export async function listAdminAudit({ from = null, to = null, actorId = null, l
 export async function ledgerStats(managerId = null, {runQuery = query} = {}) {
   const res = await runQuery(
     `select
-        count(*)::int                                   as users,
-        count(*) filter (where role = 'PLAYER')::int     as players,
-        count(*) filter (where status <> 'ACTIVE')::int  as blocked,
+        count(*) filter(where deleted_at is null)::int as users,
+        count(*) filter (where role = 'PLAYER' and deleted_at is null)::int as players,
+        count(*) filter (where status <> 'ACTIVE' and deleted_at is null)::int as blocked,
         coalesce(sum(balance), 0)                        as balance
        from app_user
       where ($1::uuid is null or manager_id = $1::uuid)`,

@@ -75,6 +75,8 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   const matchId = Number(parsed.matchId);
   const match = await loadMatch(matchId,executor);
   if (!match) throw badRequest('Ndeshja nuk është më e disponueshme.');
+  if (match.listing_stale === true || match.has_open_odds === false) throw Object.assign(
+    badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.'), { code: 'SELECTION_UNAVAILABLE', outcomeId: selection.outcomeId });
   if (match.active === false || ['ended','finished','cancelled'].includes(String(match.status ?? '').toLowerCase())) {
     throw badRequest('Ndeshja ka përfunduar ose është anuluar.');
   }
@@ -416,8 +418,9 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
     await client.query('begin');
 
     // lock the balance row: two simultaneous bets must not both pass the check
-    const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
+    const locked = await client.query('select balance, manager_id, username, status, deleted_at from app_user where id = $1 for update', [user.id]);
     if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
+    if (locked.rows[0].deleted_at || (locked.rows[0].status && locked.rows[0].status !== 'ACTIVE')) throw Object.assign(new Error('Llogaria nuk mund të vendosë baste.'), { status: 403 });
     // The balance lock serializes simultaneous requests from the same player.
     // An already committed request returns the same ticket, without another debit.
     if (requestId) {
@@ -591,8 +594,9 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   let ids = [], placedBatch;
   try {
     await client.query('begin');
-    const locked = await client.query('select balance, manager_id, username from app_user where id = $1 for update', [user.id]);
+    const locked = await client.query('select balance, manager_id, username, status, deleted_at from app_user where id = $1 for update', [user.id]);
     if (!locked.rows.length) throw badRequest('Llogaria nuk u gjet.');
+    if (locked.rows[0].deleted_at || (locked.rows[0].status && locked.rows[0].status !== 'ACTIVE')) throw Object.assign(new Error('Llogaria nuk mund të vendosë baste.'), { status: 403 });
     const retry = await getPrevious(client);
     if (retry) {
       await client.query('commit');

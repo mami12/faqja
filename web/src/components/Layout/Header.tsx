@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, LogOut, Shield, Users, Ticket, Receipt, Coins } from 'lucide-react';
+import LanguagePicker from './LanguagePicker';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -16,7 +17,7 @@ interface Props {
  */
 export default function Header({ onToggleNav }: Props) {
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -33,7 +34,7 @@ export default function Header({ onToggleNav }: Props) {
       <button type="button" onClick={() => go('/casino')}
         className={'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ' +
           (location.pathname.startsWith('/casino') ? 'bg-amber-400/15 text-amber-300' : 'text-text-secondary hover:bg-tertiary/60 hover:text-white')}>
-        <Coins size={14} /> <span>Kazino</span>
+        <Coins size={14} /> <span>{t('nav.casino')}</span>
       </button>
       {user?.role === 'ADMIN' && (
         <button
@@ -71,7 +72,7 @@ export default function Header({ onToggleNav }: Props) {
           onClick={() => go('/transactions')}
         >
           <Receipt size={14} />
-          <span>Transaksionet</span>
+          <span>{t('nav.transactions')}</span>
         </button>
       )}
       {user?.role === 'PLAYER' && (
@@ -97,7 +98,7 @@ export default function Header({ onToggleNav }: Props) {
           onClick={() => go('/transactions')}
         >
           <Receipt size={14} />
-          <span>Transaksionet</span>
+          <span>{t('nav.transactions')}</span>
         </button>
       )}
     </>
@@ -105,25 +106,26 @@ export default function Header({ onToggleNav }: Props) {
 
   return (
     <header className="shrink-0 z-20 border-b border-white/10 bg-[#17294b] ">
-      <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-[68px] sm:px-5">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex h-14 items-center justify-between gap-1 px-3 sm:h-[68px] sm:gap-2 sm:px-5">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           {onToggleNav && (
             <button
               onClick={onToggleNav}
-              className="rounded-lg border border-white/10 bg-[#0b1018] p-2 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden"
+              className="rounded-lg border border-white/10 bg-[#0b1018] p-1.5 text-text-secondary transition hover:border-emerald-500/40 hover:text-white lg:hidden sm:p-2"
               aria-label={t('nav.sports')}
             >
               <Menu size={18} />
             </button>
           )}
           <button type="button" onClick={() => navigate('/')}
-            aria-label="Faqja kryesore"
-            className="rounded-sm px-2 py-1 text-lg font-black tracking-[0.25em] text-white transition-colors hover:text-emerald-300">
+            aria-label={t('common.home_page')}
+            className="rounded-sm px-1 py-1 text-base font-black tracking-[0.25em] text-white transition-colors hover:text-emerald-300 sm:px-2 sm:text-lg">
             ....
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-3">
+          <LanguagePicker />
           {user && (
             <>
               {/* Desktop links */}
@@ -131,12 +133,12 @@ export default function Header({ onToggleNav }: Props) {
                 {links}
               </div>
 
-              <div className="flex flex-col items-end text-right leading-tight" aria-label="Llogaria dhe balanca">
-                <span className="max-w-[120px] truncate text-[10px] font-semibold text-slate-200 sm:max-w-[180px] sm:text-xs">
+              <div className="flex min-w-0 flex-col items-end text-right leading-tight" aria-label={t('nav.account_balance')}>
+                <span className="max-w-[76px] truncate text-[10px] font-semibold text-slate-200 sm:max-w-[180px] sm:text-xs">
                   {user.username || t('admin.balance')}
                 </span>
                 <span className="whitespace-nowrap text-xs font-extrabold tabular-nums text-amber-300 sm:text-sm">
-                  {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-200/80">Lek</span>
+                  {user.balance.toFixed(2)} <span className="text-[10px] font-semibold text-amber-200/80">{lang === 'en' ? 'ALL' : 'Lek'}</span>
                 </span>
               </div>
 
@@ -154,9 +156,10 @@ export default function Header({ onToggleNav }: Props) {
 
               {/* Mobile hamburger menu toggle */}
               <button
-                className="md:hidden p-2 rounded-lg text-text-secondary hover:text-white hover:bg-tertiary transition"
+                className="md:hidden p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-tertiary transition sm:p-2"
                 onClick={() => setMenuOpen((v) => !v)}
-                aria-label="menuja e llogarisë"
+                aria-label={t('nav.account_menu')}
+                aria-expanded={menuOpen}
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
@@ -169,7 +172,7 @@ export default function Header({ onToggleNav }: Props) {
       {menuOpen && user && (
         <div className="md:hidden border-t border-tertiary bg-secondary/95 backdrop-blur-md px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
           <div className="text-[10px] font-black uppercase tracking-wider text-text-secondary mb-1">
-            {{ ADMIN: 'Administrator', MANAGER: 'Menaxher', PLAYER: 'Lojtar' }[user.role]} &bull; {user.username}
+            {{ ADMIN: t('admin.administrator'), MANAGER: t('admin.manager'), PLAYER: t('admin.player') }[user.role]} &bull; {user.username}
           </div>
           <div className="flex flex-col space-y-1">
             {links}

@@ -158,10 +158,10 @@ assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en'),
 assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en', true),
   'Bet Builder: X/2&P_2.5', 'individual template names remain unchanged');
 const bttsTotal = builder('4', 'G/G&+2.5', 'BTTS Yes + TOTAL Over 2.5', 2.4);
-assert.equal(ui.marketDisplayTitle(bttsTotal, 'al'), 'Kombinim ndeshjeje: Shënojnë të dy ekipet & Totali i golave');
+assert.equal(ui.marketDisplayTitle(bttsTotal, 'al'), 'Kombinim ndeshjeje: Shënojnë të dyja skuadrat & Totali i golave');
 assert.equal(ui.marketSelectionLabel(bttsTotal.outcomes[0].name, 'al', bttsTotal.name, 'Arsenal vs Chelsea'), 'Po + Lart 2.5');
 assert.equal(ui.marketDisplayTitle(mk('BTTS + Total Goals 2.5', '2.5'), 'al', true),
-  'Shënojnë të dy ekipet & Totali i golave (2.5)', 'translation must retain the exact market line');
+  'Shënojnë të dyja skuadrat & Totali i golave (2.5)', 'translation must retain the exact market line');
 const resultBtts = builder('5', '1&G/G', '1X2 1 + BTTS Yes', 4.4);
 const chanceBtts = builder('6', '1/X&G/G', 'DC 1X + BTTS Yes', 2.5);
 assert.equal(ui.marketDisplayTitle(bttsTotal, 'en'), 'Bet Builder: Both Teams to Score + Total Goals');

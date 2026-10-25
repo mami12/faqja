@@ -65,7 +65,7 @@ export default function MyBetsPage() {
               {t('tickets.ticket_id')}: <span className="font-mono text-white font-bold bg-[#25303e] px-1.5 py-0.5">{ticket.id.slice(0, 8).toUpperCase()}</span>
             </div>
             <div className="text-[11px] text-text-muted">{t('tickets.placed_at')}: {formatDate(ticket.placedAt)}</div>
-            <div className="text-[11px] text-text-muted">Lloji: <span className="font-semibold text-slate-300">{translateTicketType(ticket.ticketType, t)}</span></div>
+            <div className="text-[11px] text-text-muted">{t("Lloji:") + " "}<span className="font-semibold text-slate-300">{translateTicketType(ticket.ticketType, t)}</span></div>
           </div>
           <span className={`font-bold text-[10px] px-2 py-1 uppercase tracking-wider ${statusClass}`}>
             {t(`tickets.${ticket.status.toLowerCase()}`)}
@@ -92,12 +92,12 @@ export default function MyBetsPage() {
         <div className="flex justify-between items-center border-t border-tertiary bg-[#1c2733] px-3 py-3 text-xs sm:px-4">
           <div>
             <span className="text-text-secondary">{t('tickets.stake')}: </span>
-            <span className="font-mono font-bold text-white">{totalStake.toFixed(2)} Lëk</span>
+            <span className="font-mono font-bold text-white">{totalStake.toFixed(2)} {" " + t("Lëk")}</span>
           </div>
           <div className="text-right">
             <div>
               <span className="text-text-secondary">{ticket.system ? (isPending ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : t('tickets.payout')}: </span>
-              <span className="font-mono font-black text-accent-yellow text-sm">{(ticket.system && !isPending ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} Lëk</span>
+              <span className="font-mono font-black text-accent-yellow text-sm">{(ticket.system && !isPending ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} {" " + t("Lëk")}</span>
             </div>
             {!ticket.system && <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{formatOdds(totalOdds)}</div>}
           </div>
@@ -130,7 +130,7 @@ export default function MyBetsPage() {
               </div>
               <div>
                 <h1 className="text-lg font-black text-white">{t('nav.myBets')}</h1>
-                <p className="text-xs text-text-secondary">Biletat aktive dhe historiku yt</p>
+                <p className="text-xs text-text-secondary">{t("Biletat aktive dhe historiku yt")}</p>
               </div>
             </header>
             <div className="flex gap-px mb-4 bg-tertiary border border-tertiary w-fit max-w-full">

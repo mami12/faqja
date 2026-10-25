@@ -1,3 +1,4 @@
+import { useLanguage } from '../context/LanguageContext';
 import CasinoFullscreen,{requestCasinoLandscape,releaseCasinoLandscape} from '../components/Layout/CasinoFullscreen';
 import {useMemo} from 'react';
 import {createCasinoExitController} from './casinoExit';
@@ -58,6 +59,7 @@ function GameArt({ game, className }: { game: GameMeta; className: string }) {
 
 /** Original provider cabinets connected to the shared sportsbook wallet. */
 export default function CasinoPage() {
+  const { t } = useLanguage();
   const { gameId } = useParams<{ gameId?: string }>();
   const navigate=useNavigate(),{refreshUser}=useAuth();
   const exitGame=useMemo(()=>createCasinoExitController({
@@ -74,11 +76,9 @@ export default function CasinoPage() {
         <main className="mx-auto w-full max-w-[1320px] flex-1 px-2 pb-12 pt-3 sm:px-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 bg-[#1c2733] px-4 text-sm font-semibold text-slate-100 hover:bg-[#29394a]">
-              <ArrowLeft size={17}/> Kthehu te sporti
-            </Link>
+              <ArrowLeft size={17}/> {" " + t("Kthehu te sporti")}</Link>
             <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-              Bilanci i llogarisë · i njëjti me sportin
-            </div>
+              {t("Bilanci i llogarisë · i njëjti me sportin")}</div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -110,16 +110,14 @@ export default function CasinoPage() {
                     <p className="text-xs text-slate-400">{game.subtitle}</p>
                   </div>
                   <span className="shrink-0 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-black group-hover:bg-amber-300">
-                    Hap lojën
-                  </span>
+                    {t("Hap lojën")}</span>
                 </div>
               </Link>
             ))}
           </div>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Të gjitha lojërat përdorin të njëjtin bilanc me bastet sportive.
-          </p>
+            {t("Të gjitha lojërat përdorin të njëjtin bilanc me bastet sportive.")}</p>
         </main>
       </div>
     );

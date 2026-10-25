@@ -41,6 +41,9 @@ export interface Tournament {
 
 export interface Match {
   id: string;
+  displayOrder?: number;
+  competitionOrder?: number;
+  listingStale?: boolean;
   tournamentId: number;
   homeTeam: string;
   awayTeam: string;
@@ -104,6 +107,8 @@ export interface Outcome {
   feedSuspended?: boolean;
   /** Reversible auto-suspension from the server's live risk rules. */
   riskSuspended?: boolean;
+  /** The server's live facts have irreversibly completed this contract. */
+  decided?: boolean;
 
 }
 

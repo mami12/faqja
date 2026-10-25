@@ -25,6 +25,9 @@ create table if not exists app_user (
 );
 create index if not exists app_user_role_idx    on app_user (role);
 create index if not exists app_user_manager_idx on app_user (manager_id);
+alter table app_user add column if not exists deleted_at timestamptz;
+alter table app_user add column if not exists deleted_by uuid references app_user(id) on delete set null;
+create index if not exists app_user_deleted_idx on app_user(deleted_at,id) where deleted_at is not null;
 
 create table if not exists app_commission_config (
   id         smallint primary key check (id = 1),

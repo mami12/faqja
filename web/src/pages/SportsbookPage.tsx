@@ -159,11 +159,11 @@ export default function SportsbookPage() {
           onOpenBetslip={() => {setNavOpen(false);setBetslipOpen(v => !v);}}
         />
         {/* Compact mobile shortcuts, as on the reference board. */}
-        <nav aria-label="Shkurtoret e sporteve" className="flex h-[63px] shrink-0 items-stretch border-b border-[#111a26] bg-[#0d1420] text-white md:hidden">
+        <nav aria-label={t("Shkurtoret e sporteve")} className="flex h-[63px] shrink-0 items-stretch border-b border-[#111a26] bg-[#0d1420] text-white md:hidden">
           <button type="button" onClick={handleSelectAll} aria-pressed={viewMode === 'all' && !selectedSport && !selectedCategory && !selectedTournament}
             className={`flex w-[66px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${viewMode === 'all' ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
             <CalendarDays size={25} strokeWidth={2.4}/>
-            <span className="text-[10px] font-black leading-tight">TË GJITHA</span>
+            <span className="text-[10px] font-black leading-tight">{t("TË GJITHA")}</span>
           </button>
           <button type="button" onClick={() => {
               setMobileSearchOpen(v => !v);
@@ -174,21 +174,21 @@ export default function SportsbookPage() {
             aria-pressed={mobileSearchOpen || !!searchTerm} aria-expanded={mobileSearchOpen}
             className={`flex w-[65px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${mobileSearchOpen || searchTerm ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
             <Search size={26} strokeWidth={3}/>
-            <span className="text-[10px] font-bold leading-tight">Kërko</span>
+            <span className="text-[10px] font-bold leading-tight">{t("Kërko")}</span>
           </button>
           <button type="button" onClick={handleSelectLive} aria-pressed={isLiveOnly}
             className={`flex w-[83px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${isLiveOnly ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
             <span className="relative">
               <FootballIcon size={25}/>
-              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">NË LOJË</span>
+              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">{t("NË LOJË")}</span>
             </span>
-            <span className="text-[10px] font-black leading-tight">FUTBOLL</span>
+            <span className="text-[10px] font-black leading-tight">{t("FUTBOLL")}</span>
           </button>
           <div className="min-w-0 flex-1 bg-[#101925]" aria-hidden="true"/>
           <button type="button" onClick={() => navigate('/casino')}
             className="flex w-[75px] shrink-0 flex-col items-center justify-center gap-1 border-b-[3px] border-amber-500 pt-1 text-amber-300 transition-colors hover:bg-[#263141]">
             <span className="text-[25px] leading-7" aria-hidden="true">🎰</span>
-            <span className="text-[10px] font-black leading-tight">KAZINO</span>
+            <span className="text-[10px] font-black leading-tight">{t("KAZINO")}</span>
           </button>
         </nav>
         {mobileSearchOpen && (
@@ -197,10 +197,10 @@ export default function SportsbookPage() {
             <Search size={19} className="shrink-0 text-white"/>
             <input ref={mobileSearchRef} type="search" value={searchTerm}
               onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Kërko ndeshje ose kampionat" aria-label="Kërko ndeshje"
+              placeholder={t("Kërko ndeshje ose kampionat")} aria-label={t("Kërko ndeshje")}
               className="h-9 min-w-0 flex-1 border border-[#8593a7] bg-[#1b2533] px-2 text-sm text-white outline-none placeholder:text-[#aab7c6]"/>
             <button type="button" className="p-1 text-white"
-              aria-label={searchTerm ? 'Pastro kërkimin' : 'Mbyll kërkimin'}
+              aria-label={searchTerm ? t("Pastro kërkimin") : 'Mbyll kërkimin'}
               onClick={() => searchTerm ? handleSearchChange('') : setMobileSearchOpen(false)}><X size={19}/></button>
           </form>
         )}

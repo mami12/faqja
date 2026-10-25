@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Sparkles, Flame, Clock, Flag, 
@@ -115,6 +115,8 @@ export default function MatchDetail() {
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
   const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled, refreshVersion, acceptMatches } = useLiveFeed();
+  const refreshRef = useRef<(() => void) | null>(null);
+  const lastRefreshVersion = useRef(refreshVersion);
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
@@ -126,17 +128,23 @@ export default function MatchDetail() {
     if (!id) return;
     let active = true;
     let busy = false;
+    let queued = false;
     const controller = new AbortController();
     const refresh = () => {
-      if (busy || !active) return;
+      if (!active) return;
+      if (busy) {queued = true; return;}
       busy = true;
       apiClient.get(`/matches/${id}`, {signal:controller.signal, params:{_snapshot:Date.now()}}).then(res => {
         if (!active) return;
         acceptMatches([res.data]);
         setMatch(res.data);
         setMarkets(res.data?.markets ?? []);
-      }).catch(error => { if (active) console.error(error); }).finally(() => { busy = false; });
+      }).catch(error => { if (active) console.error(error); }).finally(() => {
+        busy = false;
+        if(active && queued) {queued=false;refresh();}
+      });
     };
+    refreshRef.current=refresh;
     refresh();
     // Opening a fixture boosts its upstream subscription to FULL markets.
     // The first REST response can predate that push snapshot: re-fetch while open
@@ -144,10 +152,17 @@ export default function MatchDetail() {
     const timer = window.setInterval(refresh, 20_000);
     return () => {
       active = false;
+        refreshRef.current=null;
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [id, refreshVersion, acceptMatches]);
+  }, [id, acceptMatches]);
+
+  useEffect(() => {
+    if(lastRefreshVersion.current===refreshVersion) return;
+    lastRefreshVersion.current=refreshVersion;
+    refreshRef.current?.();
+  }, [refreshVersion]);
 
   // One visibility rule for the full market page, search, category counts and rows.
   // Apply pushed scores immediately instead of waiting for the 20s REST refresh.
@@ -239,11 +254,11 @@ export default function MatchDetail() {
       {/* A photographic, dynamic scoreboard: the image is only a background.
           Scores and statistics always come from the live feed, never from the photo.
           Photo: Peter Glaser, CC0 (Wikimedia Commons, 2017). */}
-      <section className="overflow-hidden rounded-sm border border-[#303d4b]" aria-label="Rezultati dhe statistikat e ndeshjes">
+      <section className="overflow-hidden rounded-sm border border-[#303d4b]" aria-label={t("Rezultati dhe statistikat e ndeshjes")}>
         <div className="flex min-h-[36px] items-center justify-between gap-2 bg-[#414b5b] px-2.5 text-[#eaf0f9]">
           <button type="button" onClick={() => navigate(-1)}
             className="inline-flex min-w-0 items-center gap-2 py-2 text-left text-xs hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-            aria-label="Kthehu te lista e ndeshjeve">
+            aria-label={t("Kthehu te lista e ndeshjeve")}>
             <ArrowLeft size={15} className="shrink-0" />
             <span className="truncate">
               {[live.tournament?.category?.name, live.tournament?.name].filter(Boolean).join(' / ') || t('common.match')}
@@ -251,8 +266,8 @@ export default function MatchDetail() {
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             <button type="button" onClick={() => toggleFavorite(matchIdStr)}
-              aria-label={isFav ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
-              aria-pressed={isFav} title={isFav ? 'Hiq nga të preferuarat' : 'Shto te të preferuarat'}
+              aria-label={isFav ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
+              aria-pressed={isFav} title={isFav ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
               className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
               <Star size={15} className={isFav ? 'fill-amber-400 text-amber-400' : ''}/>
             </button>
@@ -262,8 +277,8 @@ export default function MatchDetail() {
               className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
               {isAlert ? <BellRing size={15} className="text-emerald-300" /> : <Bell size={15}/>}
             </button>
-            <button type="button" onClick={() => navigate('/')} title="Mbyll ndeshjen"
-              aria-label="Mbyll ndeshjen dhe kthehu te ndeshjet"
+            <button type="button" onClick={() => navigate('/')} title={t("Mbyll ndeshjen")}
+              aria-label={t("Mbyll ndeshjen dhe kthehu te ndeshjet")}
               className="rounded-sm p-1 text-slate-200 transition-colors hover:bg-white/10 hover:text-white">
               <X size={17} strokeWidth={3}/>
             </button>
@@ -282,14 +297,14 @@ export default function MatchDetail() {
               <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center bg-[#234a48] px-2 py-1 text-center text-[12px] text-white sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
                 <strong className="min-w-0 truncate text-left text-[11px] sm:text-[13px]">
                   {isLive
-                    ? ('NË LOJË' + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
+                    ? (t("NË LOJË") + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
                       (live.period ? ' ' + live.period : ''))
                     : formattedDate.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' +
                       formattedDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                 </strong>
-                <span title="Gola" aria-label="Gola" role="img">⚽</span>
-                <span title="Kartonë gjithsej" aria-label="Kartonë gjithsej" role="img">🟨</span>
-                <span title="Kornera" aria-label="Kornera" role="img">🚩</span>
+                <span title={t("Gola")} aria-label={t("Gola")} role="img">⚽</span>
+                <span title={t("Kartonë gjithsej")} aria-label={t("Kartonë gjithsej")} role="img">🟨</span>
+                <span title={t("Kornera")} aria-label={t("Kornera")} role="img">🚩</span>
               </div>
               <div className="divide-y divide-white/10 text-xs sm:text-sm">
                 <div className="grid min-h-[27px] grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center px-2 text-center sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
@@ -322,7 +337,7 @@ export default function MatchDetail() {
             type="text"
             value={marketSearch}
             onChange={(e) => setMarketSearch(e.target.value)}
-            placeholder="Kërko tregje, linja, zgjedhje (p.sh. 3.5, këndore, kartona...)"
+            placeholder={t("Kërko tregje, linja, zgjedhje (p.sh. 3.5, këndore, kartona...)")}
             className="w-full bg-secondary border border-tertiary rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green shadow-inner"
           />
           {marketSearch && (
@@ -367,14 +382,13 @@ export default function MatchDetail() {
       {/* Header controls: market counter and collapse toggle */}
       <div className="flex items-center justify-between text-xs px-1 text-text-secondary">
         <span className="font-semibold">
-          Shfaqen <strong className="text-white">{groupedMarkets.length}</strong> tregje / <strong className="text-white">{visibleLines}</strong> linja
-        </span>
+          {t("Shfaqen") + " "}<strong className="text-white">{groupedMarkets.length}</strong> {" " + t("tregje /") + " "}<strong className="text-white">{visibleLines}</strong> {" " + t("linja")}</span>
         <button
           onClick={toggleAllCollapse}
           className="text-text-secondary hover:text-white font-bold inline-flex items-center gap-1 hover:underline active:scale-95 transition"
         >
           <Layers size={13} />
-          <span>Palos / Hapi të Gjitha</span>
+          <span>{t("Palos / Hapi të Gjitha")}</span>
         </button>
       </div>
 
@@ -383,8 +397,8 @@ export default function MatchDetail() {
         {groupedMarkets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-secondary p-8 text-center text-sm text-text-secondary space-y-2">
             <Search size={28} className="mx-auto opacity-30 text-white" />
-            <div className="font-bold text-white">Nuk u gjet asnjë treg</div>
-            <p className="text-xs">Provoni të ndryshoni kategorinë ose fjalën e kërkimit.</p>
+            <div className="font-bold text-white">{t("Nuk u gjet asnjë treg")}</div>
+            <p className="text-xs">{t("Provoni të ndryshoni kategorinë ose fjalën e kërkimit.")}</p>
           </div>
         ) : (
           groupedMarkets.map((group, idx) => {
@@ -410,7 +424,7 @@ export default function MatchDetail() {
                     <span className="break-words">{group.title}</span>
                   </span>
                   <span className="shrink-0 text-[10px] text-text-secondary flex items-center gap-1">
-                    {group.markets.length} {group.markets.length === 1 ? 'linjë' : 'linja'}
+                    {group.markets.length} {group.markets.length === 1 ? 'linjë' : t("linja")}
                     {isCollapsed ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
                   </span>
                 </button>

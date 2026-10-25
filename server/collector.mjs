@@ -421,11 +421,15 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
   // When the feed reports no open odds, every price is unbettable — hide markets entirely
   // so the board never shows placeholder prices (41.00 / 41.00 / 1.29) as bettable odds.
   const oddsClosed = row.has_open_odds === false;
-  const markets = oddsClosed ? [] : buildMarkets(oddsRows);
+  const knownMarkets = buildMarkets(oddsRows);
+  const markets = oddsClosed ? [] : knownMarkets;
 
   return {
     id: row.match_id,
     service: row.service,
+    displayOrder: row.first_seen_at ? new Date((row.service === 'LIVE' ? row.live_first_seen_at : row.prematch_first_seen_at) ?? row.first_seen_at).getTime() : undefined,
+    competitionOrder: row.competition_first_seen_at ? new Date(row.competition_first_seen_at).getTime() : undefined,
+    listingStale: row.listing_stale === true,
     live: row.service === 'LIVE',
     status: clock.status,
     phase: clock.phase,
@@ -452,9 +456,9 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,
     isHot: row.is_hot === true,
-    suspended: oddsClosed || (markets.length > 0 && markets.every((m) => m.suspended)),
+    suspended: row.listing_stale === true || oddsClosed || (markets.length > 0 && markets.every((m) => m.suspended)),
     hasSuspended: markets.some((m) => m.suspended),
-    marketCount: markets.length,
+    marketCount: knownMarkets.length,
     markets,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
     snapshotAt: new Date(now).toISOString(),
@@ -487,7 +491,7 @@ export function startCollector({ io } = {}) {
     if (state.running || state.paused) return;
     state.running = true;
     try {
-      const { rows, received, skipped } = await fetchRealFootball();
+      const { rows, received, skipped, complete } = await fetchRealFootball();
       const now = Date.now();
 
       // refresh the derived live clock on every cycle
@@ -518,6 +522,7 @@ export function startCollector({ io } = {}) {
       state.received = received;
       state.kept = rows.length;
       state.skipped = skipped;
+      state.catalogComplete = complete !== false;
       state.cycles++;
       state.lastError = null;
 

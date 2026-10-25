@@ -375,16 +375,16 @@ const setStatus = (checkOwnership) =>
 adminRouter.patch('/admin/users/:id/status', ...admin, setStatus(false));
 adminRouter.patch('/manager/users/:id/status', ...manager, setStatus(true));
 
-/** delete a login (tickets keep their history) */
+/** The transfer rechecks ownership under the money lock, including safe retries
+ * after the login has already been removed from the active account list. */
 const removeUser = (checkOwnership) =>
   guard(async (req, res) => {
     const id = req.params.id;
-    if (checkOwnership) await assertOwned(req, id);
     if (id === req.user.id) throw badRequest('you cannot delete your own account');
 
-    const deleted = await ledger.deleteUser(id);
+    const deleted = await ledger.deleteUser(id, req.user);
     if (!deleted) throw Object.assign(new Error('user not found'), { status: 404 });
-    res.json({ success: true, id: deleted });
+    res.json({ success: true, ...deleted });
   });
 
 adminRouter.delete('/admin/users/:id', ...admin, removeUser(false));

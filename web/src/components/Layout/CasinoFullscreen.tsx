@@ -1,3 +1,4 @@
+import { useLanguage } from '../../context/LanguageContext';
 import {useEffect,useRef,useState} from 'react';
 import type {ReactNode} from 'react';
 import {ArrowLeft,Maximize2,Minimize2} from 'lucide-react';
@@ -16,6 +17,7 @@ export const requestCasinoLandscape=display.request;
 export const releaseCasinoLandscape=display.release;
 
 export default function CasinoFullscreen({children,title,onExit}:{children:ReactNode;title:string;onExit:()=>void}){
+  const { t } = useLanguage();
  const [portrait,setPortrait]=useState(()=>window.innerHeight>window.innerWidth);
  const [windowed,setWindowed]=useState(false);
  const exiting=useRef(false),wasNative=useRef(Boolean(document.fullscreenElement));
@@ -69,7 +71,7 @@ export default function CasinoFullscreen({children,title,onExit}:{children:React
  return <div className={windowed?'min-h-screen bg-primary':''}>
   <div key="game-stage" className={'casino-game-stage '+(windowed?'casino-game-windowed':portrait?'casino-game-rotated':'')}>
   <div className="casino-game-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-white/20 bg-slate-950 px-2 text-white">
-   <button type="button" onClick={exit} disabled={closing} aria-label="Kthehu te kazinoja"
+   <button type="button" onClick={exit} disabled={closing} aria-label={t("Kthehu te kazinoja")}
     className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold hover:bg-white/10 disabled:opacity-60"><ArrowLeft size={18}/>{closing?'Duke mbyllur…':'Kthehu'}</button>
    <span className="truncate text-sm font-bold">{error||title}</span>
    <button type="button" onClick={toggleFullscreen} aria-label={windowed?'Ekran i plotë horizontal':'Dil nga ekrani i plotë'} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-2 text-xs hover:bg-white/10">

@@ -1,3 +1,4 @@
+import { useLanguage } from './context/LanguageContext';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -11,6 +12,7 @@ import TransactionHistoryPage from './pages/TransactionHistoryPage';
 import CasinoPage from './pages/CasinoPage';
 
 const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false, allowAnyRole = false }: { children: JSX.Element, requireAdmin?: boolean, requireManager?: boolean, allowAnyRole?: boolean }) => {
+  const { t } = useLanguage();
   const { user, isAuthenticated, isLoading } = useAuth();
   
   // Wait for auth check to complete before deciding where to redirect
@@ -19,7 +21,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireManager = false
       <div className="min-h-screen bg-primary flex items-center justify-center">
         <div className="flex items-center gap-3 text-text-secondary">
           <span className="w-4 h-4 rounded-full bg-accent-green animate-ping"></span>
-          <span>Duke u ngarkuar...</span>
+          <span>{t("Duke u ngarkuar...")}</span>
         </div>
       </div>
     );

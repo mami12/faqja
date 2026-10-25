@@ -1,3 +1,4 @@
+import { useLanguage } from '../../context/LanguageContext';
 import { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
 import { apiClient } from '../../api/client';
@@ -9,6 +10,7 @@ interface Rates {
 }
 
 export default function CommissionRates() {
+  const { t } = useLanguage();
   const [rates, setRates] = useState<Rates>({ single: 3, double: 5, multi: 7 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,13 +62,12 @@ export default function CommissionRates() {
     <section className="rounded-2xl border border-tertiary bg-secondary p-4 sm:p-5 shadow-lg">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
-          <h3 className="text-base sm:text-lg font-bold text-white">Komisionet e menaxherëve</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">Ndryshimi zbatohet për bastet e reja. Bastet ekzistuese ruajnë komisionin origjinal.</p>
+          <h3 className="text-base sm:text-lg font-bold text-white">{t("Komisionet e menaxherëve")}</h3>
+          <p className="mt-0.5 text-xs text-text-secondary">{t("Ndryshimi zbatohet për bastet e reja. Bastet ekzistuese ruajnë komisionin origjinal.")}</p>
         </div>
         {saveSuccess && (
           <span className="self-start sm:self-auto text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 animate-pulse">
-            Normat u ruajtën me sukses!
-          </span>
+            {t("Normat u ruajtën me sukses!")}</span>
         )}
       </div>
       <form onSubmit={save} className="flex flex-col gap-3 sm:flex-row sm:items-end">

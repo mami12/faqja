@@ -142,7 +142,7 @@ export default function TicketAudit() {
             onClick={handleTriggerSettlement}
             disabled={settling}
             className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-emerald-900/30 transition active:scale-95 disabled:opacity-50"
-            title="Përfundo ndeshjet e mbyllura dhe llogarit skedinat menjëherë"
+            title={translate("Përfundo ndeshjet e mbyllura dhe llogarit skedinat menjëherë")}
           >
             <CheckCircle2 size={16} className={settling ? 'animate-spin' : ''} />
             <span>{settling ? 'Duke llogaritur...' : 'Llogarit Skedinat Tani'}</span>
@@ -164,18 +164,16 @@ export default function TicketAudit() {
       )}
       {/* Administrative diagnostics, keyed by the REAL upstream match ID,
           not by potentially repeated team names or the public ticket prefix. */}
-      <section aria-label="Kontrolli i ndeshjeve në pritje" className="border border-tertiary bg-secondary p-3 sm:p-4 space-y-2">
+      <section aria-label={translate("Kontrolli i ndeshjeve në pritje")} className="border border-tertiary bg-secondary p-3 sm:p-4 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-white">Ndeshje me bileta në pritje</h3>
-          <span className="text-[11px] text-slate-300">{pendingFixtures.length} ndeshje</span>
+          <h3 className="text-sm font-bold text-white">{translate("Ndeshje me bileta në pritje")}</h3>
+          <span className="text-[11px] text-slate-300">{pendingFixtures.length} {" " + translate("ndeshje")}</span>
         </div>
         <p className="text-[11px] text-text-secondary">
-          Ndeshjet mbyllen vetëm me rezultat përfundimtar të konfirmuar.
-          Në mungesë të rezultatit, pas 72 orësh zbatohet kontrolli i rimbursimit sipas rregullave ekzistuese.
-        </p>
+          {translate("Ndeshjet mbyllen vetëm me rezultat përfundimtar të konfirmuar. Në mungesë të rezultatit, pas 72 orësh zbatohet kontrolli i rimbursimit sipas rregullave ekzistuese.")}</p>
         {pendingError && <p role="alert" className="text-xs text-rose-300">{pendingError}</p>}
         {!pendingError && pendingFixtures.length === 0 && (
-          <p className="text-xs text-slate-300">Nuk ka ndeshje të palogaritshme në listën e kontrollit.</p>
+          <p className="text-xs text-slate-300">{translate("Nuk ka ndeshje të palogaritshme në listën e kontrollit.")}</p>
         )}
         <div className="max-h-64 overflow-auto divide-y divide-tertiary/70">
           {pendingFixtures.map(item => (
@@ -183,8 +181,7 @@ export default function TicketAudit() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-white">{item.matchName}</div>
                 <div className="text-[10px] text-slate-400">
-                  Match ID: {item.matchId} · {item.pendingTickets} bileta / {item.pendingLines} zgjedhje
-                  {item.ageHours !== null ? ' · Më e vjetra ' + item.ageHours + ' orë' : ''}
+                  Match ID: {item.matchId} · {item.pendingTickets} {" " + translate("bileta /") + " "}{item.pendingLines} {" " + translate("zgjedhje")}{item.ageHours !== null ? ' · Më e vjetra ' + item.ageHours + ' orë' : ''}
                 </div>
                 <div className="mt-1 text-[11px] text-amber-200">{reasonText[item.reason]}</div>
                 {item.marketNames?.length > 0 && (
@@ -209,7 +206,7 @@ export default function TicketAudit() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Kërko me numër skedine, kod rezervimi ose përdorues..."
+            placeholder={translate("Kërko me numër skedine, kod rezervimi ose përdorues...")}
             className="w-full bg-primary border border-tertiary rounded-xl pl-9 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green"
           />
           {searchQuery && (
@@ -226,10 +223,10 @@ export default function TicketAudit() {
         <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-1">
           {[
             { id: 'ALL', label: 'Të Gjitha', count: tickets.length },
-            { id: 'PENDING', label: 'Në Pritje', count: pendingCount },
-            { id: 'WON', label: 'Fituar', count: wonCount },
-            { id: 'LOST', label: 'Humbur', count: lostCount },
-            { id: 'REVERTED', label: 'Anuluar', count: revertedCount },
+            { id: 'PENDING', label: translate("Në Pritje"), count: pendingCount },
+            { id: 'WON', label: translate("Fituar"), count: wonCount },
+            { id: 'LOST', label: translate("Humbur"), count: lostCount },
+            { id: 'REVERTED', label: translate("Anuluar"), count: revertedCount },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -244,7 +241,7 @@ export default function TicketAudit() {
             </button>
           ))}
           <span className="ml-auto text-[11px] text-text-secondary font-medium whitespace-nowrap pl-2">
-            Shfaqur {filteredTickets.length}
+            {translate("Shfaqur") + " "}{filteredTickets.length}
           </span>
         </div>
       </div>
@@ -259,8 +256,8 @@ export default function TicketAudit() {
         ) : filteredTickets.length === 0 ? (
           <div className="p-12 text-center text-text-secondary flex flex-col items-center gap-2">
             <TicketIcon size={32} className="opacity-30 text-white" />
-            <div className="text-sm font-bold text-white">Nuk u gjet asnjë skedinë</div>
-            <p className="text-xs">Ndryshoni filtrin ose fjalën e kërkimit për të gjetur skedina të tjera.</p>
+            <div className="text-sm font-bold text-white">{translate("Nuk u gjet asnjë skedinë")}</div>
+            <p className="text-xs">{translate("Ndryshoni filtrin ose fjalën e kërkimit për të gjetur skedina të tjera.")}</p>
           </div>
         ) : (
           <div className="divide-y divide-tertiary/70">
@@ -285,15 +282,15 @@ export default function TicketAudit() {
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-white text-sm sm:text-base">
-                            Skedina #{t.id.substring(0, 8)}
+                            {translate("Skedina #")}{t.id.substring(0, 8)}
                           </span>
                           {t.bookingCode && (
                             <button
                               onClick={() => copyToClipboard(t.bookingCode)}
                               className="text-[11px] bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue font-mono px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 border border-accent-blue/20 transition active:scale-95"
-                              title="Kopjo kodin e rezervimit"
+                              title={translate("Kopjo kodin e rezervimit")}
                             >
-                              <span>Kodi: {t.bookingCode}</span>
+                              <span>{translate("Kodi:") + " "}{t.bookingCode}</span>
                               {copiedCode === t.bookingCode ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                             </button>
                           )}
@@ -321,7 +318,7 @@ export default function TicketAudit() {
                       <div className="text-left md:text-right">
                         <div className="text-[10px] sm:text-xs text-text-secondary uppercase">{translate('tickets.stake_payout')}</div>
                         <div className="text-xs sm:text-sm font-bold text-white tabular-nums">
-                          {t.stake.toFixed(2)} Lëk &rarr; <span className="text-accent-green font-black text-sm sm:text-base">{(t.system && t.status !== 'PENDING' ? t.actualPayout ?? 0 : t.potentialPayout).toFixed(2)} Lëk</span>
+                          {t.stake.toFixed(2)} {" " + translate("Lëk →") + " "}<span className="text-accent-green font-black text-sm sm:text-base">{(t.system && t.status !== 'PENDING' ? t.actualPayout ?? 0 : t.potentialPayout).toFixed(2)} {" " + translate("Lëk")}</span>
                         </div>
                       </div>
 
@@ -340,7 +337,7 @@ export default function TicketAudit() {
                           className="px-2.5 py-1.5 sm:p-2 bg-tertiary hover:bg-tertiary/80 text-text-secondary hover:text-white rounded-xl text-xs font-bold flex items-center gap-1 transition active:scale-95"
                           title={translate('tickets.view_selections')}
                         >
-                          <span className="sm:hidden text-xs">Zgjedhjet</span>
+                          <span className="sm:hidden text-xs">{translate("Zgjedhjet")}</span>
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       </div>

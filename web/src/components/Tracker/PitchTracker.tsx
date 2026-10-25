@@ -18,7 +18,7 @@ interface Props {
  * Do not duplicate that scoreboard here.
  */
 export default function PitchTracker({ matchId, homeTeam, awayTeam, eventsOnly = false }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const patch = useLivePatch(matchId);
   const { matchEvents } = useLiveFeed();
   const [showEvents, setShowEvents] = useState(false);
@@ -39,7 +39,7 @@ export default function PitchTracker({ matchId, homeTeam, awayTeam, eventsOnly =
   if (!corners && !cards && recentEvents.length === 0) return null;
 
   return (
-    <section className="overflow-hidden border border-tertiary bg-secondary text-xs" aria-label="Statistikat gjatë lojës">
+    <section className="overflow-hidden border border-tertiary bg-secondary text-xs" aria-label={t("Statistikat gjatë lojës")}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-[#25303e] px-3 py-2">
         {corners && (
           <div className="flex items-center gap-2" title={`${homeTeam} / ${awayTeam}`}>
@@ -73,7 +73,7 @@ export default function PitchTracker({ matchId, homeTeam, awayTeam, eventsOnly =
           {recentEvents.map((event, i) => (
             <div key={`${event.minute}-${event.type}-${event.team}-${i}`} className="flex items-start gap-3 px-3 py-2">
               <span className="w-9 shrink-0 font-mono font-semibold text-accent-yellow">{event.minute}'</span>
-              <span className="min-w-0 break-words text-slate-200">{translateMatchEventText(event.text, homeTeam, awayTeam)}</span>
+              <span className="min-w-0 break-words text-slate-200">{translateMatchEventText(event.text, homeTeam, awayTeam, lang)}</span>
             </div>
           ))}
         </div>

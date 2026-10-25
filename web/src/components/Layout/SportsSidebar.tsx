@@ -87,7 +87,7 @@ export default function SportsSidebar({
     !selectedSportId && !isLiveOnly && !isFavoritesOnly;
 
   return (
-    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col border-r border-[#101923] bg-[#192330] text-white xl:w-[242px]" aria-label="Sportet dhe kampionatet">
+    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col border-r border-[#101923] bg-[#192330] text-white xl:w-[242px]" aria-label={t("Sportet dhe kampionatet")}>
       {/* Three short icon tabs: the reference photo uses this compact navigation. */}
       <div className="grid shrink-0 grid-cols-3 border-b border-[#344254] bg-[#0e1622]">
         <button type="button" onClick={onSelectAll} aria-pressed={isAllActive}
@@ -99,30 +99,30 @@ export default function SportsSidebar({
           className={`relative flex min-h-[65px] flex-col items-center justify-center gap-1 border-b-[3px] px-0.5 pt-2 text-center transition-colors hover:bg-[#263141] ${isLiveOnly ? 'border-[#e5a900]' : 'border-transparent'}`}>
           <span className="relative">
             <FootballIcon/>
-            <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e8b48] px-[3px] py-px text-[9px] font-extrabold leading-none text-white">TANI</span>
+            <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e8b48] px-[3px] py-px text-[9px] font-extrabold leading-none text-white">{t("TANI")}</span>
           </span>
-          <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight">FUTBOLL</span>
+          <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight">{t("FUTBOLL")}</span>
         </button>
         <button type="button" onClick={onSelectFavorites} aria-pressed={!!isFavoritesOnly}
           className={`relative flex min-h-[65px] flex-col items-center justify-center gap-1 border-b-[3px] px-0.5 pt-2 text-center transition-colors hover:bg-[#263141] ${isFavoritesOnly ? 'border-[#e5a900]' : 'border-transparent'}`}>
           <span className="flex h-[25px] w-[25px] items-center justify-center rounded-full border border-white/90"><Star size={16} strokeWidth={1.8}/></span>
-          <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight">FAVORITET</span>
+          <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight">{t("FAVORITET")}</span>
         </button>
       </div>
 
       {/* Sidebar match search: filters the central match list, not merely this tree. */}
       <div className="shrink-0 border-b border-[#121c2a] bg-[#536073] p-[5px]">
-        <label htmlFor="sidebar-match-search" className="mb-1 block text-[12px] font-medium text-white">Kërko Ndeshje</label>
+        <label htmlFor="sidebar-match-search" className="mb-1 block text-[12px] font-medium text-white">{t("Kërko Ndeshje")}</label>
         <div className="flex h-[34px] items-center gap-2 border border-[#8291a5] bg-[#1b2533] px-2 focus-within:border-[#dcae51]">
           <Search size={17} strokeWidth={2.7} className="shrink-0 text-[#d4dde7]" aria-hidden="true"/>
           <input id="sidebar-match-search" type="search" value={searchTerm}
             onChange={e => onSearchChange(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); onSearchSubmit?.(); } }}
-            placeholder="Kërko"
+            placeholder={t("Kërko")}
             className="min-w-0 flex-1 bg-transparent text-[12px] text-white placeholder-[#78879a] outline-none [appearance:textfield] [&::-webkit-search-cancel-button]:hidden"
           />
           {searchTerm && (
-            <button type="button" onClick={() => onSearchChange('')} aria-label="Pastro kërkimin"
+            <button type="button" onClick={() => onSearchChange('')} aria-label={t("Pastro kërkimin")}
               className="shrink-0 text-[#c3d2e2] transition-colors hover:text-white">
               <X size={17} strokeWidth={3}/>
             </button>
@@ -153,7 +153,7 @@ export default function SportsSidebar({
                   <span className="truncate">{t(`sports.${s.name}`) || s.name}</span>
                 </button>
                 <button type="button" onClick={() => setExpandedSports(prev => ({...prev,[sportId]:!open}))}
-                  aria-label={`${open ? 'Mbyll' : 'Hap'} ${s.name}`} aria-expanded={open}
+                  aria-label={`${open ? t("Mbyll") : t("Hap")} ${s.name}`} aria-expanded={open}
                   className="flex h-full shrink-0 items-center gap-[3px] px-[6px] text-[#d9e2ed] hover:bg-[#607087]">
                   <span className="h-[15px] w-[15px] border border-[#bac5d2]"/>
                   {open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
@@ -164,7 +164,7 @@ export default function SportsSidebar({
                   {isFootball && (
                     <button type="button" onClick={onSelectLive}
                       className={`flex h-[34px] w-full items-center justify-between border-b border-[#151e29] px-2 text-left text-[12px] font-semibold text-white transition-colors hover:bg-[#387548] ${isLiveOnly ? 'bg-[#347c41]' : 'bg-[#2c6335]'}`}>
-                      <span>Drejtpërdrejt</span><ChevronDown size={13} fill="currentColor"/>
+                      <span>{t("Drejtpërdrejt")}</span><ChevronDown size={13} fill="currentColor"/>
                     </button>
                   )}
                   {categories.map(category => {
@@ -186,7 +186,7 @@ export default function SportsSidebar({
                             {category.name}
                           </button>
                           <button type="button" onClick={() => setExpandedCategories(prev => ({...prev,[categoryId]:!expanded}))}
-                            aria-label={`${expanded ? 'Mbyll' : 'Hap'} ligat e ${category.name}`}
+                            aria-label={`${expanded ? t("Mbyll") : t("Hap")} ligat e ${category.name}`}
                             aria-expanded={expanded}
                             className="flex h-[29px] items-center px-[7px] hover:bg-[#46576a]">
                             {expanded ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
@@ -211,7 +211,7 @@ export default function SportsSidebar({
                     );
                   })}
                   {categories.length === 0 && (
-                    <div className="px-2 py-3 text-[11px] text-[#9aa8ba]">Nuk ka liga të disponueshme</div>
+                    <div className="px-2 py-3 text-[11px] text-[#9aa8ba]">{t("Nuk ka liga të disponueshme")}</div>
                   )}
                 </div>
               )}

@@ -42,11 +42,12 @@ export async function upsertMatches(rows, chunkSize = 150) {
         values.push(col === 'raw' ? JSON.stringify(row[col] ?? {}) : (row[col] ?? null));
         return `$${idx}`;
       });
-      return `(${placeholders.join(',')}, now(), now())`;
+      const serviceParameter = `$${r * MATCH_COLUMNS.length + MATCH_COLUMNS.indexOf('service') + 1}`;
+      return `(${placeholders.join(',')}, now(), now(), case when ${serviceParameter}='LIVE' then now() end, case when ${serviceParameter}='PREMATCH' then now() end)`;
     });
 
     const sql = `
-      insert into matches (${MATCH_COLUMNS.join(',')}, last_seen_at, updated_at)
+      insert into matches (${MATCH_COLUMNS.join(',')}, last_seen_at, updated_at, live_first_seen_at, prematch_first_seen_at)
       values ${tuples.join(',')}
       on conflict (match_id) do update set
         sport_id        = excluded.sport_id,
@@ -68,6 +69,9 @@ export async function upsertMatches(rows, chunkSize = 150) {
         status          = excluded.status,
         raw             = excluded.raw,
         active          = true,
+        listing_stale   = false,
+        live_first_seen_at = case when excluded.service='LIVE' then coalesce(matches.live_first_seen_at,now()) else matches.live_first_seen_at end,
+        prematch_first_seen_at = case when excluded.service='PREMATCH' then coalesce(matches.prematch_first_seen_at,now()) else matches.prematch_first_seen_at end,
         last_seen_at    = now(),
         updated_at      = now()`;
 
@@ -77,24 +81,31 @@ export async function upsertMatches(rows, chunkSize = 150) {
   return written;
 }
 
-/** Marks matches that vanished from the feed as finished/inactive. */
+/** Suspend missing listings first; only real FT or long feed loss retires them. */
 export async function expireStaleMatches(graceSeconds = 150) {
   const res = await query(
     `update matches
         set active = false,
-            status = case when status in ('live','scheduled') then 'ended' else status end,
+            listing_stale = true,
+            status = case when lower(coalesce(feed_status,'')) in ('finished','ended','ft','full time') then 'ended' else status end,
             updated_at = now()
       where active
-        and last_seen_at < now() - make_interval(secs => $1::int)
+        and greatest(last_seen_at,updated_at,score_at,clock_at,feed_status_at) < now() - make_interval(secs => $1::int)
+        and (status='ended' or lower(coalesce(feed_status,'')) in ('finished','ended','ft','full time')
+          or greatest(last_seen_at,updated_at,score_at,clock_at,feed_status_at) < now()-interval '6 hours')
       returning match_id`,
     [graceSeconds],
   );
+  await query(`update matches set listing_stale=true where active and listing_stale=false
+    and greatest(last_seen_at,updated_at,score_at,clock_at,feed_status_at) < now()-make_interval(secs=>$1::int)`, [graceSeconds]);
   return res.rows.map((r) => r.match_id);
 }
 
 export async function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false }) {
   const res = await query(
-    `select * from matches
+    `select matches.*, (select min(case when matches.service='LIVE' then all_matches.live_first_seen_at else all_matches.prematch_first_seen_at end)
+      from matches all_matches where all_matches.sport_id is not distinct from matches.sport_id
+        and all_matches.tournament_id is not distinct from matches.tournament_id) as competition_first_seen_at from matches
       where active
         and ($1::text is null or service = upper($1))
         and ($2::text is null or category_slug = $2)
@@ -104,7 +115,9 @@ export async function getMatches({ service = null, league = null, tournamentId =
         and ($6::boolean or status <> 'ended')
         and ($7::text is null or tournament_id::text = $7)
         and ($8::text is null or sport_id::text = $8)
-      order by (service = 'LIVE') desc, start_at asc, match_id asc
+      order by (service = 'LIVE') desc, competition_first_seen_at asc nulls last,
+        coalesce(tournament_id,category_id,0) asc,
+        case when service='LIVE' then coalesce(live_first_seen_at,first_seen_at) else coalesce(prematch_first_seen_at,first_seen_at) end asc, match_id asc
       limit $4 offset $5`,
     [service, league, q, Math.min(limit, 2000), offset, includeEnded === true,
       tournamentId == null ? null : String(tournamentId), sportId == null ? null : String(sportId)],
@@ -309,6 +322,8 @@ export async function applyMatchInfo(info) {
         feed_status_at = case when $8::text is not null then now() else feed_status_at end,
         has_open_odds = coalesce($9, has_open_odds),
         broadcast_url = coalesce($12, broadcast_url),
+        active        = true,
+        listing_stale = false,
         updated_at    = now()
       where match_id = $1
       returning match_id, home_score, away_score, periods_score, odds_count, stats, raw,

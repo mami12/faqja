@@ -8,6 +8,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useBetslip } from '../../context/BetslipContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { countBetslipMatches } from '../../utils/betslipMatchCount';
+import LanguagePicker from './LanguagePicker';
+import { useLanguage } from '../../context/LanguageContext';
 
 type Panel = 'account' | 'notifications' | null;
 
@@ -22,6 +24,7 @@ interface Props {
  */
 export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Props) {
   const { user, logout } = useAuth();
+  const {t, lang} = useLanguage();
   const { selections } = useBetslip();
   const { notifications, clearAllNotifications, dismissNotification } = useFavorites();
   const navigate = useNavigate();
@@ -35,34 +38,35 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
     <div className="relative z-30 shrink-0 md:hidden">
       <header className="flex h-[53px] items-center justify-between bg-[#182b4d] text-white">
         <div className="flex min-w-0 items-center gap-1">
-          <button type="button" aria-label="Hap sportet dhe ligat" onClick={() => {setPanel(null);onOpenLeagues();}}
-            className="flex h-[53px] w-[51px] shrink-0 items-center justify-center border-r border-[#0c1a32] text-white transition hover:bg-[#263f66]">
+          <button type="button" aria-label={t('sports.open_leagues')} onClick={() => {setPanel(null);onOpenLeagues();}}
+            className="flex h-[53px] w-[43px] shrink-0 items-center justify-center border-r border-[#0c1a32] text-white transition hover:bg-[#263f66]">
             <LayoutGrid size={27} strokeWidth={2.5}/>
           </button>
           <button type="button" onClick={() => toggle('account')}
-            aria-label={`Profili i ${user?.username ?? 'përdoruesit'}`}
+            aria-label={`${t('nav.profile')}: ${user?.username ?? t('nav.user')}`}
             aria-expanded={panel === 'account'}
-            className="flex min-w-0 items-center gap-2 px-1.5 py-1 text-left hover:text-amber-200">
-            <CircleUserRound size={30} strokeWidth={2} className="shrink-0 text-white"/>
-            <span className="max-w-[125px] truncate text-[12px] font-bold leading-tight">
+            className="flex min-w-0 items-center gap-1 px-1 py-1 text-left hover:text-amber-200">
+            <CircleUserRound size={25} strokeWidth={2} className="shrink-0 text-white"/>
+            <span className="max-w-[38px] truncate text-[12px] font-bold leading-tight min-[390px]:max-w-[82px]">
               {user?.username ?? ''}
             </span>
           </button>
         </div>
         <div className="flex h-full shrink-0 items-center gap-0.5 pr-1">
+          <LanguagePicker />
           <button type="button" onClick={() => {setPanel(null);onOpenBetslip();}}
-            aria-label={`Kuponi: ${matchCount} ndeshje të zgjedhura`}
-            title="Hap kuponin"
-            className="relative flex h-11 w-10 items-center justify-center rounded hover:bg-[#2b446a]">
+            aria-label={`${t('betslip.betslip')}: ${matchCount}`}
+            title={t('betslip.open')}
+            className="relative flex h-11 w-9 items-center justify-center rounded hover:bg-[#2b446a]">
             <Receipt size={25} strokeWidth={2.1}/>
             <span aria-live="polite" className="absolute right-0 top-0 flex min-h-[19px] min-w-[19px] items-center justify-center rounded-full bg-[#e2a600] px-[3px] text-[11px] font-black leading-none text-white">
               {matchCount}
             </span>
           </button>
-          <button type="button" aria-label={`Njoftimet (${notifications.length})`}
+          <button type="button" aria-label={`${t('nav.notifications')} (${notifications.length})`}
             aria-expanded={panel === 'notifications'} onClick={() => toggle('notifications')}
-            title="Njoftimet e ndeshjeve"
-            className="relative flex h-11 w-9 items-center justify-center rounded hover:bg-[#2b446a]">
+            title={t('nav.match_notifications')}
+            className="relative flex h-11 w-8 items-center justify-center rounded hover:bg-[#2b446a]">
             <MessagesSquare size={23} fill="#ffffff" stroke="#ffffff" strokeWidth={1.8}/>
             {notifications.length > 0 && (
               <span className="absolute right-0 top-0 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[#e2a600] px-0.5 text-[9px] font-bold text-white">
@@ -70,9 +74,9 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
               </span>
             )}
           </button>
-          <button type="button" aria-label="Cilësimet e llogarisë" aria-expanded={panel === 'account'}
-            onClick={() => toggle('account')} title="Cilësimet"
-            className="flex h-11 w-9 items-center justify-center rounded hover:bg-[#2b446a]">
+          <button type="button" aria-label={t('nav.account_settings')} aria-expanded={panel === 'account'}
+            onClick={() => toggle('account')} title={t('nav.settings')}
+            className="flex h-11 w-8 items-center justify-center rounded hover:bg-[#2b446a]">
             <Settings size={23} fill="#ffffff" stroke="#ffffff" strokeWidth={1.8}/>
           </button>
         </div>
@@ -80,20 +84,20 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
 
       {panel && (
         <>
-          <button type="button" aria-label="Mbyll panelin" onClick={() => setPanel(null)}
+          <button type="button" aria-label={t('common.close_panel')} onClick={() => setPanel(null)}
             className="fixed inset-0 z-30 bg-black/20" />
           <div className="absolute inset-x-2 top-[53px] z-40 rounded-b border border-[#607087] bg-[#202c3d] p-3 shadow-2xl">
             <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#47546a] pb-2">
               <h3 className="text-sm font-bold text-white">
-                {panel === 'account' ? (user?.username ?? 'Llogaria') : 'Njoftimet e ndeshjeve'}
+                {panel === 'account' ? (user?.username ?? t('nav.account')) : t('nav.match_notifications')}
               </h3>
-              <button type="button" aria-label="Mbyll" onClick={() => setPanel(null)} className="p-1 text-white"><X size={17}/></button>
+              <button type="button" aria-label={t('common.close')} onClick={() => setPanel(null)} className="p-1 text-white"><X size={17}/></button>
             </div>
             {panel === 'notifications' ? (
               <div className="max-h-[55vh] space-y-2 overflow-y-auto text-xs text-slate-200">
-                {notifications.length === 0 ? <p className="py-3 text-slate-300">Nuk ka njoftime të reja.</p> :
+                {notifications.length === 0 ? <p className="py-3 text-slate-300">{t('nav.no_notifications')}</p> :
                   <>
-                    <button type="button" onClick={clearAllNotifications} className="mb-1 text-amber-300 hover:text-white">Pastro njoftimet</button>
+                    <button type="button" onClick={clearAllNotifications} className="mb-1 text-amber-300 hover:text-white">{t('nav.clear_notifications')}</button>
                     {notifications.map(item => (
                       <div key={item.id} className="flex items-start gap-2 border-b border-[#46546b] pb-2">
                         <button type="button" onClick={() => go(`/match/${item.matchId}`)}
@@ -101,7 +105,7 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
                           <span className="block font-bold text-white">{item.title}</span>
                           <span>{item.message}</span>
                         </button>
-                        <button type="button" aria-label="Hiq njoftimin" onClick={() => dismissNotification(item.id)} className="p-1"><X size={15}/></button>
+                        <button type="button" aria-label={t('nav.dismiss_notification')} onClick={() => dismissNotification(item.id)} className="p-1"><X size={15}/></button>
                       </div>
                     ))}
                   </>
@@ -111,15 +115,15 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
               <div className="space-y-1 text-sm text-white">
                 <div className="mb-2 flex items-center gap-2 rounded bg-[#152131] px-3 py-2 text-xs">
                   <Wallet size={16} className="text-amber-400"/>
-                  <span className="text-slate-300">Bilanci</span>
-                  <strong className="ml-auto text-amber-300">{user?.balance.toFixed(2) ?? '0.00'} Lek</strong>
+                  <span className="text-slate-300">{t('admin.balance')}</span>
+                  <strong className="ml-auto text-amber-300">{user?.balance.toFixed(2) ?? '0.00'} {lang === 'en' ? 'ALL' : 'Lek'}</strong>
                 </div>
                 <button type="button" onClick={() => go('/my-bets')}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Ticket size={16}/> Biletat e mia</button>
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Ticket size={16}/> {t('nav.myBets')}</button>
                 <button type="button" onClick={() => go('/transactions')}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Bell size={16}/> Transaksionet</button>
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Bell size={16}/> {t('nav.transactions')}</button>
                 <button type="button" onClick={() => {setPanel(null);logout();navigate('/login');}}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-rose-300 hover:bg-[#39495e]"><LogOut size={16}/> Dil nga llogaria</button>
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-rose-300 hover:bg-[#39495e]"><LogOut size={16}/> {t('nav.logout')}</button>
               </div>
             )}
           </div>

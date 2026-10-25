@@ -3,11 +3,13 @@ import { apiClient } from '../../api/client';
 import { User } from '../../types';
 import { Plus, ShieldAlert, CheckCircle, Ban, ArrowDownRight, ArrowUpRight, Trash2, Edit3, Users as UsersIcon, Search, X, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 
 const PRESET_AMOUNTS = [100, 500, 1000, 2000, 5000, 10000];
 
 export default function UserManagement() {
   const { t } = useLanguage();
+  const { refreshUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -68,7 +70,7 @@ export default function UserManagement() {
       fetchUsers();
       alert(t('admin.user_created'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.create_failed'));
+      alert(t(e.response?.data?.error || t('admin.create_failed')));
     }
   };
 
@@ -91,18 +93,20 @@ export default function UserManagement() {
       fetchUsers();
       alert(t('admin.user_updated'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.update_failed'));
+      alert(t(e.response?.data?.error || t('admin.update_failed')));
     }
   };
 
   const handleDeleteUser = async (userId: string, username: string) => {
-    if (!confirm(`Delete user "${username}"? This will permanently remove the account and all related data.`)) return;
+    if (!confirm(`${t('Fshij llogarinë')} "${username}"? ${t('Bilanci i mbetur kalon te llogaria jote. Historiku i lojtarit pastrohet në pastrimin mujor pas datës 2; detyrimet në pritje ruhen.')}`)) return;
     try {
       await apiClient.delete(`/admin/users/${userId}`);
-      fetchUsers();
       alert(t('admin.user_deleted'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.delete_failed'));
+      alert(t(e.response?.data?.error || t('admin.delete_failed')));
+    } finally {
+      await refreshUser();
+      void fetchUsers();
     }
   };
 
@@ -111,7 +115,7 @@ export default function UserManagement() {
       await apiClient.patch(`/admin/users/${userId}/status`, { status: newStatus });
       fetchUsers();
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.status_failed'));
+      alert(t(e.response?.data?.error || t('admin.status_failed')));
     }
   };
 
@@ -131,7 +135,7 @@ export default function UserManagement() {
       fetchUsers();
       alert(t('admin.balance_updated'));
     } catch (e: any) {
-      alert(e.response?.data?.error || t('admin.transaction_failed'));
+      alert(t(e.response?.data?.error || t('admin.transaction_failed')));
     }
   };
 
@@ -193,7 +197,7 @@ export default function UserManagement() {
           <button 
             onClick={fetchUsers}
             className="p-2.5 bg-tertiary/70 hover:bg-tertiary text-text-secondary hover:text-white rounded-xl text-xs font-bold transition active:scale-95"
-            title="Rifresko përdoruesit"
+            title={t("Rifresko përdoruesit")}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin text-accent-green' : ''} />
           </button>
@@ -216,7 +220,7 @@ export default function UserManagement() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Kërko me emër përdoruesi..."
+              placeholder={t("Kërko me emër përdoruesi...")}
               className="w-full bg-primary border border-tertiary rounded-xl pl-9 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green"
             />
             {searchQuery && (
@@ -241,8 +245,7 @@ export default function UserManagement() {
                   <option value="">{t('admin.all_users')}</option>
                   {managers.map(m => (
                     <option key={m.id} value={m.id}>
-                      {m.username} ({m._count?.managedUsers || 0} lojtarë)
-                    </option>
+                      {m.username} ({m._count?.managedUsers || 0} {" " + t("lojtarë)")}</option>
                   ))}
                 </select>
               </div>
@@ -254,7 +257,7 @@ export default function UserManagement() {
         <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-1">
           {[
             { id: 'ALL', label: 'Të Gjithë', count: users.length },
-            { id: 'PLAYER', label: 'Lojtarë', count: playerCount },
+            { id: 'PLAYER', label: t("Lojtarë"), count: playerCount },
             { id: 'MANAGER', label: 'Menaxherë', count: managerCount },
             { id: 'ADMIN', label: 'Administratorë', count: adminCount },
           ].map((tab) => (
@@ -267,11 +270,11 @@ export default function UserManagement() {
                   : 'bg-primary/80 text-text-secondary hover:text-white hover:bg-tertiary/60'
               }`}
             >
-              {tab.label} <span className="opacity-75 text-[11px]">({tab.count})</span>
+              {t(tab.label)} <span className="opacity-75 text-[11px]">({tab.count})</span>
             </button>
           ))}
           <span className="ml-auto text-[11px] text-text-secondary font-medium whitespace-nowrap pl-2">
-            Duke shfaqur {filteredUsers.length}
+            {t("Duke shfaqur") + " "}{filteredUsers.length}
           </span>
         </div>
       </div>
@@ -280,18 +283,17 @@ export default function UserManagement() {
       {activeManager && (
         <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-3 sm:p-4 flex items-center justify-between text-xs sm:text-sm text-amber-200 shadow-md">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-white">Lojtarët e menaxherit:</span>
+            <span className="font-semibold text-white">{t("Lojtarët e menaxherit:")}</span>
             <span className="font-black text-amber-300 bg-amber-500/25 border border-amber-500/40 px-2.5 py-1 rounded-xl">
               ⭐ @{activeManager.username}
             </span>
-            <span className="text-text-secondary text-xs">({filteredUsers.length} lojtarë të lidhur)</span>
+            <span className="text-text-secondary text-xs">({filteredUsers.length} {" " + t("lojtarë të lidhur)")}</span>
           </div>
           <button
             onClick={() => { setSelectedManagerId(''); }}
             className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 active:scale-95"
           >
-            <X size={15} /> Hiq Filtrin
-          </button>
+            <X size={15} /> {" " + t("Hiq Filtrin")}</button>
         </div>
       )}
 
@@ -304,8 +306,8 @@ export default function UserManagement() {
       ) : filteredUsers.length === 0 ? (
         <div className="p-12 text-center text-text-secondary bg-secondary rounded-2xl border border-tertiary space-y-2">
           <UsersIcon size={32} className="mx-auto opacity-30 text-white" />
-          <div className="text-sm font-bold text-white">Nuk u gjet asnjë përdorues</div>
-          <p className="text-xs">Provoni të ndryshoni filtrat ose fjalën e kërkimit.</p>
+          <div className="text-sm font-bold text-white">{t("Nuk u gjet asnjë përdorues")}</div>
+          <p className="text-xs">{t("Provoni të ndryshoni filtrat ose fjalën e kërkimit.")}</p>
         </div>
       ) : (
         <>
@@ -325,14 +327,14 @@ export default function UserManagement() {
                     <div>
                       <div className="font-bold text-white text-base leading-tight">{u.username}</div>
                       <div className="text-[11px] text-text-secondary mt-0.5">
-                        {u.manager?.username ? `Menaxher: ${u.manager.username}` : (u.role === 'MANAGER' ? `${u._count?.managedUsers || 0} lojtarë të menaxhuar` : 'I pavarur')}
+                        {u.manager?.username ? `Menaxher: ${u.manager.username}` : (u.role === 'MANAGER' ? `${u._count?.managedUsers || 0} lojtarë të menaxhuar` : t("I pavarur"))}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex flex-col items-end gap-1">
                     <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${getRoleBadge(u.role)}`}>
-                      {roleLabel(u.role)}
+                      {t(roleLabel(u.role))}
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
                       u.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -341,7 +343,7 @@ export default function UserManagement() {
                       {u.status === 'ACTIVE' && <CheckCircle size={10} />}
                       {u.status === 'FROZEN' && <ShieldAlert size={10} />}
                       {u.status === 'BANNED' && <Ban size={10} />}
-                      {statusLabel(u.status)}
+                      {t(statusLabel(u.status))}
                     </span>
                   </div>
                 </div>
@@ -350,13 +352,13 @@ export default function UserManagement() {
                 {u.role === 'PLAYER' && (
                   <div className="bg-primary/90 border border-tertiary/80 rounded-xl p-2.5 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-text-secondary text-[11px] font-semibold">Menaxheri:</span>
+                      <span className="text-text-secondary text-[11px] font-semibold">{t("Menaxheri:")}</span>
                       {u.manager?.username ? (
                         <span className="font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg truncate">
                           ⭐ @{u.manager.username}
                         </span>
                       ) : (
-                        <span className="text-text-secondary italic text-[11px]">I pavarur (pa menaxher)</span>
+                        <span className="text-text-secondary italic text-[11px]">{t("I pavarur (pa menaxher)")}</span>
                       )}
                     </div>
                     {u.managerId && (
@@ -364,8 +366,7 @@ export default function UserManagement() {
                         onClick={() => filterByManager(u.managerId!)}
                         className="text-[11px] font-bold text-accent-green hover:underline shrink-0 ml-2"
                       >
-                        Lojtarët e tij →
-                      </button>
+                        {t("Lojtarët e tij →")}</button>
                     )}
                   </div>
                 )}
@@ -373,14 +374,13 @@ export default function UserManagement() {
                 {u.role === 'MANAGER' && (
                   <div className="bg-purple-500/10 border border-purple-500/25 rounded-xl p-2.5 flex items-center justify-between text-xs">
                     <span className="text-text-secondary text-[11px] font-semibold">
-                      Menaxhon: <strong className="text-purple-300 font-black">{u._count?.managedUsers || 0} lojtarë</strong>
+                      {t("Menaxhon:") + " "}<strong className="text-purple-300 font-black">{u._count?.managedUsers || 0} {" " + t("lojtarë")}</strong>
                     </span>
                     <button
                       onClick={() => filterByManager(u.id)}
                       className="text-[11px] font-bold text-purple-300 bg-purple-500/20 hover:bg-purple-500/30 px-2.5 py-1 rounded-lg transition"
                     >
-                      Shiko Lojtarët e Tij →
-                    </button>
+                      {t("Shiko Lojtarët e Tij →")}</button>
                   </div>
                 )}
 
@@ -388,7 +388,7 @@ export default function UserManagement() {
                 <div className="bg-primary/80 px-3.5 py-2.5 rounded-xl border border-tertiary/70 flex items-center justify-between">
                   <span className="text-xs text-text-secondary font-medium uppercase tracking-wider">{t('admin.balance')}</span>
                   <span className="text-lg font-black text-accent-green tabular-nums">
-                    {u.balance.toFixed(2)} {u.currency || 'Lëk'}
+                    {u.balance.toFixed(2)} {u.currency || t("Lëk")}
                   </span>
                 </div>
 
@@ -480,7 +480,7 @@ export default function UserManagement() {
                     </td>
                     <td className="p-4">
                       <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${getRoleBadge(u.role)}`}>
-                        {roleLabel(u.role)}
+                        {t(roleLabel(u.role))}
                       </span>
                     </td>
                     <td className="p-4">
@@ -491,11 +491,11 @@ export default function UserManagement() {
                         {u.status === 'ACTIVE' && <CheckCircle size={12} />}
                         {u.status === 'FROZEN' && <ShieldAlert size={12} />}
                         {u.status === 'BANNED' && <Ban size={12} />}
-                        {statusLabel(u.status)}
+                        {t(statusLabel(u.status))}
                       </span>
                     </td>
                     <td className="p-4 text-base font-black text-white tabular-nums">
-                      {u.balance.toFixed(2)} <span className="text-xs text-text-secondary font-medium">{u.currency || 'Lëk'}</span>
+                      {u.balance.toFixed(2)} <span className="text-xs text-text-secondary font-medium">{u.currency || t("Lëk")}</span>
                     </td>
                     <td className="p-4 text-xs">
                       {u.role === 'PLAYER' ? (
@@ -507,26 +507,23 @@ export default function UserManagement() {
                             <button
                               onClick={() => filterByManager(u.managerId!)}
                               className="text-[10px] text-accent-green hover:underline font-bold"
-                              title="Filtro lojtarët e këtij menaxheri"
+                              title={t("Filtro lojtarët e këtij menaxheri")}
                             >
-                              Lojtarët →
-                            </button>
+                              {t("Lojtarët →")}</button>
                           </div>
                         ) : (
-                          <span className="text-text-secondary/50 italic text-xs">I pavarur</span>
+                          <span className="text-text-secondary/50 italic text-xs">{t("I pavarur")}</span>
                         )
                       ) : u.role === 'MANAGER' ? (
                         <div className="inline-flex items-center gap-2">
                           <span className="px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 font-black text-xs inline-flex items-center gap-1">
-                            👥 {u._count?.managedUsers || 0} lojtarë
-                          </span>
+                            👥 {u._count?.managedUsers || 0} {" " + t("lojtarë")}</span>
                           <button
                             onClick={() => filterByManager(u.id)}
                             className="text-[10px] text-purple-300 hover:text-purple-200 underline font-bold"
-                            title="Shfaq të gjithë lojtarët e këtij menaxheri"
+                            title={t("Shfaq të gjithë lojtarët e këtij menaxheri")}
                           >
-                            Shfaq →
-                          </button>
+                            {t("Shfaq →")}</button>
                         </div>
                       ) : (
                         <span className="text-text-secondary/40 text-xs">-</span>
@@ -640,9 +637,9 @@ export default function UserManagement() {
                   onChange={e => setRole(e.target.value)}
                   className="w-full bg-primary border border-tertiary rounded-xl p-3 text-white text-sm focus:outline-none focus:border-accent-green"
                 >
-                  <option value="PLAYER">Lojtar</option>
-                  <option value="MANAGER">Menaxher</option>
-                  <option value="ADMIN">Administrator</option>
+                  <option value="PLAYER">{t("Lojtar")}</option>
+                  <option value="MANAGER">{t("Menaxher")}</option>
+                  <option value="ADMIN">{t("Administrator")}</option>
                 </select>
               </div>
               {role === 'PLAYER' && managers.length > 0 && (
@@ -731,9 +728,9 @@ export default function UserManagement() {
                   onChange={e => setEditRole(e.target.value)}
                   className="w-full bg-primary border border-tertiary rounded-xl p-3 text-white text-sm focus:outline-none focus:border-accent-green"
                 >
-                  <option value="PLAYER">Lojtar</option>
-                  <option value="MANAGER">Menaxher</option>
-                  <option value="ADMIN">Administrator</option>
+                  <option value="PLAYER">{t("Lojtar")}</option>
+                  <option value="MANAGER">{t("Menaxher")}</option>
+                  <option value="ADMIN">{t("Administrator")}</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-3">
@@ -775,7 +772,7 @@ export default function UserManagement() {
               </div>
               <div className="text-text-secondary flex justify-between">
                 <span>{t('admin.current_balance')}:</span>
-                <strong className="text-accent-green text-sm font-black">{selectedUser.balance.toFixed(2)} Lëk</strong>
+                <strong className="text-accent-green text-sm font-black">{selectedUser.balance.toFixed(2)} {" " + t("Lëk")}</strong>
               </div>
             </div>
 
@@ -794,13 +791,13 @@ export default function UserManagement() {
                     autoFocus
                     className="w-full bg-primary border border-tertiary rounded-xl p-3 pr-12 text-white focus:outline-none focus:border-accent-green text-xl font-black tabular-nums"
                   />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-secondary">Lëk</span>
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-secondary">{t("Lëk")}</span>
                 </div>
               </div>
 
               {/* Quick Preset Amount Chips */}
               <div>
-                <span className="text-[11px] font-semibold text-text-secondary block mb-1.5">Zgjedhje e shpejtë:</span>
+                <span className="text-[11px] font-semibold text-text-secondary block mb-1.5">{t("Zgjedhje e shpejtë:")}</span>
                 <div className="grid grid-cols-3 gap-1.5">
                   {PRESET_AMOUNTS.map((preset) => (
                     <button

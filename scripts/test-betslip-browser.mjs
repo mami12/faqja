@@ -389,7 +389,8 @@ try {
   await add([{...fixtureSelections[0],outcomeId:'C|result||1',matchId:'C',marketId:'C|result|',odds:4.31}]);
   oddsChangedResponse={code:'SELECTION_UNAVAILABLE',message:'Selection unavailable',outcomeId:'C|result||1'};
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').click());
-  await page.waitForFunction(()=>document.body.innerText.includes('Kuota joaktive u pezullua')&&document.querySelector('#fixture-combo button').disabled);
+  await page.waitForFunction(()=>document.querySelector('#fixture-combo button').disabled);
+  assert.ok(!(await page.$eval('body',body=>body.innerText)).includes('Kuota joaktive u pezullua'), 'closed quotes are disabled without the removed warning');
   assert.ok((await page.$eval('body',body=>body.innerText)).includes('Pezulluar'));
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),true);
   const beforeRetry=plainRequests.length;
@@ -408,7 +409,8 @@ try {
   await page.waitForFunction(()=>window.slip.selections.length===0);
   await add([{...fixtureSelections[0],matchId:'D',outcomeId:'D|total|2.5|Under',marketId:'D|total|2.5',marketName:'Total Goals',marketType:'OVER_UNDER',marketLine:'2.5',outcomeName:'Under',matchSnapshot:{status:'LIVE',homeScore:0,awayScore:0}}]);
   socketServer.emit('match:info',{match_id:'D',home_score:1,away_score:2,feed_status:'2H',match_time_ms:3600000});
-  await page.waitForFunction(()=>document.body.innerText.includes('Ka kuota të pezulluara'));
+  await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin')?.disabled);
+  assert.ok(!(await page.$eval('body',body=>body.innerText)).includes('Ka kuota të pezulluara'), 'decided selections close without the removed warning');
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Vendos Bastin').disabled),true,'a settled total already in the slip must close on the live score push');
   // Seconds continue advancing without refreshing the shared feed consumers.
   await socketBarrier();

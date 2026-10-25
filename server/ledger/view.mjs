@@ -13,6 +13,7 @@ import * as overrides from './overrides.mjs';
 import { isResultBttsMarket } from './result-btts.mjs';
 import { liveRiskReason } from '../live-risk.mjs';
 import { frozenSelectionPrice } from './system-columns.mjs';
+import { isDecidedLiveOutcome } from './decided-markets.mjs';
 
 export const outcomeIdOf = (matchId, marketKey, line, outcomeKey) =>
   `${matchId}|${marketKey}|${line ?? ''}|${outcomeKey}`;
@@ -115,6 +116,10 @@ export function toClientMatch(m) {
           outcomeKey: o.key,
           price,
         }) !== null;
+        const decided = isDecidedLiveOutcome(m, {
+          name: mk.name, line, period: mk.period ?? 0,
+          outcomeName: o.name, outcomeCode: o.key,
+        });
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),
@@ -126,7 +131,8 @@ export function toClientMatch(m) {
           // reversible risk lock, so score changes may reopen only our own lock.
           feedSuspended: providerSuspended,
           riskSuspended,
-          status: providerSuspended || riskSuspended ? 'SUSPENDED' : 'ACTIVE',
+          decided,
+          status: providerSuspended || riskSuspended || decided ? 'SUSPENDED' : 'ACTIVE',
         };
       });
 
@@ -179,6 +185,9 @@ export function toClientMatch(m) {
 
   return {
     id: matchId,
+    displayOrder: m.displayOrder,
+    competitionOrder: m.competitionOrder,
+    listingStale: m.listingStale === true,
     tournamentId: String(m.tournament?.id ?? m.league?.slug ?? ''),
     homeTeam: m.home,
     awayTeam: m.away,

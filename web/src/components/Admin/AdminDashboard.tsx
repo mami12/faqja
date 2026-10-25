@@ -84,16 +84,16 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-2xl font-black text-white">{t('admin.dashboard')}</h2>
-          <p className="text-xs sm:text-sm text-text-secondary">Përmbledhje në kohë reale e aktivitetit dhe financave</p>
+          <p className="text-xs sm:text-sm text-text-secondary">{t("Përmbledhje në kohë reale e aktivitetit dhe financave")}</p>
         </div>
         <button
           onClick={() => void refreshStats(false)}
           disabled={refreshing}
           className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-tertiary/70 hover:bg-tertiary text-text-primary text-xs sm:text-sm font-bold border border-white/5 active:scale-95 transition"
-          title="Rifresko statistikat"
+          title={t("Rifresko statistikat")}
         >
           <RefreshCw size={14} className={refreshing ? 'animate-spin text-accent-green' : ''} />
-          <span className="hidden sm:inline">Rifresko</span>
+          <span className="hidden sm:inline">{t("Rifresko")}</span>
         </button>
       </div>
 
@@ -116,7 +116,7 @@ export default function AdminDashboard() {
 
       {/* Financial Chart */}
       <FinancialChart
-        title="Grafiku financiar i menaxherëve"
+        title={t("Grafiku financiar i menaxherëve")}
         description="Totali aktual i fondeve të luajtura, pagesave dhe bilanceve të menaxherëve."
         items={[
           { label: 'Fonde të luajtura', value: financialTotals.totalStake, color: 'bg-sky-400' },
@@ -136,8 +136,8 @@ export default function AdminDashboard() {
       <section className="bg-secondary rounded-2xl border border-tertiary shadow-xl overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-tertiary flex items-center justify-between">
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-white">Pasqyra financiare e menaxherëve</h3>
-            <p className="text-xs sm:text-sm text-text-secondary">Bilanci, aktiviteti i lojtarëve dhe diferenca neto</p>
+            <h3 className="text-base sm:text-lg font-bold text-white">{t("Pasqyra financiare e menaxherëve")}</h3>
+            <p className="text-xs sm:text-sm text-text-secondary">{t("Bilanci, aktiviteti i lojtarëve dhe diferenca neto")}</p>
           </div>
           <span className="text-xs font-semibold px-2.5 py-1 bg-tertiary/70 text-text-secondary rounded-lg">
             {managers.length} {managers.length === 1 ? 'menaxher' : 'menaxherë'}
@@ -158,35 +158,34 @@ export default function AdminDashboard() {
                     </span>
                     <div>
                       <div className="font-bold text-white text-sm">{manager.username}</div>
-                      <div className="text-[11px] text-text-secondary">{manager.playerCount} lojtarë</div>
+                      <div className="text-[11px] text-text-secondary">{manager.playerCount} {" " + t("lojtarë")}</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-black tabular-nums ${
                       isPositive ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
                     }`}>
-                      {isPositive ? '+' : ''}{manager.netDifference.toFixed(2)} Lëk
-                    </span>
+                      {isPositive ? '+' : ''}{manager.netDifference.toFixed(2)} {" " + t("Lëk")}</span>
                   </div>
                 </div>
 
                 {/* 4-Box Key Metrics Grid */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-primary/70 p-2.5 rounded-xl border border-tertiary/50">
-                    <div className="text-[10px] text-text-secondary font-medium uppercase">Fonde të luajtura</div>
-                    <div className="font-bold text-white tabular-nums mt-0.5">{manager.totalStake.toFixed(2)} Lëk</div>
+                    <div className="text-[10px] text-text-secondary font-medium uppercase">{t("Fonde të luajtura")}</div>
+                    <div className="font-bold text-white tabular-nums mt-0.5">{manager.totalStake.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                   <div className="bg-primary/70 p-2.5 rounded-xl border border-tertiary/50">
-                    <div className="text-[10px] text-text-secondary font-medium uppercase">Pagesa fituese</div>
-                    <div className="font-bold text-emerald-400 tabular-nums mt-0.5">{manager.wonPayouts.toFixed(2)} Lëk</div>
+                    <div className="text-[10px] text-text-secondary font-medium uppercase">{t("Pagesa fituese")}</div>
+                    <div className="font-bold text-emerald-400 tabular-nums mt-0.5">{manager.wonPayouts.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                   <div className="bg-primary/70 p-2.5 rounded-xl border border-tertiary/50">
-                    <div className="text-[10px] text-text-secondary font-medium uppercase">Humbje</div>
-                    <div className="font-bold text-rose-400 tabular-nums mt-0.5">{manager.lostStake.toFixed(2)} Lëk</div>
+                    <div className="text-[10px] text-text-secondary font-medium uppercase">{t("Humbje")}</div>
+                    <div className="font-bold text-rose-400 tabular-nums mt-0.5">{manager.lostStake.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                   <div className="bg-primary/70 p-2.5 rounded-xl border border-tertiary/50">
-                    <div className="text-[10px] text-text-secondary font-medium uppercase">Bilanci menaxherit</div>
-                    <div className="font-bold text-white tabular-nums mt-0.5">{manager.balance.toFixed(2)} Lëk</div>
+                    <div className="text-[10px] text-text-secondary font-medium uppercase">{t("Bilanci menaxherit")}</div>
+                    <div className="font-bold text-white tabular-nums mt-0.5">{manager.balance.toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                 </div>
 
@@ -203,18 +202,18 @@ export default function AdminDashboard() {
                 {isExpanded && (
                   <div className="bg-primary/90 p-3 rounded-xl border border-tertiary/80 space-y-2 text-xs">
                     <div className="flex justify-between items-center py-1 border-b border-tertiary/40">
-                      <span className="text-text-secondary">Norma komisionit (T/D/M)</span>
+                      <span className="text-text-secondary">{t("Norma komisionit (T/D/M)")}</span>
                       <span className="font-bold text-accent-yellow">
                         {manager.commissionRates.single}% / {manager.commissionRates.double}% / {manager.commissionRates.multi}%
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-tertiary/40">
-                      <span className="text-text-secondary">Komision i zbritur</span>
-                      <span className="font-bold text-white">{manager.commission.toFixed(2)} Lëk</span>
+                      <span className="text-text-secondary">{t("Komision i zbritur")}</span>
+                      <span className="font-bold text-white">{manager.commission.toFixed(2)} {" " + t("Lëk")}</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-text-secondary">Bilanci total i lojtarëve</span>
-                      <span className="font-bold text-accent-green">{manager.playerBalance.toFixed(2)} Lëk</span>
+                      <span className="text-text-secondary">{t("Bilanci total i lojtarëve")}</span>
+                      <span className="font-bold text-accent-green">{manager.playerBalance.toFixed(2)} {" " + t("Lëk")}</span>
                     </div>
                   </div>
                 )}
@@ -223,8 +222,7 @@ export default function AdminDashboard() {
           })}
           {!managers.length && (
             <div className="p-8 text-center text-text-secondary text-sm">
-              Nuk ka menaxherë për t’u shfaqur.
-            </div>
+              {t("Nuk ka menaxherë për t’u shfaqur.")}</div>
           )}
         </div>
 
@@ -233,16 +231,16 @@ export default function AdminDashboard() {
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="bg-tertiary/60 uppercase text-[11px] text-text-secondary font-bold tracking-wider">
               <tr>
-                <th className="p-3.5">Menaxheri</th>
-                <th className="p-3.5 text-right">Lojtarë</th>
-                <th className="p-3.5 text-right">Fonde të luajtura</th>
-                <th className="p-3.5 text-right">Pagesa fituese</th>
-                <th className="p-3.5 text-right">Humbje</th>
-                <th className="p-3.5 text-right">Komisioni (%)</th>
-                <th className="p-3.5 text-right">Komision</th>
-                <th className="p-3.5 text-right">Bilanci i lojtarëve</th>
-                <th className="p-3.5 text-right">Bilanci</th>
-                <th className="p-3.5 text-right">Diferenca</th>
+                <th className="p-3.5">{t("Menaxheri")}</th>
+                <th className="p-3.5 text-right">{t("Lojtarë")}</th>
+                <th className="p-3.5 text-right">{t("Fonde të luajtura")}</th>
+                <th className="p-3.5 text-right">{t("Pagesa fituese")}</th>
+                <th className="p-3.5 text-right">{t("Humbje")}</th>
+                <th className="p-3.5 text-right">{t("Komisioni (%)")}</th>
+                <th className="p-3.5 text-right">{t("Komision")}</th>
+                <th className="p-3.5 text-right">{t("Bilanci i lojtarëve")}</th>
+                <th className="p-3.5 text-right">{t("Bilanci")}</th>
+                <th className="p-3.5 text-right">{t("Diferenca")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-tertiary/60">
@@ -255,23 +253,21 @@ export default function AdminDashboard() {
                     {manager.username}
                   </td>
                   <td className="p-3.5 text-right tabular-nums">{manager.playerCount}</td>
-                  <td className="p-3.5 text-right tabular-nums">{manager.totalStake.toFixed(2)} Lëk</td>
-                  <td className="p-3.5 text-right tabular-nums text-emerald-400">{manager.wonPayouts.toFixed(2)} Lëk</td>
-                  <td className="p-3.5 text-right tabular-nums text-rose-400">{manager.lostStake.toFixed(2)} Lëk</td>
+                  <td className="p-3.5 text-right tabular-nums">{manager.totalStake.toFixed(2)} {" " + t("Lëk")}</td>
+                  <td className="p-3.5 text-right tabular-nums text-emerald-400">{manager.wonPayouts.toFixed(2)} {" " + t("Lëk")}</td>
+                  <td className="p-3.5 text-right tabular-nums text-rose-400">{manager.lostStake.toFixed(2)} {" " + t("Lëk")}</td>
                   <td className="p-3.5 text-right tabular-nums text-accent-yellow">{manager.commissionRates.single}% / {manager.commissionRates.double}% / {manager.commissionRates.multi}%</td>
-                  <td className="p-3.5 text-right tabular-nums">{manager.commission.toFixed(2)} Lëk</td>
-                  <td className="p-3.5 text-right tabular-nums">{manager.playerBalance.toFixed(2)} Lëk</td>
-                  <td className="p-3.5 text-right tabular-nums font-semibold">{manager.balance.toFixed(2)} Lëk</td>
+                  <td className="p-3.5 text-right tabular-nums">{manager.commission.toFixed(2)} {" " + t("Lëk")}</td>
+                  <td className="p-3.5 text-right tabular-nums">{manager.playerBalance.toFixed(2)} {" " + t("Lëk")}</td>
+                  <td className="p-3.5 text-right tabular-nums font-semibold">{manager.balance.toFixed(2)} {" " + t("Lëk")}</td>
                   <td className={`p-3.5 text-right font-black tabular-nums ${manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {manager.netDifference >= 0 ? '+' : ''}{manager.netDifference.toFixed(2)} Lëk
-                  </td>
+                    {manager.netDifference >= 0 ? '+' : ''}{manager.netDifference.toFixed(2)} {" " + t("Lëk")}</td>
                 </tr>
               ))}
               {!managers.length && (
                 <tr>
                   <td colSpan={10} className="p-8 text-center text-text-secondary">
-                    Nuk ka menaxherë për t’u shfaqur.
-                  </td>
+                    {t("Nuk ka menaxherë për t’u shfaqur.")}</td>
                 </tr>
               )}
             </tbody>
@@ -280,8 +276,7 @@ export default function AdminDashboard() {
       </section>
 
       <div className="text-xs text-text-secondary px-1 leading-relaxed bg-tertiary/20 p-3 rounded-xl border border-tertiary/40">
-        <span className="text-accent-yellow font-bold">Informacion:</span> Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin. Normat aktuale shfaqen në tabelë dhe mund të ndryshohen më sipër; për skedinat e anuluara ose të pavlefshme, komisioni kthehet automatikisht.
-      </div>
+        <span className="text-accent-yellow font-bold">{t("Informacion:")}</span> {" " + t("Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin. Normat aktuale shfaqen në tabelë dhe mund të ndryshohen më sipër; për skedinat e anuluara ose të pavlefshme, komisioni kthehet automatikisht.")}</div>
     </div>
   );
 }

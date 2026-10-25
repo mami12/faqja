@@ -1,3 +1,4 @@
+import { useLanguage } from './LanguageContext';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useLiveFeed } from '../api/liveFeed';
 import { Bell, BellRing, Star, X, Zap } from 'lucide-react';
@@ -26,6 +27,7 @@ interface FavoritesContextType {
 const FavoritesContext = createContext<FavoritesContextType>({} as FavoritesContextType);
 
 export const FavoritesProvider = ({ children }: { children: React.ReactNode }) => {
+  const { t } = useLanguage();
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('app_favorite_matches');
@@ -193,7 +195,7 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-xs font-black text-accent-green tracking-wide">{notif.title}</span>
-                  <span className="text-[10px] text-text-secondary font-mono">Tani</span>
+                  <span className="text-[10px] text-text-secondary font-mono">{t("Tani")}</span>
                 </div>
                 <p className="text-xs font-bold text-white mt-0.5 line-clamp-2">{notif.message}</p>
               </div>

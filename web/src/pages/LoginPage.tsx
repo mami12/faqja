@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { User, Lock, ArrowRight } from 'lucide-react';
+import LanguagePicker from '../components/Layout/LanguagePicker';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -25,6 +26,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-[100dvh] bg-primary flex items-center justify-center px-3 py-8">
       <div className="w-full max-w-[420px] border border-tertiary bg-secondary">
+        <div className="flex justify-end px-5 pt-4"><LanguagePicker /></div>
         <form onSubmit={handleLogin} className="space-y-4 px-5 py-6 sm:px-6">
           {error && (
             <div role="alert" className="border-l-2 border-accent-red bg-accent-red/10 px-3 py-2.5 text-xs font-semibold text-rose-300">

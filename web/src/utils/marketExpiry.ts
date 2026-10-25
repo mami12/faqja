@@ -7,6 +7,7 @@
  */
 
 import { isImpossibleLiveCombination } from '../../../server/ledger/combo-feasibility.mjs';
+import { isDecidedLiveMarket, isDecidedLiveOutcome } from '../../../server/ledger/decided-markets.mjs';
 type Score = { home: number; away: number };
 type MarketLike = {
   name?: string; line?: string; specifier?: string; marketType?: string;
@@ -17,9 +18,10 @@ type MarketLike = {
 };
 type OutcomeLike = {
   id?: string; name?: string; code?: string; odds?: number;
-  status?: string; suspended?: boolean; feedSuspended?: boolean; riskSuspended?: boolean;
+  status?: string; suspended?: boolean; feedSuspended?: boolean; riskSuspended?: boolean; decided?: boolean;
 };
 type MatchLike = {
+  homeTeam?: string; awayTeam?: string;
   status?: string; period?: string | null; currentMinute?: number;
   homeScore?: number; awayScore?: number;
   corners?: Score | null; cards?: Score | null;
@@ -58,8 +60,7 @@ const isMatchFinished = (m: MatchLike): boolean =>
 
 const isSecondHalfOrLater = (m: MatchLike): boolean => {
   const phase = norm(m.period);
-  return /^(?:2h|ht|ft|2nd half|second half|break time|half time|halftime|ended|finished)\b/.test(phase) ||
-    (number(m.currentMinute) ?? 0) > 45;
+  return /^(?:2h|ht|ft|2nd half|second half|break time|half time|halftime|ended|finished)\b/.test(phase);
 };
 
 const isFirstHalf = (market: MarketLike): boolean => {
@@ -121,8 +122,8 @@ const isSimpleTotal = (market: MarketLike): boolean => {
   const name = norm(market.name);
   if (/bet builder|both teams|btts|correct|exact|result|winner|1x2|odd.?even|handicap|asian|next|last|race|score in|goal in|time of|&|\+|\b(?:first|1st)\s+(?:goal|corner|card|scorer)\b/.test(name)) return false;
   const o = market.outcomes ?? [];
-  const hasOverUnder = o.some(item =>
-    /^(?:over|under|o|u)(?:\b|$)/i.test(String(item.code ?? item.name ?? '').trim()));
+  const hasOverUnder = o.some(item => [item.code, item.name].some(label =>
+    /^(?:over|under|o|u)(?:\b|$)/i.test(String(label ?? '').trim())));
   const type = norm(market.marketType);
   return hasOverUnder && (
     /\b(?:total|goals?|corners?|cards?|over\s*\/?\s*under|under\s*\/?\s*over|goal line)\b/.test(name) ||
@@ -130,17 +131,17 @@ const isSimpleTotal = (market: MarketLike): boolean => {
   );
 };
 
-const teamSide = (name: string): 'home' | 'away' | null => {
+const teamSide = (name: string, match?: MatchLike): 'home' | 'away' | null => {
   const n = norm(name);
-  const home = /\b(?:home(?: team)?|team 1|1st team)\b/.test(n);
-  const away = /\b(?:away(?: team)?|team 2|2nd team)\b/.test(n);
+  const home = /\b(?:home(?: team)?|team 1|1st team)\b/.test(n) || !!(match?.homeTeam && n.includes(norm(match.homeTeam)));
+  const away = /\b(?:away(?: team)?|team 2|2nd team)\b/.test(n) || !!(match?.awayTeam && n.includes(norm(match.awayTeam)));
   return home !== away ? (home ? 'home' : 'away') : null;
 };
 
 const observedTotal = (m: MatchLike, market: MarketLike): number | null => {
   const counts = observedCounter(m, market);
   if (!counts) return null;
-  const side = teamSide(String(market.name ?? ''));
+  const side = teamSide(String(market.name ?? ''), m);
   return side ? counts[side] : counts.home + counts.away;
 };
 
@@ -261,6 +262,7 @@ export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   if (!market) return false;
   if (isMatchFinished(m)) return true;
   if (!isLive(m)) return false;
+  if (isDecidedLiveMarket(m, market)) return true;
   if (builderCompleted(m, market)) return true;
   if ((isFirstHalf(market) || isHTFTMarket(String(market.name ?? ''))) && isSecondHalfOrLater(m)) return true;
 
@@ -294,7 +296,7 @@ export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
  * Settled/void outcomes and empty unquoted offers are not visible.
  */
 export const isOutcomeDisplayable = (o: OutcomeLike): boolean => {
-  if (!o || ['SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase())) return false;
+  if (!o || o.decided === true || ['SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase())) return false;
   const hasPrice = typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0;
   const locked = o.suspended === true || o.feedSuspended === true || o.riskSuspended === true ||
     String(o.status ?? '').toUpperCase() === 'SUSPENDED';
@@ -302,7 +304,7 @@ export const isOutcomeDisplayable = (o: OutcomeLike): boolean => {
 };
 
 export const isOutcomeAvailable = (o: OutcomeLike): boolean =>
-  !!o && typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0 &&
+  !!o && o.decided !== true && typeof o.odds === 'number' && Number.isFinite(o.odds) && o.odds > 0 &&
   o.suspended !== true && o.feedSuspended !== true && o.riskSuspended !== true &&
   !['SUSPENDED', 'SETTLED', 'VOID'].includes(String(o.status ?? '').toUpperCase());
 
@@ -334,6 +336,10 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
   if (!outcomes.length) return outcomes;
   if (isMarketExpired(match, market)) return [];
   if (!isLive(match)) return outcomes;
+  outcomes = outcomes.filter(outcome => outcome.decided !== true && !isDecidedLiveOutcome(match, {
+    ...market, outcomeName: outcome.name, outcomeCode: outcome.code,
+  }));
+  if (!outcomes.length) return [];
 
   // A provider combo may contain many outcomes with *different* contracts
   // and thresholds. Remove just those whose goal/BTTS leg has settled.

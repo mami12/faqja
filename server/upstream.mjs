@@ -1,5 +1,6 @@
 import { config } from './config.mjs';
 import { liveClock } from './minute.mjs';
+import { fetchMatchPages } from './match-pages.mjs';
 
 const BASE = config.gateway;
 const QS = () => `l=${encodeURIComponent(config.lang)}&p=${encodeURIComponent(config.partnerId)}`;
@@ -164,11 +165,9 @@ function toRow(match, catalog) {
 /** Every real football match from the public feed (live + prematch). */
 export async function fetchRealFootball() {
   const catalog = await loadCatalog();
-  const { items } = await apiPost('matches/get-many', {
-    sportIds: [config.footballSportId],
-    limit: config.matchPageLimit,
-    offset: 0,
-  });
+  const { items, received, complete } = await fetchMatchPages(page => apiPost('matches/get-many', {
+    sportIds: [config.footballSportId], ...page,
+  }), { pageSize: config.matchPageLimit });
 
   const rows = [];
   let skipped = 0;
@@ -176,6 +175,6 @@ export async function fetchRealFootball() {
     if (isRealFootball(m, catalog)) rows.push(toRow(m, catalog));
     else skipped++;
   }
-  return { rows, received: items.length, skipped };
+  return { rows, received, skipped, complete };
 }
 
