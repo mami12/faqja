@@ -112,7 +112,7 @@ export default function AdminPage() {
             </nav>
           </div>
           <main className="min-w-0 pb-10">
-            <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
+            {tab !== 'matches' && <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary border border-tertiary text-accent-green">
                   <ActiveIcon size={19} />
@@ -122,7 +122,7 @@ export default function AdminPage() {
                   <p className="text-xs sm:text-sm text-text-secondary">{active.description}</p>
                 </div>
               </div>
-            </div>
+            </div>}
             {tab === 'dashboard' && <AdminDashboard />}
             {tab === 'users' && <UserManagement />}
             {tab === 'matches' && <MatchControl />}

@@ -13,9 +13,9 @@ import * as overrides from './overrides.mjs';
 import { settleMatch, settleAll } from './settler.mjs';
 import { recentResults, storeResult, pendingSettlementReview } from './results.mjs';
 import { query } from '../db.mjs';
-import { getMatches as getMatchRows } from '../matches.mjs';
-import { withOdds } from '../collector.mjs';
-import { toClientMatches } from './view.mjs';
+import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
+import { withOdds, serializeMatch } from '../collector.mjs';
+import { toClientMatch, toClientMatches } from './view.mjs';
 
 export const adminRouter = express.Router();
 
@@ -449,12 +449,42 @@ const matchList = guard(async (req, res) => {
     limit: Math.min(Number(req.query.limit) || 200, 2000),
     includeEnded: true,
   });
+  // The administration list needs fixture metadata, not every price in every
+  // fixture. Keep the original full response unless the client opts in.
+  if (req.query.summary === 'true') {
+    const now = Date.now();
+    const items = rows.map((row) => ({
+      ...toClientMatch(serializeMatch(row, [], now)),
+      // Unknown until the selected detail loads; zero would imply no markets.
+      marketCount: null,
+    }));
+    return res.json({ items, overrides: await overrides.list(), summary: true });
+  }
   const withPrices = await withOdds(rows);
   res.json({ items: toClientMatches(withPrices), overrides: await overrides.list() });
 });
 
 adminRouter.get('/admin/matches', ...admin, matchList);
 adminRouter.get('/manager/matches', ...manager, matchList);
+
+const matchDetail = guard(async (req, res) => {
+  const matchId = Number(req.params.id);
+  if (!Number.isSafeInteger(matchId) || matchId <= 0) {
+    return res.status(404).json({ message: 'match not found' });
+  }
+  const row = await getMatchRow(matchId);
+  if (!row) return res.status(404).json({ message: 'match not found' });
+  // Like the public detail view, ask the feed for this fixture's full markets.
+  boostMatch(row.match_id);
+  const [serialized] = await withOdds([row]);
+  const id = String(row.match_id);
+  const relevantOverrides = (await overrides.list()).filter((entry) =>
+    entry.kind === 'match' ? entry.ref === id : entry.ref.startsWith(`${id}|`));
+  return res.json({ item: toClientMatch(serialized), overrides: relevantOverrides });
+});
+
+adminRouter.get('/admin/matches/:id', ...admin, matchDetail);
+adminRouter.get('/manager/matches/:id', ...manager, matchDetail);
 
 /** the toggle the UI sends is `isSuspended`; a market/outcome sends `status` */
 const wantsSuspend = (body = {}) =>

@@ -49,7 +49,8 @@
     "test:system": "node scripts/test-system-columns.mjs && node scripts/test-system-columns-ledger.mjs && node scripts/test-system-columns-feed.mjs",
     "test:betslip": "node scripts/test-betslip-columns.mjs && node scripts/test-format-odds.mjs && node scripts/test-betslip-browser.mjs && node scripts/test-betslip-layout.mjs",
     "test:betting": "node scripts/test-betting.mjs",
-    "test:match-sync": "node scripts/test-match-sync.mjs && node scripts/test-match-sync-browser.mjs"
+    "test:match-sync": "node scripts/test-match-sync.mjs && node scripts/test-match-sync-browser.mjs",
+    "test:admin-matches": "node scripts/test-admin-match-reads.mjs && node scripts/test-admin-match-control-browser.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

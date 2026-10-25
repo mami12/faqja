@@ -1,568 +1,277 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock, Filter, Layers, Loader2, Lock, Percent, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trophy, Unlock, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import { ShieldAlert, CheckCircle2, ChevronDown, ChevronUp, Edit3, Lock, Unlock, PlayCircle, Search, X, RefreshCw, Trophy, Clock } from 'lucide-react';
-import { translateOutcomeName, formatMarketSelectionLabel } from '../../utils/sportsbookLabels';
+import type { Match, Market, Outcome } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatMarketSelectionLabel, formatTicketSelection } from '../../utils/sportsbookLabels';
 import { formatOdds } from '../../utils/formatOdds';
+import { marketCategoryLabel, marketCategoryOf, type MarketCategory } from '../../utils/marketCatalog';
+import { userError } from '../../utils/userError';
+import MatchControlDialog from './MatchControlDialog';
+import { competitionKey, eligibleOutcomes, fixtureName, matchStatus, previewAdjustments, searchText, statusLabel, type AdminOverride, type ControlDialog } from './matchControlModel';
+import './matchControl.css';
+
+const PAGE_SIZE = 30;
+const categories: MarketCategory[] = ['main', 'goals', 'mixed', 'corners', 'cards', 'htft', 'players', 'other'];
+const errorMessage = (error: any, fallback: string) => userError(error.response?.data?.error ?? error, fallback);
+const kickoff = (value: string) => {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString('sq-AL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : 'Ora nuk është konfirmuar';
+};
 
 export default function MatchControl() {
   const { t } = useLanguage();
-  const [matches, setMatches] = useState<any[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [overrides, setOverrides] = useState<AdminOverride[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'PREMATCH' | 'ENDED'>('ALL');
-  
-  // Settle Modal State
-  const [settleMatch, setSettleMatch] = useState<any | null>(null);
-  const [homeScore, setHomeScore] = useState('0');
-  const [awayScore, setAwayScore] = useState('0');
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Match | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailStale, setDetailStale] = useState(true);
+  const [mobileDetail, setMobileDetail] = useState(false);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [competition, setCompetition] = useState('ALL');
+  const [suspension, setSuspension] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [marketQuery, setMarketQuery] = useState('');
+  const [category, setCategory] = useState<'all' | MarketCategory>('all');
+  const [marketState, setMarketState] = useState('ALL');
+  const [marketLimit, setMarketLimit] = useState(20);
+  const [dialog, setDialog] = useState<ControlDialog | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [listError, setListError] = useState('');
+  const [detailError, setDetailError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [automatic, setAutomatic] = useState(true);
+  const mounted = useRef(true);
+  const selection = useRef<string | null>(null);
+  const epoch = useRef(0);
+  const listRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const actionRunning = useRef(false);
+  const detailAvailable = useRef(false);
+  const overrideMap = useMemo(() => new Map(overrides.map(row => [`${row.kind}:${row.ref}`, row])), [overrides]);
+  const ownLock = (kind: string, id: string) => overrideMap.get(`${kind}:${id}`)?.suspended === true;
 
-  // Odds Edit Modal State
-  const [editOutcome, setEditOutcome] = useState<any | null>(null);
-  const [newOdds, setNewOdds] = useState('');
-
-  const fetchMatches = async () => {
+  const loadList = useCallback(async () => {
+    const request = ++listRequest.current, version = epoch.current;
+    setRefreshing(true);
     try {
-      setLoading(true);
-      const res = await apiClient.get('/admin/matches');
-      setMatches(res.data.items || []);
-    } catch (e: any) {
-      console.error(e);
+      const response = await apiClient.get('/admin/matches?summary=true&limit=2000&includeEnded=true');
+      if (!mounted.current || request !== listRequest.current || version !== epoch.current) return;
+      const items: Match[] = (response.data.items ?? []).map((match: Match) => ({ ...match, id: String(match.id) }));
+      setMatches(items);
+      setListError('');
+      setOverrides(response.data.overrides ?? []);
+      setUpdatedAt(new Date());
+      if (!selection.current && items[0]) {
+        selection.current = items[0].id;
+        setSelectedId(items[0].id);
+      }
+    } catch (failure) {
+      if (mounted.current && request === listRequest.current && version === epoch.current) setListError(errorMessage(failure, 'Ndeshjet nuk u ngarkuan. Provo rifreskimin.'));
     } finally {
-      setLoading(false);
+      if (mounted.current && request === listRequest.current) { setLoading(false); setRefreshing(false); }
     }
-  };
-
-  useEffect(() => {
-    fetchMatches();
   }, []);
 
-  const handleToggleMatchSuspend = async (matchId: string, currentSuspended: boolean) => {
+  const loadDetail = useCallback(async (id: string) => {
+    const request = ++detailRequest.current, version = epoch.current;
+    detailAvailable.current = false;
+    setDetailLoading(true);
     try {
-      await apiClient.patch(`/admin/matches/${matchId}/suspend`, {
-        isSuspended: !currentSuspended
-      });
-      fetchMatches();
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Përditësimi i statusit të ndeshjes dështoi.');
+      const response = await apiClient.get(`/admin/matches/${encodeURIComponent(id)}`);
+      if (!mounted.current || request !== detailRequest.current || selection.current !== id || version !== epoch.current) return;
+      setDetail({ ...response.data.item, id: String(response.data.item.id) });
+      setDetailStale(false); setDetailError(''); detailAvailable.current = true;
+      const relevant: AdminOverride[] = response.data.overrides ?? [];
+      setOverrides(previous => [...previous.filter(row => !(row.kind === 'match' ? row.ref === id : row.ref.startsWith(`${id}|`))), ...relevant]);
+    } catch (failure) {
+      if (mounted.current && request === detailRequest.current && selection.current === id && version === epoch.current) {
+        setDetailStale(true); detailAvailable.current = false;
+        setDetailError(errorMessage(failure, 'Tregjet nuk u rifreskuan. Veprimet janë bllokuar derisa të rifreskosh me sukses.'));
+      }
+    } finally {
+      if (mounted.current && request === detailRequest.current) setDetailLoading(false);
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    // The selected fixture's precise overrides take precedence over the light list.
+    await loadList();
+    if (selection.current) await loadDetail(selection.current);
+  }, [loadList, loadDetail]);
+  useEffect(() => {
+    mounted.current = true;
+    void loadList();
+    return () => { mounted.current = false; listRequest.current++; detailRequest.current++; };
+  }, [loadList]);
+  useEffect(() => { if (selectedId) void loadDetail(selectedId); }, [selectedId, loadDetail]);
+  useEffect(() => {
+    if (!automatic || dialog || busy) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible' && !actionRunning.current) void refresh(); }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [automatic, dialog, busy, refresh]);
+  useEffect(() => { setPage(1); }, [query, status, competition, suspension]);
+  useEffect(() => { setMarketLimit(20); }, [selectedId, marketQuery, category, marketState]);
+
+  const perform = async (work: () => Promise<unknown>, success: string, closeDialog = false) => {
+    if (actionRunning.current) return;
+    if (!detailAvailable.current) { setError('Rifresko ndeshjen me sukses përpara një ndryshimi tjetër.'); return; }
+    actionRunning.current = true;
+    epoch.current++;
+    setBusy(true); setError(''); setNotice('');
+    let completed = false;
+    try {
+      await work();
+      completed = true;
+      if (mounted.current) setNotice(success);
+    } catch (failure) {
+      if (mounted.current) setError(errorMessage(failure, 'Veprimi nuk u konfirmua. Kontrollo gjendjen e rifreskuar përpara se ta provosh përsëri.'));
+    } finally {
+      await refresh();
+      actionRunning.current = false;
+      if (mounted.current) { setBusy(false); if (completed && closeDialog) setDialog(null); }
     }
   };
-
-  const handleToggleMarketSuspend = async (marketId: string, currentStatus: string) => {
-    try {
-      const nextStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-      await apiClient.patch(`/admin/markets/${marketId}/suspend`, {
-        status: nextStatus
-      });
-      fetchMatches();
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Përditësimi i statusit të tregut dështoi.');
-    }
+  const toggle = (kind: 'match' | 'market' | 'outcome', id: string) => {
+    const remove = ownLock(kind, id);
+    const resource = kind === 'match' ? 'matches' : `${kind}s`;
+    void perform(() => apiClient.patch(`/admin/${resource}/${encodeURIComponent(id)}/suspend`, kind === 'match'
+      ? { isSuspended: !remove } : { status: remove ? 'ACTIVE' : 'SUSPENDED' }), remove
+      ? 'Pezullimi i administratorit u hoq. Gjendja e burimit dhe rregullat e rrezikut vazhdojnë të zbatohen.'
+      : 'Pezullimi u ruajt me sukses.');
+  };
+  const saveOdds = async (odds: number) => {
+    if (dialog?.kind !== 'odds') return;
+    await perform(() => apiClient.patch(`/admin/outcomes/${encodeURIComponent(dialog.outcome.id)}/odds`, { odds }), 'Kuota u ruajt me sukses.', true);
+  };
+  const adjustOdds = async (percentage: number) => {
+    if (dialog?.kind !== 'adjust') return;
+    const changes = previewAdjustments(dialog.outcomes, percentage);
+    if (!Number.isFinite(percentage) || percentage <= -100 || percentage === 0 || !changes.length || changes.some(row => !row.valid)) return;
+    await perform(async () => {
+      let failed = 0;
+      // Bound concurrent writes; preserve native three-decimal prices and IDs.
+      for (let index = 0; index < changes.length; index += 6) {
+        const results = await Promise.allSettled(changes.slice(index, index + 6).map(row => apiClient.patch(`/admin/outcomes/${encodeURIComponent(row.outcome.id)}/odds`, { odds: row.next })));
+        failed += results.filter(result => result.status === 'rejected').length;
+      }
+      if (failed) throw new Error(`U konfirmuan ${changes.length - failed} nga ${changes.length} kuota. ${failed} nuk u konfirmuan; kontrollo gjendjen e rifreskuar përpara një veprimi tjetër.`);
+    }, `U përditësuan ${changes.length} kuota.`, true);
+  };
+  const settleMatch = async (homeScore: number, awayScore: number) => {
+    if (dialog?.kind !== 'settle') return;
+    await perform(() => apiClient.post(`/admin/matches/${encodeURIComponent(dialog.match.id)}/settle`, { homeScore, awayScore }), 'Rezultati u ruajt dhe skedinat u përditësuan.', true);
   };
 
-  const handleToggleOutcomeSuspend = async (outcomeId: string, currentStatus: string) => {
-    try {
-      await apiClient.patch(`/admin/outcomes/${outcomeId}/suspend`, {
-        status: currentStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
-      });
-      fetchMatches();
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Përditësimi i statusit të zgjedhjes dështoi.');
-    }
+  const competitions = useMemo(() => [...new Map(matches.filter(match => competitionKey(match)).map(match => [competitionKey(match), match.tournament?.name ?? 'Pa kampionat'])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [matches]);
+  const filtered = useMemo(() => matches.filter(match => {
+    const text = searchText(`${match.homeTeam} ${match.awayTeam} ${match.tournament?.name ?? ''} ${match.id}`);
+    return (!query.trim() || text.includes(searchText(query.trim()))) && (status === 'ALL' || matchStatus(match) === status)
+      && (competition === 'ALL' || competitionKey(match) === competition)
+      && (suspension === 'ALL' || Boolean(match.isSuspended) === (suspension === 'SUSPENDED'));
+  }), [matches, query, status, competition, suspension]);
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pages);
+  const selected = detail && detail.id === selectedId ? detail : null;
+  const controlsBlocked = busy || detailLoading || detailStale;
+  const shownError = error || detailError || listError;
+  const markets = selected?.markets ?? [];
+  const categoryCounts = new Map(categories.map(key => [key, markets.filter(market => marketCategoryOf(market) === key).length]));
+  const marketTitle = (market: Market) => formatMarketSelectionLabel(market.name, market.line, t);
+  const outcomeTitle = (outcome: Outcome, market: Market) => formatTicketSelection(outcome.name, market.name, selected ? fixtureName(selected) : '', t, outcome.code, market.line);
+  const filteredMarkets = markets.filter(market => (category === 'all' || marketCategoryOf(market) === category)
+    && (marketState === 'ALL' || market.status === marketState)
+    && (!marketQuery.trim() || searchText(`${marketTitle(market)} ${market.name} ${market.line ?? ''} ${(market.outcomes ?? []).map(outcome => outcomeTitle(outcome, market)).join(' ')}`).includes(searchText(marketQuery.trim()))));
+  const chooseMatch = (match: Match) => {
+    if (actionRunning.current) return;
+    if (selection.current !== match.id) { detailAvailable.current = false; setDetailStale(true); setDetailError(''); }
+    selection.current = match.id;
+    setSelectedId(match.id); setMobileDetail(true);
+    setMarketQuery(''); setCategory('all'); setMarketState('ALL'); setError('');
+  };
+  const openDialog = (value: ControlDialog) => { setError(''); setNotice(''); setDialog(value); };
+  const adjustDialog = (scope: 'match' | 'market', id: string, title: string, outcomes: Outcome[]) => {
+    if (selected) openDialog({ kind: 'adjust', match: selected, scope, id, title, outcomes });
   };
 
-  const adjustOutcomes = async (outcomes: any[], percentage: number) => {
-    const eligible = outcomes.filter((outcome) => Number(outcome.odds) > 1);
-    const updates = eligible.map((outcome) => {
-      const odds = Number((Number(outcome.odds) * (1 + percentage / 100)).toFixed(3));
-      if (odds <= 1) return Promise.reject(new Error(`Adjustment would make ${outcome.name} odds invalid`));
-      return apiClient.patch(`/admin/outcomes/${outcome.id}/odds`, { odds });
-    });
-    const results = await Promise.allSettled(updates);
-    await fetchMatches();
-    const failed = results.filter((result) => result.status === 'rejected').length;
-    if (failed) alert(`${failed} nga ${updates.length} ndryshime të kuotave dështuan. Ndryshimet e tjera u ruajtën.`);
-  };
-
-  const percentButtons = (outcomes: any[], compact = false) => (
-    <div className={`flex flex-wrap items-center gap-1 ${compact ? 'mt-1' : ''}`}>
-      {[-10, -5, 5, 10].map((percent) => (
-        <button
-          key={percent}
-          type="button"
-          onClick={() => adjustOutcomes(outcomes, percent)}
-          className="px-1.5 py-0.5 rounded bg-tertiary hover:bg-accent-blue/20 text-text-secondary hover:text-white text-[10px] font-black active:scale-95 transition"
-          title={`Ndrysho kuotat me ${percent}%`}
-        >
-          {percent > 0 ? '+' : ''}{percent}%
-        </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          const value = window.prompt('Vendos përqindjen e ndryshimit (p.sh. 12 ose -8):');
-          if (value === null) return;
-          const percent = Number(value);
-          if (!Number.isFinite(percent) || percent <= -100 || percent === 0) {
-            alert('Përqindja duhet të jetë numër më i madh se -100 dhe jo zero.');
-            return;
-          }
-          adjustOutcomes(outcomes, percent);
-        }}
-        className="px-1.5 py-0.5 rounded bg-accent-blue/15 hover:bg-accent-blue/25 text-accent-blue text-[10px] font-black active:scale-95 transition"
-      >
-        %
-      </button>
+  return <section className="match-control" data-mobile-detail={mobileDetail} aria-busy={busy || undefined}>
+    <header className="mc-heading">
+      <div><div className="mc-eyebrow"><SlidersHorizontal size={14} /> ADMINISTRIMI I TREGJEVE</div><h2>Ndeshjet dhe koeficientët</h2><p>Gjej ndeshjen, kontrollo tregjet dhe menaxho kuotat në një vend.</p></div>
+      <button className="mc-button mc-secondary" disabled={busy || refreshing || detailLoading} onClick={() => { setError(''); void refresh(); }}><RefreshCw size={16} className={refreshing ? 'mc-spin' : ''} /> Rifresko</button>
+    </header>
+    <div className="mc-stats">
+      <div><Layers /><strong>{matches.length}</strong><span>Ndeshje të ngarkuara</span></div>
+      <div><span className="mc-live-dot" /><strong>{matches.filter(match => matchStatus(match) === 'LIVE').length}</strong><span>Në lojë</span></div>
+      <div><Lock /><strong>{matches.filter(match => match.isSuspended).length}</strong><span>Të pezulluara</span></div>
+      <div><Filter /><strong>{filtered.length}</strong><span>Në këtë kërkim</span></div>
     </div>
-  );
-
-  const handleSaveOdds = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editOutcome || !newOdds) return;
-    try {
-      await apiClient.patch(`/admin/outcomes/${editOutcome.id}/odds`, {
-        odds: parseFloat(newOdds)
-      });
-      setEditOutcome(null);
-      setNewOdds('');
-      fetchMatches();
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Përditësimi i kuotës dështoi.');
-    }
-  };
-
-  const handleSettleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!settleMatch) return;
-    try {
-      await apiClient.post(`/admin/matches/${settleMatch.id}/settle`, {
-        homeScore: parseInt(homeScore) || 0,
-        awayScore: parseInt(awayScore) || 0
-      });
-      setSettleMatch(null);
-      setHomeScore('0');
-      setAwayScore('0');
-      fetchMatches();
-      alert('Ndeshja u mbyll dhe fitimet e skedinave fituese u paguan.');
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Mbyllja e ndeshjes dështoi.');
-    }
-  };
-
-  const filteredMatches = matches.filter(m => {
-    if (statusFilter !== 'ALL' && m.status !== statusFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchName = `${m.homeTeam || ''} ${m.awayTeam || ''} ${m.tournament?.name || ''}`.toLowerCase();
-      return matchName.includes(q);
-    }
-    return true;
-  });
-
-  const liveCount = matches.filter(m => m.status === 'LIVE').length;
-  const prematchCount = matches.filter(m => m.status === 'PREMATCH' || (!m.status || m.status === 'UPCOMING')).length;
-  const endedCount = matches.filter(m => m.status === 'ENDED').length;
-
-  return (
-    <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-black text-white">{t('admin.match_management')}</h2>
-          <p className="text-text-secondary text-xs sm:text-sm">{t('admin.control_matches')}</p>
-        </div>
-        <button 
-          onClick={fetchMatches}
-          className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 bg-tertiary/80 hover:bg-tertiary text-white rounded-xl text-xs sm:text-sm font-bold transition active:scale-95"
-        >
-          <RefreshCw size={15} className={loading ? 'animate-spin text-accent-green' : ''} />
-          <span>{t('admin.refresh_fixtures')}</span>
-        </button>
-      </div>
-
-      {/* Search & Status Filters */}
-      <div className="bg-secondary p-3 sm:p-4 rounded-2xl border border-tertiary space-y-3 shadow-md">
-        <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Kërko me emër ekipi ose lige (p.sh. Real Madrid, Arsenal)..."
-            className="w-full bg-primary border border-tertiary rounded-xl pl-9 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
-            >
-              <X size={15} />
-            </button>
-          )}
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-1">
-          {[
-            { id: 'ALL', label: 'Të Gjitha', count: matches.length },
-            { id: 'LIVE', label: 'Drejtpërdrejt', count: liveCount, isLive: true },
-            { id: 'PREMATCH', label: 'Para Ndeshjes', count: prematchCount },
-            { id: 'ENDED', label: 'Përfunduar', count: endedCount },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 ${
-                statusFilter === tab.id
-                  ? 'bg-accent-green text-primary font-black shadow-sm'
-                  : 'bg-primary/80 text-text-secondary hover:text-white hover:bg-tertiary/60'
-              }`}
-            >
-              {tab.isLive && liveCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
-              <span>{tab.label}</span>
-              <span className="opacity-75 text-[11px]">({tab.count})</span>
-            </button>
-          ))}
-          <span className="ml-auto text-[11px] text-text-secondary font-medium whitespace-nowrap pl-2">
-            Shfaqur {filteredMatches.length}
-          </span>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="p-16 text-center text-text-secondary bg-secondary rounded-2xl border border-tertiary flex flex-col items-center justify-center gap-3">
-          <RefreshCw size={26} className="animate-spin text-accent-green" />
-          <span className="text-sm font-semibold">{t('admin.loading_matches')}</span>
-        </div>
-      ) : filteredMatches.length === 0 ? (
-        <div className="p-12 text-center text-text-secondary bg-secondary rounded-2xl border border-tertiary space-y-2">
-          <Trophy size={32} className="mx-auto opacity-30 text-white" />
-          <div className="text-sm font-bold text-white">Nuk u gjet asnjë ndeshje</div>
-          <p className="text-xs">Provoni të pastroni kërkimin ose të zgjidhni një filtër tjetër.</p>
-        </div>
-      ) : (
-        <div className="space-y-3 sm:space-y-4">
-          {filteredMatches.map(m => {
-            const isExpanded = expandedMatchId === m.id;
-            const marketCount = m.markets?.length || 0;
-            return (
-              <div key={m.id} className="bg-secondary rounded-2xl border border-tertiary shadow-lg overflow-hidden transition hover:border-tertiary/90">
-                {/* Match Header Card */}
-                <div className="p-4 sm:p-5 space-y-3">
-                  {/* Top Meta Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider ${
-                        m.status === 'LIVE' ? 'bg-accent-red text-white animate-pulse' :
-                        m.status === 'ENDED' ? 'bg-tertiary text-text-secondary' : 'bg-accent-blue/20 text-accent-blue'
-                      }`}>
-                        {m.status === 'LIVE' ? `DREJTPËRDREJT ${m.currentMinute ? `${m.currentMinute}'` : ''}` : m.status === 'ENDED' ? 'PËRFUNDUAR' : 'PARA NDESHJES'}
-                      </span>
-                      <span className="text-xs text-text-secondary font-medium">
-                        {m.tournament?.name || 'Kampionati'} &bull; {new Date(m.startTime).toLocaleString('sq-AL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-
-                    {m.isSuspended && (
-                      <span className="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 border border-amber-500/30">
-                        <Lock size={12} /> Kuotat të Pezulluara
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Teams and Score Box */}
-                  <div className="bg-primary/70 p-3 sm:p-4 rounded-xl border border-tertiary/70 flex items-center justify-between gap-3">
-                    <div className="flex-1 text-right font-bold text-white text-sm sm:text-base leading-tight">
-                      {m.homeTeam}
-                    </div>
-                    <div className="px-3 sm:px-4 py-1.5 bg-secondary rounded-xl text-accent-yellow font-black text-base sm:text-xl border border-tertiary shrink-0 tabular-nums">
-                      {m.homeScore ?? 0} - {m.awayScore ?? 0}
-                    </div>
-                    <div className="flex-1 text-left font-bold text-white text-sm sm:text-base leading-tight">
-                      {m.awayTeam}
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <div className="flex items-center gap-2 flex-wrap flex-1">
-                      <button 
-                        onClick={() => handleToggleMatchSuspend(m.id, m.isSuspended)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 ${
-                          m.isSuspended 
-                            ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30' 
-                            : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30'
-                        }`}
-                      >
-                        {m.isSuspended ? <Unlock size={14} /> : <Lock size={14} />}
-                        <span>{m.isSuspended ? 'Hap kuotat' : 'Pezullo kuotat'}</span>
-                      </button>
-
-                      {m.status !== 'ENDED' && (
-                        <button 
-                          onClick={() => { setSettleMatch(m); setHomeScore(String(m.homeScore || 0)); setAwayScore(String(m.awayScore || 0)); }}
-                          className="px-3 py-2 bg-accent-green hover:bg-emerald-600 text-primary font-black rounded-xl text-xs flex items-center gap-1.5 transition active:scale-95 shadow-sm shadow-accent-green/20"
-                        >
-                          <CheckCircle2 size={14} /> <span>Vendos rezultatin</span>
-                        </button>
-                      )}
-                    </div>
-
-                    <button 
-                      onClick={() => setExpandedMatchId(isExpanded ? null : m.id)}
-                      className="px-3 py-2 bg-tertiary hover:bg-tertiary/80 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95"
-                      title="Shiko dhe ndrysho tregjet"
-                    >
-                      <span>Tregjet ({marketCount})</span>
-                      {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* EXPANDED MARKETS VIEW */}
-                {isExpanded && (
-                  <div className="p-3 sm:p-5 bg-primary/60 border-t border-tertiary/80 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-tertiary/40">
-                      <div>
-                        <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                          Kontrolli i tregjeve dhe kuotave ({marketCount} tregje)
-                        </h4>
-                        <p className="text-[11px] text-text-secondary">Ndrysho përqindjet ose kliko mbi një kuotë për ta redaktuar direkt</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] text-text-secondary font-semibold">Të gjitha kuotat:</span>
-                        {percentButtons(m.markets?.flatMap((market: any) => market.outcomes ?? []) ?? [])}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                      {m.markets?.map((mk: any) => (
-                        <div key={mk.id} className="bg-secondary p-3 rounded-xl border border-tertiary/80 space-y-2.5 shadow-sm">
-                          <div className="flex flex-wrap justify-between items-center gap-2">
-                            <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-                              {formatMarketSelectionLabel(mk.name, mk.line, t)}
-                              {mk.status === 'SUSPENDED' && (
-                                <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black border border-amber-500/30">
-                                  Treg i mbyllur
-                                </span>
-                              )}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {percentButtons(mk.outcomes ?? [])}
-                              <button
-                                onClick={() => handleToggleMarketSuspend(mk.id, mk.status)}
-                                className="text-[11px] text-text-secondary hover:text-white font-semibold underline active:scale-95 transition"
-                              >
-                                {mk.status === 'ACTIVE' ? 'Mbyll tregun' : 'Hap tregun'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {mk.outcomes?.map((oc: any) => (
-                              <div key={oc.id} className="bg-primary/90 border border-tertiary/70 p-2.5 rounded-xl flex flex-col justify-between gap-1.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <button
-                                    onClick={() => { setEditOutcome({ ...oc, marketName: mk.name, matchName: `${m.homeTeam} vs ${m.awayTeam}` }); setNewOdds(String(oc.odds)); }}
-                                    className="min-w-0 flex-1 text-left group"
-                                  >
-                                    <span className="block truncate text-xs text-text-secondary group-hover:text-white transition">
-                                      {translateOutcomeName(oc.name, t, mk.name, `${m.homeTeam} vs ${m.awayTeam}`, oc.code)}
-                                    </span>
-                                    <span className="text-sm font-black text-accent-green flex items-center gap-1 tabular-nums mt-0.5">
-                                      {formatOdds(Number(oc.odds))} <Edit3 size={12} className="text-text-secondary group-hover:text-white" />
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleToggleOutcomeSuspend(oc.id, oc.status)}
-                                    className={`p-2 rounded-xl active:scale-95 transition ${
-                                      oc.status === 'SUSPENDED' 
-                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                                        : 'bg-tertiary text-text-secondary hover:text-white'
-                                    }`}
-                                    title={oc.status === 'SUSPENDED' ? 'Hap kuotën' : 'Pezullo kuotën'}
-                                  >
-                                    {oc.status === 'SUSPENDED' ? <Unlock size={14} /> : <Lock size={14} />}
-                                  </button>
-                                </div>
-                                <div className="pt-0.5 border-t border-tertiary/30">
-                                  {percentButtons([oc], true)}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* SETTLE SCORE MODAL (Touch-Friendly Steppers) */}
-      {settleMatch && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto">
-          <div className="bg-secondary border-t sm:border border-tertiary rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl max-h-[92dvh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg sm:text-xl font-bold text-white">Mbyll ndeshjen dhe paguaj</h3>
-              <button onClick={() => setSettleMatch(null)} className="text-text-secondary hover:text-white p-1">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-xs text-text-secondary mb-5">
-              Vendosni rezultatin përfundimtar për <strong className="text-white">{settleMatch.homeTeam} - {settleMatch.awayTeam}</strong>. Fitimet do të kreditohen automatikisht.
-            </p>
-
-            <form onSubmit={handleSettleSubmit} className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {/* Home Score */}
-                <div className="bg-primary/80 p-3 rounded-2xl border border-tertiary text-center space-y-2">
-                  <label className="text-xs font-semibold text-text-secondary block truncate">{settleMatch.homeTeam}</label>
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setHomeScore(String(Math.max(0, (parseInt(homeScore) || 0) - 1)))}
-                      className="w-8 h-8 rounded-xl bg-tertiary hover:bg-tertiary/80 text-white font-bold text-lg flex items-center justify-center active:scale-95 transition"
-                    >
-                      -
-                    </button>
-                    <input 
-                      type="number" 
-                      value={homeScore} 
-                      onChange={e => setHomeScore(e.target.value)}
-                      min="0"
-                      required
-                      className="w-16 bg-secondary border border-tertiary rounded-xl p-2 text-white text-center text-2xl font-black tabular-nums focus:outline-none focus:border-accent-green"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setHomeScore(String((parseInt(homeScore) || 0) + 1))}
-                      className="w-8 h-8 rounded-xl bg-tertiary hover:bg-tertiary/80 text-white font-bold text-lg flex items-center justify-center active:scale-95 transition"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {/* Away Score */}
-                <div className="bg-primary/80 p-3 rounded-2xl border border-tertiary text-center space-y-2">
-                  <label className="text-xs font-semibold text-text-secondary block truncate">{settleMatch.awayTeam}</label>
-                  <div className="flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAwayScore(String(Math.max(0, (parseInt(awayScore) || 0) - 1)))}
-                      className="w-8 h-8 rounded-xl bg-tertiary hover:bg-tertiary/80 text-white font-bold text-lg flex items-center justify-center active:scale-95 transition"
-                    >
-                      -
-                    </button>
-                    <input 
-                      type="number" 
-                      value={awayScore} 
-                      onChange={e => setAwayScore(e.target.value)}
-                      min="0"
-                      required
-                      className="w-16 bg-secondary border border-tertiary rounded-xl p-2 text-white text-center text-2xl font-black tabular-nums focus:outline-none focus:border-accent-green"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setAwayScore(String((parseInt(awayScore) || 0) + 1))}
-                      className="w-8 h-8 rounded-xl bg-tertiary hover:bg-tertiary/80 text-white font-bold text-lg flex items-center justify-center active:scale-95 transition"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button 
-                  type="button" 
-                  onClick={() => setSettleMatch(null)}
-                  className="flex-1 py-3 bg-tertiary hover:bg-tertiary/80 text-white rounded-xl font-bold text-sm transition"
-                >
-                  Anulo
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 py-3 bg-accent-green hover:bg-emerald-600 text-primary font-black rounded-xl text-sm transition shadow-lg shadow-accent-green/20 active:scale-95"
-                >
-                  Konfirmo rezultatin
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT ODDS MODAL */}
-      {editOutcome && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50 overflow-y-auto">
-          <div className="bg-secondary border-t sm:border border-tertiary rounded-t-3xl sm:rounded-2xl max-w-xs w-full p-5 shadow-2xl max-h-[92dvh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-base font-bold text-white">Ndrysho vlerën e kuotës</h3>
-              <button onClick={() => setEditOutcome(null)} className="text-text-secondary hover:text-white p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <p className="text-xs text-text-secondary mb-4">
-              Zgjedhja: <strong className="text-white">{translateOutcomeName(editOutcome.name, t, editOutcome.marketName, editOutcome.matchName, editOutcome.code)}</strong>
-            </p>
-            <form onSubmit={handleSaveOdds} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-text-secondary block mb-1">Kuota (dhjetore)</label>
-                <input 
-                  type="number" 
-                  value={newOdds} 
-                  onChange={e => setNewOdds(e.target.value)}
-                  step="0.01"
-                  min="1.01"
-                  required
-                  autoFocus
-                  className="w-full bg-primary border border-tertiary rounded-xl p-3 text-white text-xl font-black text-center tabular-nums focus:outline-none focus:border-accent-green"
-                />
-              </div>
-
-              {/* Quick Stepper Chips */}
-              <div className="grid grid-cols-4 gap-1">
-                {[-0.10, -0.05, 0.05, 0.10].map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => {
-                      const cur = parseFloat(newOdds) || 1.0;
-                      const next = Math.max(1.01, Number((cur + step).toFixed(2)));
-                      setNewOdds(String(next));
-                    }}
-                    className="py-1 rounded-lg bg-tertiary hover:bg-tertiary/80 text-white font-bold text-xs active:scale-95 transition"
-                  >
-                    {step > 0 ? `+${step.toFixed(2)}` : step.toFixed(2)}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-2.5 pt-2">
-                <button 
-                  type="button" 
-                  onClick={() => setEditOutcome(null)}
-                  className="flex-1 py-2.5 bg-tertiary hover:bg-tertiary/80 text-white rounded-xl font-bold text-xs transition"
-                >
-                  Anulo
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 py-2.5 bg-accent-green hover:bg-emerald-600 text-primary font-black rounded-xl text-xs transition active:scale-95 shadow-md shadow-accent-green/20"
-                >
-                  Ruaj kuotën
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    <div className="mc-toolbar">
+      <label className="mc-search"><Search size={18} /><input aria-label="Kërko ndeshje" placeholder="Kërko ekip, kampionat ose ID…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button aria-label="Pastro kërkimin" onClick={() => setQuery('')}><X size={16} /></button>}</label>
+      <label className="mc-auto"><input type="checkbox" aria-label="Rifreskim automatik" checked={automatic} onChange={event => setAutomatic(event.target.checked)} /><span>Rifreskim automatik<small>{updatedAt ? `Përditësuar ${updatedAt.toLocaleTimeString('sq-AL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}` : 'Çdo 30 sekonda'}</small></span></label>
     </div>
-  );
+    <div className="mc-filters">
+      <label>Gjendja<select aria-label="Gjendja e ndeshjeve" value={status} onChange={event => setStatus(event.target.value)}><option value="ALL">Të gjitha ndeshjet</option><option value="LIVE">Në lojë</option><option value="PREMATCH">Para ndeshjes</option><option value="ENDED">Të përfunduara</option></select></label>
+      <label>Kampionati<select aria-label="Kampionati" value={competition} onChange={event => setCompetition(event.target.value)}><option value="ALL">Të gjitha kampionatet</option>{competitions.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      <label>Pezullimi<select aria-label="Pezullimi i ndeshjeve" value={suspension} onChange={event => setSuspension(event.target.value)}><option value="ALL">Çdo gjendje</option><option value="ACTIVE">Pa pezullim ndeshjeje</option><option value="SUSPENDED">Të pezulluara</option></select></label>
+    </div>
+    {shownError && !dialog && <div className="mc-message mc-error" role="alert"><Lock size={17} /><span>{shownError}</span>{!detailError && !listError && <button aria-label="Mbyll njoftimin" onClick={() => setError('')}><X size={16} /></button>}</div>}
+    {notice && <div className="mc-message mc-success" role="status"><CheckCircle2 size={17} /><span>{notice}</span><button aria-label="Mbyll njoftimin" onClick={() => setNotice('')}><X size={16} /></button></div>}
+    <div className="mc-workspace">
+      <aside className="mc-list" data-mobile-hidden={mobileDetail} aria-label="Lista e ndeshjeve">
+        <div className="mc-list-heading"><strong>Ndeshjet</strong><span>{filtered.length} rezultate</span></div>
+        <div className="mc-list-scroll">
+          {loading ? <div className="mc-empty"><Loader2 className="mc-spin" />Po ngarkohen ndeshjet…</div> : !filtered.length ? <div className="mc-empty"><Search />Nuk u gjet asnjë ndeshje.<small>Provo një emër tjetër ose ndrysho filtrat.</small></div> : filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map(match => <button className="mc-match" key={match.id} data-admin-match-id={match.id} aria-pressed={selectedId === match.id} disabled={busy} onClick={() => chooseMatch(match)}>
+            <span className="mc-match-top"><span className={`mc-badge ${matchStatus(match) === 'LIVE' ? 'mc-live' : ''}`}>{statusLabel(match)}{matchStatus(match) === 'LIVE' && match.currentMinute != null ? ` · ${match.currentMinute}′` : ''}</span><span>#{match.id}</span>{match.isSuspended && <Lock size={13} aria-label="E pezulluar" />}</span>
+            <span className="mc-team"><span>{match.homeTeam}</span><b>{match.homeScore ?? '–'}</b></span><span className="mc-team"><span>{match.awayTeam}</span><b>{match.awayScore ?? '–'}</b></span>
+            <span className="mc-match-bottom"><span>{match.tournament?.name ?? 'Pa kampionat'}</span><ChevronRight size={15} /></span><span className="mc-kickoff"><Clock size={11} />{kickoff(match.startTime)}</span>
+          </button>)}
+        </div>
+        <footer className="mc-pagination"><span>Faqja {currentPage} / {pages}</span><div><button aria-label="Faqja e mëparshme" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={17} /></button><button aria-label="Faqja tjetër" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight size={17} /></button></div></footer>
+      </aside>
+      <div className="mc-detail" data-mobile-hidden={!mobileDetail}>
+        <button className="mc-mobile-back" onClick={() => setMobileDetail(false)} disabled={busy}><ArrowLeft size={17} />Kthehu te ndeshjet</button>
+        {!selected ? <div className="mc-detail-placeholder"><Layers size={32} /><h3>{detailLoading ? 'Po ngarkohen tregjet…' : 'Zgjidh një ndeshje'}</h3><p>Kuotat dhe kontrollet do të shfaqen këtu.</p></div> : <div data-admin-selected-match={selected.id}>
+          <section className="mc-fixture">
+            <div className="mc-fixture-meta"><span className={`mc-badge ${matchStatus(selected) === 'LIVE' ? 'mc-live' : ''}`}>{statusLabel(selected)}{matchStatus(selected) === 'LIVE' && selected.currentMinute != null ? ` · ${selected.currentMinute}′` : ''}</span><span>#{selected.id}</span>{detailLoading && <Loader2 size={14} className="mc-spin" aria-label="Po rifreskohet ndeshja" />}</div>
+            <div className="mc-fixture-title"><div><h3>{selected.homeTeam}</h3><h3>{selected.awayTeam}</h3></div><div className="mc-score">{selected.homeScore ?? '–'}<span>:</span>{selected.awayScore ?? '–'}</div></div>
+            <div className="mc-fixture-subtitle"><Trophy size={13} /><span>{selected.tournament?.name ?? 'Pa kampionat'}</span><span>· {kickoff(selected.startTime)}</span></div>
+            <div className="mc-fixture-actions">
+              <button className={`mc-button ${ownLock('match', selected.id) ? 'mc-warning' : 'mc-secondary'}`} data-admin-toggle-match={selected.id} aria-pressed={ownLock('match', selected.id)} disabled={controlsBlocked} onClick={() => toggle('match', selected.id)}>{ownLock('match', selected.id) ? <Unlock size={15} /> : <Lock size={15} />}{ownLock('match', selected.id) ? 'Hiq pezullimin' : 'Pezullo ndeshjen'}</button>
+              <button className="mc-button mc-secondary" data-admin-adjust-scope="match" data-admin-adjust-id={selected.id} disabled={controlsBlocked || !eligibleOutcomes(markets.flatMap(market => market.outcomes ?? [])).length} onClick={() => adjustDialog('match', selected.id, 'Të gjitha kuotat e ndeshjes', markets.flatMap(market => market.outcomes ?? []))}><Percent size={15} />Rregullo kuotat</button>
+              <button className="mc-button mc-quiet" disabled={controlsBlocked} onClick={() => openDialog({ kind: 'settle', match: selected })}><Trophy size={15} />Vendos rezultatin</button>
+            </div>
+            {selected.isSuspended && <p className="mc-lock-note"><Lock size={14} />{ownLock('match', selected.id) ? 'Ndeshja është pezulluar nga administratori. Tregjet trashëgojnë këtë pezullim.' : 'Ndeshja është pezulluar nga burimi ose rregullat e sistemit. Heqja e një pezullimi individual nuk e hap ndeshjen.'}</p>}
+          </section>
+          <section className="mc-market-controls">
+            <div className="mc-section-heading"><h3>Tregjet <span>{markets.length}</span></h3><small>{filteredMarkets.length} të shfaqshme</small></div>
+            <div className="mc-market-search"><label className="mc-search"><Search size={17} /><input aria-label="Kërko treg ose zgjedhje" placeholder="Kërko treg, zgjedhje ose linjë…" value={marketQuery} onChange={event => setMarketQuery(event.target.value)} /></label><select aria-label="Gjendja e tregjeve" value={marketState} onChange={event => setMarketState(event.target.value)}><option value="ALL">Çdo gjendje</option><option value="ACTIVE">Tregje aktive</option><option value="SUSPENDED">Të pezulluara</option></select></div>
+            <div className="mc-categories" aria-label="Kategoritë e tregjeve"><button aria-pressed={category === 'all'} onClick={() => setCategory('all')}>Të gjitha</button>{categories.filter(key => categoryCounts.get(key)).map(key => <button key={key} aria-pressed={category === key} onClick={() => setCategory(key)}>{marketCategoryLabel(key, 'al')}</button>)}</div>
+          </section>
+          <div className="mc-markets">
+            {filteredMarkets.slice(0, marketLimit).map(market => <article key={market.id} className={`mc-market ${market.status === 'SUSPENDED' ? 'mc-market-paused' : ''}`} data-admin-market-id={market.id}>
+              <header><div><small>{marketCategoryLabel(marketCategoryOf(market), 'al')}</small><h4>{marketTitle(market)}</h4>{market.status !== 'ACTIVE' && <span className="mc-paused-text">{market.status === 'SETTLED' ? 'I përfunduar' : 'I pezulluar'}</span>}</div><div className="mc-market-actions"><button className="mc-icon-button" title="Rregullo kuotat e tregut" aria-label={`Rregullo kuotat: ${marketTitle(market)}`} data-admin-adjust-scope="market" data-admin-adjust-id={market.id} disabled={controlsBlocked || !eligibleOutcomes(market.outcomes ?? []).length} onClick={() => adjustDialog('market', market.id, marketTitle(market), market.outcomes ?? [])}><Percent size={16} /></button><button className={`mc-icon-button ${ownLock('market', market.id) ? 'mc-locked' : ''}`} aria-label={`${ownLock('market', market.id) ? 'Hiq pezullimin e tregut' : 'Pezullo tregun'}: ${marketTitle(market)}`} data-admin-toggle-market={market.id} aria-pressed={ownLock('market', market.id)} disabled={controlsBlocked} onClick={() => toggle('market', market.id)}>{ownLock('market', market.id) ? <Unlock size={16} /> : <Lock size={16} />}</button></div></header>
+              <div className="mc-outcomes" style={{ gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, market.outcomes?.length ?? 1))}, minmax(0, 1fr))` }}>{(market.outcomes ?? []).map(outcome => {
+                const locked = outcome.status !== 'ACTIVE', own = ownLock('outcome', outcome.id), pinned = overrideMap.get(`outcome:${outcome.id}`)?.price != null;
+                return <div className={`mc-outcome ${locked ? 'mc-outcome-paused' : ''}`} key={outcome.id} data-admin-outcome-id={outcome.id}>
+                  <button className="mc-quote" data-admin-edit-outcome={outcome.id} aria-label={`Ndrysho kuotën: ${outcomeTitle(outcome, market)}`} disabled={controlsBlocked || !eligibleOutcomes([outcome]).length} onClick={() => openDialog({ kind: 'odds', match: selected, market, outcome })}><span>{outcomeTitle(outcome, market)}</span><strong>{formatOdds(outcome.odds)}</strong><small>{pinned ? 'E ndryshuar' : 'Ndrysho kuotën'}<ArrowRight size={10} /></small></button>
+                  <div className="mc-outcome-status"><span>{outcome.riskSuspended ? 'Rreziku' : own ? 'Pezulluar nga ju' : locked ? 'E pezulluar' : 'Aktive'}</span><button data-admin-toggle-outcome={outcome.id} aria-pressed={own} aria-label={`${own ? 'Hiq pezullimin e kuotës' : 'Pezullo kuotën'}: ${outcomeTitle(outcome, market)}`} disabled={controlsBlocked} onClick={() => toggle('outcome', outcome.id)}>{own ? <Unlock size={13} /> : <Lock size={13} />}</button></div>
+                </div>;
+              })}</div>
+              {!market.outcomes?.length && <p className="mc-market-empty">Nuk ka kuota të disponueshme.</p>}
+            </article>)}
+          </div>
+          {!filteredMarkets.length && <div className="mc-empty mc-market-empty"><Search /><strong>{markets.length ? 'Nuk u gjet treg për këto filtra.' : 'Nuk ka tregje të disponueshme për këtë ndeshje.'}</strong><small>Rifresko ndeshjen ose ndrysho kërkimin.</small></div>}
+          {filteredMarkets.length > marketLimit && <button className="mc-more" onClick={() => setMarketLimit(value => value + 20)}>Shfaq edhe {Math.min(20, filteredMarkets.length - marketLimit)} tregje<ChevronRight size={16} /></button>}
+          <p className="mc-help"><ShieldCheck size={15} /><span>Butonat e pezullimit ndryshojnë vetëm vendimin e administratorit. Pezullimet e burimit, ndeshjes dhe rrezikut vazhdojnë të zbatohen.</span></p>
+        </div>}
+      </div>
+    </div>
+    {dialog && <MatchControlDialog key={`${dialog.kind}:${dialog.kind === 'odds' ? dialog.outcome.id : dialog.kind === 'adjust' ? dialog.id : dialog.match.id}`} dialog={dialog} busy={busy} error={shownError} onClose={() => { if (!actionRunning.current) { setDialog(null); setError(''); } }} onSaveOdds={saveOdds} onAdjust={adjustOdds} onSettle={settleMatch} />}
+  </section>;
 }
