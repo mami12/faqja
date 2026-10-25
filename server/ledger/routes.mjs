@@ -17,8 +17,10 @@ import { getPlayerControls, requestSelfExclusion, updatePlayerLimits } from './p
 import { refreshLiveRiskSettings, writeLiveRiskSettings } from './live-risk-store.mjs';
 import { DEFAULT_LIVE_RISK_SETTINGS } from '../live-risk-settings.mjs';
 import { projectBoardMatches } from './board-projection.mjs';
+import { freshFeed } from '../feed-sync.mjs';
 
 export const ledgerRouter = express.Router();
+ledgerRouter.use(freshFeed);
 
 /**
  * Async wrapper that also maps a thrown error to its intended status. Bet rules throw
@@ -287,16 +289,15 @@ ledgerRouter.get(
     const { tournamentId, categoryId, sportId, status, q } = req.query;
     const service = status === 'LIVE' ? 'LIVE' : status === 'PREMATCH' ? 'PREMATCH' : null;
 
-    let rows = await getMatchRows({
+    const rows = await getMatchRows({
       service,
+      league: categoryId ? String(categoryId) : null,
+      tournamentId: tournamentId ? String(tournamentId) : null,
+      sportId: sportId ? String(sportId) : null,
       q: q ? String(q) : null,
       limit: asLimit(req.query.limit, 500, 2000),
       includeEnded: status === 'ENDED',
     });
-
-    // our store filters by league; the app also asks by category/tournament
-    if (categoryId) rows = rows.filter((r) => r.category_slug === String(categoryId));
-    if (tournamentId) rows = rows.filter((r) => String(r.tournament_id) === String(tournamentId));
 
     const board = req.query.view === 'board';
     const serialized = await withOdds(rows);

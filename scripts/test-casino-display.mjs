@@ -116,7 +116,7 @@ assert.equal(exiting.calls.fullscreen,1);assert.equal(exiting.state.fullscreen,t
 
 const component=readFileSync(new URL('../web/src/components/Layout/CasinoFullscreen.tsx',import.meta.url),'utf8');
 assert(component.includes('requestCasinoLandscape({retry:true})'),'Visible Fullscreen control must opt in to retry');
-assert(component.includes('casino-game-rotated')&&component.includes('Back to casino'),'CSS landscape and Back remain present');
+assert(component.includes('casino-game-rotated')&&component.includes('Kthehu te kazinoja'),'CSS landscape and Back remain present');
 
 // Execute the actual toolbar handlers and fullscreen listener with persistent
 // hook state. Native exit is deliberately delayed until after a second click.
@@ -160,16 +160,16 @@ const findButton=(tree,label)=>{
  return null;
 };
 let tree=render();await Promise.resolve();
-findButton(tree,'Exit fullscreen').props.onClick();
-tree=render();assert(findButton(tree,'Fullscreen landscape'),'The first click offers windowed mode immediately');
-findButton(tree,'Fullscreen landscape').props.onClick();
+findButton(tree,'Dil nga ekrani i plotë').props.onClick();
+tree=render();assert(findButton(tree,'Ekran i plotë horizontal'),'The first click offers windowed mode immediately');
+findButton(tree,'Ekran i plotë horizontal').props.onClick();
 exitGate.resolve();await new Promise(resolve=>setImmediate(resolve));
 tree=render();
 assert.equal(exitCalls,1,'The delayed native exit event must not issue a second release');
 assert.equal(enterCalls,1,'The second click must reenter after the pending exit');
-assert(findButton(tree,'Exit fullscreen'),'The queued reentry must keep the stage fullscreen');
+assert(findButton(tree,'Dil nga ekrani i plotë'),'The queued reentry must keep the stage fullscreen');
 browserDocument.fullscreenElement=null;fireNative();
 tree=render();
-assert(findButton(tree,'Fullscreen landscape'),'A later browser Escape still returns to windowed mode');
+assert(findButton(tree,'Ekran i plotë horizontal'),'A later browser Escape still returns to windowed mode');
 for(const entry of effects)entry.cleanup?.();
 console.log('PASS casino display coalescing, explicit retry, nonblocking exit, suspended provider taps and late native races');

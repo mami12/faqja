@@ -34,6 +34,7 @@ import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseRes
 import { buildSystemColumns, splitSystemStake, moneyCents, frozenSelectionPrice, systemColumnPayout } from './system-columns.mjs';
 import { aggregateSystemTicket, parseSystemTicketId, systemTicketId, SYSTEM_STATUS_SQL } from './system-ticket-view.mjs';
 import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
+import { assertDistinctSelectionMarkets } from './selection-market.mjs';
 
 const MIN_STAKE = 100; // LEK
 const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
@@ -400,9 +401,11 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
   }
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
+  assertDistinctSelectionMarkets(selections);
   // Independent odds checks can be awaited together instead of serially.
   const lines = (await Promise.all(selections.map(resolve))).map(line => ({ ...line, price: frozenSelectionPrice(line.price) }));
 
+  assertDistinctSelectionMarkets(lines);
   assertDistinctMatches(lines);
   const totalOdds = totalOddsForSelections(lines);
   if (!Number.isFinite(totalOdds) || totalOdds > 9999999999.9999) throw badRequest('Koeficienti i biletës është shumë i madh.');
@@ -565,6 +568,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
   const response = async batch => aggregateSystemTicket(batch,await Promise.all(batch.ticket_ids.map(getTicket)));
   const previous = await getPrevious({ query: runQuery });
   if (previous) return response(previous);
+  assertDistinctSelectionMarkets(picks);
 
   // Every underlying selection is resolved exactly once, so repeated legs across
   // columns cannot acquire different prices while the feed changes.
@@ -572,6 +576,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
     const line = await resolve(pick);
     return [String(pick.outcomeId), { ...line, price: frozenSelectionPrice(line.price) }];
   })));
+  assertDistinctSelectionMarkets([...linesById.values()]);
   const resolved = grouped.map(column => column.map(pick => linesById.get(String(pick.outcomeId))));
   resolved.forEach(assertDistinctMatches);
   const priced = resolved.map((lines, i) => ({
@@ -664,8 +669,10 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
   if (!Array.isArray(selections) || selections.length < 1 || selections.length > 20) throw badRequest('Zgjidh 1–20 kuota për kolonë.');
 
   const type = ticketTypeForSelectionCount(ticketType, selections.length);
+  assertDistinctSelectionMarkets(selections);
   const lines = [];
   for (const selection of selections) lines.push(await resolveSelection(selection));
+  assertDistinctSelectionMarkets(lines);
   assertDistinctMatches(lines);
 
   const totalOdds = totalOddsForSelections(lines);

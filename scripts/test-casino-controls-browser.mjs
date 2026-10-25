@@ -26,7 +26,7 @@ const setCustom=(gameId,rtp,hit)=>{
  Object.assign(game,{controls:{mode:'custom',rtp,hitFrequency:hit},effectiveRtp:rtp,effectiveHitFrequency:hit,mathVersion:gameId+'-custom-'+rtp+'-'+hit});
 };
 try{
- vite=await createServer({root,configFile:false,plugins:[(await import('@vitejs/plugin-react')).default()],server:{middlewareMode:true,hmr:false,fs:{allow:[fileURLToPath(new URL('..',import.meta.url))]}},appType:'custom',optimizeDeps:{include:['react','react-dom/client','axios','lucide-react']}});
+ vite=await createServer({root,configFile:false,cacheDir:fileURLToPath(new URL('../node_modules/.vite-casino-controls',import.meta.url)),plugins:[(await import('@vitejs/plugin-react')).default()],server:{middlewareMode:true,hmr:false,fs:{allow:[fileURLToPath(new URL('..',import.meta.url))]}},appType:'custom',optimizeDeps:{include:['react','react-dom/client','axios','lucide-react']}});
  const app=express();app.use(express.json());
  app.get(['/app/api/admin/casino/settings','/app/api/casino/status'],(_req,res)=>res.json(settings));
  app.get('/app/api/admin/casino/finance',(_req,res)=>res.json({totals:{casinoStake:0,casinoPayout:0,casinoSpins:0}}));
@@ -57,8 +57,8 @@ try{
  // Speed up only the status refresh in this fixture; real launch uses 30 seconds.
  await page.evaluateOnNewDocument(()=>{const interval=window.setInterval;window.setInterval=(callback,delay,...args)=>interval(callback,delay===30000?200:delay,...args);});
  await page.setViewport({width:1100,height:820});
- await page.goto('http://127.0.0.1:'+server.address().port+'/fixture',{waitUntil:'networkidle0'});
- await page.waitForSelector('article');
+ await page.goto('http://127.0.0.1:'+server.address().port+'/fixture',{waitUntil:'domcontentloaded',timeout:60000});
+ await page.waitForSelector('article',{timeout:60000});
  const changeSelect=async(selector,value)=>page.select(selector,value);
  const setNumber=async(selector,value)=>{await page.click(selector,{clickCount:3});await page.keyboard.down('Control');await page.keyboard.press('A');await page.keyboard.up('Control');await page.keyboard.type(String(value));};
  const clickSave=async(index)=>page.evaluate(index=>document.querySelectorAll('article')[index].querySelector('button').click(),index);
@@ -67,7 +67,7 @@ try{
   await changeSelect(`select[aria-label="${title}: modaliteti"]`,'custom');
   await setNumber(`input[aria-label="${title}: RTP"]`,0);
   assert.equal(await page.$eval(`article:nth-child(${index+1}) button`,element=>element.disabled),true,'inconsistent zero pair cannot be saved');
-  await setNumber(`input[aria-label="${title}: Hit frequency"]`,0);
+  await setNumber(`input[aria-label="${title}: Shpeshtësia e fitimit"]`,0);
   await clickSave(index);
   await page.waitForFunction(index=>{const article=document.querySelectorAll('article')[index];return article.textContent.includes('Aktive: E personalizuar')&&!article.querySelector('input').disabled&&article.querySelector('button').disabled;},{timeout:10000},index);
   assert.deepEqual(saved.at(-1),{gameId,mode:'custom',rtp:0,hitFrequency:0});
@@ -79,16 +79,16 @@ try{
  await page.evaluate(()=>window.mountWallet('lucky-clover-x3'));
  await page.waitForSelector('section[aria-label="Kushtet e lojës"]');
  assert.equal(sessions.length,0);assert.equal(await page.$('iframe'),null);
- assert.ok((await page.$eval('body',element=>element.textContent)).includes('Every new stake will be lost.'));
+ assert.ok((await page.$eval('body',element=>element.textContent)).includes('Çdo bast i ri do të humbet.'));
  await page.click('section[aria-label="Kushtet e lojës"] button');
  await page.waitForSelector('iframe');
  assert.equal(sessions.at(-1).mathVersion,'lucky-clover-x3-custom-0-0');
  const bounds=await page.$eval('iframe',element=>{const r=element.getBoundingClientRect(),parent=element.closest('.casino-game-content').getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,parent:{x:parent.x,y:parent.y,right:parent.right,bottom:parent.bottom}};});
  assert.ok(bounds.x>=bounds.parent.x-1&&bounds.y>=bounds.parent.y-1&&bounds.right<=bounds.parent.right+1&&bounds.bottom<=bounds.parent.bottom+1,'game remains within space reserved below terms');
  setCustom('lucky-clover-x3',50,25);
- await page.waitForFunction(()=>document.body.textContent.includes('Settings changed · Review before next paid spin'));
+ await page.waitForFunction(()=>document.body.textContent.includes('Cilësimet ndryshuan · Kontrolloji para rrotullimit tjetër me pagesë'));
  assert.ok(await page.$('iframe'),'changed settings preserve the accepted frame for owed bonus/collect');
- await page.evaluate(()=>Array.from(document.querySelectorAll('button')).find(button=>button.textContent.includes('Settings changed')).click());
+ await page.evaluate(()=>Array.from(document.querySelectorAll('button')).find(button=>button.textContent.includes('Cilësimet ndryshuan')).click());
  await page.waitForSelector('section[aria-label="Kushtet e lojës"]');
  assert.ok((await page.$eval('body',element=>element.textContent)).includes('50%'));
  assert.equal(await page.$('iframe'),null);
@@ -109,7 +109,7 @@ try{
   await page.evaluate(gameId=>window.mountWallet(gameId),gameId);await page.waitForSelector(`iframe[title="${title} · bilanci i llogarisë"]`);
   assert.equal(sessions.at(-1).gameId,gameId);assert.equal(sessions.at(-1).mathVersion,gameId+'-original');
   assert.equal(await page.$('section[aria-label="Kushtet e lojës"]'),null);
-  assert.ok((await page.$eval('body',element=>element.textContent)).includes('Bet: 0.20–5,000 lekë'));
+  assert.ok((await page.$eval('body',element=>element.textContent)).includes('Basti: 0.20–5,000 lekë'));
  }
  assert.deepEqual(errors,[]);
  console.log('casino controls browser: six 0% settings, invalid pair, disclosure, version race, bonus-preserving change notice, and all six launch contracts PASS');

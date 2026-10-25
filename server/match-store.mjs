@@ -31,6 +31,7 @@ const FEED_COLUMNS = {
   clock_at: null,
   score_at: null,
   feed_status: null,
+  feed_status_at: null,
   has_open_odds: null,
   provider_id: null,
   broadcast_url: null,
@@ -93,15 +94,17 @@ export function expireStale(graceSeconds = 150, at = Date.now()) {
 }
 
 /** same filters/order as the old SQL: active, service/league/q, live first, then kickoff */
-export function getMatches({ service = null, league = null, q = null, limit = 500, offset = 0, includeEnded = false } = {}) {
+export function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false } = {}) {
   const wantService = service ? String(service).toUpperCase() : null;
   const needle = q ? String(q).toLowerCase() : null;
   const out = [];
 
   for (const match of byId.values()) {
-    if (!includeEnded && !match.active) continue;
+    if (!match.active) continue;
     if (wantService && match.service !== wantService) continue;
     if (league && match.category_slug !== league) continue;
+    if (tournamentId != null && String(match.tournament_id) !== String(tournamentId)) continue;
+    if (sportId != null && String(match.sport_id) !== String(sportId)) continue;
     if (!includeEnded && match.status === 'ended') continue;
     if (needle) {
       const hay = `${match.home ?? ''} ${match.away ?? ''} ${match.category_name ?? ''} ${match.tournament_name ?? ''}`.toLowerCase();
@@ -113,7 +116,7 @@ export function getMatches({ service = null, league = null, q = null, limit = 50
   out.sort(
     (a, b) =>
       (b.service === 'LIVE' ? 1 : 0) - (a.service === 'LIVE' ? 1 : 0) ||
-      time(a.start_at) - time(b.start_at),
+      time(a.start_at) - time(b.start_at) || Number(a.match_id) - Number(b.match_id),
   );
 
   const from = Math.max(0, Number(offset) || 0);
@@ -265,7 +268,10 @@ export function applyInfo(info) {
     match.match_time_ms = info.matchTimeMs;
     match.clock_at = at;
   }
-  if (typeof info.feedStatus === 'string') match.feed_status = info.feedStatus;
+  if (typeof info.feedStatus === 'string') {
+    match.feed_status = info.feedStatus;
+    match.feed_status_at = at;
+  }
   if (typeof info.hasOpenOdds === 'boolean') match.has_open_odds = info.hasOpenOdds;
   // the book the site itself sells this match from (match-info.providerId)
   if (info.providerId !== null && info.providerId !== undefined && Number.isFinite(Number(info.providerId))) {

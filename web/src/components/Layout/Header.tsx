@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Globe, LogOut, Shield, Users, Ticket, Receipt, Coins } from 'lucide-react';
+import { Menu, X, LogOut, Shield, Users, Ticket, Receipt, Coins } from 'lucide-react';
 
 interface Props {
   /** small screens only: opens the sports / leagues drawer (the desktop rail is always there) */
@@ -16,7 +16,7 @@ interface Props {
  */
 export default function Header({ onToggleNav }: Props) {
   const { user, logout } = useAuth();
-  const { t, lang, setLanguage } = useLanguage();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -124,20 +124,6 @@ export default function Header({ onToggleNav }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
-          <div className="relative flex items-center rounded-lg border border-white/10 bg-[#0b1018] px-2 py-1.5 text-xs transition hover:border-emerald-500/30">
-            <Globe size={13} className="mr-1.5 shrink-0 text-text-secondary" />
-            <select
-              value={lang}
-              onChange={(e) => setLanguage(e.target.value as any)}
-              className="cursor-pointer bg-transparent pr-1 text-[11px] font-semibold text-text-primary focus:outline-none sm:text-xs"
-            >
-              <option value="al" className="bg-secondary text-white">Shqip</option>
-              <option value="en" className="bg-secondary text-white">English</option>
-              <option value="de" className="bg-secondary text-white">Deutsch</option>
-              <option value="fr" className="bg-secondary text-white">Français</option>
-            </select>
-          </div>
-
           {user && (
             <>
               {/* Desktop links */}
@@ -183,7 +169,7 @@ export default function Header({ onToggleNav }: Props) {
       {menuOpen && user && (
         <div className="md:hidden border-t border-tertiary bg-secondary/95 backdrop-blur-md px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
           <div className="text-[10px] font-black uppercase tracking-wider text-text-secondary mb-1">
-            {user.role} &bull; {user.username}
+            {{ ADMIN: 'Administrator', MANAGER: 'Menaxher', PLAYER: 'Lojtar' }[user.role]} &bull; {user.username}
           </div>
           <div className="flex flex-col space-y-1">
             {links}

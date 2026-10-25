@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
-const ts = require('../web/node_modules/typescript/lib/typescript.js');
+const ts = require('typescript');
 const source = readFileSync(new URL('../web/src/utils/sportsbookLabels.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -15,6 +15,8 @@ const translations = {
   'markets.match_result': 'Rezultati i ndeshjes (1X2)',
   'markets.totals': 'Totali i golave',
   'markets.over_under': 'Lart / Poshtë',
+  'markets.both_teams_score': 'Shënojnë të dy ekipet',
+  'markets.double_chance': 'Dopio shans',
   'outcomes.over': 'Lart',
   'outcomes.under': 'Poshtë',
   'outcomes.home': 'Vendas',
@@ -123,23 +125,23 @@ assert.equal(
 );
 assert.equal(
   module.exports.translateOutcomeName('1/Yes', translate, mixedMarket, fixture, 'X/No'),
-  '1/Yes',
-  'Keep original label visible if provider fields contradict each other',
+  '1/Po',
+  'Translate the supplied label literally on conflict; never substitute X/No',
 );
 assert.equal(
   module.exports.translateOutcomeName('No', translate, mixedMarket, fixture),
-  'No',
-  'Never invent a result from plain BTTS No',
+  'Jo',
+  'Translate plain BTTS No without inventing a result',
 );
 assert.equal(module.exports.translateOutcomeName('Nil', translate, mixedMarket, fixture), 'Jo', 'Display Nil in Albanian without inventing the result');
 assert.equal(module.exports.translateOutcomeName('Nil', translate, 'Both Teams to Score', fixture), 'Jo', 'Translate standalone provider Nil to Jo');
 assert.equal(module.exports.translateOutcomeName('2/Nil', translate, mixedMarket, fixture), '2 & Jo', 'Translate Nil mixed combination');
 assert.equal(module.exports.isResultBttsMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isResultBttsMarket(mixedMarket), true);
-assert.equal(module.exports.translateMarketName(mixedMarket, translate), 'Rezultati & Gol/Gol');
-assert.equal(module.exports.translateMarketName('1st half. Result and both teams to score', translate), 'Pjesa e Parë: Rezultati & Gol/Gol');
-assert.equal(module.exports.translateMarketName('Result and total', translate), 'Rezultati & Totali i Golave');
-assert.equal(module.exports.translateMarketName('Total and both teams to score', translate), 'Totali i Golave & Gol/Gol');
+assert.equal(module.exports.translateMarketName(mixedMarket, translate), 'Rezultati & Shënojnë të dy ekipet');
+assert.equal(module.exports.translateMarketName('1st half. Result and both teams to score', translate), 'Pjesa e parë: Rezultati & Shënojnë të dy ekipet');
+assert.equal(module.exports.translateMarketName('Result and total', translate), 'Rezultati & Totali i golave');
+assert.equal(module.exports.translateMarketName('Total and both teams to score', translate), 'Shënojnë të dy ekipet & Totali i golave');
 
 
 // Feed-defined BTTS + goals-total combinations belong in MIKSE, not plain BTTS.
@@ -150,7 +152,7 @@ for (const title of [
   'Total Goals Over/Under & Both Teams to Score',
 ]) {
   assert.equal(module.exports.isBttsGoalsComboMarket(title), true, title);
-  assert.equal(module.exports.translateMarketName(title, translate), 'Totali i Golave & Gol/Gol', title);
+  assert.equal(module.exports.translateMarketName(title, translate), 'Shënojnë të dy ekipet & Totali i golave', title);
 }
 assert.equal(module.exports.isBttsGoalsComboMarket('Both Teams to Score'), false);
 assert.equal(module.exports.isBttsGoalsComboMarket('Total Goals 2.5'), false);
@@ -192,7 +194,7 @@ const universalOutcomeExamples = [
   ['Arsenal to score', '1 shënon gol'],
   ['Chelsea scores first', 'Goli i parë: 2'],
   ['Arsenal / Draw', '1 / X'],
-  ['Home or Draw', '1 or X'],
+  ['Home or Draw', '1 ose X'],
 ];
 for (const [input, expected] of universalOutcomeExamples) {
   assert.equal(module.exports.translateOutcomeName(input, translate, 'First Goal', fixture), expected, input);
@@ -270,11 +272,11 @@ assert.deepEqual(
 );
 
 const comboCases = [
-  ['Result and total', 'Lyon And Over 2.5', '1 & Mbi 2.5'],
-  ['Result and total', 'Crystal Palace And Under 2.5', '2 & Nën 2.5'],
-  ['Result and total', 'Draw And Over 2.5', 'X & Mbi 2.5'],
-  ['Total and both teams to score', 'Over 2.5 And No', 'Mbi 2.5 & Jo'],
-  ['Total and both teams to score', 'Under 2.5 And Yes', 'Nën 2.5 & Po'],
+  ['Result and total', 'Lyon And Over 2.5', '1 & Lart 2.5'],
+  ['Result and total', 'Crystal Palace And Under 2.5', '2 & Poshtë 2.5'],
+  ['Result and total', 'Draw And Over 2.5', 'X & Lart 2.5'],
+  ['Total and both teams to score', 'Over 2.5 And No', 'Lart 2.5 & Jo'],
+  ['Total and both teams to score', 'Under 2.5 And Yes', 'Poshtë 2.5 & Po'],
   ['Result and both teams to score', 'Lyon To Nil', '1 & Jo'],
   ['Result and both teams to score', 'Crystal Palace And Both To Score', '2 & Po'],
   ['1st half. Result and both teams to score', 'Both Teams Not To Score and Draw', 'X & Jo'],
@@ -343,3 +345,37 @@ assert.deepEqual(
   [],
   'Do not reintroduce generic 1X2 if canonical result market is absent',
 );
+
+// User examples: translate titles and every choice while preserving each
+// condition, line and period. Presentation must not modify betting contracts.
+for (const [raw, expected] of [
+  ['G/G&+2.5', 'Po + Lart 2.5'],
+  ['BTTS No + Over 1.5', 'Jo + Lart 1.5'],
+  ['BTTS No + Over 2.5', 'Jo + Lart 2.5'],
+  ['BTTS Yes + Over 3.5', 'Po + Lart 3.5'],
+  ['BTTS No + Over 3.5', 'Jo + Lart 3.5'],
+  ['BTTS Yes + Over 4.5', 'Po + Lart 4.5'],
+  ['BTTS No + Over 4.5', 'Jo + Lart 4.5'],
+  ['DC X2 + TOTAL Under 2.5', 'X2 + Poshtë 2.5'],
+]) {
+  for (const format of [
+    () => module.exports.formatOddsButtonLabel(raw, 'Bet Builder: Both Teams to Score + Total Goals', '', translate, fixture),
+    () => module.exports.formatTicketSelection(raw, 'Bet Builder: Both Teams to Score + Total Goals', fixture, translate),
+  ]) assert.equal(format(), expected, raw);
+}
+for (const [raw, expected] of [
+  ['First Goalscorer', 'Shënuesi i golit të parë'],
+  ['Last Goalscorer', 'Shënuesi i golit të fundit'],
+  ['Anytime Goalscorer', 'Shënues goli gjatë ndeshjes'],
+  ['First Team to Score', 'Ekipi që shënon i pari'],
+  ['Last Team to Score', 'Ekipi që shënon i fundit'],
+  ['Last Goal Time', 'Koha e golit të fundit'],
+  ['Next Goal Time', 'Koha e golit të radhës'],
+  ['1st half. Total Goals', 'Pjesa e parë: Totali i golave'],
+  ['2nd half. Total Goals', 'Pjesa e dytë: Totali i golave'],
+]) assert.equal(module.exports.translateMarketName(raw, translate), expected, 'Preserve contract: ' + raw);
+assert.equal(module.exports.translateMarketName('Bet Builder: Both Teams to Score + Total Goals', translate),
+  'Kombinim ndeshjeje: Shënojnë të dy ekipet & Totali i golave');
+assert.equal(module.exports.translateMatchEventText('Red Star: Goal', 'Red Star', 'Away United'), 'Red Star: Gol',
+  'Fixture names remain unchanged in translated events');
+console.log('PASS Albanian combination titles, all user selection examples, scoring/period distinctions and fixture names');

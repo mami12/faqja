@@ -82,6 +82,7 @@ alter table matches add column if not exists broadcast_url text;
 -- are what let the board tell "1-0 five minutes ago" apart from "1-0 right now".
 alter table matches add column if not exists clock_at timestamptz;
 alter table matches add column if not exists score_at timestamptz;
+alter table matches add column if not exists feed_status_at timestamptz;
 
 -- added later: full market tree (every odds group the feed sends, not just the board columns)
 alter table odds_current add column if not exists is_base     boolean not null default false;

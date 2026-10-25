@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { LEDGER_SQL } from '../server/ledger/schema.mjs';
-import { createColumnsPlacer, toClientTicket, revertTicket, placeBet, getTicketWithLines, listActive, listHistory, listLogicalTickets, searchTickets, withLines } from '../server/ledger/bets.mjs';
+import { createColumnsPlacer, toClientTicket, revertTicket, placeBet, bookTicket, getTicketWithLines, listActive, listHistory, listLogicalTickets, searchTickets, withLines } from '../server/ledger/bets.mjs';
 import { listPlayerBetActivity } from '../server/ledger/bet-history.mjs';
 import { listTransactions, managerFinancials, ledgerStats } from '../server/ledger/store.mjs';
 import { recalcTicket, gradeLine } from '../server/ledger/settler.mjs';
@@ -46,6 +46,7 @@ const source = new Map([
   ['1497|total|3.5|over', { matchId: '1497', marketKey: 'total', line: '3.5', outcomeKey: 'over', outcomeName: 'Over', marketName: 'Total Goals', matchName: 'Al Arabi vs Al Nejmeh', price: 2.1 }],
   ['6983|result||1', { matchId: '6983', marketKey: 'result', line: '', outcomeKey: '1', outcomeName: 'Home', marketName: '1X2', matchName: 'Saturn vs Rodina', price: 15.18 }],
   ['1497|result||x', { matchId: '1497', marketKey: 'result', line: '', outcomeKey: 'x', outcomeName: 'Draw', marketName: '1X2', matchName: 'Al Arabi vs Al Nejmeh', price: 3.2 }],
+  ['1497|btts||yes', { matchId: '1497', marketKey: 'btts', line: '', outcomeKey: 'yes', outcomeName: 'Yes', marketName: 'Both Teams to Score', matchName: 'Al Arabi vs Al Nejmeh', price: 3.2 }],
 ]);
 let failResolution = null, resolveCalls = 0;
 const resolve = async pick => {
@@ -170,7 +171,7 @@ try {
   assert.equal(await balance(failingUser.id), 1000); assert.equal(await balance(managerId), beforeManager);
 
   const threeUser = await player(100);
-  const three = await place({ ...input(threeUser), selections: [selections[0], selections[1], { outcomeId: '1497|result||x', oddsAtPlacement: 3.2 }] });
+  const three = await place({ ...input(threeUser), selections: [selections[0], selections[1], { outcomeId: '1497|btts||yes', oddsAtPlacement: 3.2 }] });
   assert.deepEqual(three.system.columns.map(t => t.stake), [33.34, 33.33, 33.33]);
   // One win, one loss, one void: settlement and void refund are independent.
   for (let i = 0; i < three.system.columns.length; i++) {
@@ -231,6 +232,66 @@ try {
   await assert.rejects(place({ user: forged, stake: 100, columns: [[selections[0], selections[2]], [selections[1], selections[2]]], clientRequestId: randomUUID() }), /Rifresko faqen/);
   assert.equal(await balance(forged.id), 1000, 'old per-column client cannot silently place a differently priced slip');
   const regular = request => placeBet(request, { database, runQuery, getTicket, resolve });
+  // One choice per exact market is a server rule across the WHOLE logical
+  // ticket, even though alternatives would otherwise go into separate columns.
+  const duplicateMarket = [selections[0], { outcomeId:'1497|result||x', oddsAtPlacement:3.2 }, selections[2]];
+  const duplicateError = error => error.status === 400 && error.code === 'DUPLICATE_MARKET';
+  const beforeInvalid = {
+    funds:await balance(forged.id), manager:await balance(managerId),
+    tickets:await count('app_ticket'), batches:await count('app_ticket_batch'), transactions:await count('app_transaction'),
+  };
+  await assert.rejects(place({ ...input(forged), selections:duplicateMarket }), duplicateError);
+  await assert.rejects(place({ ...input(forged), selections:undefined, columns:[
+    [duplicateMarket[0],duplicateMarket[2]], [duplicateMarket[1],duplicateMarket[2]],
+  ] }), duplicateError);
+  await assert.rejects(regular({ user:forged, stake:100, selections:duplicateMarket.slice(0,2) }), duplicateError);
+  await assert.rejects(bookTicket({ stake:100, selections:duplicateMarket.slice(0,2) }), duplicateError);
+  const disguised = { ...duplicateMarket[1], marketId:'forged-different-market', matchId:'another-match', marketName:'Other' };
+  await assert.rejects(place({ ...input(forged), selections:[duplicateMarket[0],disguised,duplicateMarket[2]] }), duplicateError);
+  // Raw IDs are only preflight evidence. Canonical resolved fields must also
+  // agree, so an alternate identifier cannot turn one source market into two.
+  source.set('1497|alias||x', { ...source.get('1497|result||x') });
+  await assert.rejects(place({ ...input(forged), selections:[selections[0],{outcomeId:'1497|alias||x',oddsAtPlacement:3.2},selections[2]] }), duplicateError);
+  // Synthetic templates sharing two source markets are choices in the same
+  // grouped builder market, even when both template IDs and outcomes differ.
+  const yesOverId=randomUUID(),noUnderId=randomUUID(),otherLineId=randomUUID(),otherFamilyId=randomUUID();
+  const builderPick=(id,first,second)=>{
+    const outcomeId=`BB|1497|${id}`;
+    source.set(outcomeId,{matchId:'1497',marketKey:`BB:${id}`,line:'',outcomeKey:'builder',
+      outcomeName:'Builder option',marketName:'Bet Builder',matchName:'Home vs Away',price:4,
+      builderLegs:[first,second].map(part=>({match_id:1497,...part})),
+    });
+    return {outcomeId,oddsAtPlacement:4};
+  };
+  const yesOverPick=builderPick(yesOverId,{market_key:'btts',line:'',outcome_key:'yes'},{market_key:'total',line:'2.5',outcome_key:'over'});
+  const noUnderPick=builderPick(noUnderId,{market_key:'total',line:'2.5',outcome_key:'under'},{market_key:'btts',line:'',outcome_key:'no'});
+  await assert.rejects(place({ ...input(forged), selections:[yesOverPick,noUnderPick,selections[2]] }),duplicateError);
+  await assert.rejects(regular({user:forged,stake:100,selections:[yesOverPick,noUnderPick]}),duplicateError);
+  const disguisedBuilder={...noUnderPick,builderLegs:[{marketId:'fake|one|',outcomeId:'fake|one||yes'},{marketId:'fake|two|',outcomeId:'fake|two||over'}]};
+  await assert.rejects(place({...input(forged),selections:[yesOverPick,disguisedBuilder,selections[2]]}),duplicateError,'fake submitted constituent metadata cannot evade authoritative builder identity');
+  assert.deepEqual({
+    funds:await balance(forged.id), manager:await balance(managerId),
+    tickets:await count('app_ticket'), batches:await count('app_ticket_batch'), transactions:await count('app_transaction'),
+  }, beforeInvalid, 'rejected same-market requests cannot create tickets, debits, commissions or batches');
+  // Distinct goal lines and periods remain independent valid contracts.
+  source.set('1497|total|4.5|under', { ...source.get('1497|total|3.5|over'), line:'4.5', outcomeKey:'under', outcomeName:'Under', price:1.8 });
+  source.set('1497|totalp1|3.5|under', { ...source.get('1497|total|3.5|over'), marketKey:'totalp1', outcomeKey:'under', outcomeName:'Under', marketName:'First Half Total Goals', price:1.9 });
+  const distinctContracts = await place({ ...input(forged), selections:[
+    selections[1], {outcomeId:'1497|total|4.5|under',oddsAtPlacement:1.8},
+    {outcomeId:'1497|totalp1|3.5|under',oddsAtPlacement:1.9}, selections[2],
+  ] });
+  assert.equal(distinctContracts.system.columnCount,3);
+  assert.deepEqual(distinctContracts.system.columns.map(column=>column.stake),[33.34,33.33,33.33]);
+  assert.equal(distinctContracts.stake,100); assert.equal(await balance(forged.id),900);
+  assert.equal(distinctContracts.lines.length,4,'all different-market choices print on one logical ticket');
+  const otherLinePick=builderPick(otherLineId,{market_key:'btts',line:'',outcome_key:'yes'},{market_key:'total',line:'3.5',outcome_key:'over'});
+  const otherFamilyPick=builderPick(otherFamilyId,{market_key:'result',line:'',outcome_key:'1'},{market_key:'total',line:'2.5',outcome_key:'over'});
+  const builderUser=await player(100);
+  const distinctBuilders=await place({...input(builderUser),selections:[yesOverPick,otherLinePick,otherFamilyPick,selections[0]]});
+  assert.equal(distinctBuilders.system.columnCount,4,'different builder families/lines and a native market remain independent choices');
+  assert.equal(distinctBuilders.lines.length,4);assert.equal(distinctBuilders.stake,100);
+  assert.deepEqual(distinctBuilders.system.columns.map(column=>column.stake),[25,25,25,25]);
+  assert.equal(await balance(builderUser.id),0);
   await assert.rejects(regular({ user, stake: 100, selections: [selections[0]], clientRequestId: request.clientRequestId }), error => error.status === 409);
   const singleUser = await player(), singleId = randomUUID();
   const ordinaryTicket=await regular({ user: singleUser, stake: 100, selections: [selections[0]], clientRequestId: singleId });

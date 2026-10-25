@@ -4,6 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Match } from '../../types';
 import OddsButton from './OddsButton';
 import { useLiveFeed } from '../../api/liveFeed';
+import { liveMatch } from '../../api/matchSync';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Star, Bell, BellRing, Filter } from 'lucide-react';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
@@ -35,7 +36,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
-  const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled } = useLiveFeed();
+  const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled, refreshVersion, acceptMatches } = useLiveFeed();
   const refreshing = feedMode !== 'live';
 
   useEffect(() => {
@@ -45,25 +46,31 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       if(busy||!active) return;
       busy=true;
       try {
-        const params:any={view:'board'};
+        const params:any={view:'board', _snapshot:Date.now()};
         if(tournamentId) params.tournamentId=tournamentId;
         if(categoryId) params.categoryId=categoryId;
         if(sportId) params.sportId=sportId;
         if(isLiveOnly) params.status='LIVE';
         const res=await apiClient.get('/matches',{params,signal:controller.signal});
-        if(active) setMatches(res.data);
+        if(active) {
+          const snapshot=Array.isArray(res.data)?res.data:[];
+          acceptMatches(snapshot);
+          setMatches(snapshot);
+        }
       } catch(error) {if(active) console.error('Failed to fetch matches:',error);}
       finally {busy=false;if(active) setLoading(false);}
     };
     setLoading(true);
     void refresh();
-    const interval=window.setInterval(()=>void refresh(),15000);
+    const interval=window.setInterval(()=>void refresh(),30000);
     return ()=>{active=false;controller.abort();window.clearInterval(interval);};
-  }, [tournamentId, categoryId, sportId, isLiveOnly]);
+  }, [tournamentId, categoryId, sportId, isLiveOnly, refreshVersion, acceptMatches]);
 
-  const mainLeagueMatches = matches.filter(isMainFootballMatch);
+  const currentMatches = matches.map(match => liveMatch(match, livePatches[String(match.id)]))
+    .filter(match => match.status !== 'ENDED' && match.status !== 'CANCELLED');
+  const mainLeagueMatches = currentMatches.filter(isMainFootballMatch);
   const searchFiltered = searchTerm.trim()
-    ? matches.filter(m => {
+    ? currentMatches.filter(m => {
         const search = searchTerm.toLowerCase();
         return (
           m.homeTeam?.toLowerCase().includes(search) ||
@@ -95,8 +102,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   });
 
   const pricedMatches = filteredMatches.filter(m => {
-    const patch = livePatches[String(m.id)];
-    if (patch?.marketCount && patch.marketCount > 0) return true;
+    if (typeof m.marketCount === 'number') return m.marketCount > 0;
     return (m.markets ?? []).some((mk: any) =>
       (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
     );
@@ -139,7 +145,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   // Render a single compact odds board per competition. All odds still use the
   // existing OddsButton and its live-feed, suspension and betslip behavior.
   const renderMatchCard = (raw: any) => {
-    const m = { ...raw, ...(livePatches[String(raw.id)] ?? {}) };
+    const m = liveMatch(raw, livePatches[String(raw.id)]);
     const markets: any[] = m.markets ?? [];
     const visible = (mk: any) => (combosEnabled || !isComboMarket(mk)) && !isHandicapMarket(mk) && isMarketVisible(m, mk, lockedMarkets, lockedOutcomes, riskLockedOutcomes) && filterDecidedOutcomes((mk.outcomes ?? []).filter(isOutcomeDisplayable), mk, m).length > 0;
     const findMarket = (pattern: RegExp, type?: string) =>
@@ -190,7 +196,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex w-[39px] shrink-0 flex-col items-center justify-center border-r border-[#111922] px-0.5 text-center font-mono tabular-nums" aria-label={m.status === 'LIVE' ? `Minuta ${liveMinute || 'nuk dihet'}` : `Ora e ndeshjes ${scheduledTime}`}>
             {m.status === 'LIVE' ? (
               <>
-                <span className="text-[8px] font-bold leading-tight text-[#35cf68]">LIVE</span>
+                <span className="text-[8px] font-bold leading-tight text-[#35cf68]">NË LOJË</span>
                 <span className="text-[11px] font-black leading-tight text-[#f0d06c]">{liveMinute ? `${liveMinute.replace(/['′]/g, '')}′` : '—'}</span>
               </>
             ) : (
@@ -237,7 +243,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="w-9 sm:w-11 shrink-0 text-center text-[9px] font-semibold text-text-secondary tabular-nums">
               {m.status === 'LIVE' ? (
-                <span className="text-accent-red">LIVE<br />{m.currentMinute ?? 0}'</span>
+                <span className="text-accent-red">NË LOJË<br />{m.currentMinute ?? 0}'</span>
               ) : (
                 <span>{new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
@@ -269,8 +275,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
               {oddsGroup(main, oneXtwo, ['1', 'X', '2'])}
             </div>
             <div className="hidden lg:block w-[128px]">
-              <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">Over / Under {goals?.line ? String(goals.line) : ''}</div>
-              {oddsGroup(goals, total, ['Over', 'Under'])}
+              <div className="hidden text-[10px] font-bold text-center text-text-secondary mb-1">Lart / Poshtë {goals?.line ? String(goals.line) : ''}</div>
+              {oddsGroup(goals, total, ['Lart', 'Poshtë'])}
             </div>
             <button type="button" onClick={() => navigate(`/match/${m.id}`)}
               title={t('sections.view_markets')}
@@ -341,7 +347,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         <div className="hidden lg:flex xl:hidden items-center gap-px px-2 py-1 border-b border-tertiary/50 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
           <span className="flex-1 min-w-0">Ndeshja</span>
           <span className="w-[147px] text-center">1X2</span>
-          <span className="w-[128px] text-center">Over / Under</span>
+          <span className="w-[128px] text-center">Lart / Poshtë</span>
           <span className="w-9 text-center">+</span>
         </div>
         <div className="hidden md:flex lg:hidden items-center bg-[#424e60] px-2 py-1 text-[10px] font-semibold text-slate-200">
@@ -402,7 +408,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
           </div>
 
           <div className="space-y-2.5">
-            {renderCompetitionBoards(liveMatches, 'Futboll Live')}
+            {renderCompetitionBoards(liveMatches, 'Futboll në lojë')}
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { toDateRange } from '../../utils/dateFilters';
 import { ClipboardList, Search, X, RefreshCw, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import {auditActionLabel,auditTargetLabel} from '../../utils/accountLabels';
 
 interface AuditEntry {
   id: number;
@@ -70,7 +71,9 @@ export default function AdminAuditLog() {
     return (
       entry.actorName.toLowerCase().includes(q) ||
       entry.action.toLowerCase().includes(q) ||
+      auditActionLabel(entry.action).toLowerCase().includes(q) ||
       entry.targetType.toLowerCase().includes(q) ||
+      auditTargetLabel(entry.targetType).toLowerCase().includes(q) ||
       (entry.targetId && entry.targetId.toLowerCase().includes(q))
     );
   });
@@ -195,7 +198,7 @@ export default function AdminAuditLog() {
                         <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
                           entry.actorRole === 'ADMIN' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                         }`}>
-                          {entry.actorRole === 'ADMIN' ? 'Admin' : 'Menaxher'}
+                          {entry.actorRole === 'ADMIN' ? 'Administrator' : 'Menaxher'}
                         </span>
                         <span className="font-bold text-white text-xs">{entry.actorName}</span>
                       </div>
@@ -206,10 +209,10 @@ export default function AdminAuditLog() {
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs px-2 py-0.5 rounded bg-primary text-accent-yellow font-bold border border-tertiary">
-                        {entry.action}
+                        {auditActionLabel(entry.action)}
                       </span>
                       <span className="text-xs text-text-secondary font-medium">
-                        {entry.targetType}{entry.targetId ? ` · ${entry.targetId}` : ''}
+                        {auditTargetLabel(entry.targetType)}{entry.targetId ? ` · ${entry.targetId}` : ''}
                       </span>
                     </div>
 
@@ -258,11 +261,11 @@ export default function AdminAuditLog() {
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-black uppercase ${
                           entry.actorRole === 'ADMIN' ? 'bg-purple-500/20 text-purple-400' : 'bg-amber-500/20 text-amber-400'
                         }`}>
-                          {entry.actorRole === 'ADMIN' ? 'Admin' : 'Menaxher'}
+                          {entry.actorRole === 'ADMIN' ? 'Administrator' : 'Menaxher'}
                         </span>
                       </td>
-                      <td className="p-3.5 font-mono text-xs text-accent-yellow font-bold">{entry.action}</td>
-                      <td className="p-3.5 text-xs">{entry.targetType}{entry.targetId ? ` · ${entry.targetId}` : ''}</td>
+                      <td className="p-3.5 text-xs text-accent-yellow font-bold">{auditActionLabel(entry.action)}</td>
+                      <td className="p-3.5 text-xs">{auditTargetLabel(entry.targetType)}{entry.targetId ? ` · ${entry.targetId}` : ''}</td>
                       <td className="p-3.5 text-xs text-text-secondary max-w-xs truncate font-mono">
                         {JSON.stringify(entry.details?.input ?? {})}
                       </td>

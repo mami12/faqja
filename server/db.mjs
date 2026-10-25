@@ -92,7 +92,7 @@ export async function expireStaleMatches(graceSeconds = 150) {
   return res.rows.map((r) => r.match_id);
 }
 
-export async function getMatches({ service = null, league = null, q = null, limit = 500, offset = 0, includeEnded = false }) {
+export async function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false }) {
   const res = await query(
     `select * from matches
       where active
@@ -102,9 +102,12 @@ export async function getMatches({ service = null, league = null, q = null, limi
                             or category_name ilike '%' || $3 || '%'
                             or tournament_name ilike '%' || $3 || '%')
         and ($6::boolean or status <> 'ended')
-      order by (service = 'LIVE') desc, start_at asc
+        and ($7::text is null or tournament_id::text = $7)
+        and ($8::text is null or sport_id::text = $8)
+      order by (service = 'LIVE') desc, start_at asc, match_id asc
       limit $4 offset $5`,
-    [service, league, q, Math.min(limit, 2000), offset, includeEnded === true],
+    [service, league, q, Math.min(limit, 2000), offset, includeEnded === true,
+      tournamentId == null ? null : String(tournamentId), sportId == null ? null : String(sportId)],
   );
   return res.rows;
 }
@@ -303,12 +306,13 @@ export async function applyMatchInfo(info) {
         match_time_ms = case when $11::boolean then $7::bigint else match_time_ms end,
         clock_at      = case when $11::boolean then now()      else clock_at end,
         feed_status   = coalesce($8, feed_status),
+        feed_status_at = case when $8::text is not null then now() else feed_status_at end,
         has_open_odds = coalesce($9, has_open_odds),
         broadcast_url = coalesce($12, broadcast_url),
         updated_at    = now()
       where match_id = $1
       returning match_id, home_score, away_score, periods_score, odds_count, stats, raw,
-                match_time_ms, clock_at, score_at, feed_status, has_open_odds, broadcast_url`,
+                match_time_ms, clock_at, score_at, feed_status, feed_status_at, has_open_odds, broadcast_url, updated_at`,
     [
       info.matchId,
       hasScore ? info.homeScore : null,

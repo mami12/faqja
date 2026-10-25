@@ -102,32 +102,39 @@ assert.equal(distinct.length, 2, 'retain distinct provider market IDs sharing th
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
-const source = readFileSync(new URL('../web/src/utils/marketCatalog.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText;
-const mod = { exports: {} };
-new Function('exports', 'require', 'module', compiled)(mod.exports, require, mod);
-const ui = mod.exports;
+const moduleCache = new Map();
+function loadUiModule(url) {
+  if (moduleCache.has(url.href)) return moduleCache.get(url.href).exports;
+  const mod = { exports: {} };
+  moduleCache.set(url.href, mod);
+  const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const localRequire = id => id.startsWith('.') ? loadUiModule(new URL(id + '.ts', url)) : require(id);
+  new Function('exports', 'require', 'module', compiled)(mod.exports, localRequire, mod);
+  return mod.exports;
+}
+const ui = loadUiModule(new URL('../web/src/utils/marketCatalog.ts', import.meta.url));
 const mk = (name, line = '', period = 0, marketType = 'OTHER', extId = '') =>
   ({ id: 'test-' + extId + name + line, name, line, period, marketType, extId });
 
-for (const name of ['Total', 'Correct score', 'Corners', 'Cards', 'Result']) {
+for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i Saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonat'], ['Result', 'Rezultati']]) {
   assert.equal(ui.isIdentifiedMarket(mk(name)), true, name + ' is a real upstream name');
-  assert.equal(ui.marketDisplayTitle(mk(name), 'al'), name, name + ' must stay English');
+  assert.equal(ui.marketDisplayTitle(mk(name), 'al'), translated, name + ' is translated for display');
+  assert.equal(ui.marketDisplayTitle(mk(name), 'en'), name, 'raw provider title remains available unchanged');
 }
 assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
-assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Total (4.5)');
-assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Corners. Result');
-assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Yellow cards. Total');
-assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Total Corners (9.5)');
+assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Totali i golave (4.5)');
+assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Goditjet këndore (1X2)');
+assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Totali i kartonave të verdhë');
+assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Totali i goditjeve këndore (9.5)');
 assert.equal(ui.marketCategoryOf(mk('Corners. Double chance')), 'corners');
 assert.equal(ui.marketCategoryOf(mk('Corners. Result', '', 0, '1X2')), 'corners');
 assert.equal(ui.marketCategoryOf(mk('Yellow cards. Result')), 'cards');
 assert.equal(ui.marketCategoryOf(mk('Correct score')), 'goals');
 assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
-assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Over 9.5');
-assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'Draw');
+assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Lart 9.5');
+assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'X');
 assert.equal(ui.marketCategoryLabel('corners', 'en'), 'Corners');
 
 // Synthetic Bet Builder offers are visually grouped by the market contracts,
@@ -151,6 +158,10 @@ assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en'),
 assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en', true),
   'Bet Builder: X/2&P_2.5', 'individual template names remain unchanged');
 const bttsTotal = builder('4', 'G/G&+2.5', 'BTTS Yes + TOTAL Over 2.5', 2.4);
+assert.equal(ui.marketDisplayTitle(bttsTotal, 'al'), 'Kombinim ndeshjeje: Shënojnë të dy ekipet & Totali i golave');
+assert.equal(ui.marketSelectionLabel(bttsTotal.outcomes[0].name, 'al', bttsTotal.name, 'Arsenal vs Chelsea'), 'Po + Lart 2.5');
+assert.equal(ui.marketDisplayTitle(mk('BTTS + Total Goals 2.5', '2.5'), 'al', true),
+  'Shënojnë të dy ekipet & Totali i golave (2.5)', 'translation must retain the exact market line');
 const resultBtts = builder('5', '1&G/G', '1X2 1 + BTTS Yes', 4.4);
 const chanceBtts = builder('6', '1/X&G/G', 'DC 1X + BTTS Yes', 2.5);
 assert.equal(ui.marketDisplayTitle(bttsTotal, 'en'), 'Bet Builder: Both Teams to Score + Total Goals');

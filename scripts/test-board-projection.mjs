@@ -11,6 +11,7 @@ import { initLedgerSchema } from '../server/ledger/store.mjs';
 import * as matches from '../server/match-store.mjs';
 import * as odds from '../server/odds-store.mjs';
 import { snapshot } from '../server/ledger/overrides.mjs';
+import { signToken } from '../server/ledger/auth.mjs';
 
 const raw = [{id:'1',marketCount:80,markets:[
   {name:'1st Half Result',period:1,line:''},
@@ -55,6 +56,15 @@ try {
   const app=express();app.use('/app/api',ledgerRouter);
   server=await new Promise(resolve=>{const listening=app.listen(0,'127.0.0.1',()=>resolve(listening));});
   const base=`http://127.0.0.1:${server.address().port}/app/api`;
+  const playerId='00000000-0000-4000-8000-000000004412';
+  await sql.query(`insert into app_user(id,username,password_hash,role,balance) values($1,'sync-fixture','unused','PLAYER',321.09)`,[playerId]);
+  const headers={Authorization:`Bearer ${signToken({id:playerId,username:'sync-fixture',role:'PLAYER'})}`};
+  const account=await fetch(base+'/auth/me',{headers});
+  assert.equal(account.status,200);assert.equal((await account.json()).balance,321.09);
+  for(const key of ['cache-control','cdn-cache-control','cloudflare-cdn-cache-control'])assert.match(account.headers.get(key),/no-store/,'authenticated balance cannot be cached');
+  await sql.query('update app_user set balance=222.22 where id=$1',[playerId]);
+  const refreshed=await fetch(base+'/auth/me',{headers});
+  assert.equal((await refreshed.json()).balance,222.22,'same account URL returns current authoritative ledger balance');
   const get=async path=>{const response=await fetch(base+path);assert.equal(response.status,200,path);return response.json();};
   for(const path of ['/matches?view=board','/sports/18/matches?view=board']){
     const board=await get(path);assert.equal(board.length,1);assert.equal(board[0].markets.length,3);
@@ -69,7 +79,7 @@ try {
   assert.deepEqual(await get('/sports/99/matches?view=board'),[]);
   const detail=await get(`/matches/${matchId}`);
   assert.ok(detail.markets.length>=103,'detail endpoint retains all underlying markets');
-  console.log('PASS board projection: base-market contracts, original count, immutable detail, both actual HTTP routes, no builder catalog work and substantially smaller payload');
+  console.log('PASS board projection: base-market contracts, original count, immutable detail, both actual HTTP routes, fresh authenticated balances, no builder catalog work and substantially smaller payload');
 } finally {
   if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   pool.query=originalQuery;await sql.close();

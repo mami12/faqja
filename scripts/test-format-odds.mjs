@@ -11,11 +11,11 @@ const module = { exports: {} };
 new Function('exports', 'require', 'module', compiled)(module.exports, require, module);
 const { formatOdds } = module.exports;
 for (const [value, expected] of [
-  [1, '1.00'], [3, '3.00'], [75.9, '75.90'], [3.96, '3.96'], [3.9601, '3.9601'],
-  [8.189, '8.189'], [8.1890, '8.189'], [4.31 * 1.9, '8.189'], [2.1000, '2.10'],
-  [2.1001, '2.1001'], [2.1010, '2.101'], [15.18, '15.18'], [0, '0.00'],
-  [12.123456, '12.1235'], [null, '—'], [undefined, '—'], [NaN, '—'], [Infinity, '—'],
+  [1, '1.00'], [3, '3.00'], [75.9, '75.90'], [3.96, '3.96'], [3.9601, '3.96'],
+  [8.189, '8.19'], [4.31 * 1.9, '8.19'], [2.1000, '2.10'],
+  [2.1001, '2.10'], [2.1010, '2.10'], [15.18, '15.18'], [0, '0.00'],
+  [12.123456, '12.12'], [22.243492358, '22.24'], [1.005, '1.01'], [1.00499,'1.00'],
+  [1e-7,'0.00'], [null, '—'], [undefined, '—'], [NaN, '—'], [Infinity, '—'],
 ]) assert.equal(formatOdds(value), expected, String(value));
-assert.notEqual(formatOdds(3.96), formatOdds(3.9601), 'a four-decimal quote change stays visible');
-assert.equal((100 * 8.189).toFixed(2), '818.90', 'odds display must not round the quote used for monetary payout');
-console.log('PASS odds formatter: two minimum/four maximum decimals, exact displayed quote changes and unchanged two-decimal money');
+assert.notEqual(formatOdds(3.96), formatOdds(3.97), 'a new two-decimal quote remains visibly different');
+console.log('PASS odds formatter: exactly two decimals, requested22.24 example, precise half-up boundaries and invalid quotes');

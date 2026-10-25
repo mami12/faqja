@@ -35,9 +35,27 @@ export default function SportsbookPage() {
   // small screens: the leagues drawer and the betslip sheet
   const [navOpen, setNavOpen] = useState(false);
   const [betslipOpen, setBetslipOpen] = useState(false);
+  const [sheetViewport, setSheetViewport] = useState<{ height: number; top: number } | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (mobileSearchOpen) mobileSearchRef.current?.focus(); }, [mobileSearchOpen]);
+
+  useEffect(() => {
+    if (!betslipOpen) return;
+    // Mobile keyboards can shrink the visual viewport without changing 100dvh.
+    // Keep the whole sheet, including its footer, inside the visible area.
+    const viewport = window.visualViewport;
+    const resize = () => setSheetViewport({ height: viewport?.height ?? window.innerHeight, top: viewport?.offsetTop ?? 0 });
+    resize();
+    viewport?.addEventListener('resize', resize);
+    viewport?.addEventListener('scroll', resize);
+    window.addEventListener('resize', resize);
+    return () => {
+      viewport?.removeEventListener('resize', resize);
+      viewport?.removeEventListener('scroll', resize);
+      window.removeEventListener('resize', resize);
+    };
+  }, [betslipOpen]);
 
   // both are overlays: opening a match closes them
   useEffect(() => {
@@ -162,7 +180,7 @@ export default function SportsbookPage() {
             className={`flex w-[83px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${isLiveOnly ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
             <span className="relative">
               <FootballIcon size={25}/>
-              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">LIVE</span>
+              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">NË LOJË</span>
             </span>
             <span className="text-[10px] font-black leading-tight">FUTBOLL</span>
           </button>
@@ -187,7 +205,7 @@ export default function SportsbookPage() {
           </form>
         )}
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="min-h-0 flex-1 flex overflow-hidden">
           {/* leagues: always there from lg up, a drawer below that */}
           <div className="hidden lg:flex">{sidebar}</div>
 
@@ -209,7 +227,7 @@ export default function SportsbookPage() {
           </div>
 
           {/* betslip: a rail from xl up, a bottom sheet below that */}
-          <div className="hidden xl:flex">
+          <div className="hidden min-h-0 xl:flex" data-betslip-rail>
             <BetslipSidebar />
           </div>
         </div>
@@ -272,18 +290,21 @@ export default function SportsbookPage() {
 
         {/* betslip sheet */}
         {betslipOpen && (
-          <div className="xl:hidden fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setBetslipOpen(false)}>
-            <div className="w-full max-h-[92dvh] bg-secondary rounded-t-sm border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
+          <div className="xl:hidden fixed inset-0 z-40 flex items-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            style={sheetViewport ? { top: sheetViewport.top, height: sheetViewport.height, bottom: 'auto' } : undefined}
+            onClick={() => setBetslipOpen(false)}>
+            <div data-betslip-sheet role="dialog" aria-modal="true" aria-label={t('betslip.betslip')}
+              className="h-[92%] min-h-0 max-h-full w-full bg-secondary rounded-t-sm border-t border-tertiary/90 overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-250" onClick={(e) => e.stopPropagation()}>
               {/* Sheet handle bar */}
               <button
                 type="button"
-                className="flex w-full justify-center bg-secondary py-2"
+                className="flex w-full shrink-0 justify-center bg-secondary py-2"
                 onClick={() => setBetslipOpen(false)}
                 aria-label={t('common.cancel')}
               >
                 <span className="h-1.5 w-12 rounded-full bg-tertiary transition hover:bg-slate-500" />
               </button>
-              <BetslipSidebar className="w-full flex-1 overflow-hidden" />
+              <BetslipSidebar className="min-h-0 w-full flex-1 overflow-hidden" />
             </div>
           </div>
         )}

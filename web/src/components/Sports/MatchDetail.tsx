@@ -11,9 +11,10 @@ import OddsButton from './OddsButton';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch, useLiveFeed } from '../../api/liveFeed';
+import { liveMatch } from '../../api/matchSync';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue } from '../../utils/marketCatalog';
+import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue, marketSelectionLabel } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
 import { useFavorites } from '../../context/FavoritesContext';
 import { isComboMarket } from '../../utils/comboPolicy';
@@ -113,25 +114,28 @@ export default function MatchDetail() {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
-  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled } = useLiveFeed();
+  const { lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled, refreshVersion, acceptMatches } = useLiveFeed();
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
-    () => match ? { ...match, ...(patch ?? {}) } : null,
-    [match, patch?.status, patch?.period, patch?.currentMinute,
-      patch?.homeScore, patch?.awayScore, patch?.corners?.home, patch?.corners?.away,
-      patch?.cards?.home, patch?.cards?.away, patch?.isSuspended],
+    () => match ? liveMatch(match, patch) : null,
+    [match, patch],
   );
 
   useEffect(() => {
     if (!id) return;
     let active = true;
+    let busy = false;
+    const controller = new AbortController();
     const refresh = () => {
-      apiClient.get(`/matches/${id}`).then(res => {
+      if (busy || !active) return;
+      busy = true;
+      apiClient.get(`/matches/${id}`, {signal:controller.signal, params:{_snapshot:Date.now()}}).then(res => {
         if (!active) return;
+        acceptMatches([res.data]);
         setMatch(res.data);
         setMarkets(res.data?.markets ?? []);
-      }).catch(console.error);
+      }).catch(error => { if (active) console.error(error); }).finally(() => { busy = false; });
     };
     refresh();
     // Opening a fixture boosts its upstream subscription to FULL markets.
@@ -140,9 +144,10 @@ export default function MatchDetail() {
     const timer = window.setInterval(refresh, 20_000);
     return () => {
       active = false;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, [id]);
+  }, [id, refreshVersion, acceptMatches]);
 
   // One visibility rule for the full market page, search, category counts and rows.
   // Apply pushed scores immediately instead of waiting for the 20s REST refresh.
@@ -178,13 +183,14 @@ export default function MatchDetail() {
         const subMarketMatches = group.markets.some(m => 
           (m.name?.toLowerCase().includes(q)) || 
           (String(m.line ?? '').toLowerCase().includes(q)) ||
-          ((m as any).outcomes?.some((o: any) => o.name?.toLowerCase().includes(q)))
+          ((m as any).outcomes?.some((o: any) => o.name?.toLowerCase().includes(q) ||
+            marketSelectionLabel(o.name, lang, m.name, `${match?.homeTeam} vs ${match?.awayTeam}`, o.code, m.line).toLowerCase().includes(q)))
         );
         return titleMatches || subMarketMatches;
       }
       return true;
     });
-  }, [allGrouped, activeTab, marketSearch]);
+  }, [allGrouped, activeTab, marketSearch, lang, match?.homeTeam, match?.awayTeam]);
 
   const visibleLines = groupedMarkets.reduce((sum, group) => sum + group.markets.length, 0);
 
@@ -219,8 +225,8 @@ export default function MatchDetail() {
   const isAlert = isAlertEnabled(matchIdStr);
 
   const categories = [
-    { id: 'all', label: 'All Markets' },
-    ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, 'en') })),
+    { id: 'all', label: 'Të gjitha tregjet' },
+    ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, lang) })),
   ];
 
   const filteredCategories = categories.filter(c => c.id === 'all' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
@@ -251,8 +257,8 @@ export default function MatchDetail() {
               <Star size={15} className={isFav ? 'fill-amber-400 text-amber-400' : ''}/>
             </button>
             <button type="button" onClick={() => toggleAlert(matchIdStr)}
-              aria-label={isAlert ? 'Çaktivizo njoftimet LIVE' : 'Aktivizo njoftimet LIVE'}
-              aria-pressed={isAlert} title={isAlert ? 'Çaktivizo njoftimet LIVE' : 'Aktivizo njoftimet LIVE'}
+              aria-label={isAlert ? 'Çaktivizo njoftimet gjatë lojës' : 'Aktivizo njoftimet gjatë lojës'}
+              aria-pressed={isAlert} title={isAlert ? 'Çaktivizo njoftimet gjatë lojës' : 'Aktivizo njoftimet gjatë lojës'}
               className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
               {isAlert ? <BellRing size={15} className="text-emerald-300" /> : <Bell size={15}/>}
             </button>
@@ -276,7 +282,7 @@ export default function MatchDetail() {
               <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center bg-[#234a48] px-2 py-1 text-center text-[12px] text-white sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
                 <strong className="min-w-0 truncate text-left text-[11px] sm:text-[13px]">
                   {isLive
-                    ? ('LIVE' + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
+                    ? ('NË LOJË' + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
                       (live.period ? ' ' + live.period : ''))
                     : formattedDate.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' +
                       formattedDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
@@ -316,7 +322,7 @@ export default function MatchDetail() {
             type="text"
             value={marketSearch}
             onChange={(e) => setMarketSearch(e.target.value)}
-            placeholder="Search markets, lines, selections (e.g. 3.5, corners, cards...)"
+            placeholder="Kërko tregje, linja, zgjedhje (p.sh. 3.5, këndore, kartona...)"
             className="w-full bg-secondary border border-tertiary rounded-xl pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent-green shadow-inner"
           />
           {marketSearch && (
@@ -361,7 +367,7 @@ export default function MatchDetail() {
       {/* Header controls: market counter and collapse toggle */}
       <div className="flex items-center justify-between text-xs px-1 text-text-secondary">
         <span className="font-semibold">
-          Showing <strong className="text-white">{groupedMarkets.length}</strong> markets / <strong className="text-white">{visibleLines}</strong> lines
+          Shfaqen <strong className="text-white">{groupedMarkets.length}</strong> tregje / <strong className="text-white">{visibleLines}</strong> linja
         </span>
         <button
           onClick={toggleAllCollapse}
@@ -390,7 +396,7 @@ export default function MatchDetail() {
                 {sectionStart && (
                   <div className="flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
                     {getCategoryIcon(group.category)}
-                    <span>{categoryLabel(group.category, 'en')}</span>
+                    <span>{categoryLabel(group.category, lang)}</span>
                     <span className="rounded bg-tertiary/70 px-2 py-0.5 text-[10px] text-text-secondary">
                       {groupedMarkets.filter(g => g.category === group.category).length}
                     </span>
@@ -417,13 +423,13 @@ export default function MatchDetail() {
                       const line = marketLineValue(market);
                       const showLine = !builder && (group.markets.length > 1 || !!line);
                       if (builder) {
-                        // A real builder template, not an invented market. Keep
-                        // its original admin name and exact bettable outcome.
+                        // Render verified contract legs in Albanian; keep the
+                        // original template and outcome IDs for placement.
                         return (
                           <div key={market.id} className="flex min-h-[42px] items-stretch gap-px bg-tertiary/80">
                             <div className="flex min-w-0 flex-1 items-center bg-[#414b5b] px-2 py-1.5">
                               <span className="break-words text-[11px] font-semibold text-slate-100">
-                                {market.name.replace(/^Bet Builder:\s*/i, '')}
+                                {marketSelectionLabel(cleanOutcomes[0]?.name ?? '', lang, market.name, `${live.homeTeam} vs ${live.awayTeam}`, cleanOutcomes[0]?.code, market.line)}
                               </span>
                             </div>
                             <div className="flex min-w-0 flex-[1.4] flex-col bg-[#252e3b] [&_button]:min-h-[42px] [&_button]:w-full [&_button]:flex-1 [&_button]:rounded-none">
@@ -438,7 +444,7 @@ export default function MatchDetail() {
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
                           {showLine && (
                             <div className="w-[48px] sm:w-[76px] shrink-0 flex items-center justify-center bg-[#424d60] border-r border-tertiary/80 px-1 text-xs font-bold text-slate-200">
-                              {formatMarketLine(market.name, line) || market.name}
+                              {formatMarketLine(market.name, line) || marketDisplayTitle(market, lang)}
                             </div>
                           )}
                           <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"

@@ -178,7 +178,7 @@ function decodeRequest(req) {
 
 const basicResponse = (state, before) => ({
   balance: { before: money(before), after: balance(state) },
-  denomination: 1,
+  denomination: state.walletLimits ? .04 : 1,
 });
 
 function initResponse(state) {

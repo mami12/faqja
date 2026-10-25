@@ -124,8 +124,8 @@ try {
   await page.setRequestInterception(true);
   page.on('request', request => request.url().startsWith(origin) || request.url().startsWith('data:') ? request.continue() : request.abort());
   await page.evaluateOnNewDocument(() => localStorage.setItem('token', 'isolated-test-token'));
-  await page.goto(origin);
-  await page.waitForFunction(() => !!window.slip, { timeout: 15000 });
+  await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(() => !!window.slip, { timeout: 60000 });
   await page.waitForFunction(() => window.feed.connected);
   console.log('Real React betslip and local socket connected');
   const snapshot = () => page.evaluate(() => ({
@@ -136,14 +136,35 @@ try {
   }));
   const add = async rows => {
     const expected=await page.evaluate(rows => {
-      const ids=new Set(window.slip.selections.map(row=>row.outcomeId));
-      rows.forEach(row=>{if(ids.has(row.outcomeId))ids.delete(row.outcomeId);else ids.add(row.outcomeId);window.slip.addSelection(row);});
-      return [...ids];
+      let picks=[...window.slip.selections];
+      rows.forEach(row=>{
+        const selected=picks.some(pick=>pick.outcomeId===row.outcomeId);
+        const index=picks.findIndex(pick=>pick.matchId===row.matchId&&pick.marketId===row.marketId);
+        if(selected)picks=picks.filter(pick=>pick.outcomeId!==row.outcomeId);
+        else if(index>=0)picks=picks.map((pick,position)=>position===index?row:pick);
+        else picks.push(row);
+        window.slip.addSelection(row);
+      });
+      return picks.map(row=>row.outcomeId);
     }, rows);
     await page.waitForFunction(ids => JSON.stringify(window.slip.selections.map(row=>row.outcomeId))===JSON.stringify(ids)&&
       (!ids.length||[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Vendos Bastin')), {}, expected);
   };
   const waitType = type => page.waitForFunction(type => window.slip.ticketType === type, {}, type);
+  const builderOptions=[{
+    ...fixtureSelections[0],outcomeId:'BB|A|yes-over',marketId:'BB|A|yes-over|market',marketName:'Bet Builder: Both Teams to Score + Total Goals',
+    builderLegs:[{marketId:'A|btts|',outcomeId:'A|btts||Yes'},{marketId:'A|total|2.5',outcomeId:'A|total|2.5|Over'}],
+  },{
+    ...fixtureSelections[0],outcomeId:'BB|A|no-under',marketId:'BB|A|no-under|market',marketName:'Bet Builder: Both Teams to Score + Total Goals',
+    builderLegs:[{marketId:'A|total|2.5',outcomeId:'A|total|2.5|Under'},{marketId:'A|btts|',outcomeId:'A|btts||No'}],
+  }];
+  await page.evaluate(rows=>rows.forEach(row=>window.slip.addSelection(row)),builderOptions);
+  await page.waitForFunction(()=>window.slip.selections.length===1&&window.slip.selections[0].outcomeId==='BB|A|no-under');
+  assert.equal((await snapshot()).type,'SINGLE','another option of one grouped builder source-market pair replaces the prior option');
+  await page.evaluate(row=>window.slip.addSelection(row),fixtureSelections[0]);
+  await waitType('SYSTEM');assert.equal((await snapshot()).columns.length,2,'native and synthetic builder markets remain different choices');
+  await page.evaluate(()=>window.slip.clearAll());
+  await page.waitForFunction(()=>window.slip.selections.length===0);
   await add([fixtureSelections[0], fixtureSelections[2]]);
   await waitType('COMBO');
   assert.equal((await snapshot()).stake, '100');
@@ -167,8 +188,18 @@ try {
   await page.evaluate(() => window.slip.removeSelection('Aover'));
   await waitType('COMBO');
   assert.equal((await snapshot()).stake, '100');
-  // Multiple alternatives from the same market must be retained, including batched clicks.
+  // The real context replaces same-market options even when clicks are batched.
   await add([selection('A', 'A2', 3), selection('A', 'AX', 4)]);
+  assert.deepEqual((await snapshot()).columns, [['AX', 'B1']]);
+  assert.equal((await snapshot()).type, 'COMBO');
+  assert.deepEqual(await page.evaluate(()=>window.slip.selections.map(row=>row.outcomeId)), ['AX','B1']);
+  await add([selection('A', 'AX', 4)]);
+  assert.deepEqual((await snapshot()).columns, [['B1']], 'clicking the active option removes it');
+  await add([fixtureSelections[0], fixtureSelections[1]]);
+  await add([selection('A', 'Aunder', 2, 'A-total', 'Under')]);
+  assert.deepEqual((await snapshot()).columns, [['B1','A1'],['B1','Aunder']], 'Under replaces Over, while another market on the same match remains');
+  // A third distinct market still creates three legitimate system columns.
+  await add([selection('A', 'Abtts', 4, 'A-btts', 'Yes')]);
   await page.waitForFunction(() => window.slip.columns.length === 3);
   assert.deepEqual((await snapshot()).stakes, [3334, 3333, 3333]);
   assert.equal((await snapshot()).stake, '100');
@@ -316,41 +347,41 @@ try {
   await page.waitForFunction(() => document.querySelector('#fixture-combo button').textContent.includes('14.00'));
   assert.equal(await page.evaluate(() => window.feed.oddsDeltas['C|result||1'].at), quoteTime + 8000);
   assert.equal(await page.evaluate(() => window.slip.selections[0].odds), 14, 'fresh same-price ticks still do not auto-accept betslip odds');
-  // Four-decimal price changes are visible and require an explicit acceptance.
+  // Offered two-decimal price changes still require an explicit acceptance.
   await page.evaluate(() => window.slip.clearAll());
   await page.waitForFunction(() => window.slip.selections.length === 0);
   await add([{ ...fixtureSelections[0], outcomeId: 'BB|C|tiny-change|combo', odds: 3.96, marketName: 'Bet Builder · 1 + Over 2.5' }]);
   oddsChangedResponse = { code: 'ODDS_CHANGED', message: 'Odds have changed',
-    outcomeId: 'BB|C|tiny-change|combo', oldOdds: 3.96, newOdds: 3.9601 };
+    outcomeId: 'BB|C|tiny-change|combo', oldOdds: 3.96, newOdds: 3.97 };
   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin').click());
   await page.waitForSelector('[role="dialog"]');
   assert.equal(await page.$eval('[role="dialog"]', modal => [...modal.querySelectorAll('div')].some(node => node.textContent.trim() === '@3.96')), true);
-  assert.equal(await page.$eval('[role="dialog"]', modal => [...modal.querySelectorAll('div')].some(node => node.textContent.trim() === '@3.9601')), true);
+  assert.equal(await page.$eval('[role="dialog"]', modal => [...modal.querySelectorAll('div')].some(node => node.textContent.trim() === '@3.97')), true);
   assert.equal(await page.evaluate(() => window.slip.selections[0].odds), 3.96);
   await page.evaluate(() => [...document.querySelector('[role="dialog"]').querySelectorAll('button')].find(button => button.textContent.includes('Përditëso Biletën')).click());
-  await page.waitForFunction(() => !document.querySelector('[role="dialog"]') && window.slip.selections[0].odds === 3.9601);
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"]') && window.slip.selections[0].odds === 3.97);
   assert.equal(plainRequests.length, 1, 'accepting a quote updates the slip without automatically placing it');
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('396.01'), 'four-decimal price keeps the exact two-decimal money payout');
-  // A three-decimal combo product stays consistent on button, slip and receipt.
+  assert.ok((await page.$eval('body', body => body.innerText)).includes('397.00'), 'the accepted two-decimal quote matches the money preview');
+  // Long products use the same rounded quote on button, slip and receipt.
   await page.evaluate(quotedAt => {
     window.slip.clearAll();
     window.setBuilderQuote(previous => ({ ...previous,
       market: { ...previous.market, builderQuotedAt: quotedAt,
         builderLegs: previous.market.builderLegs.map((leg, index) => ({ ...leg, odds: index ? 1.9 : 4.31 })) },
-      outcome: { ...previous.outcome, odds: 8.189 },
+      outcome: { ...previous.outcome, odds: 8.19 },
     }));
   }, new Date(quoteTime + 9000).toISOString());
-  await page.waitForFunction(() => document.querySelector('#fixture-combo button').textContent.includes('8.189') && window.slip.selections.length === 0);
+  await page.waitForFunction(() => document.querySelector('#fixture-combo button').textContent.includes('8.19') && window.slip.selections.length === 0);
   await page.click('#fixture-combo button');
-  await page.waitForFunction(() => window.slip.selections[0]?.odds === 8.189);
-  assert.equal(await page.evaluate(() => window.slip.potentialPayout), 818.9);
-  assert.ok((await page.$eval('body', body => body.innerText)).includes('818.90'));
-  assert.ok(await page.evaluate(() => [...document.querySelectorAll('strong')].some(node => node.textContent.trim() === '8.189')));
+  await page.waitForFunction(() => window.slip.selections[0]?.odds === 8.19);
+  assert.equal(await page.evaluate(() => window.slip.potentialPayout), 819);
+  assert.ok((await page.$eval('body', body => body.innerText)).includes('819.00'));
+  assert.ok(await page.evaluate(() => [...document.querySelectorAll('strong')].some(node => node.textContent.trim() === '8.19')));
   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin').click());
   await page.waitForSelector('.ticket-print-panel');
-  assert.equal(plainRequests[1].selections[0].oddsAtPlacement, 8.189);
-  assert.equal(await page.$eval('.ticket-print-panel', receipt => [...receipt.querySelectorAll('strong')].filter(node => node.textContent.trim() === '8.189').length), 2);
-  assert.ok((await page.$eval('.ticket-print-panel', receipt => receipt.innerText)).includes('818.90'));
+  assert.equal(plainRequests[1].selections[0].oddsAtPlacement, 8.19);
+  assert.equal(await page.$eval('.ticket-print-panel', receipt => [...receipt.querySelectorAll('strong')].filter(node => node.textContent.trim() === '8.19').length), 2);
+  assert.ok((await page.$eval('.ticket-print-panel', receipt => receipt.innerText)).includes('819.00'));
   await page.click('button[aria-label="Mbyll"]');
   await page.waitForFunction(() => !document.querySelector('.ticket-print-panel'));
   // Definitive rejection suspends the real selection and every combo using it;
@@ -384,13 +415,13 @@ try {
   const idleClock=await page.evaluate(()=>({text:document.querySelector('#fixture-clock').textContent,renders:window.probeRenders}));
   await page.waitForFunction(text=>document.querySelector('#fixture-clock').textContent!==text,{},idleClock.text);
   assert.equal(await page.evaluate(()=>window.probeRenders),idleClock.renders,'clock ticks must not redraw the shared odds/slip consumers');
-  const explosive = Array.from({ length: 12 }, (_, index) => [selection(`M${index}`, `M${index}1`, 2), selection(`M${index}`, `M${index}2`, 3)]).flat();
+  const explosive = Array.from({ length: 12 }, (_, index) => [selection(`M${index}`, `M${index}1`, 2), selection(`M${index}`, `M${index}over`, 3, `M${index}-total`, 'Over')]).flat();
   await page.evaluate(rows => { window.slip.clearAll(); rows.forEach(row => window.slip.addSelection(row)); }, explosive);
   await page.waitForFunction(() => window.slip.columnsOverflow);
   assert.equal((await snapshot()).columns.length, 0);
   assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Vendos Bastin')?.disabled), true);
   assert.deepEqual(failures, []);
-  console.log('PASS real React betslip: System stakes/payouts, desktop/mobile, caps, retries, receipts, combo socket policies, explicit price acceptance and four-decimal quotes with two-decimal money');
+  console.log('PASS real React betslip: System stakes/payouts, desktop/mobile, caps, retries, receipts, combo socket policies and consistent accepted two-decimal quotes');
 } catch (error) {
   console.error('Betslip browser regression failed:', error.message, failures);
   throw error;

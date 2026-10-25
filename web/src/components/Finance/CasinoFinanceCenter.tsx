@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, RefreshCw, Search, Wallet, Dices, Trophy } from 'lucide-react';
 import { apiClient } from '../../api/client';
+import {transactionLabel,transactionDescription} from '../../utils/accountLabels';
 
 type PlayerFinance = {
   id:string;username:string;balance:number;sportTurnover:number;sportPending:number;
@@ -95,7 +96,7 @@ export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'
       <span>Lojtari: <strong className="text-white">{player.username}</strong></span>
       <span>Bilanci aktual: <strong className="text-amber-300">{fmt(player.balance)}</strong></span>
       <span>Baste në pritje: <strong className="text-white">{fmt(player.sportPending)}</strong></span>
-      <span>Spins: <strong className="text-white">{player.casinoSpins}</strong></span>
+      <span>Rrotullime: <strong className="text-white">{player.casinoSpins}</strong></span>
       <span>RTP i vëzhguar: <strong className="text-white">{player.casinoStake>0?(100*player.casinoPayout/player.casinoStake).toFixed(2)+'%':'Pa të dhëna'}</strong></span>
     </div>}
     <div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
@@ -135,7 +136,7 @@ export default function CasinoFinanceCenter({role,initialUserId}:{role:'admin'|'
     {player&&<div className="overflow-hidden rounded-xl border border-tertiary bg-secondary">
       <div className="border-b border-tertiary p-4"><h3 className="font-bold text-white">Transaksionet · {player.username}</h3><p className="text-xs text-text-secondary">Depozitat dhe transfertat shfaqen në “Të gjitha”, por nuk përfshihen në neton e lojërave.</p></div>
       <div className="divide-y divide-tertiary">{txFiltered.length?txFiltered.map(tx=><div key={tx.id} className="grid grid-cols-[1fr_auto] gap-3 p-3 sm:grid-cols-[1fr_1fr_auto]">
-        <div className="min-w-0"><p className="break-words text-sm font-semibold text-white">{tx.description||tx.type}</p><p className="text-xs text-text-secondary">{stamp(tx.createdAt)} · {tx.type}</p></div>
+        <div className="min-w-0"><p className="break-words text-sm font-semibold text-white">{transactionDescription(tx.description,tx.type)}</p><p className="text-xs text-text-secondary">{stamp(tx.createdAt)} · {transactionLabel(tx.type)}</p></div>
         <p className="hidden self-center text-xs text-text-secondary sm:block">Bilanci pas: {fmt(tx.balanceAfter)}</p>
         <div className={'flex items-center gap-1 self-center font-bold tabular-nums '+(tx.amount>=0?'text-emerald-300':'text-rose-300')}>
           {tx.amount>=0?<ArrowUpRight size={15}/>:<ArrowDownRight size={15}/>}

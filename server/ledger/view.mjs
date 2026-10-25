@@ -121,6 +121,7 @@ export function toClientMatch(m) {
           name: outcomeName(o.key, o.name, mType, mk.name),
           code: String(o.key),
           odds: price,
+          quotedAt: m.snapshotAt ?? m.updatedAt ?? null,
           // Differentiate provider/admin suspensions from this server-owned,
           // reversible risk lock, so score changes may reopen only our own lock.
           feedSuspended: providerSuspended,
@@ -186,8 +187,13 @@ export function toClientMatch(m) {
     homeScore: num(m.score?.home) ?? 0,
     awayScore: num(m.score?.away) ?? 0,
     currentMinute: num(m.minute) ?? 0,
+    currentSecond: num(m.currentSecond) ?? 0,
     // Preserve feed-score evidence so synthetic combos cannot rely on placeholders.
     scoreAt: m.scoreAt ?? null,
+    clockAt: m.clockAt ?? null,
+    phaseAt: m.phaseAt ?? null,
+    updatedAt: m.updatedAt ?? undefined,
+    snapshotAt: m.snapshotAt ?? undefined,
     period: m.phase ?? m.feedStatus ?? null,
     isSuspended: m.suspended === true || matchOverride?.suspended === true,
     isSimulated: false,

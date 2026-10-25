@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
+import { useLiveFeed } from '../../api/liveFeed';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   CalendarDays, ChevronDown, ChevronRight, Search, X, Star,
@@ -58,6 +59,7 @@ export default function SportsSidebar({
   onSelectAll, onSelectLive, onSelectFavorites,
 }: Props) {
   const { t } = useLanguage();
+  const { refreshVersion } = useLiveFeed();
   const [sports, setSports] = useState<SportItem[]>([]);
   const [expandedSports, setExpandedSports] = useState<Record<string, boolean>>({});
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
@@ -73,11 +75,13 @@ export default function SportsSidebar({
         ...prev,
       }));
     };
-    apiClient.get('/sports')
+    const controller = new AbortController();
+    const options = {signal:controller.signal, params:{_snapshot:Date.now()}};
+    apiClient.get('/sports',options)
       .then(res => accept(res.data))
-      .catch(() => apiClient.get('/sports/tree').then(res => accept(res.data)).catch(console.error));
-    return () => { alive = false; };
-  }, []);
+      .catch(() => { if (alive) void apiClient.get('/sports/tree',options).then(res => accept(res.data)).catch(error => {if(alive)console.error(error);}); });
+    return () => { alive = false; controller.abort(); };
+  }, [refreshVersion]);
 
   const isAllActive = !selectedTournamentId && !selectedCategoryId &&
     !selectedSportId && !isLiveOnly && !isFavoritesOnly;
@@ -95,7 +99,7 @@ export default function SportsSidebar({
           className={`relative flex min-h-[65px] flex-col items-center justify-center gap-1 border-b-[3px] px-0.5 pt-2 text-center transition-colors hover:bg-[#263141] ${isLiveOnly ? 'border-[#e5a900]' : 'border-transparent'}`}>
           <span className="relative">
             <FootballIcon/>
-            <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e8b48] px-[3px] py-px text-[9px] font-extrabold leading-none text-white">LIVE</span>
+            <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e8b48] px-[3px] py-px text-[9px] font-extrabold leading-none text-white">TANI</span>
           </span>
           <span className="text-[9px] font-extrabold uppercase leading-tight tracking-tight">FUTBOLL</span>
         </button>
@@ -160,7 +164,7 @@ export default function SportsSidebar({
                   {isFootball && (
                     <button type="button" onClick={onSelectLive}
                       className={`flex h-[34px] w-full items-center justify-between border-b border-[#151e29] px-2 text-left text-[12px] font-semibold text-white transition-colors hover:bg-[#387548] ${isLiveOnly ? 'bg-[#347c41]' : 'bg-[#2c6335]'}`}>
-                      <span>Live</span><ChevronDown size={13} fill="currentColor"/>
+                      <span>Drejtpërdrejt</span><ChevronDown size={13} fill="currentColor"/>
                     </button>
                   )}
                   {categories.map(category => {

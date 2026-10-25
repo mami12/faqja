@@ -45,7 +45,7 @@ async function flushPending(db,userId,player,manager){
 
 export async function bookOfRaFreeState(userId,{database=pool}={}){
   const {rows}=await database.query(
-    `select f.*,coalesce(g.pending,0) as pending,r.result as paid_result
+    `select f.*,coalesce(g.pending,0) as pending,r.result as paid_result,r.bet as paid_bet,r.denomination as paid_denomination,r.lines as paid_lines
        from app_casino_freespin_state f
        left join app_casino_gamble_state g on g.user_id=f.user_id and g.round_id=f.round_id
        join app_casino_round r on r.id=f.round_id where f.user_id=$1`,[userId]);

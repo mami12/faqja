@@ -15,6 +15,7 @@ import { formatOdds } from '../../utils/formatOdds';
 import SystemTicketSummary from './SystemTicketSummary';
 import { filterDecidedOutcomes } from '../../utils/marketExpiry';
 import { isImpossibleLiveCombination } from '../../../../server/ledger/combo-feasibility.mjs';
+import './betslip.css';
 
 export default function Betslip() {
   const { 
@@ -208,10 +209,11 @@ export default function Betslip() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-secondary text-white">
+    <>
+    <div className="betslip flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-secondary text-white">
       {/* Compact slip heading and ticket type. */}
-      <div className="shrink-0 border-b border-tertiary bg-[#424e60]">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <div className="betslip-heading shrink-0 border-b border-tertiary bg-[#424e60]">
+        <div className="betslip-heading-row flex items-center justify-between gap-2 px-3 py-2">
           <div className="flex items-center gap-2 text-xs font-bold tracking-wide">
             <TicketIcon size={15} className="text-accent-yellow"/>
             <span>{t('betslip.betslip')}</span>
@@ -223,7 +225,7 @@ export default function Betslip() {
             {t('betslip.search_ticket')}
           </button>
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
+        <div className="betslip-heading-row flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
           <select
             disabled
             value={ticketType}
@@ -242,6 +244,7 @@ export default function Betslip() {
         </div>
       </div>
 
+      <div className="betslip-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#1b2530]" data-betslip-scroll>
       {showTicketSearch && (
         <div className="shrink-0 space-y-2 border-b border-tertiary bg-[#1d2835] p-3">
           <div className="flex gap-1">
@@ -276,7 +279,7 @@ export default function Betslip() {
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#1b2530]">
+          <div>
             {selections.map((s, index) => (
               <div key={s.outcomeId} className="border-b border-[#0b1018] bg-[#252d3a] px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2">
@@ -304,13 +307,13 @@ export default function Betslip() {
           </div>
 
           {hasMultipleColumns && (
-            <div className="shrink-0 border-t border-accent-yellow/30 bg-[#1d2835] px-3 py-2 text-xs">
-              <div className="font-bold text-accent-yellow">Sistem · {columnsOverflow ? 'Mbi 24' : columns.length} kolona automatike</div>
+            <details className="border-t border-accent-yellow/30 bg-[#1d2835] px-3 py-2 text-xs" data-betslip-columns>
+              <summary className="cursor-pointer font-bold text-accent-yellow">Sistem · {columnsOverflow ? 'Mbi 24' : columns.length} kolona automatike</summary>
               <p className="mt-1 text-text-secondary">Një zgjedhje për ndeshje në çdo kolonë. Shuma totale ndahet mes kolonave.</p>
-              <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+              <div className="mt-2 space-y-1">
                 {columns.map((col, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 border-b border-tertiary/50 py-1">
-                    <span className="min-w-0 text-slate-200">#{i+1} {col.map(s => `${s.matchName}: ${formatMarketSelectionLabel(s.marketName, s.marketLine, t)} · ${formatTicketSelection(s.outcomeName, s.marketName, s.matchName, t, s.outcomeCode, s.marketLine)}`).join(' + ')}</span>
+                    <span className="min-w-0 break-words text-slate-200">#{i+1} {col.map(s => `${s.matchName}: ${formatMarketSelectionLabel(s.marketName, s.marketLine, t)} · ${formatTicketSelection(s.outcomeName, s.marketName, s.matchName, t, s.outcomeCode, s.marketLine)}`).join(' + ')}</span>
                     <span className="shrink-0 text-right font-mono text-accent-yellow">
                       <strong>{columnPreviews[i].invalid ? '—' : formatOdds(columnPreviews[i].odds)}</strong>
                       <span className="block text-[10px] text-slate-300">{columnPreviews[i].stake.toFixed(2)} Lek → {columnPreviews[i].invalid ? '—' : columnPreviews[i].payout.toFixed(2)} Lek</span>
@@ -319,7 +322,7 @@ export default function Betslip() {
                 ))}
               </div>
               {columnsOverflow && <p role="alert" className="text-rose-300">Maksimumi 24 kolona. Hiq disa zgjedhje.</p>}
-            </div>
+            </details>
           )}
 
           {oddsChangedError && (
@@ -329,27 +332,12 @@ export default function Betslip() {
             </div>
           )}
 
-          <div className="shrink-0 border-t border-tertiary bg-[#252d3a]">
-            <div className="space-y-2 px-3 py-3">
+          <div className="space-y-2 border-t border-tertiary px-3 py-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300">{t('betslip.total_odds')}:</span>
                 <strong className="font-mono text-sm font-bold tabular-nums text-accent-yellow">
                   {hasMultipleColumns ? 'Sipas kolonave' : formatOdds(totalOdds)}
                 </strong>
-              </div>
-              <div className="flex items-center justify-between gap-3 text-xs">
-                <label htmlFor="betslip-stake" className="shrink-0 text-slate-300">
-                  Shuma Totale:
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex w-[155px] items-center border border-[#53657c] bg-[#17212c]">
-                    <input id="betslip-stake" type="number" min="100" step="0.01" value={stake}
-                      onChange={e => setStake(e.target.value)}
-                      className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-sm font-semibold text-white focus:outline-none"
-                    />
-                    <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
-                  </div>
-                </div>
               </div>
               {hasMultipleColumns && !columnsOverflow && (
                 <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
@@ -360,14 +348,38 @@ export default function Betslip() {
               {hasMultipleColumns && columnStakes.some(amount => amount !== columnStakes[0]) && (
                 <p className="text-[10px] text-text-secondary">Diferenca prej 0.01 Lek ndahet te kolonat e para; totali ruhet saktësisht.</p>
               )}
-              {stakeError && <p role="alert" className="text-[11px] font-semibold text-rose-300">{stakeError}</p>}
-              {blockedCombos && <p role="alert" className="text-[11px] font-semibold text-rose-300">Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.</p>}
-              {hasUnavailable && <p role="status" className="text-[11px] font-semibold text-rose-300">Ka kuota të pezulluara. Hiqi nga kuponi ose prit rihapjen e tyre.</p>}
-              {invalidQuote && <p role="alert" className="text-[11px] font-semibold text-rose-300">Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.</p>}
-              {unavailableNotice && (
-                <p role="status" className="text-[11px] text-slate-300">{unavailableNotice}</p>
+              {hasMultipleColumns && !columnsOverflow && (
+                <div className="space-y-1 text-[10px] text-text-secondary">
+                  <div className="flex justify-between gap-2"><span>Kthimi më i vogël për kolonë, nëse fiton:</span><strong className="shrink-0">{Math.min(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
+                  <div className="flex justify-between gap-2"><span>Kthimi më i madh për kolonë, nëse fiton:</span><strong className="shrink-0">{Math.max(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
+                  <p>Çdo kolonë vlerësohet veçmas. Mblidhen vetëm kthimet e kolonave fituese; shuma e shfaqur kërkon që të gjitha kolonat të fitojnë.</p>
+                </div>
               )}
-              <div className="grid grid-cols-4 gap-1">
+          </div>
+        </>
+      )}
+      </div>
+
+      {selections.length > 0 && (
+          <div className="betslip-footer shrink-0 border-t border-tertiary bg-[#252d3a]" data-betslip-footer>
+            <div className="betslip-footer-fields space-y-2 px-3 py-2">
+              <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
+                <label htmlFor="betslip-stake" className="min-w-0 text-slate-300">Shuma Totale:</label>
+                <div className="flex w-[155px] max-w-[55%] shrink-0 items-center border border-[#53657c] bg-[#17212c]">
+                  <input id="betslip-stake" type="number" inputMode="decimal" min="100" step="0.01" value={stake}
+                    onChange={e => setStake(e.target.value)}
+                    className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-base font-semibold text-white focus:outline-none" />
+                  <span className="shrink-0 pr-2 text-[10px] text-text-secondary">Lëk</span>
+                </div>
+              </div>
+              <div className="betslip-notices max-h-16 overflow-y-auto text-[11px]">
+                {stakeError && <p role="alert" className="font-semibold text-rose-300">{stakeError}</p>}
+                {blockedCombos && <p role="alert" className="font-semibold text-rose-300">Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.</p>}
+                {hasUnavailable && <p role="status" className="font-semibold text-rose-300">Ka kuota të pezulluara. Hiqi nga kuponi ose prit rihapjen e tyre.</p>}
+                {invalidQuote && <p role="alert" className="font-semibold text-rose-300">Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.</p>}
+                {unavailableNotice && <p role="status" className="text-slate-300">{unavailableNotice}</p>}
+              </div>
+              <div className="betslip-quick-stakes grid grid-cols-4 gap-1">
                 {[100, 500, 1000, 5000].map(amount => (
                   <button type="button" key={amount} onClick={() => setStake(String(amount))}
                     className={`border border-tertiary py-1 text-[10px] font-semibold transition-colors ${Number(stake) === amount ? 'bg-[#465870] text-white' : 'bg-[#19232f] text-text-secondary hover:bg-[#424e60] hover:text-white'}`}>
@@ -375,27 +387,20 @@ export default function Betslip() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center justify-between border-t border-tertiary pt-2 text-xs">
-                <span className="text-slate-300">{hasMultipleColumns ? 'Shuma e kthimeve të mundshme' : t('betslip.potential_payout')}:</span>
-                <strong className="font-mono text-base font-bold tabular-nums text-accent-yellow">{invalidQuote ? '—' : potentialPayout.toFixed(2)} Lëk</strong>
+              <div className="flex min-w-0 items-center justify-between gap-2 border-t border-tertiary pt-2 text-xs">
+                <span className="min-w-0 text-slate-300">{hasMultipleColumns ? 'Shuma e kthimeve të mundshme' : t('betslip.potential_payout')}:</span>
+                <strong className="shrink-0 font-mono text-sm font-bold tabular-nums text-accent-yellow">{invalidQuote ? '—' : potentialPayout.toFixed(2)} Lëk</strong>
               </div>
-              {hasMultipleColumns && !columnsOverflow && (
-                <div className="space-y-1 text-[10px] text-text-secondary">
-                  <div className="flex justify-between"><span>Kthimi më i vogël për kolonë, nëse fiton:</span><strong>{Math.min(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
-                  <div className="flex justify-between"><span>Kthimi më i madh për kolonë, nëse fiton:</span><strong>{Math.max(...columnPreviews.map(column => column.payout)).toFixed(2)} Lek</strong></div>
-                  <p>Çdo kolonë vlerësohet veçmas. Mblidhen vetëm kthimet e kolonave fituese; shuma e shfaqur kërkon që të gjitha kolonat të fitojnë.</p>
-                </div>
-              )}
             </div>
-            <div className="grid gap-px bg-[#0b1018] p-px">
+            <div className="betslip-actions grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote || hasUnavailable}
+                <button type="button" data-betslip-place onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote || hasUnavailable}
                   aria-busy={isPlacingBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
                   {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
                 </button>
               ) : (
-                <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Login to Bet</button>
+                <button disabled className="bg-tertiary/60 py-3 text-sm font-semibold text-text-muted">Identifikohu për të vendosur bast</button>
               )}
               <button type="button" onClick={handleBook} disabled={hasMultipleColumns || isPlacingBet || blockedCombos || invalidQuote || hasUnavailable}
                 title={hasMultipleColumns ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
@@ -404,8 +409,8 @@ export default function Betslip() {
               </button>
             </div>
           </div>
-        </>
       )}
+    </div>
 
       {showBookingModal && <BookingModal code={bookingCode} onClose={() => setShowBookingModal(false)} />}
       {placedTicket && <TicketReceipt ticket={placedTicket} onClose={() => setPlacedTicket(null)} />}
@@ -501,6 +506,6 @@ export default function Betslip() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

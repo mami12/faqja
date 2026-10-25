@@ -137,7 +137,7 @@ try {
     'a changed or tampered synthetic quote needs explicit acceptance');
   const total = odds.getOddsForMatches([matchId]).find(r => r.market_key === 'total' && r.outcome_key === 'Over');
   total.price = 1.81;
-  await rejectWithoutMoney(() => placeBet(request()), error => error.code === 'ODDS_CHANGED' && error.newOdds === 3.982,
+  await rejectWithoutMoney(() => placeBet(request()), error => error.code === 'ODDS_CHANGED' && error.newOdds === 3.98,
     'placement recalculates product using current server legs');
   total.price = 1.8;
   total.suspended = true;

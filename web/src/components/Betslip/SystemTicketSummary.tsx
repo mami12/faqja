@@ -1,8 +1,11 @@
 import type { Ticket } from '../../types';
 import { formatOdds } from '../../utils/formatOdds';
+import { useLanguage } from '../../context/LanguageContext';
+import { formatMarketSelectionLabel, formatTicketSelection, translateTicketStatus } from '../../utils/sportsbookLabels';
 
 /** Financial columns belong to one public ticket; never display a joint odd. */
 export default function SystemTicketSummary({ ticket }: { ticket: Ticket }) {
+  const { t } = useLanguage();
   const system = ticket.system;
   if (!system) return null;
   const stakes = system.columns.map(column => column.stake);
@@ -17,8 +20,8 @@ export default function SystemTicketSummary({ ticket }: { ticket: Ticket }) {
         <summary className="cursor-pointer py-1 text-slate-300">Llogaritja sipas kolonave</summary>
         {system.columns.map((column, index) => (
           <div key={column.id} className="mt-1 border-t border-tertiary/60 py-1">
-            <div>#{index + 1} · {column.stake.toFixed(2)} Lëk × {formatOdds(column.totalOdds)} = {column.potentialPayout.toFixed(2)} Lëk · {column.status}</div>
-            <div>{column.lines.map(line => `${line.matchName}: ${line.marketName} ${line.marketLine ?? ''} · ${line.outcomeName}`).join(' + ')}</div>
+            <div>#{index + 1} · {column.stake.toFixed(2)} Lëk × {formatOdds(column.totalOdds)} = {column.potentialPayout.toFixed(2)} Lëk · {translateTicketStatus(column.status, t)}</div>
+            <div>{column.lines.map(line => `${line.matchName}: ${formatMarketSelectionLabel(line.marketName, line.marketLine, t)} · ${formatTicketSelection(line.outcomeName, line.marketName, line.matchName, t, line.outcomeCode, line.marketLine)}`).join(' + ')}</div>
           </div>
         ))}
       </details>

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, useCal
 import { io, type Socket } from 'socket.io-client';
 import type { Match, MatchEvent, OddsDelta } from '../types';
 import { frozenSelectionPrice } from '../../../server/ledger/system-columns.mjs';
+import { mergeMatchFacts, snapshotTime, timestamp } from './matchSync';
 
 /**
  * One shared Socket.IO connection for the whole board.
@@ -26,6 +27,9 @@ export interface LivePatch {
   homeScore?: number;
   awayScore?: number;
   scoreAt?: string;
+  clockAt?: string | null;
+  phaseAt?: string | null;
+  snapshotAt?: string;
   /** Optional team names used by the favorites alert view. */
   homeTeam?: string;
   awayTeam?: string;
@@ -57,6 +61,10 @@ interface LiveFeedValue {
   lockedMatches: Record<string, boolean>;
   combosEnabled: boolean;
   invalidateSelections: (outcomeIds: string[]) => void;
+  /** Changes on a collector snapshot, reconnect or browser resume. */
+  refreshVersion: number;
+  /** REST and push enter the same timestamp-ordered state. */
+  acceptMatches: (matches: Match[]) => void;
 }
 
 export type FeedMode = 'live' | 'idle' | 'waking';
@@ -73,6 +81,8 @@ const EMPTY: LiveFeedValue = {
   lockedMatches: {},
   combosEnabled: true,
   invalidateSelections: () => {},
+  refreshVersion: 0,
+  acceptMatches: () => {},
 };
 
 const LiveFeedContext = createContext<LiveFeedValue>(EMPTY);
@@ -110,6 +120,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const [lockedMatches, setLockedMatches] = useState<Record<string, boolean>>({});
   const [feedMode, setFeedMode] = useState<FeedMode>('live');
   const [combosEnabled, setCombosEnabled] = useState(true);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [rejectedOutcomes,setRejectedOutcomes] = useState<Record<string,number>>({});
   const invalidateSelections = useCallback((ids:string[]) => {
     const at=Date.now();
@@ -118,12 +129,81 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const prevOdds = useRef<Record<string, number>>({});
   const prevOddsAt = useRef<Record<string, number>>({});
   const prevMarketAt = useRef<Record<string, number>>({});
+  const prevMatchAt = useRef<Record<string, number>>({});
+  const prevRiskAt = useRef<Record<string, number>>({});
+
+  const acceptMatches = useCallback((matches: Match[]) => {
+    const patches: Record<string, LivePatch> = {};
+    const deltas: Record<string, OddsDelta> = {};
+    const outcomeLocks: Record<string, boolean> = {}, marketLocks: Record<string, boolean> = {};
+    const matchLocks: Record<string, boolean> = {}, riskLocks: Record<string, boolean> = {};
+    for (const match of matches) {
+      if (!match?.id) continue;
+      const at = snapshotTime(match);
+      const id = String(match.id);
+      patches[id] = compact({
+        status: match.status, currentMinute: match.currentMinute, currentSecond: (match as any).currentSecond,
+        homeScore: match.homeScore, awayScore: match.awayScore, scoreAt: match.scoreAt ?? undefined,
+        clockAt: match.clockAt, phaseAt: match.phaseAt, snapshotAt: match.snapshotAt, updatedAt: match.updatedAt ?? match.snapshotAt ?? '',
+        period: match.period, corners: match.corners, cards: match.cards,
+        marketCount: (match as any).marketCount, isSuspended: match.isSuspended,
+        homeTeam: match.homeTeam, awayTeam: match.awayTeam,
+      });
+      if (at >= (prevMatchAt.current[id] ?? 0)) {
+        prevMatchAt.current[id] = at;
+        matchLocks[id] = match.isSuspended === true;
+      }
+      for (const market of match.markets ?? []) {
+        if (at >= (prevMarketAt.current[market.id] ?? 0)) {
+          prevMarketAt.current[market.id] = at;
+          marketLocks[market.id] = market.status === 'SUSPENDED';
+        }
+        for (const outcome of market.outcomes ?? []) {
+          if (at < (prevOddsAt.current[outcome.id] ?? 0)) continue;
+          prevOddsAt.current[outcome.id] = at;
+          outcomeLocks[outcome.id] = outcome.feedSuspended ??
+            (outcome.status === 'SUSPENDED' && outcome.riskSuspended !== true);
+          if (at >= (prevRiskAt.current[outcome.id] ?? 0)) {
+            prevRiskAt.current[outcome.id] = at;
+            riskLocks[outcome.id] = outcome.riskSuspended === true;
+          }
+          if (!Number.isFinite(outcome.odds) || outcome.odds < 1) continue;
+          prevOdds.current[outcome.id] = outcome.odds;
+          deltas[outcome.id] = { outcomeId: outcome.id, newOdds: outcome.odds, at, direction: 'up', changed: false };
+        }
+      }
+    }
+    setLivePatches(previous => {
+      const next = { ...previous };
+      for (const [id, patch] of Object.entries(patches)) next[id] = mergeMatchFacts(previous[id], patch);
+      return next;
+    });
+    setLockedMatches(previous => ({ ...previous, ...matchLocks }));
+    setLockedMarkets(previous => ({ ...previous, ...marketLocks }));
+    setLockedOutcomes(previous => ({ ...previous, ...outcomeLocks }));
+    setRiskLockedOutcomes(previous => ({ ...previous, ...riskLocks }));
+    setOddsDeltas(previous => ({ ...previous, ...deltas }));
+    setRejectedOutcomes(previous => {
+      const next = { ...previous };
+      for (const [id, refusedAt] of Object.entries(previous)) {
+        if ((deltas[id]?.at ?? 0) >= refusedAt && outcomeLocks[id] === false) delete next[id];
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const socket: Socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
 
-    socket.on('connect', () => setConnected(true));
+    const refresh = () => setRefreshVersion(value => value + 1);
+    socket.on('connect', () => { setConnected(true); refresh(); });
     socket.on('disconnect', () => setConnected(false));
+    // Mobile browsers suspend timers and may miss whole collector cycles. Their
+    // next foreground view must request a fresh authoritative snapshot.
+    const resume = () => { if (document.visibilityState !== 'hidden') refresh(); };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('online', refresh);
 
     // idle mode: the server says when it paused the feed (nobody was on the board) and when it
     // is filling it again, so the board can say "odds are being refreshed" instead of looking
@@ -192,20 +272,29 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       if (Number.isFinite(minute) || phase) {
         setLivePatches(prev => ({
           ...prev,
-          [String(payload.matchId)]: compact({
-            ...prev[String(payload.matchId)],
+          [String(payload.matchId)]: mergeMatchFacts(prev[String(payload.matchId)], compact({
             currentMinute: Number.isFinite(minute) ? minute : undefined,
             period: phase ?? undefined,
-            updatedAt: new Date().toISOString(),
-          }) as LivePatch,
+            clockAt: (payload as any).clockAt,
+            phaseAt: (payload as any).phaseAt,
+            snapshotAt: (payload as any).at,
+            updatedAt: (payload as any).at ?? new Date().toISOString(),
+          }) as LivePatch),
         }));
       }
     });
 
     // Reversible server-side risk suspensions (separate from provider locks).
-    socket.on('risk:locks', (payload: { locks?: Record<string, boolean> }) => {
+    socket.on('risk:locks', (payload: { locks?: Record<string, boolean>; at?: string }) => {
       if (!payload?.locks || typeof payload.locks !== 'object') return;
-      setRiskLockedOutcomes(prev => ({ ...prev, ...payload.locks }));
+      const at = timestamp(payload.at) || Date.now();
+      const locks: Record<string, boolean> = {};
+      for (const [id, locked] of Object.entries(payload.locks)) {
+        if (at < (prevRiskAt.current[id] ?? 0)) continue;
+        prevRiskAt.current[id] = at;
+        locks[id] = locked;
+      }
+      setRiskLockedOutcomes(prev => ({ ...prev, ...locks }));
     });
     socket.on('combos:settings', (payload: {enabled?: boolean}) => {
       if (typeof payload?.enabled === 'boolean') setCombosEnabled(payload.enabled);
@@ -214,6 +303,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     // the whole live board, once per collector cycle
     socket.on('matches:live', (payload: { matches?: any[] }) => {
       useMode(payload); // the first board after a wake also announces the mode
+      refresh(); // membership, including prematch and removals, comes from REST
       const patches: Record<string, LivePatch> = {};
       for (const m of payload?.matches ?? []) {
         if (!m || m.id === undefined || m.id === null) continue;
@@ -229,17 +319,29 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           homeScore: Number.isFinite(home) ? home : undefined,
           awayScore: Number.isFinite(away) ? away : undefined,
           scoreAt: typeof m.scoreAt==='string'?m.scoreAt:undefined,
+          clockAt: m.clockAt,
+          phaseAt: m.phaseAt,
           corners: cornersOf(m.stats),
           cards: cardsOf(m.stats),
           isSuspended: m.suspended === true,
-          updatedAt: new Date().toISOString(),
+          snapshotAt: m.snapshotAt ?? (payload as any).at,
+          updatedAt: m.updatedAt ?? (payload as any).at ?? '',
         }) as LivePatch;
       }
       if (Object.keys(patches).length) {
-        setLivePatches(prev => ({ ...prev, ...patches }));
+        setLivePatches(prev => {
+          const next = { ...prev };
+          for (const [id, patch] of Object.entries(patches)) next[id] = mergeMatchFacts(prev[id], patch);
+          return next;
+        });
         // the board's own view: a match whose every market is locked
         const matchLocks: Record<string, boolean> = {};
-        for (const [id, p] of Object.entries(patches)) matchLocks[id] = p.isSuspended === true;
+        for (const [id, p] of Object.entries(patches)) {
+          const at = snapshotTime(p);
+          if (at < (prevMatchAt.current[id] ?? 0)) continue;
+          prevMatchAt.current[id] = at;
+          matchLocks[id] = p.isSuspended === true;
+        }
         setLockedMatches(prev => ({ ...prev, ...matchLocks }));
       }
     });
@@ -249,27 +351,37 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       const id = info?.match_id ?? info?.matchId;
       if (id === undefined || id === null) return;
 
-      const clock = Number(info.match_time_ms ?? info.matchTimeMs);
+      const at = info.at ?? info.updated_at ?? '';
+      const clockAt = info.clock_at ? new Date(info.clock_at).toISOString() : undefined;
+      const rawClock = info.match_time_ms ?? info.matchTimeMs;
+      const clock = rawClock == null ? NaN : Number(rawClock) +
+        (clockAt ? Math.max(0, timestamp(at) - timestamp(clockAt)) : 0);
       const minute = Number.isFinite(clock) ? Math.floor(clock / 60000) : undefined;
       const second = Number.isFinite(clock) ? Math.floor((clock % 60000) / 1000) : undefined;
       const patch = compact({
+        status: /finish|ended|\bFT\b|after (?:match|penalt)/i.test(info.feed_status ?? '') ? 'ENDED' : undefined,
         currentMinute: minute,
         currentSecond: second,
-        period: info.feed_status ?? null,
+        period: info.feed_status ?? undefined,
         homeScore: info.home_score === null || info.home_score === undefined ? undefined : Number(info.home_score),
         awayScore: info.away_score === null || info.away_score === undefined ? undefined : Number(info.away_score),
-        scoreAt: info.home_score!=null&&info.away_score!=null?new Date().toISOString():undefined,
+        scoreAt: info.score_at ? new Date(info.score_at).toISOString() : undefined,
+        clockAt,
+        phaseAt: info.feed_status_at ? new Date(info.feed_status_at).toISOString() : undefined,
+        isSuspended: typeof info.has_open_odds === 'boolean' ? info.has_open_odds === false : undefined,
         corners: cornersOf(info.stats),
         cards: cardsOf(info.stats),
-        updatedAt: new Date().toISOString(),
+        snapshotAt: at,
+        updatedAt: info.updated_at ? new Date(info.updated_at).toISOString() : at,
       }) as LivePatch;
 
       const key = String(id);
       // the feed's own "this match has no open odds" flag locks every price on it
-      if (typeof info.has_open_odds === 'boolean') {
+      if (typeof info.has_open_odds === 'boolean' && snapshotTime(patch) >= (prevMatchAt.current[key] ?? 0)) {
+        prevMatchAt.current[key] = snapshotTime(patch);
         setLockedMatches(prev => ({ ...prev, [key]: info.has_open_odds === false }));
       }
-      setLivePatches(prev => ({ ...prev, [key]: { ...(prev[key] ?? { updatedAt: patch.updatedAt }), ...patch } }));
+      setLivePatches(prev => ({ ...prev, [key]: mergeMatchFacts(prev[key], patch) }));
       setMatchEvents(prev => [
         ...prev.slice(-49),
         {
@@ -285,6 +397,9 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     socket.on('connect_error', (e: Error) => console.warn('[socket] connect_error:', e.message));
 
     return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('online', refresh);
       socket.close();
     };
   }, []);
@@ -292,8 +407,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LiveFeedValue>(
     () => ({ oddsDeltas, livePatches, matchEvents, connected, feedMode,
       lockedOutcomes:{...lockedOutcomes,...Object.fromEntries(Object.keys(rejectedOutcomes).map(id=>[id,true]))},
-      riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, invalidateSelections }),
-    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, rejectedOutcomes,invalidateSelections],
+      riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, invalidateSelections, refreshVersion, acceptMatches }),
+    [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, rejectedOutcomes,invalidateSelections, refreshVersion, acceptMatches],
   );
 
   return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;

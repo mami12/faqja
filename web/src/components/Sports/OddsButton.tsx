@@ -10,6 +10,7 @@ import { isMarketExpired, isCompletedCombinationOutcome } from '../../utils/mark
 import { isComboMarket } from '../../utils/comboPolicy';
 import { multipliedComboPrice } from '../../../../server/ledger/combo-price.mjs';
 import { formatOdds } from '../../utils/formatOdds';
+import { timestamp } from '../../api/matchSync';
 import { comboOutcomeLegs } from '../../../../server/ledger/combo-feasibility.mjs';
 
 interface Props { match: Match; market: Market; outcome: Outcome; isWide?: boolean; showRawLabel?: boolean; }
@@ -50,7 +51,7 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
     (outcome.id.startsWith('BB|') && currentOdds > 1000);
 
   const label = showRawLabel
-    ? marketSelectionLabel(String(outcome.name || outcome.code || 'Selection'), lang)
+    ? marketSelectionLabel(String(outcome.name || outcome.code || 'Zgjedhje'), lang, market.name, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code, market.line || market.specifier)
     : formatOddsButtonLabel(outcome.name, market.name, market.line || market.specifier, t, `${match.homeTeam} vs ${match.awayTeam}`, outcome.code);
   const scoringTimeLabel = !showRawLabel && /\btime\s+of\s+scoring\b|\bgoal\s+(?:before|after|in|during|until|by|within|between)\b|\b(?:to\s+score|scores?|scoring)\s+(?:before|after|in|during|until|by|within|between)\b/i.test(market.name);
 
@@ -69,15 +70,16 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
   }, [outcome.id, outcome.odds, market.builderLegs, market.builderQuotedAt, oddsDeltas]);
 
   useEffect(() => {
+    if (outcome.id.startsWith('BB|')) return;
     const delta = oddsDeltas[outcome.id];
-    if (delta) {
+    if (delta && (delta.at ?? 0) >= timestamp(outcome.quotedAt)) {
       setCurrentOdds(delta.newOdds);
-      if (delta.changed === false) return;
+      if (delta.changed === false) { setFlashClass(''); return; }
       setFlashClass(delta.direction === 'up' ? 'animate-flash-green' : 'animate-flash-red');
       const timer = setTimeout(() => setFlashClass(''), 1000);
       return () => clearTimeout(timer);
-    }
-  }, [oddsDeltas, outcome.id]);
+    } else { setCurrentOdds(outcome.odds); setFlashClass(''); }
+  }, [oddsDeltas, outcome.id, outcome.odds, outcome.quotedAt]);
 
   const toggle = () => {
     if (isSuspended) return;

@@ -18,13 +18,13 @@ type GameMeta = {
 };
 
 const GAMES: GameMeta[] = [
-  {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 lines · 15 free games · Double Up',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp'},
-  {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 lines · Double Up',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg'},
-  {id:'seven-hot',title:'Seven Hot',subtitle:'20 lines · Double Up',logo:'seven-hot/top.webp',background:'seven-hot/emptyback.jpg'},
+  {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 linja · 15 rrotullime falas · Dyfishim',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp'},
+  {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 linja · Dyfishim',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg'},
+  {id:'seven-hot',title:'Seven Hot',subtitle:'20 linja · Dyfishim',logo:'seven-hot/top.webp',background:'seven-hot/emptyback.jpg'},
   {
     id: 'lucky-clover-x3',
     title: 'Lucky Clover X3',
-    subtitle: '5 lines · Wild x3 · Double Up',
+    subtitle: '5 linja · Simbol zëvendësues x3 · Dyfishim',
     logo: 'lucky-clover-x3/main/top_name.webp',
     background: 'lucky-clover-x3/main/background.webp',
 
@@ -39,7 +39,7 @@ const GAMES: GameMeta[] = [
   {
     id: 'bookofra',
     title: 'Book of Ra Deluxe',
-    subtitle: '10 linja · Book wild · 10 free spins',
+    subtitle: '10 linja · Libri zëvendësues · 10 rrotullime falas',
     logo: 'book-ra/logo-alpha.png',
     background: 'book-ra/background.webp',
   },
@@ -118,7 +118,7 @@ export default function CasinoPage() {
           </div>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Të gjitha lojërat përdorin të njëjtin bilanc me sport betting.
+            Të gjitha lojërat përdorin të njëjtin bilanc me bastet sportive.
           </p>
         </main>
       </div>

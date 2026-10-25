@@ -23,7 +23,7 @@ export default function CasinoFullscreen({children,title,onExit}:{children:React
  const [closing,setClosing]=useState(false),[error,setError]=useState('');
  const exit=()=>{
   if(exiting.current)return;exiting.current=true;setClosing(true);setError('');
-  try{onExit();}catch(e:any){setError(e?.message||'Could not close the game. Try again.');exiting.current=false;setClosing(false);}
+  try{onExit();}catch(e:any){setError(e?.message||'Loja nuk u mbyll. Provo përsëri.');exiting.current=false;setClosing(false);}
  };
  const toggleFullscreen=()=>{
   if(!wantNative.current){
@@ -69,11 +69,11 @@ export default function CasinoFullscreen({children,title,onExit}:{children:React
  return <div className={windowed?'min-h-screen bg-primary':''}>
   <div key="game-stage" className={'casino-game-stage '+(windowed?'casino-game-windowed':portrait?'casino-game-rotated':'')}>
   <div className="casino-game-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-white/20 bg-slate-950 px-2 text-white">
-   <button type="button" onClick={exit} disabled={closing} aria-label="Back to casino"
-    className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold hover:bg-white/10 disabled:opacity-60"><ArrowLeft size={18}/>{closing?'Closing…':'Back'}</button>
+   <button type="button" onClick={exit} disabled={closing} aria-label="Kthehu te kazinoja"
+    className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold hover:bg-white/10 disabled:opacity-60"><ArrowLeft size={18}/>{closing?'Duke mbyllur…':'Kthehu'}</button>
    <span className="truncate text-sm font-bold">{error||title}</span>
-   <button type="button" onClick={toggleFullscreen} aria-label={windowed?'Fullscreen landscape':'Exit fullscreen'} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-2 text-xs hover:bg-white/10">
-    {windowed?<Maximize2 size={18}/>:<Minimize2 size={18}/>}<span>{windowed?'Fullscreen':'Exit fullscreen'}</span>
+   <button type="button" onClick={toggleFullscreen} aria-label={windowed?'Ekran i plotë horizontal':'Dil nga ekrani i plotë'} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-2 text-xs hover:bg-white/10">
+    {windowed?<Maximize2 size={18}/>:<Minimize2 size={18}/>}<span>{windowed?'Ekran i plotë':'Dil nga ekrani i plotë'}</span>
    </button>
   </div>
   <div className="casino-game-content relative min-h-0 flex-1">{children}</div>

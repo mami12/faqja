@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useMemo, useRef } from 'react';
 import { BetSelection } from '../types';
 import { apiClient } from '../api/client';
 import { buildBetslipColumns, MIN_TOTAL_STAKE_CENTS, previewColumnPayouts, splitStakeCents, stakeToCents } from '../utils/betslipColumns';
+import { toggleMarketSelection } from '../../../server/ledger/selection-market.mjs';
 
 interface BetslipContextType {
   selections: BetSelection[];
@@ -39,9 +40,7 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const columnPreviews = useMemo(() => previewColumnPayouts(columns, columnStakes), [columns, columnStakes]);
 
   const addSelection = (s: BetSelection) => {
-    setSelections(previous => previous.some(p => p.outcomeId === s.outcomeId)
-      ? previous.filter(p => p.outcomeId !== s.outcomeId)
-      : [...previous, s]);
+    setSelections(previous => toggleMarketSelection(previous, s));
   };
 
   const removeSelection = (outcomeId: string) => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { AlertTriangle, RotateCcw, Save, ShieldAlert, Plus, Trash2 } from 'lucide-react';
+import {userError} from '../../utils/userError';
 
 type LeaderRule = { minute: number; goals: number; maxOdds: number };
 type LowOddsRule = { minute: number; maxOdds: number };
@@ -23,7 +24,7 @@ const marketChoices: { value: MarketCategory; label: string }[] = [
   {value:'DOUBLE_CHANCE',label:'Shansi i dyfishtë'},
   {value:'BTTS',label:'Shënojnë të dyja ekipet'},
   {value:'TOTAL_GOALS',label:'Totali i golave'},
-  {value:'CORNERS',label:'Kornerat'},
+  {value:'CORNERS',label:'Këndet'},
   {value:'CARDS',label:'Kartonët'},
   {value:'ALL',label:'Të gjitha tregjet'},
 ];
@@ -33,9 +34,9 @@ const scoreChoices: { value: ScoreCondition; label: string }[] = [
   {value:'LEADING',label:'Vetëm kur një ekip kryeson'},
 ];
 const moneyFields: { key: LimitKey; label: string; detail: string }[] = [
-  { key:'maxLiveStake',label:'Shuma maksimale LIVE',detail:'Gjithsej për kërkesë, edhe kur ka shumë kolona' },
-  { key:'maxLivePayout',label:'Pagesa maksimale LIVE',detail:'Shuma e pagesave të mundshme të kolonave LIVE' },
-  { key:'maxMatchExposure',label:'Ekspozimi maksimal për ndeshje',detail:'Shuma konservative e pagesave të mundshme të biletave PENDING për të njëjtën ndeshje' },
+  { key:'maxLiveStake',label:'Shuma maksimale drejtpërdrejt',detail:'Gjithsej për kërkesë, edhe kur ka shumë kolona' },
+  { key:'maxLivePayout',label:'Pagesa maksimale drejtpërdrejt',detail:'Shuma e pagesave të mundshme të kolonave drejtpërdrejt' },
+  { key:'maxMatchExposure',label:'Ekspozimi maksimal për ndeshje',detail:'Shuma konservative e pagesave të mundshme të biletave në pritje për të njëjtën ndeshje' },
 ];
 
 export default function LiveRiskManager() {
@@ -50,7 +51,7 @@ export default function LiveRiskManager() {
     try {
       const { data } = await apiClient.get<{ settings: RiskSettings; defaults: RiskSettings }>('/admin/live-risk');
       setValue(clone(data.settings)); setDefaults(clone(data.defaults));
-    } catch(e: any) { setError(e.response?.data?.message ?? 'Nuk u lexuan parametrat e riskut.'); }
+    } catch(e: any) { setError(userError(e.response?.data?.message ?? e.message,'Nuk u lexuan parametrat e rrezikut.')); }
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
@@ -69,11 +70,11 @@ export default function LiveRiskManager() {
       const {data} = await apiClient.put<{ settings: RiskSettings }>('/admin/live-risk',{settings:value});
       setValue(clone(data.settings));
       setMessage('Parametrat u ruajtën në databazë dhe zbatohen nga serveri.');
-    } catch(e: any){setError(e.response?.data?.message ?? 'Ruajtja dështoi.');}
+    } catch(e: any){setError(userError(e.response?.data?.message ?? e.message,'Ruajtja dështoi.'));}
     finally{setSaving(false);}
   };
 
-  if (loading) return <div className="px-6 py-10 text-text-secondary">Duke ngarkuar Live Risk Manager...</div>;
+  if (loading) return <div className="px-6 py-10 text-text-secondary">Duke ngarkuar menaxhimin e rrezikut...</div>;
   if (!value) return (
     <div className="m-6 space-y-3 text-sm text-rose-300">{error}
       <button className="block rounded bg-secondary px-4 py-2 text-white" onClick={()=>void load()}>Riprovo</button>
@@ -103,14 +104,14 @@ export default function LiveRiskManager() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-tertiary bg-secondary p-4">
         <div>
-          <h3 className="font-bold text-white">Combos / Bet Builder</h3>
-          <p className="mt-1 text-xs text-text-secondary">Aktivizo ose çaktivizo combot me dy zgjedhje brenda së njëjtës ndeshje, për PREMATCH dhe LIVE.</p>
-          <p className="mt-1 text-xs text-text-secondary">Ky opsion ruhet veçmas nga aktivizimi i riskut LIVE. Biletat me disa ndeshje dhe kolonat e sistemit nuk preken.</p>
+          <h3 className="font-bold text-white">Kombinime ndeshjeje</h3>
+          <p className="mt-1 text-xs text-text-secondary">Aktivizo ose çaktivizo kombinimet me dy zgjedhje brenda së njëjtës ndeshje, para ndeshjes dhe drejtpërdrejt.</p>
+          <p className="mt-1 text-xs text-text-secondary">Ky opsion ruhet veçmas nga aktivizimi i rrezikut drejtpërdrejt. Biletat me disa ndeshje dhe kolonat e sistemit nuk preken.</p>
         </div>
         <label className="flex cursor-pointer items-center gap-3 rounded bg-primary px-3 py-2 text-sm text-white">
-          <input type="checkbox" aria-label="Enable / Disable Combos" checked={value.combosEnabled}
+          <input type="checkbox" aria-label="Aktivizo ose çaktivizo kombinimet e ndeshjeve" checked={value.combosEnabled}
             onChange={e=>setValue({...value,combosEnabled:e.target.checked})}/>
-          {value.combosEnabled ? 'Enable Combos' : 'Disable Combos'}
+          {value.combosEnabled ? 'Kombinimet janë aktive' : 'Kombinimet janë joaktive'}
         </label>
       </div>
 
@@ -149,8 +150,8 @@ export default function LiveRiskManager() {
         <section className="space-y-3 rounded-xl border border-tertiary bg-secondary p-4">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold text-white">Të gjitha marketet: koeficientë të ulët</h3>
-              <p className="mt-1 text-xs text-text-secondary">Zbatohet edhe për barazimin (X), golat, kartonët, kornerat dhe zgjedhjet e kombinuara.</p>
+              <h3 className="font-bold text-white">Të gjitha tregjet: koeficientë të ulët</h3>
+              <p className="mt-1 text-xs text-text-secondary">Zbatohet edhe për barazimin (X), golat, kartonët, këndet dhe zgjedhjet e kombinuara.</p>
             </div>
             <button type="button" title="Shto rregull" disabled={value.lowOddsRules.length >= 12}
               className="rounded bg-primary p-2 text-accent-green disabled:opacity-40"
@@ -232,14 +233,14 @@ export default function LiveRiskManager() {
         </div>
         <p className="text-xs text-text-secondary">
           Për të mbyllur vetëm një treg të një ndeshjeje të caktuar, përdor «Ndeshjet dhe kuotat» në administrim.
-          Këto rregulla zbatohen automatikisht për të gjitha ndeshjet LIVE.
+          Këto rregulla zbatohen automatikisht për të gjitha ndeshjet drejtpërdrejt.
         </p>
       </section>
 
       <section className="space-y-3 rounded-xl border border-tertiary bg-secondary p-4">
         <div className="flex items-center gap-2">
           <AlertTriangle size={18} className="text-accent-yellow"/>
-          <h3 className="font-bold text-white">Kufijtë financiarë për bastet LIVE (Lek)</h3>
+          <h3 className="font-bold text-white">Kufijtë financiarë për bastet drejtpërdrejt (Lek)</h3>
         </div>
         <p className="text-xs text-text-secondary">Vlera bosh e çaktivizon vetëm atë kufi. Ekspozimi llogaritet me shumën bruto të të gjitha pagesave të mundshme të skedinave në pritje për çdo ndeshje, prandaj është kufi konservativ.</p>
         <div className="grid gap-4 md:grid-cols-3">

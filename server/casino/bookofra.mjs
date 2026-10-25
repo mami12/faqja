@@ -169,7 +169,7 @@ export function initResponse({ credits, requestId = 1, walletLimits = false }) {
   const grid = randomGrid();
   return {
     balance: { before: money(credits), after: money(credits) },
-    denomination: 1,
+    denomination: walletLimits ? .02 : 1,
     available_actions: ['spin'],
     init: {
       bet: '1', lines: LINES.length, multiplier: 1, currency: 'EUR',
@@ -211,6 +211,7 @@ export function spinResponse({ credits, stake, payout, bet, lines, grid, grading
 
 export function freespinResponse({ credits, payout, bet, lines, grid, grading, left, done, mud, requestId }) {
   const total = money(payout).toFixed(2);
+  const freespins={left,done,add:0,mud,wins:{total,win_before_chain:0},type:'freespins'};
   return {
     balance: { before: money(credits), after: money(credits) },
     denomination: 1,
@@ -222,13 +223,10 @@ export function freespinResponse({ credits, payout, bet, lines, grid, grading, l
       // stays disabled, and the type must be the free-spin enum.
       type: 'freespin', next_request_id: (Number(requestId) || 0) + 1,
       symbols: symbolMatrix(grid),
-      wins: { line_wins: grading.line_wins, total },
+      wins: { line_wins: grading.line_wins, total: money(grading.total).toFixed(2) },
+      freespins,
     },
-    freespins: {
-      left, done, add: 0, mud,
-      wins: { total, win_before_chain: 0 },
-      type: 'freespins',
-    },
+    freespins,
   };
 }
 
@@ -425,6 +423,8 @@ export function createBookOfRaRealRouter(dependencies={}){
         const fs=await bookOfRaFreeState(user.id);
         if(Number(fs?.left_spins)>0){
           const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1,walletLimits:true});
+          init.denomination=Number(fs.paid_denomination||1);
+          init.init.bet=String(Number(fs.paid_bet||1));init.init.lines=Number(fs.paid_lines||LINES.length);
           init.init.currency='LEK';init.available_actions=['initfreespin'];
           return res.json(init);
         }
@@ -438,8 +438,11 @@ export function createBookOfRaRealRouter(dependencies={}){
         const fs=await bookOfRaFreeState(user.id);
         if(!fs)throw fault(409,'NO_FREE_SPINS');
         const symbols=fs.paid_result?.symbols??symbolMatrix(randomGrid());
+        const init=initResponse({credits:Number(user.balance),requestId:id==null?1:id+1,walletLimits:true});
+        init.denomination=Number(fs.paid_denomination||1);
+        init.init.bet=String(Number(fs.paid_bet||1));init.init.lines=Number(fs.paid_lines||LINES.length);
         return res.json({
-          ...initResponse({credits:Number(user.balance),requestId:id==null?1:id+1,walletLimits:true}),
+          ...init,
           available_actions:['freespin'],
           initfreespin:{
             symbols,

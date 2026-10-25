@@ -11,7 +11,9 @@ export function casinoStakeCents(amount) {
   return cents;
 }
 
-export const CT_LINE_BETS = [1,2,3,4,5,6,8,10,12,15,20,24,30,40,50,60,80,100,200,250,500,1000,2000,2500,5000,10000,12500,20000,25000];
+// With the fixed native wallet unit these are total stakes of .20, .40, 1,
+// 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2500 and 5000 ALL.
+export const CT_LINE_BETS = [1,2,5,10,25,50,100,250,500,1000,2500,5000,12500,25000];
 export function walletCtDenoms(lines) {
   // One credit unit keeps every native menu combination inside the total limits.
   // Twenty-five Viking lines require a sub-cent unit; the wallet is still cents.

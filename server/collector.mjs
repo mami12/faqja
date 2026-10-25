@@ -8,6 +8,7 @@ import { marketColumn } from './odds.mjs';
 import { isHandicapOfferMarket } from './market-policy.mjs';
 import { isResultBttsMarket } from './ledger/result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket } from './ledger/mixed-combos.mjs';
+import { liveBoardFacts } from './feed-sync.mjs';
 
 /** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
@@ -399,7 +400,9 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
       (clockAt === null ? 0 : Math.max(0, Math.floor((now - clockAt) / 60000)))
     : null;
   const feedPhase = phaseFromStatus(row.feed_status);
-  const phase = feedPhase ?? derived.phase;
+  // A kickoff-based clock is an estimate, never evidence that a listed LIVE
+  // fixture finished (delays, extra time and long stoppages are common).
+  const phase = feedPhase ?? (row.service === 'LIVE' && derived.phase === 'FT' ? '2H' : derived.phase);
   const clockStale = clockAt === null || now - clockAt > STALE_CLOCK_MS;
 
   let minute = anchoredMinute ?? derived.minute;
@@ -435,6 +438,7 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     minuteSource,
     clockAt: row.clock_at ? new Date(row.clock_at).toISOString() : null,
     scoreAt: row.score_at ? new Date(row.score_at).toISOString() : null,
+    phaseAt: row.feed_status_at ? new Date(row.feed_status_at).toISOString() : null,
     feedStatus: row.feed_status ?? null,
     hasOpenOdds: row.has_open_odds ?? null,
     watchUrl: row.broadcast_url ?? null,
@@ -448,11 +452,12 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,
     isHot: row.is_hot === true,
-    suspended: markets.length > 0 && markets.every((m) => m.suspended),
+    suspended: oddsClosed || (markets.length > 0 && markets.every((m) => m.suspended)),
     hasSuspended: markets.some((m) => m.suspended),
     marketCount: markets.length,
     markets,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+    snapshotAt: new Date(now).toISOString(),
   };
 }
 
@@ -491,21 +496,18 @@ export function startCollector({ io } = {}) {
         const c = liveClock(r.start_at, now);
         r.live_minute = c.minute;
         r.phase = c.phase;
-        r.status = c.status;
+        r.status = 'live';
 
         // Kickoff + 105 minutes is only an approximation of full time: a delayed kickoff, a
         // long break or heavy stoppage makes it say "finished" while the feed is still
         // reporting the match in play. That status is what hid the match from the board and
         // dropped it from the push subscription, so its minute and its prices froze and the
         // match seemed to vanish around 70'. Only the feed ends a match it still reports.
-        if (c.status === 'ended') {
+        if (c.phase === 'FT') {
           const known = await getMatchById(r.match_id);
-          const clockAt = known?.clock_at ? new Date(known.clock_at).getTime() : null;
-          const inPlay = clockAt !== null && now - clockAt <= config.feedEvidenceMs;
-          if (inPlay && phaseFromStatus(known.feed_status) !== 'FT') {
-            r.status = 'live';
-            r.phase = phaseFromStatus(known.feed_status) ?? c.phase;
-          }
+          const confirmedPhase = phaseFromStatus(known?.feed_status);
+          if (confirmedPhase === 'FT') r.status = 'ended';
+          r.phase = confirmedPhase ?? '2H';
         }
       }
 
@@ -527,7 +529,7 @@ export function startCollector({ io } = {}) {
         const liveRows = await getMatches({ service: 'LIVE', limit: 500 });
         const matches = await withOdds(liveRows, now);
         const counts = await getCounts();
-        io.emit('matches:live', { at: state.syncedAt, counts, matches });
+        io.emit('matches:live', { at: state.syncedAt, counts, matches: liveBoardFacts(matches) });
         io.emit('meta', {
           ...counts,
           at: state.syncedAt,

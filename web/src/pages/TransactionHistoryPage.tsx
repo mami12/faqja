@@ -8,6 +8,8 @@ import { apiClient } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { toDateRange } from '../utils/dateFilters';
 import { formatOdds } from '../utils/formatOdds';
+import {transactionLabel,transactionDescription} from '../utils/accountLabels';
+import {userError} from '../utils/userError';
 
 interface Transaction {
   id: string;
@@ -25,24 +27,6 @@ interface TransactionSummary {
   losses: number;
   net: number;
 }
-
-const TYPE_LABELS: Record<string, string> = {
-  DEPOSIT: 'Depozitim',
-  WITHDRAWAL: 'Tërheqje',
-  BET_PLACED: 'Bast i vendosur',
-  CASINO_SPIN: 'Rrotullim kazinoje',
-  CASINO_WIN: 'Fitim kazinoje',
-  BET_WON: 'Bast fitues',
-  BET_REFUND: 'Rimbursim basti',
-  TICKET_REVERT: 'Anulim bilete',
-  MANAGER_PLAYER_FUNDING: 'Fonde dhënë lojtarit',
-  MANAGER_PLAYER_RETURN: 'Fonde të kthyera nga lojtari',
-  MANAGER_COMMISSION_DEBIT: 'Komision i zbritur',
-  MANAGER_COMMISSION_REFUND: 'Komision i kthyer',
-  MANAGER_PAYOUT_DEDUCTION: 'Pagesë fitimi',
-  MANAGER_LOST_COLLECTED: 'Fonde nga bast humbës',
-};
-
 
 type BetFilter = 'ALL' | 'WON' | 'LOST' | 'PENDING' | 'CANCELLED' | 'REJECTED';
 type RejectedAttempt = {
@@ -248,7 +232,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                         </summary>
                         {entry.kind === 'REJECTED' ? (
                           <div className="mt-3 border-t border-tertiary/60 pt-2 text-xs text-rose-200">
-                            Arsyeja: {entry.reason}
+                            Arsyeja: {userError(entry.reason,'Kërkesa për bast nuk u pranua.')}
                           </div>
                         ) : (
                           <div className="mt-3 space-y-2 border-t border-tertiary/60 pt-2">
@@ -300,7 +284,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <div className="font-bold text-white text-xs">
-                                  {TYPE_LABELS[transaction.type] ?? transaction.type}
+                                  {transactionLabel(transaction.type)}
                                 </div>
                                 {user?.role !== 'PLAYER' && (
                                   <div className="text-[11px] text-text-secondary font-medium">
@@ -320,7 +304,7 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
 
                             {transaction.description && (
                               <div className="text-[11px] text-text-secondary bg-primary/50 px-2 py-1 border-l-2 border-tertiary">
-                                {transaction.description}
+                                {transactionDescription(transaction.description,transaction.type)}
                               </div>
                             )}
                           </div>
@@ -348,8 +332,8 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                                 {new Date(transaction.createdAt).toLocaleString('sq-AL')}
                               </td>
                               {user?.role !== 'PLAYER' && <td className="p-3 font-semibold">{transaction.username}</td>}
-                              <td className="p-3 font-semibold text-xs">{TYPE_LABELS[transaction.type] ?? transaction.type}</td>
-                              <td className="p-3 text-xs text-text-secondary">{transaction.description || '—'}</td>
+                              <td className="p-3 font-semibold text-xs">{transactionLabel(transaction.type)}</td>
+                              <td className="p-3 text-xs text-text-secondary">{transaction.description ? transactionDescription(transaction.description,transaction.type) : '—'}</td>
                               <td className={`p-3 text-right font-mono font-black tabular-nums ${transaction.amount >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>
                                 {transaction.amount > 0 ? '+' : ''}{transaction.amount.toFixed(2)} Lëk
                               </td>

@@ -50,7 +50,12 @@ export interface Match {
   awayScore?: number;
   /** Timestamp of provider-confirmed score, null if score is only a placeholder. */
   scoreAt?: string | null;
+  clockAt?: string | null;
+  phaseAt?: string | null;
+  updatedAt?: string;
+  snapshotAt?: string;
   currentMinute?: number;
+  currentSecond?: number;
   isSuspended: boolean;
   isSimulated?: boolean;
   tournament?: Tournament & { category?: Category & { sport?: Sport } };
@@ -92,6 +97,7 @@ export interface Outcome {
   /** Provider's original outcome key; needed for six-way Result + BTTS combinations. */
   code?: string;
   odds: number;
+  quotedAt?: string | null;
   isWinner?: boolean;
   status: 'ACTIVE' | 'SUSPENDED' | 'SETTLED' | 'VOID';
   /** Real provider/admin lock, independent from server risk policy. */

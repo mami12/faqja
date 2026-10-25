@@ -26,6 +26,7 @@ import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } f
 import { liveClock } from './minute.mjs';
 import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
+import { freshFeed, freshSocketHeaders, liveBoardFacts } from './feed-sync.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
 import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
 import { createVikingsRouter } from './casino/vikings-ct-router.mjs';
@@ -62,6 +63,7 @@ oddsStore.configure({ pinProvider: config.oddsProviderPin });
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '4mb' }));
+app.use(['/api', '/app/api'], freshFeed);
 
 const requireToken = (req, res, next) => {
   if (!config.ingestToken) return next();
@@ -398,7 +400,7 @@ async function broadcastLiveRiskLocks(matchId, matchRow) {
   for (const key of next) if (!previous.has(key)) locks[key] = true;
   if (next.size) publishedRiskLocks.set(id, next);
   else publishedRiskLocks.delete(id);
-  if (Object.keys(locks).length) io.emit('risk:locks', { matchId: id, locks });
+  if (Object.keys(locks).length) io.emit('risk:locks', { matchId: id, at: new Date().toISOString(), locks });
 }
 
 // Admin edits (and changes made on another instance) immediately re-evaluate
@@ -436,6 +438,8 @@ async function broadcastOdds(changed) {
       matchId,
       at: new Date().toISOString(),
       minute: Number.isFinite(minute) ? minute : undefined,
+      clockAt: row.clock_at ? new Date(row.clock_at).toISOString() : undefined,
+      phaseAt: row.feed_status_at ? new Date(row.feed_status_at).toISOString() : undefined,
       phase: row.phase ?? clock.phase ?? null,
       markets: buildMarkets(toDbOddsShape(list)),
     });
@@ -483,7 +487,7 @@ async function applyInfoFromFeed(info) {
         console.error('[settle] failed to preserve provider FT match', updated.match_id, e.message);
       }
     }
-    io?.emit('match:info', { ...enriched, ...updated, stats: statsFromRow(updated) });
+    io?.emit('match:info', { ...enriched, ...updated, at: new Date().toISOString(), stats: statsFromRow(updated) });
     await broadcastLiveRiskLocks(info.matchId, updated);
   }
   return updated;
@@ -721,6 +725,7 @@ const io = new SocketServer(server, {
   cors: { origin: corsOrigin },
   path: '/socket.io',
 });
+io.engine.on('headers', freshSocketHeaders);
 
 io.on('connection', async (socket) => {
   if (shuttingDown) return socket.disconnect(true);
@@ -744,7 +749,7 @@ io.on('connection', async (socket) => {
       at: new Date().toISOString(),
       counts,
       mode: getFeedMode(),
-      matches: await withOdds(rows),
+      matches: liveBoardFacts(await withOdds(rows)),
     });
   } catch (e) {
     socket.emit('server:error', { message: e.message });

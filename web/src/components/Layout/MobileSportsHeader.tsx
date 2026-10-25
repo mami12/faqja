@@ -7,7 +7,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useBetslip } from '../../context/BetslipContext';
 import { useFavorites } from '../../context/FavoritesContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { countBetslipMatches } from '../../utils/betslipMatchCount';
 
 type Panel = 'account' | 'notifications' | null;
@@ -25,7 +24,6 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
   const { user, logout } = useAuth();
   const { selections } = useBetslip();
   const { notifications, clearAllNotifications, dismissNotification } = useFavorites();
-  const { lang, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const [panel, setPanel] = useState<Panel>(null);
   const matchCount = countBetslipMatches(selections);
@@ -120,14 +118,6 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Ticket size={16}/> Biletat e mia</button>
                 <button type="button" onClick={() => go('/transactions')}
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-[#39495e]"><Bell size={16}/> Transaksionet</button>
-                <label className="flex items-center justify-between gap-2 rounded px-3 py-2">
-                  Gjuha
-                  <select value={lang} onChange={e => setLanguage(e.target.value as typeof lang)}
-                    className="border border-[#64748b] bg-[#152131] px-2 py-1 text-xs text-white">
-                    <option value="al">Shqip</option><option value="en">English</option>
-                    <option value="de">Deutsch</option><option value="fr">Français</option>
-                  </select>
-                </label>
                 <button type="button" onClick={() => {setPanel(null);logout();navigate('/login');}}
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-rose-300 hover:bg-[#39495e]"><LogOut size={16}/> Dil nga llogaria</button>
               </div>

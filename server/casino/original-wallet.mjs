@@ -83,5 +83,5 @@ export function createOriginalWalletRouter({store=createOriginalWalletStore(),au
 export const originalFrameShellRouter=Router();
 originalFrameShellRouter.get('/:id/index-real.html',safe(async(req,res,next)=>{
  if(!['sizzling','bookofra'].includes(req.params.id))return res.sendStatus(404);
- res.set('Cache-Control','no-store').type('html').send(shell(`casino-original/${req.params.id}/index-real.html`,`/app/casino-original/${req.params.id}/`));
+ res.set('Cache-Control','no-store').type('html').send(shell(`casino-original/${req.params.id}/index-real.html`,`/app/casino-original/${req.params.id}/`,{game:req.params.id}));
 }));

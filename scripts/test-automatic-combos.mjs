@@ -71,12 +71,14 @@ for (const pair of [
   [leg('BTTS', 'Maybe'), over], [result, leg('TOTAL', 'Over', '2.7')],
 ]) assert.equal(isCompatibleComboPair(pair), false, JSON.stringify(pair));
 
-assert.equal(multipliedComboPrice([{ price: 4.31 }, { price: 2.41 }]), 10.3871);
-assert.equal(multipliedComboPrice([{ outcome: { odds: 1.23456 } }, { outcome: { odds: 2.34567 } }]), 2.896,
+assert.equal(multipliedComboPrice([{ price: 4.31 }, { price: 2.41 }]), 10.39);
+assert.equal(multipliedComboPrice([{ outcome: { odds: 1.23456 } }, { outcome: { odds: 2.34567 } }]), 2.90,
   'constituent prices freeze at the same four decimal places used by stored ticket lines');
-assert.equal(multipliedComboPrice([{ price: 1.0001 }, { price: 1.5 }]), 1.5002,
-  'an exact half at the fifth decimal rounds half-up to four decimal places');
-assert.equal(multipliedComboPrice([{ price: 2.10005 }, { price: 2 }]), 4.2002,
+assert.equal(multipliedComboPrice([{ price: 1.0001 }, { price: 1.5 }]), 1.50,
+  'the final offered combo quote uses only two decimals');
+assert.equal(multipliedComboPrice([{ price: 1.25 }, { price: 1.7 }]), 2.13,'a half-cent product rounds half-up');
+assert.equal(multipliedComboPrice([{ price: 4.31 }, { price: 5.16 }]), 22.24,'long products become the two-decimal quote accepted by the wallet');
+assert.equal(multipliedComboPrice([{ price: 2.10005 }, { price: 2 }]), 4.20,
   'source prices also round exact decimal halves before the product is calculated');
 assert.equal(multipliedComboPrice([{ price: 20 }, { price: 50 }]), COMBO_PRICE_LIMIT);
 for (const parts of [[], [{price:2}], [{price:2},{price:3},{price:4}],
@@ -113,7 +115,7 @@ const eligible = await decorate(projected);
 assert.ok(eligible.length > 10);
 const offered = eligible.find(m => m.outcomes[0].id === builderId(projected.id, baseTemplate.id));
 assert.ok(offered);
-assert.equal(offered.outcomes[0].odds, 8.189);
+assert.equal(offered.outcomes[0].odds, 8.19);
 assert.deepEqual(offered.builderLegs, [
   { marketId: '1X2:', outcomeId: '1X2::1', odds: 4.31 },
   { marketId: 'Total:2.5', outcomeId: 'Total:2.5:Over', odds: 1.9 },
