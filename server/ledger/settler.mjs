@@ -295,6 +295,12 @@ export async function recalcTicket(ticketId, { database = pool } = {}) {
       }
     }
 
+    // Freeze fully graded results in the same transaction as their payment.
+    // A recovered payment must not leave its accepted score open to a later
+    // conflicting provider frame because the original match pass was aborted.
+    await client.query(`update app_match_result r set settled_at=coalesce(r.settled_at,now())
+      where r.match_id in (select match_id from app_ticket_line where ticket_id=$1)
+        and not exists(select 1 from app_ticket_line l where l.match_id=r.match_id and l.status='PENDING')`, [ticketId]);
     await client.query('commit');
     return { ticketId, status, payout };
   } catch (e) {
@@ -345,9 +351,33 @@ export async function settleMatch(matchId) {
   return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
+/** Line grading commits before ticket payment. A crash or transient database
+ * error in between must not strand an otherwise resolved ticket forever.
+ * Reuse the existing locked, idempotent payment transaction for every retry.
+ */
+export async function recoverResolvedTickets() {
+  const { rows } = await query(`select t.id from app_ticket t
+    where t.status='PENDING'
+      and exists(select 1 from app_ticket_line l where l.ticket_id=t.id)
+      and not exists(select 1 from app_ticket_line l where l.ticket_id=t.id and l.status='PENDING')
+    order by t.placed_at,t.id`);
+  const recovered = [];
+  for (const { id } of rows) {
+    try {
+      const ticket = await recalcTicket(id);
+      if (ticket) recovered.push(ticket);
+    } catch (error) { console.error('[settle] resolved ticket', id, 'retry failed:', error.message); }
+  }
+  return recovered;
+}
+
 /** one pass: store newly finished results, then settle everything that can be settled */
 export async function settleAll() {
-  const captured = await captureFinishedMatches();
+  let captured = 0;
+  // A malformed/unavailable catalogue must not block already stored results or
+  // recovery of payments whose line grading succeeded in an earlier pass.
+  try { captured = await captureFinishedMatches(); }
+  catch (error) { console.error('[settle] result capture failed:', error.message); }
   const ids = await unsettledMatchIds();
 
   const results = [];
@@ -355,12 +385,14 @@ export async function settleAll() {
     try { results.push(await settleMatch(id)); }
     catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
   }
+  const recovered = await recoverResolvedTickets();
 
   return {
     captured,
     matches: ids.length,
     lines: results.reduce((acc, r) => acc + r.settled, 0),
-    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0),
+    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + recovered.length,
+    recovered: recovered.length,
   };
 }
 

@@ -58,6 +58,8 @@ try {
   await rejected(() => applyRows([{ ...rows[1], price: 2.11 }]), error => error.code === 'ODDS_CHANGED');
   await rejected(() => { getOddsForMatches([1101]).find(row => row.market_key === 'total').updated_at = new Date(0); }, /rifreskohen/);
   await rejected(() => { getById(1101).status = 'ended'; }, /përfunduar/);
+  await rejected(() => { getById(1101).feed_status = 'Full Time'; }, /përfunduar/);
+  getById(1101).feed_status = null;
   await rejected(() => setFeedMode(FEED_WAKING), /rifreskohen/);
   await rejected(() => snapshot().match.set('1101', { suspended: true }), /administrata/);
   snapshot().match.clear();

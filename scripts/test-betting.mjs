@@ -7,8 +7,8 @@ const root = fileURLToPath(new URL('../',import.meta.url));
 const suites = [
   'test-auth-refresh-browser.mjs',
   'test-admin-match-reads.mjs', 'test-admin-match-control-browser.mjs',
-  'test-language-browser.mjs', 'test-match-order.mjs', 'test-user-removal.mjs',
-  'test-match-pages.mjs',
+  'test-mobile-sportsbar.mjs', 'test-language-browser.mjs', 'test-match-order.mjs', 'test-user-removal.mjs',
+  'test-match-pages.mjs', 'test-pending-results.mjs', 'test-subscribe-plan.mjs',
   'test-ticket-pricing.mjs', 'test-manager-finance.mjs', 'test-player-control-policy.mjs',
   'test-live-risk.mjs', 'test-live-money-risk.mjs', 'test-result-btts.mjs',
   'test-mixed-combos.mjs', 'test-bet-builder-admin.mjs', 'test-bet-builder.mjs',

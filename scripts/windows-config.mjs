@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { localDatabaseDirectory } from '../server/database-location.mjs';
 
 const defaultRoot = fileURLToPath(new URL('../', import.meta.url));
 const placeholder = /REPLACE_WITH|PROJECT_REF|change-me|your-random-secret-token|faqja-dev-secret/i;
@@ -42,9 +43,11 @@ export async function ensureWindowsEnv({ rootDir = defaultRoot } = {}) {
 
 /** .env wins over inherited settings; values are data, never shell commands. */
 export function parseWindowsConfig(source, baseEnv = {}) {
+  const saved = parseEnv(source);
   const env = {
     NODE_ENV: 'production', PORT: '3000', SEED_DEFAULT_ACCOUNTS: 'false',
-    ...baseEnv, ...parseEnv(source),
+    ...baseEnv, ...saved,
+    DB_DRIVER: saved.DB_DRIVER ?? 'postgres',
   };
   const errors = [];
   const port = Number(env.PORT);
@@ -55,7 +58,18 @@ export function parseWindowsConfig(source, baseEnv = {}) {
   if (env.SEED_DEFAULT_ACCOUNTS !== 'false') {
     errors.push('SEED_DEFAULT_ACCOUNTS must be false when using the existing database.');
   }
-  try {
+  const driver = (env.DB_DRIVER ?? 'postgres').trim().toLowerCase();
+  env.DB_DRIVER = driver;
+  if (!['postgres', 'local'].includes(driver)) errors.push('DB_DRIVER must be postgres or local.');
+  if (driver === 'local') {
+    // Explicit local mode cannot inherit or fall back to a cloud connection.
+    env.DATABASE_URL = '';
+    const directory = env.LOCAL_DATABASE_DIR || 'data/database';
+    try { localDatabaseDirectory(directory); } catch (error) { errors.push(error.message); }
+    env.LOCAL_DATABASE_DIR = directory;
+    env.DB_INIT_STRICT ??= 'true';
+    env.LOG_RAW_FRAMES ??= 'false';
+  } else try {
     const database = new URL(env.DATABASE_URL);
     if (!['postgres:', 'postgresql:'].includes(database.protocol)
       || !database.hostname || !database.username || !database.password

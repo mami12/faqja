@@ -35,7 +35,7 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
   const go = (path: string) => { setPanel(null); navigate(path); };
 
   return (
-    <div className="relative z-30 shrink-0 md:hidden">
+    <div data-mobile-sports-header className="relative z-30 shrink-0 md:hidden">
       <header className="flex h-[53px] items-center justify-between bg-[#182b4d] text-white">
         <div className="flex min-w-0 items-center gap-1">
           <button type="button" aria-label={t('sports.open_leagues')} onClick={() => {setPanel(null);onOpenLeagues();}}

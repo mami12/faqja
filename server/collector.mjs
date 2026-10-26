@@ -355,7 +355,7 @@ export function phaseFromStatus(status) {
   if (/break|half.?time|interval|\bht\b/.test(s)) return 'HT';
   if (/(^|[^a-z])h1\b|\b1st|first half/.test(s)) return '1H';
   if (/(^|[^a-z])h2\b|\b2nd|second half/.test(s)) return '2H';
-  if (/finish|ended|\bft\b|after (match|penalt)/.test(s)) return 'FT';
+  if (/finish|ended|full.?time|\bft\b|after (match|penalt)/.test(s)) return 'FT';
   if (/not.?started|prepar|upcoming|scheduled/.test(s)) return 'pre';
   return null;
 }
@@ -416,11 +416,11 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
   const clock = {
     minute,
     phase,
-    status: row.service === 'LIVE' ? (feedPhase === 'FT' ? 'ended' : 'live') : derived.status,
+    status: feedPhase === 'FT' ? 'ended' : row.service === 'LIVE' ? 'live' : derived.status,
   };
   // When the feed reports no open odds, every price is unbettable — hide markets entirely
   // so the board never shows placeholder prices (41.00 / 41.00 / 1.29) as bettable odds.
-  const oddsClosed = row.has_open_odds === false;
+  const oddsClosed = row.has_open_odds === false || feedPhase === 'FT';
   const knownMarkets = buildMarkets(oddsRows);
   const markets = oddsClosed ? [] : knownMarkets;
 

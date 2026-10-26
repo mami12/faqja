@@ -10,12 +10,12 @@ import { getMatches, getMatchById } from '../matches.mjs';
 
 /**
  * Do not settle bets from a made-up 0-0 or a kickoff timer. A final score
- * requires a genuine LIVE match score observed from the provider (score_at)
- * and either a definitive final feed phase or a match marked ended.
+ * requires a genuine score observed from the provider (score_at) and a
+ * definitive final feed phase. The catalogue's service can lag behind play.
  * The absence of evidence deliberately leaves the ticket pending for review.
  */
 export const isFinished = (row) => {
-  if (!row || String(row.service ?? '').toUpperCase() !== 'LIVE') return false;
+  if (!row) return false;
   if (!row.score_at || row.home_score == null || row.away_score == null) return false;
   const score = [Number(row.home_score), Number(row.away_score)];
   if (!score.every(n => Number.isInteger(n) && n >= 0)) return false;
@@ -113,18 +113,18 @@ export async function captureFinishedMatches() {
 
   // Specifically check matches from any currently pending ticket lines
   const pendingLines = await query(`select distinct match_id from app_ticket_line
-    where status = 'PENDING' order by match_id limit 2000`);
+    where status = 'PENDING' order by match_id`);
   const pendingMatchIds = new Set(pendingLines.rows.map((r) => Number(r.match_id)));
 
-  const candidateMatches = [...rows];
+  const candidateMatches = new Map(rows.map(row => [Number(row.match_id), row]));
   for (const matchId of pendingMatchIds) {
-    if (!candidateMatches.some((r) => Number(r.match_id) === matchId)) {
+    if (!candidateMatches.has(matchId)) {
       const match = await getMatchById(matchId);
-      if (match) candidateMatches.push(match);
+      if (match) candidateMatches.set(matchId, match);
     }
   }
 
-  const finished = candidateMatches.filter(
+  const finished = [...candidateMatches.values()].filter(
     (r) => isFinished(r) && r.home_score !== null && r.away_score !== null,
   );
   if (!finished.length) return 0;
@@ -250,8 +250,9 @@ export async function unsettledMatchIds() {
     `select distinct l.match_id
        from app_ticket_line l
        join app_match_result r on r.match_id = l.match_id
-      where l.status = 'PENDING'
-      limit 200`,
+       join app_ticket t on t.id = l.ticket_id
+      where l.status = 'PENDING' and t.status = 'PENDING'
+      order by l.match_id`,
   );
   return res.rows.map((r) => r.match_id);
 }

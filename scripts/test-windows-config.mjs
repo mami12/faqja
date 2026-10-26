@@ -51,6 +51,17 @@ try {
     assert(invalid.errors.some(error => error.includes(key)), `${key} must be rejected`);
     assert(!invalid.errors.some(error => error.includes(value)), 'Never print a secret or invalid configuration value');
   }
+  const local = parseWindowsConfig(ready+'\nDB_DRIVER=local\nDATABASE_URL=\nLOCAL_DATABASE_DIR=data/database\n');
+  assert.deepEqual(local.errors, []);
+  assert.equal(local.env.DATABASE_URL, '');
+  assert.equal(local.env.DB_INIT_STRICT, 'true');
+  assert.equal(local.env.LOG_RAW_FRAMES, 'false');
+  const inheritedCloud = parseWindowsConfig(ready+'\nDB_DRIVER=local\n', {DATABASE_URL:database});
+  assert.equal(inheritedCloud.env.DATABASE_URL, '', 'Local mode never falls back to inherited cloud credentials');
+  for(const directory of ['memory://volatile','web/public/database','docs/database','.git/database','.']){
+    assert.ok(parseWindowsConfig(ready+'\nDB_DRIVER=local\nLOCAL_DATABASE_DIR='+directory+'\n').errors.some(error=>error.includes('LOCAL_DATABASE_DIR')));
+  }
+  assert.ok(parseWindowsConfig(ready+'\nDB_DRIVER=unknown\n').errors.some(error=>error.includes('DB_DRIVER')));
   const quoted = parseWindowsConfig(`${ready}\nMATCH_CLOCK_OFFSET_MIN=-3\nEXTRA_SETTING="some $literal & value" # comment\n`);
   assert.deepEqual(quoted.errors, []);
   assert.equal(quoted.env.EXTRA_SETTING, 'some $literal & value', 'Values are not shell-evaluated');

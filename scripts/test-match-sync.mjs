@@ -43,6 +43,7 @@ const longMatch=serializeMatch(row,[],now);
 assert.equal(longMatch.status,'live','a long/delayed upstream live match does not end on elapsed kickoff time');
 assert.equal(longMatch.phase,'2H','estimated FT must not hide ongoing markets');
 assert.equal(serializeMatch({...row,feed_status:'Finished'},[],now).status,'ended','provider-confirmed full time remains terminal');
+assert.equal(serializeMatch({...row,service:'PREMATCH',feed_status:'Full Time'},[],now).status,'ended','provider full time closes even a stale prematch catalog classification');
 assert.equal(serializeMatch({...row,has_open_odds:false},[],now).suspended,true,'a closed board cannot unlock the last odds after reconnect');
 const nativeMarket={match_id:7,market_key:'result',market_name:'Full Time Result',outcome_key:'1',outcome_name:'1',price:2,line:'',suspended:false};
 const client=toClientMatch(serializeMatch(row,[nativeMarket],now));

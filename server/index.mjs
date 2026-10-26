@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
 import { staticCacheHeaders } from './static-cache.mjs';
 import { config, dbTarget, dbTargetLabel, dbErrorHint } from './config.mjs';
-import { initSchema, dbHealth, getOddsHistory, getOddsForMatches as getDbOddsForMatches, recentRawFrames, closePool, logRawFrame } from './db.mjs';
+import { initSchema, dbHealth, getOddsHistory, getOddsForMatches as getDbOddsForMatches, recentRawFrames, closePool, logRawFrame, query } from './db.mjs';
 import { initLedgerSchema } from './ledger/store.mjs';
 import { purgeDeletedPlayerHistory } from './ledger/user-removal.mjs';
 import * as overrides from './ledger/overrides.mjs';
@@ -15,6 +15,7 @@ import { ledgerRouter } from './ledger/routes.mjs';
 import { adminRouter } from './ledger/admin.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import { isFinished, archiveFinishedMatch } from './ledger/results.mjs';
+import { createPendingResultTracker } from './pending-results.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
   getSubscriptionIds, getFeedFreshness, matchStats, boostMatch,
@@ -29,7 +30,7 @@ import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
 import { freshFeed, freshSocketHeaders, liveBoardFacts } from './feed-sync.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
-import { createIdleMonitor, getFeedMode, setFeedMode, feedIsStopped } from './idle-mode.mjs';
+import { createIdleMonitor, getFeedMode } from './idle-mode.mjs';
 import { createVikingsRouter } from './casino/vikings-ct-router.mjs';
 import { createAgtRouter } from './casino/agt-router.mjs';
 import { createCtProtocolRouter } from './casino/clover-ct-router.mjs';
@@ -117,6 +118,7 @@ let settlementBusy = false;
 let lastUnresolvedCheck = 0;
 // De-duplicate repeated full-time frames after durable result persistence.
 const archivedTerminalMatches = new Set();
+const pendingResults = createPendingResultTracker({query,archive:archiveFinishedMatch,isFinished,onArchived:()=>void runSettlement('pending provider final score')});
 async function ensureLedgerSchema() {
   if (shuttingDown) return false;
   if (ledgerReady) return true;
@@ -158,9 +160,8 @@ function stopProbe() {
 
 armProbe();
 
-/* ---------------------------------------------------------------- idle mode
- * With no visitor the feed is paused and the instance is free to sleep; the first request
- * wakes it again (server/idle-mode.mjs explains why this is worth doing on Railway).
+/* ------------------------------------------------------ always-on metrics
+ * Visitor counts are informational. They never pause the feed or settlement.
  * ---------------------------------------------------------------------------- */
 
 const feedState = () => ({
@@ -179,16 +180,19 @@ function broadcastFeedState() {
 
 /**
  * Settlement pass: store the results of matches that have finished, then close every ticket
- * whose lines are all decided. Idempotent, so a missed pass is harmless - which is what makes
- * it safe to skip while the feed is stopped (no database round trips when nobody is looking)
- * and to run once on wake, where it catches up on everything that ended while we were asleep.
+ * whose lines are all decided. Retries and payment recovery remain idempotent.
  */
 let lastDeletedHistoryCleanup = 0;
+const settlementHealth = {lastAttemptAt:null,lastSuccessAt:null,lastError:null,lastResult:null};
 async function runSettlement(why = 'periodic') {
   if (shuttingDown || !ledgerReady || settlementBusy) return null;
   settlementBusy = true;
+  settlementHealth.lastAttemptAt = new Date().toISOString();
   try {
     const out = await settleAll();
+    settlementHealth.lastSuccessAt = new Date().toISOString();
+    settlementHealth.lastError = null;
+    settlementHealth.lastResult = out;
     if (out.closed || why !== 'periodic') {
       console.log(
         `[settle] (${why}) captured=${out.captured} matches=${out.matches} lines=${out.lines} tickets=${out.closed}`,
@@ -196,6 +200,7 @@ async function runSettlement(why = 'periodic') {
     }
     return out;
   } catch (e) {
+    settlementHealth.lastError = 'SETTLEMENT_FAILED';
     console.error('[settle] pass failed:', e.message);
     return null;
   } finally {
@@ -217,6 +222,8 @@ async function runSettlement(why = 'periodic') {
         if (cleaned.purged) console.log('[ledger] removed-player history cleanup:', cleaned.purged, 'cutoff:', cleaned.cutoff);
       } catch (error) { console.error('[ledger] removed-player history cleanup failed:', error.message); }
     }
+    try { await pendingResults.refresh(); }
+    catch(error) { console.error('[settle] pending result subscriptions could not refresh:',error.message); }
     settlementBusy = false;
   }
 }
@@ -230,33 +237,7 @@ function armSettlement() {
   settleTimer.unref?.();
 }
 
-const idle = createIdleMonitor({
-  enabled: config.idleFeed,
-  idleAfterMs: config.idleAfterMs,
-  coldBootIdleMs: config.idleColdBootMs,
-  onIdle: () => {
-    pusher?.pause(); // closes the upstream socket: heartbeats are outbound traffic too
-    collector?.pause(); // no upstream polling
-    if (config.idleStopDbProbe) stopProbe(); // and no database probe
-    broadcastFeedState();
-  },
-  onWake: () => {
-    if (shuttingDown) return;
-    if (config.idleStopDbProbe) armProbe();
-    pusher?.resume();
-    broadcastFeedState();
-    // the board is rebuilt by the first collector cycle (it broadcasts matches:live itself);
-    // the settlement pass then catches up on whatever ended while the feed was paused
-    Promise.resolve(collector?.resume?.() ?? collector?.tick?.())
-      .then(() => runSettlement('after waking'))
-      .catch((e) => console.error('[idle] catch-up failed:', e.message))
-      .finally(() => {
-        idle.markLive();
-        broadcastFeedState();
-      });
-  },
-  onMode: () => broadcastFeedState(),
-});
+const idle = createIdleMonitor({ onMode: () => broadcastFeedState() });
 
 /**
  * What counts as a visitor: a board socket (see io.on('connection')) or a call to the app's
@@ -285,6 +266,8 @@ app.get('/health', (_req, res) => {
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
+    settlementWatch: pendingResults.stats(),
+    settlement: {...settlementHealth,running:settlementBusy},
     // idle mode: 'live' | 'idle' | 'waking' plus the visitor counters, and what the tiers cost
     feedMode: getFeedMode(),
     idle: {
@@ -482,6 +465,10 @@ async function applyInfoFromFeed(info) {
   }
 
   const updated = await applyMatchInfo(enriched);
+  if (ledgerReady) {
+    try { await pendingResults.observe(enriched, updated); }
+    catch(error) { console.error('[settle] pending final snapshot could not be saved:',info.matchId,error.message); }
+  }
   if (updated) {
     // Save a *feed-confirmed* FT result at the moment it arrives. Without this
     // write, the next deploy/idle expiry can erase the only stored score and
@@ -792,6 +779,7 @@ async function subscriptionPlan() {
   const prematch = ids.prematch ?? [];
   return {
     ...ids,
+    pendingResults: pendingResults.ids(),
     // ODDS_STORE=db keeps prices in Postgres, where there is no cheap "has a price?" check
     unpriced: config.oddsStore === 'db' ? [] : oddsStore.missingPrices(prematch),
   };
@@ -857,13 +845,8 @@ async function boot() {
     console.log('[odds] server-side subscription off (set ODDS_SOCKET=true); the browser relay still feeds /ingest/frames');
   }
 
-  // idle mode: with nobody on the board the feed is paused so the instance can sleep
-  idle.start();
-  console.log(
-    `[idle] ${config.idleFeed ? 'enabled' : 'disabled'}: pause after ${Math.round(config.idleAfterMs / 1000)}s ` +
-      `without a visitor (${Math.round(config.idleColdBootMs / 1000)}s when nobody has ever visited), ` +
-      `db probe ${config.idleStopDbProbe ? 'stopped' : 'kept'}`,
-  );
+  console.log('[server] always-on: feed, database checks and settlement continue without visitors.');
+
 }
 
 installGracefulShutdown({

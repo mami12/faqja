@@ -80,3 +80,8 @@ Railway. Kalimi publik bëhet pasi të kontrollosh faqen në kompjuterin e vjet�
 `npm run test:windows` përdor konfigurime dhe serverë lokalë prove. Mbulon
 sekretet lokale, folderët me hapësira, nisjen e dyfishtë, portën e zënë,
 kontrollin privat dhe mbylljen e kërkesave aktive. Nuk prek databazën reale.
+# Databaza lokale pa Supabase
+
+Për të kaluar llogaritë, bilancet dhe historikun ekzistues në PC, ndiq
+[LOCAL-DATABASE.md](LOCAL-DATABASE.md). Përdor `migrate-db-local.bat`; ai ndal
+serverin dhe ndryshon `.env` vetëm pasi kopjimi të jetë verifikuar.

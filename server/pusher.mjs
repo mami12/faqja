@@ -20,9 +20,7 @@
  * One cadence for everything is what made 150 fixtures kicking off hours from now cost as
  * much (on Railway: as much CPU) as the live board.
  *
- * pause()/resume() exist for idle mode (server/idle-mode.mjs): with no visitor the socket is
- * closed and nothing is subscribed, so no packet leaves the instance at all - which is what
- * lets the platform put it to sleep.
+ * pause()/resume() remain manual lifecycle controls; visitor inactivity never calls them.
  */
 import WebSocket from 'ws';
 import { config, dbErrorHint } from './config.mjs';
@@ -71,6 +69,7 @@ export function startPusher({
   prematchUnpricedMs = DEFAULT_UNPRICED_MS,
   tickMs = 5000,
   verbose = true,
+  socketFactory = (url, options) => new WebSocket(url, options),
 } = {}) {
   const url = `wss://api-gateway.gw-lucky-bet.com/push-server-v2/?Language=${encodeURIComponent(
     config.lang,
@@ -109,6 +108,7 @@ export function startPusher({
     }
 
     const live = (ids.live ?? []).map(Number);
+    const pendingResults = withoutDuplicates(ids.pendingResults ?? [], live).map(Number);
     const soon = (ids.prematchSoon ?? ids.prematch ?? []).map(Number);
     const later = (ids.prematchLater ?? []).map(Number);
     const unpriced = withoutDuplicates(ids.unpriced ?? [], [...live, ...soon, ...later]).map(Number);
@@ -146,6 +146,10 @@ export function startPusher({
         send('subscribe-match-odds', fullLive, false);
         send('subscribe-match-odds', baseLive, true);
         send('subscribe-match-info', live);
+        // Keep result snapshots flowing for actual tickets after a fixture
+        // leaves the visible catalog or falls outside its subscription limit.
+        send('subscribe-match-info', pendingResults);
+        counts.pendingResultIds = pendingResults.length;
         counts.fullMarketsIds = fullLive.length;
         counts.boostedIds = boostedLive.size;
       } else if (group === 'soon') {
@@ -198,7 +202,7 @@ export function startPusher({
 
   const connect = () => {
     if (closed) return;
-    ws = new WebSocket(url, { headers: HEADERS, handshakeTimeout: 20000 });
+    ws = socketFactory(url, { headers: HEADERS, handshakeTimeout: 20000 });
 
     ws.on('open', () => {
       attempt = 0;

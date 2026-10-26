@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import { pool, query } from '../db.mjs';
 import { config } from '../config.mjs';
 import { getOddsForMatches } from '../odds-store.mjs';
-import { serializeMatch } from '../collector.mjs';
+import { serializeMatch, phaseFromStatus } from '../collector.mjs';
 import { getMatchById } from '../matches.mjs';
 import { feedIsRefreshing } from '../idle-mode.mjs';
 import * as overrides from './overrides.mjs';
@@ -77,7 +77,7 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   if (!match) throw badRequest('Ndeshja nuk është më e disponueshme.');
   if (match.listing_stale === true || match.has_open_odds === false) throw Object.assign(
     badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.'), { code: 'SELECTION_UNAVAILABLE', outcomeId: selection.outcomeId });
-  if (match.active === false || ['ended','finished','cancelled'].includes(String(match.status ?? '').toLowerCase())) {
+  if (match.active === false || phaseFromStatus(match.feed_status) === 'FT' || ['ended','finished','cancelled'].includes(String(match.status ?? '').toLowerCase())) {
     throw badRequest('Ndeshja ka përfunduar ose është anuluar.');
   }
 

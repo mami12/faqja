@@ -16,8 +16,8 @@ import { formatOdds } from '../utils/formatOdds';
 /**
  * The board. Three columns on a desktop (leagues | matches | betslip); on a phone the two side
  * columns become drawers over the matches, opened from the header and from the bottom bar.
- * `100dvh` rather than `h-screen`, so the browser bars on a phone cannot push the bottom bar
- * off the screen.
+ * The phone frame is anchored to the viewport. Only the match column scrolls,
+ * so outer-document scrolling cannot carry the mobile betslip controls away.
  */
 export default function SportsbookPage() {
   const { id } = useParams<{ id?: string }>();
@@ -152,7 +152,7 @@ export default function SportsbookPage() {
 
   return (
     <LiveFeedProvider>
-      <div className="h-[100dvh] flex flex-col overflow-hidden bg-primary xl:bg-[#0d141c]">
+      <div data-sportsbook-shell className="sportsbook-shell flex flex-col overflow-hidden bg-primary xl:bg-[#0d141c]">
         <div className="hidden md:block"><Header onToggleNav={() => setNavOpen(v => !v)}/></div>
         <MobileSportsHeader
           onOpenLeagues={() => {setBetslipOpen(false);setNavOpen(v => !v);}}
@@ -209,7 +209,7 @@ export default function SportsbookPage() {
           {/* leagues: always there from lg up, a drawer below that */}
           <div className="hidden lg:flex">{sidebar}</div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-primary pb-0 md:pb-16 xl:pb-0 xl:border-x xl:border-[#101822] xl:bg-[#151e28]">
+          <div data-sportsbook-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-primary pb-0 md:pb-16 xl:pb-0 xl:border-x xl:border-[#101822] xl:bg-[#151e28]">
             {id ? (
               <MatchDetail />
             ) : (

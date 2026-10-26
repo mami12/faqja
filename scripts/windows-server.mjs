@@ -8,6 +8,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn,spawnSync,fork} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {ensureWindowsEnv,loadWindowsConfig} from './windows-config.mjs';
+import {assertNoDatabaseMaintenance} from '../server/database-location.mjs';
 
 const repository=fileURLToPath(new URL('../',import.meta.url));
 const alive=child=>child&&child.exitCode===null&&child.signalCode===null;
@@ -133,6 +134,7 @@ function openWindows(target,{editor=false}={}){
 export async function startWindowsServer({rootDir=repository,log=console.log,prepare=prepareWindowsInstall,
  entry=join(rootDir,'scripts','start-local.mjs'),launchBrowser=url=>openWindows(url),editConfig=path=>openWindows(path,{editor:true}),
  startupTimeoutMs=30000}={}){
+ assertNoDatabaseMaintenance(rootDir);
  const paths=controlPaths(rootDir);mkdirSync(paths.dir,{recursive:true});
  const token=randomBytes(32).toString('hex');let phase='configuration',current=null,backend=false,stopping=false,stopPromise=null,cleaned=false;
  let finish;
@@ -202,7 +204,7 @@ export async function startWindowsServer({rootDir=repository,log=console.log,pre
   let childFailure=null;
   current.once('error',error=>{childFailure=error;});
   current.once('exit',code=>{current=null;if(!stopping){cleanup();finish(code||1);}});
-  const until=Date.now()+startupTimeoutMs;
+   const until=Date.now()+Math.max(startupTimeoutMs,config.env.DB_DRIVER==='local'?90000:0);
   while(!stopping&&current&&Date.now()<until){
    if(childFailure)throw childFailure;
    try{

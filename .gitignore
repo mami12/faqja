@@ -1,6 +1,12 @@
 node_modules/
 .env
 .env.local
+.env.*
+!.env.example
+!.env.windows.example
+!.env.local-db.example
+data/
+backups/
 *.log
 *.tmp
 .runtime/

@@ -91,6 +91,20 @@
   }
 }
 
+/* Older Android browsers keep the vh fallback. On phones the board is a
+   viewport frame: document scrolling must never hide its betslip/header bar. */
+.sportsbook-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+@media (max-width: 767px) {
+  .sportsbook-shell {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+  }
+}
+
 @keyframes flashGreen {
   0% { 
     background-color: rgba(16, 185, 129, 0.35);

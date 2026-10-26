@@ -2,12 +2,15 @@ import pg from 'pg';
 import { config, pgClientOptions } from './config.mjs';
 import { SCHEMA_SQL } from './schema.mjs';
 import { splitByKickoff, DEFAULT_SOON_MS } from './subscribe-plan.mjs';
+import { createLocalPool } from './local-database.mjs';
 
 // bigint + numeric arrive as strings by default; normalise them for JSON output
 pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
 pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
 
-export const pool = new pg.Pool(pgClientOptions());
+export const pool = config.databaseDriver === 'local'
+  ? createLocalPool({ dataDir: config.localDatabaseDir })
+  : new pg.Pool(pgClientOptions());
 
 pool.on('error', (e) => console.error('[db] idle client error:', e.message));
 
