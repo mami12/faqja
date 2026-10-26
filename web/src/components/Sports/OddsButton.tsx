@@ -108,6 +108,8 @@ export default function OddsButton({ match, market, outcome, isWide, showRawLabe
 
   return (
     <button
+      data-outcome-id={outcome.id}
+      data-market-id={market.id}
       onClick={toggle}
       type="button"
       aria-pressed={isSelected}

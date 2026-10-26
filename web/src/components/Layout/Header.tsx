@@ -119,8 +119,8 @@ export default function Header({ onToggleNav }: Props) {
           )}
           <button type="button" onClick={() => navigate('/')}
             aria-label={t('common.home_page')}
-            className="rounded-sm px-1 py-1 text-base font-black tracking-[0.25em] text-white transition-colors hover:text-emerald-300 sm:px-2 sm:text-lg">
-            ....
+            className="rounded-sm px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:text-emerald-300">
+            {t('nav.sports')}
           </button>
         </div>
 

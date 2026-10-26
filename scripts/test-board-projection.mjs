@@ -26,10 +26,28 @@ const raw = [{id:'1',marketCount:80,markets:[
 const original = structuredClone(raw), projected = projectBoardMatches(raw);
 assert.deepEqual(raw,original,'projection never mutates full detail data');
 assert.equal(projected[0].marketCount,80);
-assert.deepEqual(projected[0].markets.map(m=>m.name),['Full Time Result','Total Goals','Both Teams To Score']);
-assert.equal(projected[0].markets.find(m=>m.name==='Total Goals').line,'2.5');
+assert.deepEqual(projected[0].markets.map(m=>m.name),['Full Time Result','Total Goals','Total Goals','Both Teams To Score']);
+assert.deepEqual(projected[0].markets.filter(m=>m.name==='Total Goals').map(m=>m.line),['3.5','2.5']);
 assert.equal(projectBoardMatches([{markets:raw[0].markets}])[0].marketCount,8);
 assert.deepEqual(projectBoardMatches([{marketCount:20}])[0].markets,[]);
+
+const suspendedResult={id:'native-result',name:'Full Time Result',period:0,status:'SUSPENDED',outcomes:[{id:'original-1',price:2.1}]};
+const doubleChance={id:'native-dc',name:'Double Chance',period:0,status:'ACTIVE',outcomes:[{id:'original-1x',price:1.4}]};
+const alternatives=projectBoardMatches([{markets:[suspendedResult,doubleChance,
+  ...Array.from({length:13},(_,index)=>({name:'Total Goals',period:0,line:String(index+0.5),status:index===2?'SUSPENDED':'ACTIVE'})),
+  {name:'Total Corners',period:0,line:'3.5'},
+  {name:'Total Cards',period:0,line:'3.5'},
+  {name:'Home Total Goals',period:0,line:'3.5'},
+  {name:'Total Goals',period:1,line:'3.5'},
+  {name:'First Half Total Goals',period:0,line:'3.5'},
+  {name:'Total Goals and BTTS',period:0,line:'3.5'},
+]}])[0];
+assert.equal(alternatives.markets[0],suspendedResult,'suspended 1X2 is kept with its original identity');
+assert.equal(alternatives.markets[1],doubleChance,'double chance is available as a distinct native fallback');
+assert.equal(alternatives.markets.filter(m=>m.name==='Total Goals').length,13,'higher playable totals cannot be cut off by a fixed line limit');
+assert.equal(alternatives.markets.at(-1).line,'12.5');
+assert.equal(alternatives.markets.length,15,'half, team, corner, card and mixed contracts are excluded');
+assert.equal(alternatives.markets.find(m=>m.line==='2.5').status,'SUSPENDED','projection does not unlock or discard suspended totals');
 
 const sql = new PGlite(), originalQuery = pool.query;
 let server, catalogQueries=0;
@@ -79,7 +97,26 @@ try {
   assert.deepEqual(await get('/sports/99/matches?view=board'),[]);
   const detail=await get(`/matches/${matchId}`);
   assert.ok(detail.markets.length>=103,'detail endpoint retains all underlying markets');
-  console.log('PASS board projection: base-market contracts, original count, immutable detail, both actual HTTP routes, fresh authenticated balances, no builder catalog work and substantially smaller payload');
+
+  const fallbackId=774412;
+  matches.upsert([{match_id:fallbackId,sport_id:18,sport_tag:'football',category_slug:'test',category_name:'Test',
+    tournament_id:1,tournament_name:'Test league',home:'Fallback Home',away:'Fallback Away',service:'PREMATCH',start_at:new Date(Date.now()+3600000)}]);
+  odds.applyRows([
+    ...['1X','12','X2'].map(outcomeKey=>({marketKey:'dc',marketName:'Double Chance',line:'',outcomeKey,outcomeName:outcomeKey,price:1.6})),
+    ...['3.5','4.5'].flatMap(line=>['Over','Under'].map(outcomeKey=>({marketKey:'total',marketName:'Total Goals',line,outcomeKey,outcomeName:outcomeKey,price:1.9}))),
+    ...['Yes','No'].map(outcomeKey=>({marketKey:'btts',marketName:'Both Teams To Score',line:'',outcomeKey,outcomeName:outcomeKey,price:1.8})),
+  ].map(row=>({matchId:fallbackId,...row})));
+  for(const route of ['/matches?view=board','/sports/18/matches?view=board']) {
+    const fallback=(await get(route)).find(match=>String(match.id)===String(fallbackId));
+    assert.ok(fallback,'fallback fixture reaches both HTTP board endpoints');
+    assert.ok(!fallback.markets.some(m=>/Full Time Result/.test(m.name)),'removed 1X2 is not synthesized');
+    const dc=fallback.markets.find(m=>m.name==='Double Chance');
+    assert.ok(dc,'native double chance survives the board projection');
+    assert.ok(dc.outcomes.some(outcome=>outcome.id===`${fallbackId}|dc||1X`),'original outcome IDs survive HTTP serialization');
+    assert.deepEqual(fallback.markets.filter(m=>m.name==='Total Goals').map(m=>String(m.line)).sort(),['3.5','4.5'],'alternate actual totals reach the browser when 2.5 is absent');
+    assert.ok(fallback.markets.some(m=>m.name==='Both Teams To Score'),'BTTS fallback stays available');
+  }
+  console.log('PASS board projection: all native full-time goal lines, DC/BTTS alternatives, suspension identity, excluded scopes, both HTTP routes, fresh balances, no builder catalog work and smaller payload');
 } finally {
   if(server){server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   pool.query=originalQuery;await sql.close();
