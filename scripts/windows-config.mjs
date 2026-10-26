@@ -114,6 +114,29 @@ export async function loadWindowsConfig({ rootDir = defaultRoot, baseEnv = proce
   }
 }
 
+/** Called after package installation, before any backend process starts. */
+export async function ensureWindowsLocalDatabase({rootDir=defaultRoot,log=console.log,migrate}={}) {
+  const existing=await loadWindowsConfig({rootDir});
+  if(existing.errors.length)throw Error(existing.errors.join('\n'));
+  if(existing.env.DB_DRIVER==='local')return existing;
+  log('Moving the existing ledger to this computer. Keep every other server stopped until verification finishes.');
+  const perform=migrate ?? (async options=>{
+    const {switchDatabaseToLocal}=await import('./local-db-setup.mjs');
+    return switchDatabaseToLocal(options);
+  });
+  try {
+    // The launcher owns its control pipe but has not started the backend yet.
+    // Do not send stop to our own launcher. Migration still checks the DB port
+    // and takes its exclusive maintenance lock before copying any data.
+    await perform({rootDir,log,stop:async()=>{}});
+  } catch {
+    throw Error('Automatic local migration did not finish. The previous database configuration was preserved; no replacement accounts were created. Check LOCAL-DATABASE.md before retrying.');
+  }
+  const configured=await loadWindowsConfig({rootDir});
+  if(configured.errors.length||configured.env.DB_DRIVER!=='local')throw Error('The migrated local database configuration could not be verified. The backend was not started.');
+  return configured;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.includes('--create')) {

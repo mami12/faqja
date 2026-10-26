@@ -1,5 +1,8 @@
 # Databaza në kompjuter
 
+Instalimet e reja me `start.bat` zgjedhin automatikisht këtë mënyrë. Nuk nevojitet
+konfigurim Supabase. Në përditësime ruaj gjithmonë `data/` dhe `.env` ekzistues.
+
 Faqja mund të përdorë një databazë lokale PostgreSQL përmes PGlite. Nuk kërkon
 instalim të veçantë të PostgreSQL apo Supabase. Skedarët ruhen në PC-në e serverit,
 brenda `data/database/` (ose folderit të shënuar te `LOCAL_DATABASE_DIR` në `.env`).
@@ -9,12 +12,12 @@ rezervë krijohet si një arkiv i vetëm `.tgz`.
 ## Kalimi me llogaritë dhe bilancet ekzistuese
 
 1. Merr versionin e fundit nga GitHub. Ruaj `.env` ekzistues.
-2. Hap `start.bat` një herë që të përditësohen paketat dhe faqja. Pastaj hap
-   `migrate-db-local.bat`. Ai e ndal vetë serverin e kësaj kopjeje.
-3. Mbaj të ndalur çdo kopje tjetër të serverit që përdor të njëjtën databazë,
+2. Mbaj të ndalur çdo kopje tjetër të serverit që përdor të njëjtën databazë,
    përfshirë ndonjë instalim të vjetër në Railway ose një PC tjetër. Mos prano
    baste ose transferta në databazën burim gjatë kalimit.
-4. Prit mesazhin që migrimi u verifikua. Pastaj hap `start.bat`.
+3. Hap `start.bat`. Ai përditëson paketat dhe faqen, kopjon dhe verifikon databazën
+   ekzistuese, pastaj e nis serverin lokalisht. Nuk duhet të ndryshosh `.env` vetë.
+4. `migrate-db-local.bat` mbetet si alternativë për kryerjen e migrimit veçmas.
 
 Në VPS, ndal fillimisht shërbimin me panelin/menaxherin që e nis atë, që të mos
 riniset automatikisht gjatë migrimit. Pastaj nga folderi i projektit përdor

@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn,spawnSync,fork} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
-import {ensureWindowsEnv,loadWindowsConfig} from './windows-config.mjs';
+import {ensureWindowsEnv,loadWindowsConfig,ensureWindowsLocalDatabase} from './windows-config.mjs';
 import {assertNoDatabaseMaintenance} from '../server/database-location.mjs';
 
 const repository=fileURLToPath(new URL('../',import.meta.url));
@@ -180,8 +180,8 @@ export async function startWindowsServer({rootDir=repository,log=console.log,pre
  try{
   const setup=await ensureWindowsEnv({rootDir});
   if(stopping)return await finished;
-  if(setup.created)log('Created .env with your Windows settings. JWT_SECRET and INGEST_TOKEN were generated locally.');
-  const config=await loadWindowsConfig({rootDir});
+  if(setup.created)log('Created .env with your Windows settings. Server secrets were configured without printing their values.');
+  let config=await loadWindowsConfig({rootDir});
   if(stopping)return await finished;
   if(config.errors.length){
    editConfig(config.envPath);
@@ -198,6 +198,8 @@ export async function startWindowsServer({rootDir=repository,log=console.log,pre
   if(stopping)return await finished;
   phase='preparing';save();
   await prepare({rootDir,env:config.env,run,log});
+  if(stopping)return await finished;
+  config=await ensureWindowsLocalDatabase({rootDir,log});
   if(stopping)return await finished;
   phase='starting';save();backend=true;
   current=fork(entry,[],{cwd:rootDir,env:config.env,stdio:['inherit','inherit','inherit','ipc'],windowsHide:true});

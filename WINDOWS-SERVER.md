@@ -1,7 +1,7 @@
 # Serveri në Windows 10/11
 
-Faqja dhe serveri mund të punojnë në kompjuterin tënd. Llogaritë, bilancet,
-bastet dhe fitimet vazhdojnë të ruhen në databazën ekzistuese Supabase.
+Faqja dhe serveri punojnë në kompjuterin tënd. Instalimi i ri përdor automatikisht
+databazën lokale te `data/database/`, pa lidhje ose fjalëkalim Supabase.
 
 ## Herën e parë
 
@@ -10,15 +10,21 @@ bastet dhe fitimet vazhdojnë të ruhen në databazën ekzistuese Supabase.
 2. Shkarko projektin nga GitHub: **Code → Download ZIP**, pastaj **Extract All**.
    Hape folderin ku ndodhen `start.bat`, `stop.bat` dhe `package.json`.
    Mund të përdorësh edhe `git clone`; Git nuk kërkohet nga launcher-i.
-3. Hape **`start.bat`** me dy klikime. Ai krijon `.env` dhe e hap në Notepad
-   nëse mungon lidhja e databazës. Vendos lidhjen aktuale të Supabase te
-   **`DATABASE_URL`**, ruaje me të njëjtin emër `.env` dhe mbylle Notepad.
-   Lidhja duhet të përdorë fjalëkalimin e ri të databazës. Karakteret e veçanta
-   brenda fjalëkalimit duhen URL-encoded; p.sh. `@` bëhet `%40`.
-4. Hape përsëri **`start.bat`**. Herën e parë instalohen paketat dhe ndërtohet
+3. Hape **`start.bat`** me dy klikime. Ai krijon `.env` me `DB_DRIVER=local`,
+   `LOCAL_DATABASE_DIR=data/database` dhe sekretet e serverit. Nuk ka nevojë të
+   plotësosh lidhje databaze ose të hapësh Notepad për instalimin e ri.
+4. Herën e parë instalohen paketat dhe ndërtohet
    faqja bashkë me asetet origjinale. Duhet internet dhe mund të duhen disa minuta.
 5. Kur serveri të jetë nisur, hapet shfletuesi te **http://localhost:3000/app/**.
    Mbaje dritaren e serverit të hapur; mund ta minimizosh.
+
+Kur përditëson një instalim ekzistues, **ruaj folderin `data/` dhe `.env`**.
+Kodi i shkarkuar nga GitHub nuk përmban përdoruesit ose bilancet e një PC-je tjetër.
+Për zhvendosje, ndale serverin dhe transfero edhe këta skedarë privatisht.
+Kur `.env` ekzistues përdor Supabase, `start.bat` kopjon e verifikon automatikisht
+llogaritë dhe historikun para nisjes lokale. Mbaji të ndalur serverët e tjerë gjatë
+këtij kalimi. Sekretet dhe cilësimet e tjera ruhen; databaza burim nuk fshihet.
+Në dështim, konfigurimi i mëparshëm ruhet dhe serveri nuk nis me llogari bosh.
 
 Windows 10 i përditësuar përfshin `tar`, që përdoret për dy arkivat origjinale
 të lojërave. Nëse mungon, launcher-i e raporton përpara ndërtimit. Node dhe npm
@@ -39,12 +45,12 @@ Kompjuteri duhet të qëndrojë ndezur, pa Sleep dhe me internet për të shërb
 
 ## Ku ruhen konfigurimet e Railway
 
-**Në `.env`, në të njëjtin folder me `start.bat`.** Profili publik është
+**Në `.env`, në të njëjtin folder me `start.bat`.** Profili i instalimit është
 `.env.windows.example`. Nisja e parë e kopjon dhe krijon lokalisht dy sekrete
 të rastësishme: `JWT_SECRET` dhe `INGEST_TOKEN`. Ato ruhen për nisjet e tjera;
 një `.env` ekzistues nuk mbishkruhet. Për të ruajtur token-at ekzistues të hyrjes
 mund të vendosësh `JWT_SECRET` e fortë nga Railway; nëse ndryshon, hyn përsëri
-në llogari. Kjo nuk ndryshon bilancet në Supabase.
+në llogari. Kjo nuk ndryshon bilancet e ruajtura në databazë.
 
 Profili përmban vlerat jo-sekrete të dhëna nga Railway. Ndryshimet për këtë
 kompjuter janë `PORT=3000`, `NODE_ENV=production`, `SEED_DEFAULT_ACCOUNTS=false`
