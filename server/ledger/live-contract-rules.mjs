@@ -125,7 +125,7 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
    relevant=ordered.events.filter(e=>e.minute>lo&&e.minute<hi);
   }else relevant=ordered.events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
   if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
-  if((scopeEnded||ended)&&fullCoverage(evidence,event,Math.min(contract.to,clock??contract.to)))return contract.choice?'LOST':'WON';
+  // An abandoned/early-closed match is not proof that a scheduled window elapsed.
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
   return null;
  }
@@ -141,7 +141,8 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
   for(const e of relevant){if(!['home','away'].includes(e.team))return null;teamCounts[e.team]++;
    if(teamCounts[e.team]===contract.target){winner=e.team;break;}}
   if(winner)return winner===contract.side?'WON':'LOST';
-  return ended?'LOST':null;
+  // Whether an unachieved race is LOST or VOID depends on provider rules.
+  return null;
  }
  if(count===null)return null;
  if(contract.kind==='over')return count>contract.threshold?'WON':(scopeEnded||ended)?'LOST':null;
