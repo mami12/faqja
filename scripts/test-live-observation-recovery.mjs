@@ -1,5 +1,7 @@
 import './fixtures/isolated-casino-env.mjs';
 import assert from 'node:assert/strict';
+import {PGlite} from '@electric-sql/pglite';
+import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '../server/ledger/live-observation-store.mjs';
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
 import {createLiveSettlementPreviews} from '../server/ledger/live-shadow-settlement.mjs';
@@ -77,3 +79,88 @@ assert.deepEqual({proposed:got.proposed,held:got.held,mode:got.mode},{proposed:1
 assert.equal(shadowWrites,1,'An unresolved backup gap must never create a winning preview');
 assert.equal(previewClears,2,'An unresolved backup gap clears any old winning preview');
 console.log('PASS targeted per-ticket recovery, frozen next goal, verified frames and shadow-only settlement');
+
+async function simulateLiveMatches(){
+ const db=new PGlite();
+ try{
+  await db.exec(LEDGER_SQL);
+  const query=(sql,params=[])=>db.query(sql,params);
+  const database={connect:async()=>({query,release(){}})};
+  const player=(await query("insert into app_user(username,password_hash,balance) values('sim-live','test',500) returning id")).rows[0].id;
+  const ticket=(await query("insert into app_ticket(user_id,stake,total_odds,potential_payout,ticket_type,placed_at) values($1,10,8,80,'COMBO',$2) returning id",[player,new Date(now-1000)])).rows[0].id;
+  const fixture={...match,home:'Arsenal',away:'Chelsea',stats:{home:{corners:0},away:{corners:0}}};
+  const selections=[
+   [123,'Next Goal','Chelsea'],
+   [123,'Goal in minutes 35-40','Yes'],
+   [123,'Arsenal corner in minutes 35-45','Yes'],
+   [123,'Chelsea corner in minutes 35-45','Yes'],
+   [123,'Next Corner','Arsenal'],
+   [123,'Total Goals','Exactly 2'],
+   [456,'Next Goal','Chelsea'],
+  ];
+  const ids=[];
+  for(const [matchId,market,choice] of selections){
+   const contract=frozenLiveContract({market_name:market,outcome_name:choice},fixture,now);
+   assert.ok(contract,market);
+   const result=await query("insert into app_ticket_line(ticket_id,match_id,market_key,outcome_key,outcome_name,market_name,match_name,odds_at_placement,live_contract) values($1,$2,$3,$4,$4,$3,'Arsenal - Chelsea',2,$5) returning id",
+    [ticket,matchId,market,choice,JSON.stringify(contract)]);
+   ids.push(result.rows[0].id);
+  }
+  const g1={id:'first-goal',type:'score_change',team:1,gt:12};
+  const g2={id:'next-goal',type:'score_change',team:2,gt:36};
+  const c1={id:'first-corner',type:'corner_kick',team:1,gt:45};
+  const frameAt=(clock,score,corners,events,status=6)=>({
+   Match:{MatchTimeExtended:clock,Score:score,CornersTeam1:corners,CornersTeam2:0,EventStatus:status},
+   TimeLines:events,
+  });
+  let elapsed=0;
+  const record=(id,frame)=>recordWatchedLiveFrame(id,frame,{database,now:()=>now+elapsed});
+  const check=async expected=>{
+   await createLiveSettlementPreviews({runQuery:query,now:()=>now+elapsed});
+   const result=await query('select line_id,proposed_status from app_live_settlement_preview');
+   const byLine=new Map(result.rows.map(row=>[row.line_id,row.proposed_status]));
+   assert.deepEqual(ids.map(id=>byLine.get(id)??null),expected);
+  };
+  const baseline=frameAt('35:00','1:0',0,[g1]);
+  await record(123,baseline);
+  await record(456,baseline);
+  assert.equal((await record(789,baseline)).reason,'NO_RELEVANT_TICKETS');
+  await check([null,null,null,null,null,null,null]);
+
+  elapsed=30000;
+  await record(123,frameAt('36:10','1:1',0,[g1,g2]));
+  await check(['WON','WON',null,null,null,null,null]);
+
+  elapsed=60000;
+  await record(123,frameAt('37:00','1:0',0,[g1,{...g2,cancelled:true}]));
+  await check([null,null,null,null,null,null,null]);
+
+  elapsed=90000;
+  await record(123,frameAt('45:00','1:0',1,[g1,c1]));
+  await check([null,'LOST','WON',null,'WON',null,null]);
+
+  elapsed=120000;
+  await record(123,frameAt('46:00','1:0',1,[g1,c1]));
+  await check([null,'LOST','WON','LOST','WON',null,null]);
+
+  elapsed=180000;
+  const g3={id:'third-goal',type:'score_change',team:1,gt:52};
+  const g4={id:'fourth-goal',type:'score_change',team:1,gt:56};
+  await record(123,frameAt('57:00','3:0',1,[g1,g3,g4,c1]));
+  const afterOutage=await record(456,frameAt('46:00','2:1',0,[g1]));
+  assert.equal(afterOutage.recovery,true);
+  await check(['LOST','LOST','WON','LOST','WON','LOST',null]);
+  const recovery=(await query(RECOVERY_TICKETS_SQL,[10])).rows;
+  assert.equal(recovery.length,1);
+  assert.equal(Number(recovery[0].match_id),456);
+  assert.deepEqual(recovery[0].line_ids,[ids.at(-1)]);
+  assert.deepEqual(recovery[0].event_types,['goal']);
+  assert.equal((await query('select id from app_live_event_frame where match_id=789')).rows.length,0);
+  assert.equal((await query('select id from app_live_event_frame where match_id=123')).rows.length,6);
+  assert.equal((await query("select id from app_ticket_line where ticket_id=$1 and status='PENDING'",[ticket])).rows.length,ids.length);
+  const financial=(await query('select t.status,u.balance,t.potential_payout from app_ticket t join app_user u on u.id=t.user_id where t.id=$1',[ticket])).rows[0];
+  assert.deepEqual([financial.status,Number(financial.balance),Number(financial.potential_payout)],['PENDING',500,80]);
+  console.log('PASS SQL simulation: seven simultaneous selections, next goal and corner, minute boundaries, VAR rollback, exact total, selective outage recovery and unchanged wallet');
+ }finally{await db.close();}
+}
+await simulateLiveMatches();
