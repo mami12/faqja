@@ -472,7 +472,7 @@ export async function voidUnresolved(hours = 72) {
   for (const row of rows) {
     // Native Ybets props are enabled for the requested testing. A missing
     // event/result feed needs an administrator's decision, not a timed refund.
-    if(/^(?:yb|zz)\d+@/.test(String(row.market_key??'')))continue;
+    if(/^yb\d+@/.test(String(row.market_key??'')))continue;
     // Missing corner/event verification is not a cancelled bet. Only an
     // administrator can resolve it; never auto-VOID after a timeout.
     if (needsEvents(row) || /\bcorners?\b/i.test(String(row.market_name??''))) continue;
