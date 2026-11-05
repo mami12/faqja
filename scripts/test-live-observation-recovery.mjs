@@ -1,6 +1,7 @@
 import './fixtures/isolated-casino-env.mjs';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
+import {createEventEvidenceStore} from '../server/ledger/event-evidence.mjs';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '../server/ledger/live-observation-store.mjs';
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
@@ -161,6 +162,29 @@ async function simulateLiveMatches(){
   assert.equal((await query("select id from app_ticket_line where ticket_id=$1 and status='PENDING'",[ticket])).rows.length,ids.length);
   const financial=(await query('select t.status,u.balance,t.potential_payout from app_ticket t join app_user u on u.id=t.user_id where t.id=$1',[ticket])).rows[0];
   assert.deepEqual([financial.status,Number(financial.balance),Number(financial.potential_payout)],['PENDING',500,80]);
+  const evidenceStore=createEventEvidenceStore({runQuery:query});
+  await evidenceStore.loadEventEvidence(123);
+  await query(`insert into app_match_result(match_id,home_score,away_score,finished_at) values
+   (123,3,0,now()-interval '49 hours'),
+   (800,0,0,now()-interval '23 hours'),
+   (801,0,0,now()-interval '25 hours'),
+   (802,0,0,now()-interval '49 hours')`);
+  for(const id of [123,800,801,802,803]){
+   await query("insert into app_match_event_evidence(match_id,payload) values($1,'{}')",[id]);
+   await query("insert into app_match_snapshot(match_id,snapshot) values($1,'{}')",[id]);
+  }
+  await query("update app_ticket_line set status='WON' where match_id=123");
+  await query("update app_ticket set status='WON' where id=$1",[ticket]);
+  const pruned=(await evidenceStore.pruneUnbetMatchEvidence()).rows[0];
+  assert.deepEqual(pruned,{evidence:2,snapshots:1});
+  for(const [table,remaining] of [
+   ['app_match_event_evidence',[123,800,803]],
+   ['app_match_snapshot',[123,800,801,803]],
+  ]){
+   const rows=(await query('select match_id from '+table+' order by match_id')).rows;
+   assert.deepEqual(rows.map(row=>Number(row.match_id)),remaining);
+  }
+  console.log('PASS retention: 24h raw evidence, 48h Favorites, historical tickets and unfinished matches protected');
   console.log('PASS SQL simulation: seven simultaneous selections, next goal and corner, minute boundaries, VAR rollback, exact total, selective outage recovery and unchanged wallet');
  }finally{await db.close();}
 }
