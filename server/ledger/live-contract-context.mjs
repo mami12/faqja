@@ -15,7 +15,7 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  const corners={home:safe(teams.home?.corners),away:safe(teams.away?.corners)};
  // Resolve team-name outcomes against this exact fixture, never by fuzzy
  // prefixes or a team's position in another match.
- const norm=v=>String(v??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+ const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
  const label=norm(line.outcome_name??line.outcomeName);
  const home=norm(match.home??match.home_team),away=norm(match.away??match.away_team);
  const selected=label&&home&&label===home?'1':label&&away&&label===away?'2':null;
