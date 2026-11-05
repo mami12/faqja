@@ -12,6 +12,14 @@ const stamp=s=>{if(!s)return null;const n=Date.parse(/[zZ]|[+]\d\d:\d\d$/.test(s
  * from the current clock or from its advertised five/ten/fifteen-minute size. */
 export function resolveMarketTitle(raw,q,{intervalWidth}={}){
  let name=text(raw).replace(/^\*\s*/,'');
+ // Race-to-X is a quote parameter, NOT the literal letter X. Refuse an
+ // ambiguous offer instead of showing a misleading threshold on the ticket.
+ if (/^(?:which team wins (?:the )?)?race to x corners?\??$/i.test(name)) {
+  const candidate=[q.h,q.p3].filter(v=>v!==null&&v!==undefined&&String(v).trim()!=='');
+  const values=candidate.map(v=>Number(v));
+  if(!values.length||values.some(v=>!Number.isSafeInteger(v)||v<1||v>100)||new Set(values).size!==1)return null;
+  name='Which team wins race to '+values[0]+' corners';
+ }
  if(/^When will next goal be scored/i.test(name)&&/^\d+$/.test(text(q.p3))){
   const explicit=name.match(/in (\d+) minutes interval/i)?.[1];
   const width=explicit??intervalWidth;
