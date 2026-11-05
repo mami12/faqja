@@ -61,6 +61,8 @@ jobs:
           npm --prefix web ci
       - name: Validate live goal, corner, card and count contract rules
         run: node scripts/test-live-contract-rules.mjs
+      - name: Validate selective offline backup queue and live shadow settlement
+        run: node scripts/test-live-observation-recovery.mjs
       - name: Validate 48-hour finished favorite history
         run: node scripts/test-finished-favorites.mjs
       - name: Validate admin manual-review notifications and decisions
