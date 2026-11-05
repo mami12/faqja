@@ -40,8 +40,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const onVisible=useCallback((ids:string[])=>setVisibleIds(old=>old.join()===ids.join()?old:ids),[]);
   useFeedScope('board',{boardIds:visibleIds});
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
-  useEffect(()=>setDateFilter('today'),[viewMode]);
+  const [dateFilter, setDateFilter] = useState<DateFilter | 'all'>('all');
+  useEffect(()=>setDateFilter('all'),[viewMode]);
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -58,13 +58,13 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
       if(busy) {queued=true;return;}
       busy=true;
       try {
-        const params:any={view:'board', limit:2000, _snapshot:Date.now()};
+        const params:any={view:'board', _snapshot:Date.now()};
         if(tournamentId) params.tournamentId=tournamentId;
         if(categoryId) params.categoryId=categoryId;
         if(sportId) params.sportId=sportId;
         if(isLiveOnly) params.status='LIVE';
         if(viewMode==='prematch')params.status='PREMATCH';
-        if(viewMode==='all'||viewMode==='prematch')params.day=viewMode==='all'?'today':dateFilter;
+        if((viewMode==='all'||viewMode==='prematch')&&dateFilter!=='all')params.day=dateFilter;
         const res=await apiClient.get('/matches',{params,signal:controller.signal});
         if(active) {
           const snapshot=Array.isArray(res.data)?res.data:[];
@@ -117,19 +117,11 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     // Live fixtures remain visible after midnight, even when their kickoff was
     // yesterday. The date picker applies to upcoming fixtures only.
     if(viewMode==='all'&&m.status==='LIVE')return true;
-    return isFixtureOnDay(m.startTime,viewMode==='all'?'today':dateFilter);
+    return dateFilter==='all'||isFixtureOnDay(m.startTime,dateFilter);
   });
 
-  const pricedMatches = filteredMatches.filter(m => {
-    // The live catalog is authoritative. A kickoff/goal suspension can briefly
-    // leave it without prices; keep the fixture visible with disabled cells.
-    if(m.status==='LIVE')return true;
-    if(m.protectedPrematch&&m.status==='PREMATCH')return true;
-    if (typeof m.marketCount === 'number') return m.marketCount > 0;
-    return (m.markets ?? []).some((mk: any) =>
-      (mk.outcomes ?? []).some((o: any) => typeof o.odds === 'number' && o.odds > 0),
-    );
-  });
+  // Keep every provider fixture while prices load or are suspended.
+  const pricedMatches = filteredMatches;
 
   const liveMatches = pricedMatches.filter(m => m.status === 'LIVE');
   const prematchMatches = pricedMatches.filter(m => m.status !== 'LIVE');
@@ -223,7 +215,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
 
   return (
     <div className="zshop-board">
-      <div className="zshop-board-tools">{viewMode==='prematch'?<label className="flex items-center gap-2 text-xs">{lang==='en'?'Date':'Data'}<select aria-label={lang==='en'?'Filter fixtures by date':'Filtro ndeshjet sipas datës'} value={dateFilter} onChange={e=>setDateFilter(e.target.value as DateFilter)}>{(['today','tomorrow','dayAfterTomorrow'] as const).map(value=><option key={value} value={value}>{value==='today'?t('Sot'):value==='tomorrow'?t('Nesër'):lang==='en'?'Day after tomorrow':'Pasnesër'}</option>)}</select></label>:<span>{viewMode==='all'?t('Sot'):viewMode==='live'?t('NË LOJË'):t('Favoritet')}</span>}<span>{visibleMatches.length} {lang==='en'?'matches':'ndeshje'}</span></div>
+      <div className="zshop-board-tools">{viewMode==='prematch'?<label className="flex items-center gap-2 text-xs">{lang==='en'?'Date':'Data'}<select aria-label={lang==='en'?'Filter fixtures by date':'Filtro ndeshjet sipas datës'} value={dateFilter} onChange={e=>setDateFilter(e.target.value as DateFilter)}><option value="all">{lang==='en'?'All dates':'Të gjitha datat'}</option>{(['today','tomorrow','dayAfterTomorrow'] as const).map(value=><option key={value} value={value}>{value==='today'?t('Sot'):value==='tomorrow'?t('Nesër'):lang==='en'?'Day after tomorrow':'Pasnesër'}</option>)}</select></label>:<span>{viewMode==='all'?t('TË GJITHA'):viewMode==='live'?t('NË LOJË'):t('Favoritet')}</span>}<span>{visibleMatches.length} {lang==='en'?'matches':'ndeshje'}</span></div>
       {searchTerm && (
         <div className="text-xs font-semibold text-text-secondary px-1">
           {filteredMatches.length} {t('common.results_found')}

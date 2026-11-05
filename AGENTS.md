@@ -18,8 +18,9 @@ override older generated notes below.
   assets. Only UI changes expressly requested by the user are authorized.
 - Audit the affected behavior, keep a backup, and run meaningful isolated
   regression tests. Never reset accounts, balances or history as a code fix.
-- Prematch/live publication must not use performance caps to hide allowed
-  matches. Europe permits tiers 1–3; elsewhere only the top category.
+- Prematch/live publication includes ALL real football supplied by the API,
+  without country, tier, default date or missing-price filters. Only explicit
+  administrator visibility decisions may hide an otherwise real match.
 - Mobile homepage shows one market. Desktop remains unchanged.
 - Admin market visibility applies to API, WebSocket and cache; hidden prices
   must not return through old snapshots or deltas.

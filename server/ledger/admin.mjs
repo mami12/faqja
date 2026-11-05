@@ -39,7 +39,7 @@ const guard = (fn) => (req, res, next) => {
         ['ADMIN', 'MANAGER'].includes(req.user?.role)) {
       try {
         const target = req.path.match(/\/(users|matches|markets|outcomes|tickets)\/([^/]+)/);
-        const safeKeys = ['username', 'role', 'managerId', 'initialBalance', 'amount', 'status', 'isSuspended', 'odds', 'price', 'homeScore', 'awayScore', 'country', 'competitionId', 'category', 'suspended'];
+        const safeKeys = ['username', 'role', 'managerId', 'initialBalance', 'amount', 'status', 'isSuspended', 'odds', 'price', 'homeScore', 'awayScore', 'country', 'competitionId', 'category', 'suspended', 'hidden'];
         const input = Object.fromEntries(
           safeKeys.filter((key) => req.body?.[key] !== undefined).map((key) => [key, req.body[key]]),
         );
@@ -647,3 +647,5 @@ adminRouter.post(
     res.json({ ...(await settleMatch(matchId)), ok: true });
   }),
 );
+
+adminRouter.patch('/admin/matches/:id/visibility',...admin,guard(async(req,res)=>res.json(await overrides.setMatchHidden(req.params.id,req.body?.hidden))));

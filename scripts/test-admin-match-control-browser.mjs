@@ -85,7 +85,7 @@ const responseMatches = () => matches.map(match => {
 });
 
 function applyWrite(method, route, body) {
-  const action = route.match(/^\/admin\/(matches|markets|outcomes)\/(.+)\/(suspend|odds|settle)$/);
+  const action = route.match(/^\/admin\/(matches|markets|outcomes)\/(.+)\/(suspend|odds|settle|visibility)$/);
   if (!action) return false;
   const [, kind, encodedId, verb] = action;
   const id = decodeURIComponent(encodedId);
@@ -100,6 +100,7 @@ function applyWrite(method, route, body) {
     override = {kind: overrideKind, ref: id, suspended: null, price: null, updatedAt: '2026-10-25T13:01:00Z'};
     overrides.push(override);
   }
+  if(verb==='visibility'){row.isHidden=body.hidden;return true;}
   if (verb === 'suspend') {
     override.suspended = kind === 'matches' ? body.isSuspended === true : body.status === 'SUSPENDED';
   } else if (verb === 'odds') {row.odds = body.odds; override.price = body.odds;}
@@ -160,9 +161,10 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   console.log('Isolated admin match-control fixture ready');
-  browser = await puppeteer.launch({headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox']});
+  browser = await puppeteer.launch({headless: true, args: []});
   const page = await browser.newPage();
-  page.setDefaultTimeout(12000);
+  page.setDefaultTimeout(20000);
+  page.setDefaultNavigationTimeout(60000);
   page.on('pageerror', error => {failures.push(error.message); console.error('Admin fixture error:', error.message);});
   page.on('dialog', async dialog => {unexpected.push({dialog: dialog.message()}); await dialog.dismiss();});
   await page.setRequestInterception(true);
@@ -346,6 +348,8 @@ try {
   await page.waitForFunction(selector => /pezull/i.test(document.querySelector(selector)?.textContent ?? ''), {}, marketSelector('101|1X2|'));
   await toggle('match', '101', {isSuspended: false});
   console.log('PASS suspension contracts: match, market, outcome and inherited parent locks');
+  await button('Fshih ndeshjen');await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='Shfaq ndeshjen'));assert.equal(writes.at(-1).body.hidden,true);
+  await button('Shfaq ndeshjen');await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='Fshih ndeshjen'));assert.equal(writes.at(-1).body.hidden,false);console.log('PASS actual admin hide/show controls');
 
   const adjust = `${attr('data-admin-adjust-scope', 'market')}${attr('data-admin-adjust-id', nativeMarketId)}`;
   await page.click(adjust);

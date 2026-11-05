@@ -10,6 +10,8 @@ kredencialet, bilancet dhe historikun. Nuk kërkon import manual të databazës.
    `restore-db.bat`. Paketat e nevojshme instalohen automatikisht herën e parë;
    kërkohet Node.js dhe internet. Përdoruesit dhe çelësat janë tashmë aty.
 
+Live dhe parandeshjet shfaqin të gjitha ndeshjet reale që sjell API-ja, pa kufi lige, date të parazgjedhur ose koeficientësh. Vetëm admini mund t’i fshehë: Admin → Ndeshjet dhe kuotat → Fshih ndeshjen / Shfaq ndeshjen.
+
 Paneli i ri: **Admin → Bastet dhe verifikimi**. Champions, Europa, Conference dhe
 World Cup janë ruajtur. Telegram-i është lënë për më vonë me kërkesë të përdoruesit.
 

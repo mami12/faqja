@@ -161,29 +161,12 @@ export const isEuropeanFootballCountry=country=>majorThree.has(String(country).t
 export const competitionTierLimit=country=>isEuropeanFootballCountry(country)?3:1;
 
 export function competitionDecision(tournament, category = {}) {
-  const country = String(category.slug ?? tournament.category?.slug ?? tournament.categorySlug ?? '').toLowerCase();
-  const raw = normalizeCompetition(tournament.name);
-  const no = reason => ({allowed:false, reason, country});
-  const yes = (reason,tier=null) => ({allowed:true, reason, country, tier});
-  if (isSyntheticFootballMatch({tournament,category}) || tournament.isEsport || syntheticCategory.test(country) || excluded.test(raw)) return no('excluded-type');
-  // International cups are independent of domestic pyramid depth and of a
-  // provider attaching the competition to a participating country's category.
-  if (/\b(?:champions league|europa league|(?:europa )?conference league|(?:club )?world cup|nations league|copa libertadores|copa sudamericana|copa america|africa cup of nations|asian cup|gold cup|european championship|uefa euro(?: \d{4})?)\b/.test(raw)) return yes('international');
-  // Gender is independent of pyramid depth: senior women's top divisions/cups stay eligible.
-  const name = raw.replace(/^(?:women|womens|men|mens)\s+/,'').replace(/\s+(?:women|womens)$/,'');
-  if (/\b(?:friendlies|friendly|amistoso|amistosos)\b/.test(name)) return yes('friendly');
-  if (/\b(?:regional|county|district|amateur|landesliga|oberliga|state league)\b/.test(name) && /\b(?:cup|pokal|trophy)\b/.test(name)) return no('regional-cup');
-  if (/\b(?:cup|copa|coupe|coppa|pokal|beker|taca|supercup|supercopa|supercoppa|supercoupe|superpokal|trophy)\b/.test(name)) return yes('cup');
-  if (regions.has(country) && /\b(?:world|european|euro|champions|conference|europa|nations|africa|african|asian|concacaf|conmebol|ofc|qualification|qualifiers?|championship|libertadores|sudamericana)\b/.test(name)) return yes('international');
-  const tiers = tierNames.get(country) ?? [];
-  for (let index=0; index<tiers.length; index++) {
-    for (const alias of tiers[index]) {
-      // Allow official geographic groups and season/stage suffixes, not arbitrary words
-      // ("Premier League 2", "Serie A reserves", "Serie B2" must never match).
-      if (name === alias || (name.startsWith(alias+' ') && /^(?:group [a-z0-9]+|girone [a-z]|north|south|east|west|center|centre|central|nord|sud|norte|sur|sul|ost|west a|west b|apertura|clausura|play offs?|playoffs?|relegation|promotion|championship round|regular season|20\d{2}(?: 20\d{2}| \d{2})?)(?: .*)?$/.test(name.slice(alias.length+1)))) return index+1<=competitionTierLimit(country)?yes('national-tier',index+1):{...no('below-country-limit'),tier:index+1};
-    }
-  }
-  return no('unlisted-competition');
+  const country=String(category.slug??tournament.category?.slug??tournament.categorySlug??'').toLowerCase();
+  const name=normalizeCompetition(tournament.name);
+  if(isSyntheticFootballMatch({tournament,category})||tournament.isEsport||syntheticCategory.test(country))return {allowed:false,reason:'synthetic',country};
+  if(/\b(?:outrights?|long term|singles only)\b/.test(name))return {allowed:false,reason:'not-a-match',country};
+  const tiers=tierNames.get(country)??[];const index=tiers.findIndex(aliases=>aliases.some(alias=>name===alias||name.startsWith(alias+' group ')));
+  return {allowed:true,reason:'all-real-football',country,tier:index<0?null:index+1};
 }
 
 /** Compile decisions once per catalog refresh, keyed by provider tournament ID. */

@@ -886,6 +886,7 @@ const io = new SocketServer(server, {
 onMarketPolicy(()=>io.emit('markets:policy',{markets:catalogRows(),categories:categoryPolicies(),scopes:scopeBlockRows()}));
 io.engine.on('headers', freshSocketHeaders);
 
+overrides.onVisibilityChange(change=>io.emit('matches:visibility',change));
 io.on('connection', async (socket) => {
   if (shuttingDown) return socket.disconnect(true);
   socket.join('feed:legacy');

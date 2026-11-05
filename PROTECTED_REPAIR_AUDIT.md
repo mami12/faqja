@@ -75,3 +75,14 @@ krijon tabelat e reja idempotente; nuk kërkohet zëvendësim i databazës.
 Skedarët e publikimit, përfshirë përmirësimet e mëparshme ende të papublikuara,
 raportohen te `PROTECTED_REPAIR_FILES.md`. Backup-et para ndërhyrjeve janë te
 `.runtime/protected-repair-backup-20261105/`, jashtë GitHub-it.
+
+
+## Kërkesa e fundit: gjithë futbolli real
+
+Filtri rajonal zëvendësohet nga kërkesa e shprehur e fundit. U hoqën filtrat e kategorisë, datës së parazgjedhur dhe mungesës së koeficientëve, përfshirë reset-in te Sot gjatë ndryshimit të skedës. Metadata e vendit/kampionatit trashëgohet nga nyja prind e header-it prematch.
+
+Prova me API reale: 1424 ndeshje prematch në atë snapshot, 1407 reale dhe 1407 të publikuara; 18 live, 9 reale dhe 9 të publikuara; asnjë ekip i pazgjidhur. Numrat ndryshojnë me API-në. Ofertat outright me ID negative dhe virtualet nuk janë ndeshje futbolli real.
+
+`test-all-real-football`: 3500 prematch reale, të ardhshme dhe pa çmime, me metadata të saktë. `test-board-markets-browser`: ndeshja pas shtatë ditësh pa tregje shfaqet në 1366/390/320px. `test-match-visibility`: fshehje/rikthim administrativ i pavarur nga pezullimi, SQL/reload/njoftim, si live edhe prematch. Admin → Ndeshjet dhe kuotat → Fshih ndeshjen / Shfaq ndeshjen. Fshehja bllokon edhe bastin në përzgjedhjet e ruajtura dhe nuk ndryshon historikun.
+
+Prova shtesë `test-admin-match-control-browser` kaloi butonat realë Fshih/Shfaq, ruajtjen e pezullimeve dhe kuotave, si dhe pamjet admin 320/390/1024/1366px. Kaluan i gjithë runner-i `test:protected`, typecheck dhe build-i i këtij versioni.

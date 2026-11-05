@@ -250,7 +250,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     socket.on('connect', () => { setConnected(true); refresh(); });
     socket.on('disconnect', () => setConnected(false));
     socket.on('finance:reset',()=>window.dispatchEvent(new Event('finance:reset')));
-    socket.on('board:settings',refresh);
+    socket.on('board:settings',refresh);socket.on('matches:visibility',refresh);
     const applyPolicy=(data:any)=>{if(Array.isArray(data?.markets)){setCatalogRows(data.markets);setCategoryPolicies(data.categories??[]);setScopeBlocks(data.scopes??[]);refresh();}};
     const readPolicy=()=>fetch('/app/api/market-policy',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(applyPolicy).catch(()=>{});
     socket.on('markets:policy',applyPolicy);socket.on('connect',readPolicy);void readPolicy();

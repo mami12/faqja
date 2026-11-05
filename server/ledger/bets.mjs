@@ -134,7 +134,7 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   const matchOverride = overrides.matchOverride(matchId);
   const marketOverride = overrides.marketOverride(matchId, parsed.marketKey, parsed.line);
   const outcomeOverride = overrides.outcomeOverride(matchId, parsed.marketKey, parsed.line, parsed.outcomeKey);
-  if (matchOverride?.suspended || marketOverride?.suspended || outcomeOverride?.suspended) {
+  if (matchOverride?.hidden || matchOverride?.suspended || marketOverride?.suspended || outcomeOverride?.suspended) {
     throw badRequest('Ndeshja ose kuota është pezulluar nga administrata.');
   }
 

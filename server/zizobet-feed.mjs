@@ -89,7 +89,7 @@ export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,selectRows
   const data=await request(META+'sport/getheader/en');const sport=data?.EN?.Sports?.['1'];if(!sport)throw Error('Invalid Zizobet prematch header');
   if(stopped||state.paused)return;
   const raw=[];
-  for(const region of Object.values(sport.Regions??{})){meta.regions.set(Number(region.ID),region);for(const champ of Object.values(region.Champs??{})){meta.champs.set(Number(champ.ID),champ);for(const g of Object.values(champ.GameSmallItems??{})){if(Number(g.ID)<=0)continue;raw.push({...g,Team1:g.t1,Team2:g.t2});}}}
+  for(const region of Object.values(sport.Regions??{})){meta.regions.set(Number(region.ID),region);for(const champ of Object.values(region.Champs??{})){meta.champs.set(Number(champ.ID),champ);for(const g of Object.values(champ.GameSmallItems??{})){if(Number(g.ID)<=0)continue;raw.push({...g,Region:g.Region??g.region??region.ID,Champ:g.Champ??g.ch??champ.ID,Team1:g.t1,Team2:g.t2});}}}
   const present=new Set(raw.map(g=>Number(g.ID))),prepared=raw.map(g=>({g,row:rowOf(g,meta,false)})).filter(x=>x.row&&!games.get(Number(x.g.ID))?.live),selected=new Set(selectRows(prepared.map(x=>x.row)).map(r=>r.match_id));
   await queue(async()=>{for(const {g,row}of prepared){if(!selected.has(row.match_id)||games.get(Number(g.ID))?.live)continue;transitions.delete(Number(g.ID));games.set(Number(g.ID),{row,raw:g,live:false});await onMatch(row);}
    for(const[id,e]of games)if(!e.live&&!selected.has(e.row.match_id)){

@@ -1,7 +1,7 @@
 /** Isolated regressions for the user's protected requirements; never live accounts. */
 import {spawn} from 'node:child_process';
 const core=[
- 'test-football-competitions','test-board-settings','test-board-settings-api','test-match-pages',
+ 'test-football-competitions','test-all-real-football','test-match-visibility','test-board-settings','test-board-settings-api','test-match-pages',
  'test-admin-market-hiding','test-market-visibility-socket','test-display-copy','test-sportsbook-labels',
  'test-custom-casino-math','test-casino-rtp-extended','test-casino-profile-admin','test-original-wallet-profiles',
  'test-stats-rotation','test-info-statistics','test-protected-finance','test-protected-event-minutes',

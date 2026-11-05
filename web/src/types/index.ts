@@ -41,6 +41,7 @@ export interface Tournament {
 }
 
 export interface Match {
+  isHidden?: boolean;
   events?:MatchEvent[];
   id: string;
   displayOrder?: number;

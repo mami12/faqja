@@ -254,6 +254,8 @@ create table if not exists app_feed_override (
 );
 
 
+alter table app_feed_override add column if not exists hidden boolean not null default false;
+
 create table if not exists app_casino_round (
  id uuid primary key default gen_random_uuid(),
  user_id uuid not null references app_user(id) on delete restrict,

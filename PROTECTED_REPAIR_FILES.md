@@ -1096,3 +1096,8 @@ Provat: `PROTECTED_REPAIR_AUDIT.md`. Nisja e kopjes së plotë: `START-COMPLETE.
 
 - `ZSHOP-FRONTEND.md` — shtuar
 
+
+
+## Përditësimi: gjithë futbolli real dhe fshehja nga admini
+
+server/football-competitions.mjs, server/board-settings.mjs, server/zizobet-feed.mjs, web/src/components/Sports/MatchList.tsx, server/ledger/schema.mjs, server/ledger/overrides.mjs, server/ledger/board-settings-store.mjs, server/ledger/view.mjs, server/ledger/bets.mjs, server/ledger/admin.mjs, server/ledger/routes.mjs, server/index.mjs, web/src/api/liveFeed.tsx, web/src/types/index.ts, web/src/components/Admin/MatchControl.tsx; testet test-all-real-football, test-match-visibility, test-football-competitions, test-board-markets-browser dhe runner-i protected; specifikimi/AGENTS/auditi.

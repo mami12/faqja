@@ -20,6 +20,7 @@ const total=(id,line,status='ACTIVE')=>market(`${id}|total|${line}`,'OVER_UNDER'
 const dc=id=>market(`${id}|dc|`,'DOUBLE_CHANCE','Double Chance','',['1X','12','X2']);
 const btts=id=>market(`${id}|btts|`,'BTTS','Both Teams to Score','',['Yes','No']);
 const cases=[
+ {id:'108',markets:[],type:'NONE',line:null,future:true},
  {id:'101',markets:[result('101'),total('101',3.5),total('101',4.5)],type:'1X2',line:'3.5'},
  {id:'102',markets:[dc('102'),total('102',4.5)],type:'DC',line:'4.5'},
  {id:'103',markets:[btts('103')],type:'BTTS',line:null},
@@ -28,7 +29,7 @@ const cases=[
  {id:'106',markets:[{...result('106'),name:'Total Corners 1X2'},dc('106')],type:'DC',line:null},
  {id:'107',markets:[{...dc('107'),status:'CLOSED'},btts('107')],type:'BTTS',line:null},
 ];
-const matches=cases.map((c,i)=>({...c,tournamentId:1,homeTeam:`Home ${c.id}`,awayTeam:`Away ${c.id}`,status:c.live?'LIVE':'PREMATCH',homeScore:c.live?4:0,awayScore:0,currentMinute:c.live?64:undefined,period:c.live?'2H':undefined,startTime:new Date(Date.now()+3600000).toISOString(),snapshotAt:new Date().toISOString(),scoreAt:new Date().toISOString(),displayOrder:i,competitionOrder:1,marketCount:c.markets.length,tournament:{id:1,name:'Premier League',category:{id:1,name:'England',sport:{id:18,name:'Football'}}}}));
+const matches=cases.map((c,i)=>({...c,tournamentId:1,homeTeam:`Home ${c.id}`,awayTeam:`Away ${c.id}`,status:c.live?'LIVE':'PREMATCH',homeScore:c.live?4:0,awayScore:0,currentMinute:c.live?64:undefined,period:c.live?'2H':undefined,startTime:new Date(Date.now()+(c.future?7*86400000:3600000)).toISOString(),snapshotAt:new Date().toISOString(),scoreAt:new Date().toISOString(),displayOrder:i,competitionOrder:1,marketCount:c.markets.length,tournament:{id:1,name:'Premier League',category:{id:1,name:'England',sport:{id:18,name:'Football'}}}}));
 const extraTheme=fs.existsSync(path.join(root,'src/vave-theme.css'))?"import '/src/vave-theme.css';":'';
 const fixture=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body><div id="root"></div><script type="module">
 import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
@@ -45,9 +46,10 @@ try{
  for(const width of [1366,390,320]){
   await page.setViewport({width,height:900,isMobile:width<768,hasTouch:width<768});await page.goto(origin,{waitUntil:'networkidle0'});await page.waitForSelector('[data-zshop-match="101"]');
   assert.ok(await page.$$eval('.zshop-market-heading',nodes=>nodes.length>0&&nodes.every(node=>node.children.length===4)),'each competition has only match, primary, totals and expand columns');
-  for(const c of cases){const row=await page.$(`[data-zshop-match="${c.id}"]`);assert.ok(row,`visible fixture ${c.id}`);
+  for(const c of cases){await page.evaluate(bottom=>window.scrollTo(0,bottom?document.body.scrollHeight:0),c.type==='NONE');await new Promise(resolve=>setTimeout(resolve,150));const row=await page.$(`[data-zshop-match="${c.id}"]`);assert.ok(row,`visible fixture ${c.id}`);
    assert.equal(await row.$$eval('.zshop-board-odds',nodes=>nodes.filter(n=>n.getBoundingClientRect().width>0&&getComputedStyle(n).display!=='none').length),width<768?1:2,`protected visible market count ${c.id}`);
    assert.equal(await row.$('.zshop-nextgoal'),null,`next-goal market is not shown on the board ${c.id}`);
+   if(c.type==='NONE')continue;
    const family=c.type==='DC'?'dc':c.type==='BTTS'?'btts':'result';
    assert.ok(await row.$(`.zshop-main-odds [data-market-id="${c.id}|${family}|"]`),`correct primary market ${c.id}`);
    const ids=await row.$$eval('[data-market-id]',nodes=>[...new Set(nodes.map(n=>n.dataset.marketId))]);if(c.line!==null)assert.ok(ids.includes(`${c.id}|total|${c.line}`),`nearest available total ${c.id}: ${ids}`);

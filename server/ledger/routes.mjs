@@ -1,3 +1,4 @@
+import {matchOverride} from './overrides.mjs';
 import {statsProviders} from '../stats-providers/index.mjs';
 import {filterFixtureRowsByDay} from '../fixture-dates.mjs';
 import {isSyntheticFootballMatch} from '../football-competitions.mjs';
@@ -351,7 +352,7 @@ ledgerRouter.get(
   '/matches/:id',
   guard(async (req, res) => {
     const row = await getMatchRow(Number(req.params.id));
-    if (!row || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
+    if (!row || matchOverride(row.match_id)?.hidden || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
     // somebody is looking at this match: make sure it gets its full market list (corners,
     // cards, every total) on the next subscribe cycle, instead of base markets only
     boostMatch(row.match_id);

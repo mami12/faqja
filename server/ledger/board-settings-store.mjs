@@ -1,10 +1,11 @@
+import {matchOverride} from './overrides.mjs';
 import {pool} from '../db.mjs';
 import {getMatches} from '../matches.mjs';
 import {boardSettings,setBoardSettings,validateBoardSettings,selectPublishedMatches} from '../board-settings.mjs';
 export async function refreshBoardSettings({database=pool}={}){const r=await database.query('select settings,updated_at from app_board_settings where id=1');if(!r.rows.length)throw Error('Board settings are not initialized');setBoardSettings(r.rows[0].settings);return {settings:boardSettings(),updatedAt:r.rows[0].updated_at};}
 // Settings are loaded on boot, after each save and by the server refresh timer.
 // Public board reads must not depend on a responsive ledger database.
-export async function publishedBoard(){return selectPublishedMatches(await getMatches({catalog:true}));}
+export async function publishedBoard(){return selectPublishedMatches((await getMatches({catalog:true})).filter(row=>!matchOverride(row.match_id)?.hidden));}
 export function filterPublishedRows(rows,{service,league,tournamentId,sportId,q}={}){const needle=String(q??'').toLowerCase();return rows.filter(r=>(!service||String(r.service).toUpperCase()===String(service).toUpperCase())&&(!league||String(r.category_slug)===String(league))&&(tournamentId==null||String(r.tournament_id)===String(tournamentId))&&(sportId==null||String(r.sport_id)===String(sportId))&&(!needle||`${r.home} ${r.away} ${r.category_name} ${r.tournament_name}`.toLowerCase().includes(needle)));}
 export async function saveBoardSettings(value,actor,{database=pool}={}){
  const candidate=validateBoardSettings(value),c=await database.connect();

@@ -526,3 +526,8 @@ Pas kësaj, asnjë developer ose agjent AI nuk ka autorizim t'i ndryshojë, heq�
 Nëse kërkoj ndryshimin e një rregulli, ndryshohet vetëm ai rregull. Të gjitha rregullat e tjera mbeten në fuqi.
 
 Asnjë ndryshim funksional ose vizual i paautorizuar nuk lejohet.
+
+
+## Ndryshim i shprehur nga përdoruesi — 2026-11-05
+
+Kërkesa e fundit zëvendëson filtrin rajonal të pikës 3: shfaq çdo ndeshje futbolli real që sjell API, live dhe prematch, pa kufizim vendi, kategorie, moshe/gjinie, date të parazgjedhur ose pranie koeficientësh. Përjashtohen vetëm virtualet/simulimet dhe ofertat që nuk janë ndeshje. Filtrat e datës të zgjedhur shprehimisht nga përdoruesi mbeten opsionalë.

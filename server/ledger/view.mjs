@@ -235,6 +235,7 @@ export function toClientMatch(m) {
     period: m.phase ?? m.feedStatus ?? null,
     isSuspended: m.suspended === true || matchOverride?.suspended === true,
     isSimulated: false,
+    isHidden: matchOverride?.hidden === true,
     // extra context our board has and the app can show
     liveMinuteSource: m.minuteSource ?? null,
     corners: pair('corners'),
