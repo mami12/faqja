@@ -36,7 +36,7 @@ export function parseEventWindow(line,clock=null) {
  }else return null;
  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||start>=end||end>130)return null;
  // Freeze the window at selection acceptance. No later moving reference clocks.
- return {version:1,kind:'window',event:kind,from:start,to:end,choice,clockAtAcceptance:number(clock)};
+ return {version:1,kind:'window',event:kind,from:start,to:end,choice,startExclusive:!!rolling,clockAtAcceptance:number(clock)};
 }
 export function parseSequenceBet(line,counts={}) {
  const name=norm(line.market_name??line.marketName??line.name);
@@ -114,14 +114,14 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
  if(contract.kind==='window'){
   if(!ordered)return null;
   // A positive event can be proven by an event that is individually verified.
-  const relevant=ordered.events.filter(e=>Number(e.minute)>contract.from&&Number(e.minute)<=contract.to);
-  if(relevant.length)return contract.choice?'WON':'LOST';
+  const relevant=ordered.events.filter(e=>(contract.startExclusive?Number(e.minute)>contract.from:Number(e.minute)>=contract.from)&&Number(e.minute)<=contract.to);
+  if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
   if((scopeEnded||ended)&&fullCoverage(evidence,event,Math.min(contract.to,clock??contract.to)))return contract.choice?'LOST':'WON';
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
   return null;
  }
  if(contract.kind==='sequence'||contract.kind==='race'){
-  if(!ordered?.orderKnown||!fullCoverage(evidence,event,clock??0))return null;
+  if(!ordered?.orderKnown||clock===null||!fullCoverage(evidence,event,clock))return null;
   const relevant=ordered.events;
   if(contract.kind==='sequence'){
    const goal=relevant[contract.target-1];
@@ -136,7 +136,7 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
  }
  if(count===null)return null;
  if(contract.kind==='over')return count>contract.threshold?'WON':(scopeEnded||ended)?'LOST':null;
- if(contract.kind==='under')return count>=contract.threshold&&Number.isInteger(contract.threshold)?'LOST':count>contract.threshold?'LOST':(scopeEnded||ended)?'WON':null;
+ if(contract.kind==='under')return count>contract.threshold?'LOST':(scopeEnded||ended)?count===contract.threshold&&Number.isInteger(contract.threshold)?'VOID':'WON':null;
  if(contract.kind==='atLeast')return count>=contract.target?'WON':(scopeEnded||ended)?'LOST':null;
  if(contract.kind==='exact')return count>contract.target?'LOST':(scopeEnded||ended)?count===contract.target?'WON':'LOST':null;
  if(contract.kind==='range')return count>contract.max?'LOST':(scopeEnded||ended)?count>=contract.min?'WON':'LOST':null;
