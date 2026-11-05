@@ -89,6 +89,15 @@ export class LocalDatabasePool extends EventEmitter {
       this.dataDir = await realpath(this.dataDir); // Symlink aliases share the same lock.
       this._unlock = await lockDirectory(this.dataDir);
       try {
+        // ZIP and Git preserve files but omit empty PostgreSQL directories.
+        // Recreate only structural directories of an existing database.
+        if (!this._loadDataDir) {
+          try {
+            await access(resolve(this.dataDir, 'PG_VERSION'));
+            for (const folder of ['pg_commit_ts','pg_dynshmem','pg_notify','pg_replslot','pg_serial','pg_snapshots','pg_stat','pg_stat_tmp','pg_tblspc','pg_twophase','base/pgsql_tmp','pg_wal/archive_status','pg_wal/summaries','pg_logical/snapshots','pg_logical/mappings'])
+              await mkdir(resolve(this.dataDir, folder), { recursive: true, mode: 0o700 });
+          } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        }
         if (!this._allowIncompleteMigration) try {
           await access(resolve(this.dataDir, 'migration.incomplete'));
           throw new Error('Local database migration is incomplete. Keep the original configuration and finish the migration before starting.');
