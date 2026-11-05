@@ -21,6 +21,10 @@ export function parseEventWindow(line,clock=null) {
  const kind=typeOf(name);
  if(!kind||!/minutes?|mins?|first \d+|next \d+|within|before|by the \d+/.test(name))return null;
  const choice=yesNo(line);if(choice===null)return null;
+ const home=/\b(?:home team|team 1)\b/.test(name);
+ const away=/\b(?:away team|team 2)\b/.test(name);
+ if(home&&away)return null;
+ const side=home?'home':away?'away':null;
  let start,end;
  const fixed=name.match(/\b(?:minutes?|mins?)\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\b|\b(?:between|from)\s+(?:minutes?\s+)?(\d{1,3})\s*(?:and|to|[-–])\s*(\d{1,3})\b/);
  const first=name.match(/\b(?:first|opening)\s+(\d{1,3})\s+minutes?\b/);
@@ -36,7 +40,7 @@ export function parseEventWindow(line,clock=null) {
  }else return null;
  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||start>=end||end>130)return null;
  // Freeze the window at selection acceptance. No later moving reference clocks.
- return {version:1,kind:'window',event:kind,from:start,to:end,choice,startExclusive:!!rolling,clockAtAcceptance:number(clock)};
+ return {version:1,kind:'window',event:kind,...(side?{side}:{}),from:start,to:end,choice,startExclusive:!!rolling,clockAtAcceptance:number(clock)};
 }
 export function parseSequenceBet(line,counts={}) {
  const name=norm(line.market_name??line.marketName??line.name);
@@ -113,6 +117,8 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
  const clock=number(evidence.clock),count=number(eventCount(evidence.counts,event));
  if(contract.kind==='window'){
   if(!ordered)return null;
+  if(contract.side&&ordered.events.some(e=>!['home','away'].includes(e.team)))return null;
+  const events=contract.side?ordered.events.filter(e=>e.team===contract.side):ordered.events;
   // A positive event can be proven by an event that is individually verified.
   // Rolling markets are anchored to an exact acceptance clock. Providers
   // frequently return ONLY an integer event minute: an event in the opening
@@ -121,9 +127,9 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
   let relevant;
   if(contract.startExclusive){
    const lo=Math.floor(contract.from),hi=Math.floor(contract.to);
-   if(ordered.events.some(e=>e.minute===lo||e.minute===hi))return null;
-   relevant=ordered.events.filter(e=>e.minute>lo&&e.minute<hi);
-  }else relevant=ordered.events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
+   if(events.some(e=>e.minute===lo||e.minute===hi))return null;
+   relevant=events.filter(e=>e.minute>lo&&e.minute<hi);
+  }else relevant=events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
   if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
   // An abandoned/early-closed match is not proof that a scheduled window elapsed.
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
