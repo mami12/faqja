@@ -2,6 +2,17 @@
 export function eventContract(line={}){
  let original=String(line.market_name??line.name??''),player=original.split(' · ')[1]?.trim();
  let name=original.split(' · ')[0].toLowerCase().replace(/\s+/g,' ').trim();
+ // Explicit five-minute corner YES/NO contracts are event totals over a
+ // frozen clock window. A generic "next five minutes" has no trustworthy
+ // starting minute and must remain unsupported, not be guessed from FT stats.
+ const legacyCorner=name.match(/^(\d+) minutes?\s*[-:]\s*(?:will there be (?:a )?)?corners?\s+from (\d+):00 to (\d+) min(?:ute)?s?$/);
+ if(legacyCorner){
+  const width=Number(legacyCorner[1]),from=Number(legacyCorner[2]),to=Number(legacyCorner[3]);
+  if(width!==to-from||width<1||to>90)return {valid:false};
+  name='total corners from '+from+':00 to '+to+' min';
+ }
+ name=name.replace(/^(?:will there be (?:a |any )?|will (?:there )?be (?:a |any )?)corners?(?=\s+(?:in|during|between|from|before|after|within|by|until|at)\b)/,'total corners');
+ name=name.replace(/^corners?(?=\s+(?:in|during|between|from|before|after|within|by|until|at)\b)/,'total corners');
  try{const pl=JSON.parse(Buffer.from(String(line.market_key??line.key??'').split('@')[1],'base64url').toString()).pl;if(typeof pl==='string'&&pl.trim()){player??=pl;name=name.replace(pl.toLowerCase(),'player');}}catch{}
  let half=null;name=name.replace(/^(1st|first|2nd|second) half\s*[-:.]\s*/,(s,h)=>{half=/1st|first/.test(h)?1:2;return '';});
  const timing=name.match(/^when will goal (\d+) be scored(?: \((\d+)-minute intervals\))?$/);
