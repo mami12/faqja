@@ -59,6 +59,8 @@ jobs:
         run: |
           npm ci
           npm --prefix web ci
+      - name: Validate live goal, corner, card and count contract rules
+        run: node scripts/test-live-contract-rules.mjs
       - name: Validate 48-hour finished favorite history
         run: node scripts/test-finished-favorites.mjs
       - name: Validate admin manual-review notifications and decisions
