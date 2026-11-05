@@ -114,7 +114,16 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
  if(contract.kind==='window'){
   if(!ordered)return null;
   // A positive event can be proven by an event that is individually verified.
-  const relevant=ordered.events.filter(e=>(contract.startExclusive?Number(e.minute)>contract.from:Number(e.minute)>=contract.from)&&Number(e.minute)<=contract.to);
+  // Rolling markets are anchored to an exact acceptance clock. Providers
+  // frequently return ONLY an integer event minute: an event in the opening
+  // or closing minute could be either inside or outside the actual window.
+  // Never turn that ambiguity into a false win, loss or no-event decision.
+  let relevant;
+  if(contract.startExclusive){
+   const lo=Math.floor(contract.from),hi=Math.floor(contract.to);
+   if(ordered.events.some(e=>e.minute===lo||e.minute===hi))return null;
+   relevant=ordered.events.filter(e=>e.minute>lo&&e.minute<hi);
+  }else relevant=ordered.events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
   if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
   if((scopeEnded||ended)&&fullCoverage(evidence,event,Math.min(contract.to,clock??contract.to)))return contract.choice?'LOST':'WON';
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
