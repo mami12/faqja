@@ -89,3 +89,12 @@ const missingMinute=obs('goal',[null],11,11);
 const firstTen=parseEventWindow(windowLine('Goal in first 10 minutes','Yes'));
 assert.equal(gradeLiveContract(firstTen,missingMinute),null,'Missing event minute is not minute zero');
 console.log('PASS live event window yes/no, next goal, race, irreversible totals, exact and range');
+
+const homeWindow=parseEventWindow(windowLine('Home team corner in minutes 20-45','Yes'));
+assert.equal(homeWindow.side,'home');
+const awayCorner=obs('corner',[20],25,25);
+awayCorner.events[0].team='away';
+assert.equal(gradeLiveContract(homeWindow,awayCorner),null);
+assert.equal(gradeLiveContract(homeWindow,{...awayCorner,clock:46,coverage:{cornerThrough:46}}),'LOST');
+assert.equal(gradeLiveContract(homeWindow,obs('corner',[20],25,25)),'WON');
+assert.equal(gradeLiveContract({...homeWindow,choice:false},obs('corner',[20],25,25)),'LOST');
