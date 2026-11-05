@@ -17,6 +17,7 @@ import { ledgerRouter } from './ledger/routes.mjs';
 import { adminRouter } from './ledger/admin.mjs';
 import {financialMonitoringRouter} from './ledger/financial-monitoring.mjs';
 import { directoryRouter } from './ledger/directory.mjs';
+import {pruneUnbetMatchEvidence} from './ledger/event-evidence.mjs';
 import {matchSnapshots} from './ledger/match-snapshots.mjs';
 import {mergeTeamStats} from './match-statistics.mjs';
 import {pool as financialDatabase} from './db.mjs';
@@ -214,6 +215,7 @@ function broadcastFeedState() {
  * whose lines are all decided. Retries and payment recovery remain idempotent.
  */
 let lastDeletedHistoryCleanup = 0;
+let lastUnbetEvidenceCleanup = 0;
 const settlementHealth = {lastAttemptAt:null,lastSuccessAt:null,lastError:null,lastResult:null};
 async function runSettlement(why = 'periodic') {
   if (shuttingDown || !ledgerReady || settlementBusy) return null;
@@ -253,6 +255,11 @@ async function runSettlement(why = 'periodic') {
         const cleaned = await purgeDeletedPlayerHistory();
         if (cleaned.purged) console.log('[ledger] removed-player history cleanup:', cleaned.purged, 'cutoff:', cleaned.cutoff);
       } catch (error) { console.error('[ledger] removed-player history cleanup failed:', error.message); }
+    }
+    if (Date.now() - lastUnbetEvidenceCleanup >= 60 * 60 * 1000) {
+      lastUnbetEvidenceCleanup = Date.now();
+      try { await pruneUnbetMatchEvidence(); }
+      catch(error) { console.error('[ledger] temporary match evidence cleanup failed:',error.message); }
     }
     try { await pendingResults.refresh(); }
     catch(error) { console.error('[settle] pending result subscriptions could not refresh:',error.message); }
