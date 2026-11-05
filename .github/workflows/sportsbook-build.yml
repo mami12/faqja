@@ -61,6 +61,8 @@ jobs:
           npm --prefix web ci
       - name: Validate 48-hour finished favorite history
         run: node scripts/test-finished-favorites.mjs
+      - name: Validate admin manual-review notifications and decisions
+        run: node scripts/test-manual-review-queue.mjs
       - name: Validate protected requirements with isolated databases and feeds
         run: npm run test:protected
       - name: Validate sportsbook label regressions
