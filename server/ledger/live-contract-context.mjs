@@ -44,5 +44,6 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  // Never infer it from the displayed odds or the browser's score.
  if(contract.kind==='sequence'&&/next/i.test(name)&&
     (current?.home==null||current?.away==null))throw fail('Mungon numri i konfirmuar i golave/kornerave.');
- return contract;
+ return (contract.kind==='sequence'||contract.kind==='race')&&current?.home!=null&&current?.away!=null
+  ?{...contract,baseline:{home:current.home,away:current.away}}:contract;
 }
