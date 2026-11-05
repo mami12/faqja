@@ -132,7 +132,8 @@ async function simulateLiveMatches(){
   await check(['WON','WON',null,null,null,null,null]);
 
   elapsed=60000;
-  await record(123,frameAt('37:00','1:0',0,[g1,{...g2,cancelled:true}]));
+  assert.equal((await record(123,baseline)).stored,true,'A → B → A must retain the rollback as a new observation');
+  assert.equal((await record(123,baseline)).stored,false,'Consecutive identical frames can be deduplicated');
   await check([null,null,null,null,null,null,null]);
 
   elapsed=90000;
