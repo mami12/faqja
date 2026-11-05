@@ -1,3 +1,4 @@
+import {managerCasinoSettings} from './manager-settings.mjs';
 /**
  * Server-authoritative settlement for the Sizzling Hot Deluxe real wallet.
  *
@@ -56,7 +57,7 @@ export async function settlePendingWin(userId,{roundId=null,database=pool}={}){
     if(!lookup.rows.length)throw fault(404,'PLAYER_NOT_FOUND');
     const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
     const locked=await db.query(
-      'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+      'select id,username,role,status,balance,manager_id,agent_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
     const users=new Map(locked.rows.map(row=>[row.id,row]));
     const player=users.get(userId);
     const manager=player?.manager_id?users.get(player.manager_id):null;
@@ -98,7 +99,7 @@ export async function placePlayNGoSpin({userId,requestId,bet,denomination=1,line
     if(!lookup.rows.length)throw fault(404,'Player not found');
     const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
     const locked=await client.query(
-      'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+      'select id,username,role,status,balance,manager_id,agent_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
     const accounts=new Map(locked.rows.map(x=>[x.id,x]));
     const player=accounts.get(userId);
     if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw fault(403,'Player account disabled');
@@ -106,6 +107,7 @@ export async function placePlayNGoSpin({userId,requestId,bet,denomination=1,line
     const manager=player.manager_id?accounts.get(player.manager_id):null;
     if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw fault(409,'Manager unavailable');
     const settings=await client.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
+    settings.rows[0]=await managerCasinoSettings(client.query.bind(client),settings.rows[0],player.manager_id,{lock:true,agentId:player.agent_id});
     const previous=await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',
       [userId,requestId]);
     if(previous.rows.length){
@@ -175,7 +177,7 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     if(!lookup.rows.length)throw fault(404,'Player not found');
     const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
     const locked=await client.query(
-      'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+      'select id,username,role,status,balance,manager_id,agent_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
     const accounts=new Map(locked.rows.map(x=>[x.id,x]));
     const player=accounts.get(userId);
     if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw fault(403,'Player account disabled');
@@ -183,6 +185,7 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
     const manager=player.manager_id?accounts.get(player.manager_id):null;
     if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw fault(409,'Manager unavailable');
     const settings=await client.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
+    settings.rows[0]=await managerCasinoSettings(client.query.bind(client),settings.rows[0],player.manager_id,{lock:true,agentId:player.agent_id});
     const previous=await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',
       [userId,requestId]);
     if(previous.rows.length){

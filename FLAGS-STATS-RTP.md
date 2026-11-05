@@ -14,7 +14,7 @@ Tregjet për një lojtar të caktuar, golashënuesin, rendin e golave apo minut�
 
 ## RTP mbi 100%
 
-Administratori mund të vendosë RTP nga 0 deri në 1000%; shpeshtësia mbetet 0–100%. Paneli tregon kombinimet e vlefshme për çdo lojë dhe RTP-në e nevojshme për shpeshtësi 100%. Cilësimet nuk ndryshojnë vetë. Për shembull, një lojë me kthim minimal 2× kërkon të paktën 200% RTP për të paguar çdo raund. Në kufirin minimal mund të realizohet vetëm pagesa minimale; për larmi nevojitet më shumë RTP ose më pak shpeshtësi.
+Për gjashtë motorët me matematikë të personalizuar, administratori mund të vendosë RTP nga 0 deri te kufiri i realizueshëm i tabelës reale të çdo loje, edhe mbi 1000%; shpeshtësia mbetet 0–100%. Fire Joker dhe Fortune Teller përdorin profilet origjinale të publikuara. Paneli tregon kombinimet e vlefshme për çdo lojë dhe RTP-në e nevojshme për shpeshtësi 100%. Cilësimet nuk ndryshojnë vetë. Për shembull, një lojë me kthim minimal 2× kërkon të paktën 200% RTP për të paguar çdo raund. Në kufirin minimal mund të realizohet vetëm pagesa minimale; për larmi nevojitet më shumë RTP ose më pak shpeshtësi.
 
 RTP 200% do të thotë kthim mesatar afatgjatë 200 lekë për 100 lekë të luajtura. Nuk garanton fitim mbi bastin në çdo rrotullim. Vlerat e mëdha rrisin pagesat mesatare në kurriz të fondit të operatorit. Paytable dhe figurat vazhdojnë të llogariten nga motorët e lojërave; pagesat nuk fryhen duke ndryshuar vizualisht figurat. Informacioni i shanseve mbetet i lexueshëm për lojtarin.
 

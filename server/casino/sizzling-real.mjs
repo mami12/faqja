@@ -1,3 +1,4 @@
+import {managerCasinoSettings} from './manager-settings.mjs';
 /**
  * Same-origin real wallet protocol for the unchanged Novomatic Pixi/Spine
  * browser client. This adapter is NOT licensed/certified provider game math.
@@ -121,7 +122,7 @@ casinoSessionRouter.post('/casino/session',requireAuth,async(req,res)=>{
   try{
     if(!isLedgerReady())throw fault(503,'LEDGER_UNAVAILABLE');
     if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
-    const settings=await ensureAdminEnabled();
+    const settings=await managerCasinoSettings(query,await ensureAdminEnabled(),req.user.managerId??req.user.manager_id??req.user.agentId??req.user.agent_id);
     const mathVersion=assertCasinoMathAcknowledged('sizzling',settings,req.body?.mathVersion);
     const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet',mathVersion,epoch:Number(req.user.financialEpoch??0)};
     const token=jwt.sign(claim,config.jwtSecret,{expiresIn:MAX_AGE});

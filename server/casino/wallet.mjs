@@ -1,3 +1,4 @@
+import {managerCasinoSettings,saveManagerCasinoSettings} from './manager-settings.mjs';
 import express from 'express';
 import { pool, query } from '../db.mjs';
 import { requireAuth } from '../ledger/auth.mjs';
@@ -15,9 +16,11 @@ const safe = handler => (req, res) => Promise.resolve(handler(req, res)).catch(e
 });
 const isAdmin = (req, res, next) => req.user.role === 'ADMIN'
   ? next() : res.status(403).json({ message: 'Administrator only' });
-export async function getCasinoSettings(executor = query) {
+export async function getCasinoSettings(executor = query, managerId=null) {
+  if(managerId&&!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(String(managerId)))throw fault(400,'Menaxher i pavlefshëm.');
   const { rows } = await executor('select enabled, profile, game_profiles, game_controls from app_casino_settings where id = 1');
-  const setting = rows[0] || { enabled: false, profile: 'SIZZLING_STANDARD_V1' };
+  const setting = await managerCasinoSettings(executor, rows[0] || { enabled: false, profile: 'SIZZLING_STANDARD_V1' }, managerId);
+  const globalCommission=Number((await executor('select casino_pct from app_commission_config where id=1')).rows[0]?.casino_pct??0);
   const games=publicGameProfiles(setting.game_profiles).map(game=>{
     const controls=casinoControls(setting.game_controls,game.gameId);
     const supportsCustomMath=supportsCustomCasinoMath(game.gameId);
@@ -30,6 +33,7 @@ export async function getCasinoSettings(executor = query) {
       mathVersion,customVersion:summary.version,maxPayoutMultiplier:summary.maxPayoutMultiplier};
   }),sizzling=games.find(game=>game.gameId==='sizzling');
   return {
+    managerId, casinoCommission:Number(setting.casinoCommission??globalCommission),
     enabled: Boolean(setting.enabled),
     stakeLimits:{min:20,max:5000,currency:'ALL'},
     deploymentEnabled: true,
@@ -47,12 +51,12 @@ const access=[auth,(_req,res,next)=>ready()?next():res.status(503).json({message
 
 casinoWalletRouter.get('/casino/status', ...access, safe(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ ...await getCasinoSettings(runQuery), balance: req.user.balance });
+  res.json({ ...await getCasinoSettings(runQuery,req.user.managerId??req.user.manager_id??req.user.agentId??req.user.agent_id??null), balance: req.user.balance });
 }));
 
 // Game-specific protocol routes own wagering; these endpoints manage global settings.
 
-casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (_req,res) => res.json(await getCasinoSettings(runQuery))));
+casinoWalletRouter.get('/admin/casino/settings', ...access, isAdmin, safe(async (req,res) => res.json(await getCasinoSettings(runQuery,req.query.managerId||null))));
 casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(async(req,res)=>{
   if(typeof req.body?.enabled !== 'boolean') throw fault(400, 'enabled must be boolean');
   const client=await database.connect();
@@ -72,6 +76,7 @@ casinoWalletRouter.patch('/admin/casino/settings', ...access, isAdmin, safe(asyn
 // Switch only between published, immutable profiles; no per-player RTP.
 // Active rounds hold FOR SHARE; this update takes an exclusive row lock.
 casinoWalletRouter.patch('/admin/casino/profile', ...access, isAdmin, safe(async(req,res)=>{
+  if(req.body?.managerId){await saveManagerCasinoSettings(req.body,req.user,database);return res.json(await getCasinoSettings(runQuery,req.body.managerId));}
   if(!req.body||Object.keys(req.body).some(key=>!['gameId','profile'].includes(key)))throw fault(400,'Select a supported global game profile');
   const profile=String(req.body?.profile||''),gameId=String(req.body?.gameId||'');
   validateGameProfile(gameId,profile);
@@ -94,6 +99,7 @@ casinoWalletRouter.patch('/admin/casino/profile', ...access, isAdmin, safe(async
 }));
 
 casinoWalletRouter.patch('/admin/casino/controls',...access,isAdmin,safe(async(req,res)=>{
+  if(req.body?.managerId){await saveManagerCasinoSettings(req.body,req.user,database);return res.json(await getCasinoSettings(runQuery,req.body.managerId));}
   if(!req.body||Object.keys(req.body).some(key=>!['gameId','mode','rtp','hitFrequency'].includes(key)))throw fault(400,'Select global game controls');
   const gameId=String(req.body.gameId||'');
   const controls=validateControls(gameId,{mode:req.body.mode,rtp:req.body.rtp,hitFrequency:req.body.hitFrequency});
@@ -112,6 +118,8 @@ casinoWalletRouter.patch('/admin/casino/controls',...access,isAdmin,safe(async(r
   }catch(error){await client.query('rollback').catch(()=>{});throw error;}
   finally{client.release();}
 }));
+casinoWalletRouter.get('/admin/casino/managers',...access,isAdmin,safe(async(_req,res)=>res.json((await runQuery("select id,username,role from app_user where role in ('MANAGER','AGENT') and status='ACTIVE' and deleted_at is null order by username,id")).rows)));
+casinoWalletRouter.patch('/admin/casino/commission',...access,isAdmin,safe(async(req,res)=>{await saveManagerCasinoSettings(req.body,req.user,database);res.json(await getCasinoSettings(runQuery,req.body.managerId||null));}));
 return casinoWalletRouter;
 }
 export const casinoWalletRouter=createCasinoWalletRouter();

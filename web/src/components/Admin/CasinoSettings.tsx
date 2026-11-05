@@ -1,5 +1,5 @@
 import { useLanguage } from '../../context/LanguageContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dices, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import {casinoPercent as percent, casinoStakeLimits, casinoControlLimits, casinoHitCompatibility, CASINO_CONTROLS_UNRESTRICTED, type CasinoSettingsData as Settings, type CasinoGameSettings} from '../../types/casino';
@@ -27,19 +27,24 @@ const draftError=(draft:Draft,game:CasinoGameSettings,en=false)=>{
 export default function CasinoSettings(){
   const { t,lang } = useLanguage();
  const en=lang==='en',tr=(sq:string,english:string)=>en?english:sq;
+ const [managerId,setManagerId]=useState(''),[managers,setManagers]=useState<{id:string;username:string;role?:string}[]>([]),[commission,setCommission]=useState('0');
  const [data,setData]=useState<Settings|null>(null),[totals,setTotals]=useState<Totals|null>(null);
  const [drafts,setDrafts]=useState<Record<string,Draft>>({});
  const [selected,setSelected]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const loadSequence=useRef(0);
  const load=async()=>{
+  const sequence=++loadSequence.current;
   setBusy(true);setError('');
   try{
-   const [settings,finance]=await Promise.all([apiClient.get<Settings>('/admin/casino/settings'),apiClient.get<{totals:Totals}>('/admin/casino/finance')]);
-   setData(settings.data);setTotals(finance.data.totals);
+   const [settings,finance]=await Promise.all([apiClient.get<Settings>('/admin/casino/settings',{params:managerId?{managerId}:undefined}),apiClient.get<{totals:Totals}>('/admin/casino/finance')]);
+   if(sequence!==loadSequence.current)return;
+   setData(settings.data);setCommission(String(settings.data.casinoCommission??0));setTotals(finance.data.totals);
    setSelected(Object.fromEntries(settings.data.games.map(game=>[game.gameId,game.profile??game.profiles[0]?.id??''])));
    setDrafts(Object.fromEntries(settings.data.games.map(game=>[game.gameId,toDraft(game)])));
-  }catch(e:any){setError(userError(e.response?.data?.message||e.message,'Nuk u ngarkuan cilësimet.'));}finally{setBusy(false);}
+  }catch(e:any){if(sequence===loadSequence.current)setError(userError(e.response?.data?.message||e.message,'Nuk u ngarkuan cilësimet.'));}finally{if(sequence===loadSequence.current)setBusy(false);}
  };
- useEffect(()=>{void load();},[]);
+ useEffect(()=>{void apiClient.get('/admin/casino/managers').then(r=>setManagers(r.data)).catch(()=>{});},[]);
+ useEffect(()=>{setData(null);void load();},[managerId]);
  const save=async(gameId:string)=>{
   const draft=drafts[gameId];
   if(!draft)return;
@@ -50,10 +55,11 @@ export default function CasinoSettings(){
   setBusy(true);setError('');
   try{
    if(draft.mode==='original'&&selected[gameId]!==previous?.profile){
-    const profileResponse=await apiClient.patch<Settings>('/admin/casino/profile',{gameId,profile:selected[gameId]});
+    const profileResponse=await apiClient.patch<Settings>('/admin/casino/profile',{gameId,profile:selected[gameId],...(managerId?{managerId}:{})});
     setData(profileResponse.data);
    }
-   const response=await apiClient.patch<Settings>('/admin/casino/controls',{gameId,mode:draft.mode,rtp:Number(draft.rtp),hitFrequency:Number(draft.hitFrequency)});
+   if(draft.mode==='original'&&!previous.supportsCustomMath)return;
+   const response=await apiClient.patch<Settings>('/admin/casino/controls',{gameId,mode:draft.mode,rtp:Number(draft.rtp),hitFrequency:Number(draft.hitFrequency),...(managerId?{managerId}:{})});
    setData(response.data);
    const game=response.data.games.find(item=>item.gameId===gameId);
    if(game){
@@ -72,14 +78,15 @@ export default function CasinoSettings(){
    <div><h2 className="text-xl font-black text-white">{t("Cilësimet e Kazinosë")}</h2><p className="mt-1 text-sm text-text-secondary">{t("Profilet e lojërave dhe portofoli i përbashkët.")}</p></div>
    <button onClick={()=>void load()} disabled={busy} className="flex min-h-11 items-center gap-2 rounded-lg border border-tertiary bg-secondary px-3 py-2 text-sm font-semibold text-white"><RefreshCw size={16}/>{t("Rifresko")}</button>
   </div>
+  <div className="rounded-xl border border-tertiary bg-secondary p-4 space-y-3"><label className="block text-sm text-white">Cilësimet për — agjenti ka përparësi<select aria-label="Menaxheri ose agjenti i kazinosë" disabled={busy} value={managerId} onChange={e=>setManagerId(e.target.value)} className="mt-2 w-full rounded-lg border border-tertiary bg-primary p-3"><option value="">Globale — të gjithë menaxherët</option>{managers.map(manager=><option key={manager.id} value={manager.id}>{manager.username} ({manager.role==='AGENT'?'Agjent':'Menaxher'})</option>)}</select></label><label className="block text-sm text-white">Komisioni kazino / Apex (%)<input aria-label="Komisioni i kazinosë" type="number" min="0" max="100" step="0.01" value={commission} onChange={e=>setCommission(e.target.value)} className="mt-2 w-full rounded-lg border border-tertiary bg-primary p-3"/></label><button disabled={busy||!data||commission.trim()===''||!Number.isFinite(Number(commission))||Number(commission)<0||Number(commission)>100} className="rounded-lg bg-accent-green px-4 py-2 font-bold text-primary disabled:opacity-50" onClick={async()=>{setBusy(true);setError('');try{const r=await apiClient.patch<Settings>('/admin/casino/commission',{commission:Number(commission),...(managerId?{managerId}:{})});setData(r.data);setCommission(String(r.data.casinoCommission));}catch(e:any){setError(userError(e,'Komisioni nuk u ruajt.'));}finally{setBusy(false);}}}>Ruaj komisionin</button><p className="text-xs text-text-secondary">Komisioni regjistrohet mbi bastin e raundit, si raport për shlyerje manuale. Bilancet nuk ndryshohen nga ky cilësim.</p></div>
   {error&&<p role="alert" className="rounded-lg border border-rose-500/50 bg-rose-500/10 p-3 text-rose-200">{error}</p>}
   {data?.warning&&<p className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">{data.warning}</p>}
   <div className="rounded-xl border border-tertiary bg-secondary p-4 sm:p-6">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><h3 className="font-bold text-white">{t("Lejo lojërat me bilancin e përdoruesit")}</h3><p className="mt-1 text-xs text-text-secondary">{t("I njëjti bilanc si te bastet sportive.")}</p></div>
-    <button type="button" disabled={!data||busy} onClick={()=>void change()} className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>{data?.enabled?'Çaktivizo':'Aktivizo'}</button>
+    <button type="button" disabled={!data||busy||!!managerId} onClick={()=>void change()} className={'min-h-11 rounded-lg px-5 py-2 font-bold disabled:opacity-50 '+(data?.enabled?'bg-rose-500 text-white':'bg-emerald-500 text-slate-950')}>{data?.enabled?'Çaktivizo':'Aktivizo'}</button>
    </div>
-   <p className="mt-4 text-sm text-text-secondary">{t("Profili i çdo loje zbatohet njësoj për të gjithë përdoruesit, nga rrotullimi tjetër me pagesë. Bonusët e nisur dhe fitimet në pritje ruajnë kushtet e tyre.")}</p>
+   <p className="mt-4 text-sm text-text-secondary">Profili zbatohet te të gjithë lojtarët e nivelit të zgjedhur, nga raundi tjetër me pagesë. Cilësimi i agjentit ka përparësi ndaj menaxherit; më pas trashëgohen cilësimet globale. Bonusët dhe fitimet ekzistuese ruajnë kushtet e tyre.</p>
    <p className="mt-2 text-sm text-text-secondary">{t("RTP është kthimi mesatar afatgjatë. Shpeshtësia e fitimit është përqindja e rrotullimeve me pagesë që kthejnë një shumë mbi zero, duke përfshirë bonusin e atij rrotullimi, përpara dyfishimit opsional të fitimit. Edhe një kthim më i vogël se basti llogaritet si rrotullim që paguan.")}</p>
    <p className="mt-2 text-sm text-text-secondary">{tr('RTP mund të jetë mbi 100%: p.sh. 200% do të thotë kthim mesatar 200 lekë për çdo 100 lekë të luajtura. Shpeshtësia 100% do të thotë pagesë mbi zero në çdo raund; nuk garanton fitim mbi bastin çdo herë.','RTP can exceed 100%: for example, 200% means an average return of 200 ALL per 100 ALL wagered. A 100% hit frequency means every round pays more than zero; it does not guarantee a profit on every round.')}</p>
    <p className="mt-2 text-sm text-text-secondary">{t("Modaliteti origjinal përdor profilin e motorit. Modaliteti i personalizuar zbaton vetëm çifte RTP dhe shpeshtësie që realizohen nga tabela reale e pagesave. Shpeshtësia është probabilitet dhe nuk mund të kalojë 100%.")}</p>

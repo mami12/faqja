@@ -536,3 +536,12 @@ Kërkesa e fundit zëvendëson filtrin rajonal të pikës 3: shfaq çdo ndeshje 
 ## Zgjedhje e adminit për numrin e parandeshjeve — 2026-11-05
 
 Përdoruesi autorizon kufi publikimi të zgjedhur shprehimisht nga administratori: 0 = të gjitha; X pozitiv = maksimumi X parandeshje, pa përjashtim që e tejkalon kufirin për ligat prioritare. Burimi ruan gjithë futbollin real dhe historikun. Live mbetet pa kufi. Fshehja individuale dhe të gjitha mbrojtjet e tjera ruhen.
+
+
+## Ngarkimi sipas kërkesës dhe hierarkia e kazinosë — 2026-11-05
+
+Autorizimi i fundit: lista kryesore merr vetëm koeficientët kryesorë; hapja e emrit të ndeshjes ose tregjeve shtesë kërkon tregjet e plota vetëm për ndeshjen e zgjedhur. Të gjitha ndeshjet reale dhe zgjedhjet e adminit për publikim ruhen. API-të shtesë aktivizohen edhe kur shikohet një ndeshje pa bast; ndajnë cache dhe kuota, me rifreskim dhjetëminutësh. Monitorimi i basteve dhe verifikimi përfundimtar vazhdojnë.
+
+Admini cakton komision kazino/Apex dhe profile ose RTP/shpeshtësi për agjentë e menaxherë. Cilësimi i shprehur i agjentit për lojën ka përparësi për TË GJITHË menaxherët dhe lojtarët e tij. Shembull: agjenti 40%, menaxherët 96%/100% → lojtarët e të dyve përdorin 40%. Pa cilësim të agjentit trashëgohet ai i menaxherit, pastaj globali. Nuk zgjidhen rezultate sipas identitetit individual të lojtarit.
+
+Ndryshimet vlejnë për raundet e reja me pagesë. Bonusët, raundet ekzistuese, riluajtja e kërkesës dhe komisionet historike ruajnë kushtet e regjistruara. Komisioni është raport financiar mbi bastin, 0–100%, pa transferim automatik të bilancit të menaxherit. RTP lejohet mbi 1000% deri te kufiri i realizueshëm i tabelës reale të lojës. Shpeshtësia si probabilitet mbetet 0–100%; çiftet e parealizueshme refuzohen. Fire Joker dhe Fortune Teller ruajnë vetëm profilet origjinale të mbështetura; një përqindje arbitrare nuk shpallet e realizuar për këto lojëra.

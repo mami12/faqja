@@ -25,6 +25,8 @@ export type CasinoGameSettings = {
 };
 
 export type CasinoSettingsData = {
+  managerId?: string | null;
+  casinoCommission?: number;
   enabled: boolean;
   games: CasinoGameSettings[];
   warning: string | null;

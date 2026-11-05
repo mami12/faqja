@@ -487,13 +487,14 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
 
 /** loads current odds for the given match rows and serialises everything */
 export async function withOdds(rows, now = Date.now(),{board=false,displayStats=false}={}) {
-  if(!board&&rows.length===1)for(const row of rows)statsProviders.warm(row);
-  if(displayStats)for(const row of rows)void statsProviders.warmStatistics(row).catch(()=>{});
+  if(displayStats&&!board)for(const row of rows)statsProviders.warm(row);
   const ids = rows.map((r) => r.match_id);
   // prices are served from memory by default (no DB read on the board path);
   // ODDS_STORE=db restores the previous behaviour
-  const odds = config.oddsStore === 'db' ? await getOddsFromDb(ids) : getOddsFromMemory(ids);
   const byMatch = new Map(),counts=new Map(),decisions=new Map(),rowsById=new Map(rows.map((r)=>[r.match_id,r]));
+  const inspect=board?o=>{if(o.price==null&&o.suspended===true)return;const key=o.match_id+'|'+o.market_key+'|'+o.market_name;let allowed=decisions.get(key);if(allowed===undefined){allowed=!isExcludedOfferMarket(o)&&marketIsEnabled(o,rowsById.get(o.match_id));decisions.set(key,allowed);}if(allowed){if(!counts.has(o.match_id))counts.set(o.match_id,new Set());counts.get(o.match_id).add(o.market_key+'|'+o.line);}}:undefined;
+  const odds = config.oddsStore === 'db' ? await getOddsFromDb(ids) : getOddsFromMemory(ids,board?isBoardOddsRow:undefined,inspect);
+  decisions.clear();
   for (const o of odds) {
     const key=o.match_id+'|'+o.market_key+'|'+o.market_name,decision=decisions.get(key)??{allowed:!isExcludedOfferMarket(o)&&marketIsEnabled(o,rowsById.get(o.match_id)),board:isBoardOddsRow(o)};decisions.set(key,decision);
     if(!decision.allowed||o.price==null&&o.suspended===true)continue;
@@ -558,7 +559,7 @@ export function startCollector({ io } = {}) {
 
       if (io) {
         const liveRows = await getMatches({ service: 'LIVE', catalog:true });
-        const matches = await withOdds(liveRows, now);
+        const matches = await withOdds(liveRows, now,{board:true});
         const counts = await getCounts();
         io.emit('matches:live', { at: state.syncedAt, counts, matches: liveBoardFacts(matches) });
         io.emit('meta', {

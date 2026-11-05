@@ -73,6 +73,7 @@ const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOr
 let collector = null;
 let legacyYbetsResults=null;
 let pusher = null;
+app.locals.loadMatchDetail=async id=>{boostMatch(Number(id));if(['ybets','zizobet'].includes(config.sportsProvider)){await collector?.focus(Number(id)).catch(()=>{});await flushFeedBuffer();}else pusher?.subscribeFull(Number(id));};
 let oddsStatus = { connected: false };
 let shuttingDown = false;
 let riskRefreshTimer = null;
@@ -704,17 +705,7 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 
 /* --------------------------------------- React app (betting / admin panels) */
 
-// Detail-page GETs need complete markets immediately, including distant prematch
-// fixtures which otherwise stay on the hourly base-only subscription tier.
-app.use('/app/api/matches/:id', async (req, _res, next) => {
-  try {
-    if (req.method === 'GET') {
-      if(['ybets','zizobet'].includes(config.sportsProvider)&&(isYbetsMatchId(req.params.id)||isZizoId(req.params.id))) {await collector?.focus(Number(req.params.id)).catch(()=>{});await flushFeedBuffer();}
-      else pusher?.subscribeFull(req.params.id);
-    }
-    next();
-  } catch(error) { next(error); }
-});
+// Public and admin detail routes invoke the shared loader after fixture validation.
 
 // Sizzling Hot Deluxe — REAL player wallet (sportsbook balance).
 // The original Pixi client posts to /real/play with the HttpOnly casino session
@@ -924,7 +915,7 @@ io.on('connection', async (socket) => {
       at: new Date().toISOString(),
       counts,
       mode: getFeedMode(),
-      matches: liveBoardFacts(await withOdds(rows)),
+      matches: liveBoardFacts(await withOdds(rows,Date.now(),{board:true})),
     });
   } catch (e) {
     socket.emit('server:error', { message: e.message });
@@ -1006,7 +997,7 @@ async function boot() {
         broadcastFeedState();
         await expireStaleMatches(180);
         const rows=await getMatches({service:'LIVE',catalog:true});
-        const matches=await withOdds(rows),counts=await getCounts();
+        const matches=await withOdds(rows,Date.now(),{board:true}),counts=await getCounts();
         io.emit('matches:live',{at:new Date().toISOString(),counts,matches:liveBoardFacts(matches)});
       },
       selectRows:rows=>{

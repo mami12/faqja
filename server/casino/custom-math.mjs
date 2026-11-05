@@ -38,7 +38,7 @@ function percentage(value,name,fallback,maximum=100){
 export function validateControls(gameId,controls){
  const entry=entryFor(gameId);
  if(!controls||typeof controls!=='object'||Array.isArray(controls)||Object.keys(controls).some(key=>!['mode','rtp','hitFrequency'].includes(key))||!['original','custom'].includes(controls.mode))throw fail('Select original or custom casino math');
- const normalized={mode:controls.mode,rtp:percentage(controls.rtp,'RTP',controls.mode==='original'?95:undefined,CUSTOM_CONTROL_LIMITS.rtp.max),hitFrequency:percentage(controls.hitFrequency,'Hit frequency',controls.mode==='original'?20:undefined,CUSTOM_CONTROL_LIMITS.hitFrequency.max)};
+ const normalized={mode:controls.mode,rtp:percentage(controls.rtp,'RTP',controls.mode==='original'?95:undefined,Math.floor(limitsOf(entry).maxWinMultiplier*10000)/100),hitFrequency:percentage(controls.hitFrequency,'Hit frequency',controls.mode==='original'?20:undefined,CUSTOM_CONTROL_LIMITS.hitFrequency.max)};
  if(normalized.rtp===undefined||normalized.hitFrequency===undefined)throw fail('RTP and hit frequency are required');
  if(normalized.mode==='custom'){
   const {rtp,hitFrequency}=normalized;
@@ -150,7 +150,7 @@ export function customGameSummary(gameId,{controls,stakeCents,lines}={}){
   maxPayoutMultiplier=maxPayoutCents/stakeCents;
  }
  return freeze({gameId,version:versionOf(gameId,variant),mode:normalized?.mode??'original',controls:normalized,
-  customLimits:limitsOf(entry),controlLimits:CUSTOM_CONTROL_LIMITS,maxPayoutMultiplier,...(maxPayoutCents!==undefined?{maxPayoutCents}:{}),
+  customLimits:limitsOf(entry),controlLimits:{rtp:{min:0,max:Math.floor(limitsOf(entry).maxWinMultiplier*10000)/100},hitFrequency:CUSTOM_CONTROL_LIMITS.hitFrequency},maxPayoutMultiplier,...(maxPayoutCents!==undefined?{maxPayoutCents}:{}),
   mathProfile:{...entry.mathProfile},freeSpinsEnabled:entry.freeSpinsEnabled,catalogTrajectories:entry.trajectories.length,
   hitDefinition:'Paid rounds with total payout greater than zero, including all awarded free games',
   scope:'All players; future paid rounds only',customModel:'Finite original-paytable trajectory catalog; custom outcome probabilities'});

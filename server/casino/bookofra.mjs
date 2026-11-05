@@ -1,3 +1,4 @@
+import {managerCasinoSettings} from './manager-settings.mjs';
 import jwt from 'jsonwebtoken';
 import {config} from '../config.mjs';
 import {requireAuth} from '../ledger/auth.mjs';
@@ -494,6 +495,7 @@ router.post('/casino/bookofra/session',dependencies.auth??requireAuth,async(req,
     const {bookOfRaFreeState}=dependencies.bookOfRaFreeState?dependencies:await import('./bookofra-transactions.mjs');
     const owed=await bookOfRaFreeState(req.user.id);
     const {rows}=await (dependencies.runQuery??query)('select enabled,game_profiles,game_controls from app_casino_settings where id=1');
+    rows[0]=await managerCasinoSettings(dependencies.runQuery??query,rows[0],req.user.managerId??req.user.manager_id??req.user.agentId??req.user.agent_id);
     if(!rows[0]?.enabled&&!Number(owed?.left_spins))throw fault(403,'CASINO_DISABLED');
     const {assertCasinoMathAcknowledged}=await import('./casino-controls.mjs');
     let mathVersion;

@@ -56,5 +56,5 @@ export function projectBoardMatches(matches) {
 export function projectClientBoardMatches(matches){return matches.map(match=>{
  const markets=match.markets??[],available=m=>!isDecidedLiveMarket(match,m)&&(m.outcomes??[]).some(o=>o.decided!==true&&o.odds!=null),suspended=m=>!isDecidedLiveMarket(match,m)&&(m.status==='SUSPENDED'||(m.outcomes??[]).some(o=>o.feedSuspended||o.riskSuspended));
  const selected=selectBoardMarkets(markets,available,suspended,match);
- return {...match,marketCount:match.marketCount??markets.length,markets:[selected.primary,selected.total,selected.nextGoal].filter(Boolean)};
+ return {...match,marketCount:match.marketCount??markets.length,markets:[selected.primary,selected.total].filter(Boolean)};
 });}

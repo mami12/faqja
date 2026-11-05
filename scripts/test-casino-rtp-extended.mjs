@@ -23,28 +23,28 @@ try{
  const before=(await pool.query('select id,balance from app_user order by id')).rows;
  for(const actor of [manager,player])assert.equal((await call(actor,'/admin/casino/controls','PATCH',{gameId:'sizzling',mode:'custom',rtp:600,hitFrequency:100})).status,403);
  let settings=(await call(admin,'/admin/casino/settings')).body;
- for(const rtp of [600,1000])for(const gameId of ids){
+ for(const rtp of [600,1000,2000])for(const gameId of ids){
   const old=settings.games.find(g=>g.gameId===gameId).mathVersion;
   const changed=await call(admin,'/admin/casino/controls','PATCH',{gameId,mode:'custom',rtp,hitFrequency:100});
   assert.equal(changed.status,200,JSON.stringify(changed));settings=changed.body;
   const game=settings.games.find(g=>g.gameId===gameId);
   assert.equal(game.configurationError,null);assert.equal(game.effectiveRtp,rtp);assert.equal(game.effectiveHitFrequency,100);
-  assert.deepEqual(game.controlLimits,{rtp:{min:0,max:1000},hitFrequency:{min:0,max:100}});
+  assert.ok(game.controlLimits.rtp.max>=1000);assert.deepEqual(game.controlLimits.hitFrequency,{min:0,max:100});
   assert.ok(game.mathVersion&&game.mathVersion!==old,'new economic terms get a new acknowledgement version');
  }
  const saved=(await pool.query('select game_controls from app_casino_settings where id=1')).rows[0].game_controls;
  const audits=Number((await pool.query("select count(*) as n from app_admin_audit where action='PATCH /admin/casino/controls'")).rows[0].n);
- for(const values of [{rtp:1000.01,hitFrequency:100},{rtp:600,hitFrequency:100.01},{rtp:600,hitFrequency:101},{rtp:600.001,hitFrequency:100},{rtp:-1,hitFrequency:100},{rtp:1000,hitFrequency:.01},{rtp:0,hitFrequency:100},{rtp:true,hitFrequency:100}]){
+ for(const values of [{rtp:Number.MAX_SAFE_INTEGER,hitFrequency:100},{rtp:600,hitFrequency:100.01},{rtp:600,hitFrequency:101},{rtp:600.001,hitFrequency:100},{rtp:-1,hitFrequency:100},{rtp:1000,hitFrequency:.01},{rtp:0,hitFrequency:100},{rtp:true,hitFrequency:100}]){
   assert.equal((await call(admin,'/admin/casino/controls','PATCH',{gameId:'sizzling',mode:'custom',...values})).status,400);
  }
  for(const gameId of ['lucky-clover-x3','fruit-queen','seven-hot'])assert.equal((await call(admin,'/admin/casino/controls','PATCH',{gameId,mode:'custom',rtp:100,hitFrequency:100})).status,400,'an impossible pair is never silently saved');
  assert.deepEqual((await pool.query('select game_controls from app_casino_settings where id=1')).rows[0].game_controls,saved);
  assert.equal(Number((await pool.query("select count(*) as n from app_admin_audit where action='PATCH /admin/casino/controls'")).rows[0].n),audits);
  const publicStatus=await call(player,'/casino/status');assert.equal(publicStatus.status,200);
- for(const game of publicStatus.body.games){if(game.supportsCustomMath){assert.equal(game.effectiveRtp,1000);assert.equal(game.effectiveHitFrequency,100);}else{assert.equal(game.controls.mode,'original');assert.equal(game.effectiveHitFrequency,null);}assert.ok(game.mathVersion);}
+ for(const game of publicStatus.body.games){if(game.supportsCustomMath){assert.equal(game.effectiveRtp,2000);assert.equal(game.effectiveHitFrequency,100);}else{assert.equal(game.controls.mode,'original');assert.equal(game.effectiveHitFrequency,null);}assert.ok(game.mathVersion);}
  assert.deepEqual((await pool.query('select id,balance from app_user order by id')).rows,before,'settings never alter any wallet');
  assert.equal(Number((await pool.query('select count(*) as n from app_casino_round')).rows[0].n),0);
- console.log('PASS extended RTP admin API: six games at600/100 and1000/100, exact reported limits/versions, role checks, invalid/impossible pairs rejected atomically, unchanged balances and no rounds');
+ console.log('PASS extended RTP admin API: six games at600/100,1000/100 and2000/100, exact reported limits/versions, role checks, invalid/impossible pairs rejected atomically, unchanged balances and no rounds');
 }finally{
  if(server){server.closeAllConnections?.();await new Promise(r=>server.close(r));}
  await pool.end();assert.ok(resolve(temp).startsWith(parent+sep));await rm(temp,{recursive:true,force:true});

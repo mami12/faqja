@@ -138,3 +138,12 @@ override older generated notes below.
 - Prefer typed APIs where the stack supports them.
 
 See `.xgrok/BEST_PRACTICES.md` and `.xgrok/SECURITY.md`.
+
+## Latest authorized performance and casino scope rules — 2026-11-05
+
+- Board requests fetch/process main prices only; opening one fixture fetches its full prices. Preserve all real fixtures and explicit admin visibility/publication choices.
+- Detail viewers trigger shared extra statistics without needing a bet; use the existing ten-minute cache, provider rotation and durable quotas. Queue concurrent requests rather than discarding them.
+- Casino per-game precedence is AGENT > MANAGER > GLOBAL for every descendant player. An agent40% overrides manager96%/100%. Apply effective settings in every paid wallet path, not just the settings UI.
+- Casino commission uses the same hierarchy and freezes once per paid round; never move staff balances automatically. Preserve awarded bonuses and exact replay results.
+- Six custom-math games accept only native-paytable-realizable RTP/HF. RTP maxima derive from each game, HF never exceeds100%. Fire Joker/Fortune Teller remain original-profile only.
+- Isolated checks: test-manager-casino-settings, test-manager-casino-browser, test-zizo-board-demand, test-board-speed, test-stats-rotation and the protected suite. Never test on production accounts.

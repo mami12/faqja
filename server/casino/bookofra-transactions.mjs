@@ -1,3 +1,4 @@
+import {managerCasinoSettings} from './manager-settings.mjs';
 /**
  * Server-authoritative settlement for Book of Ra Deluxe (real wallet).
  *
@@ -22,7 +23,7 @@ async function lockAccounts(db,userId){
   if(!lookup.rows.length)throw fault(404,'Player not found');
   const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
   const locked=await db.query(
-    'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+    'select id,username,role,status,balance,manager_id,agent_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
   const accounts=new Map(locked.rows.map(x=>[x.id,x]));
   const player=accounts.get(userId);
   if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw fault(403,'Player account disabled');
@@ -61,6 +62,7 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
     await db.query('begin');
     const {player,manager}=await lockAccounts(db,userId);
     const settings=await db.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
+    settings.rows[0]=await managerCasinoSettings(db.query.bind(db),settings.rows[0],player.manager_id,{lock:true,agentId:player.agent_id});
 
     if(mode==='freespin'){
       const cached=await db.query('select action,response from app_casino_gamble_event where user_id=$1 and request_id=$2',[userId,requestId]);

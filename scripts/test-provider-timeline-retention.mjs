@@ -20,7 +20,7 @@ const request=async url=>{
 const feed=startZizoFeed({autoStart:false,request,now:()=>time,connectMqtt:()=>({setLiveIds(){},stop(){},pause(){},resume(){}}),
  onMatch:row=>{lastRow=row;},onInfo:info=>infos.push(info),onOdds:()=>{}});
 try{
- await feed.tick();
+ await feed.tick();assert.equal(detailReads,0,'unopened matches use the board header only');await feed.focus(lastRow.match_id);
  assert.equal(detailReads,1);assert.deepEqual(lastRow.raw.eventTimeline.map(e=>e.minuteLabel),['23','45+2']);
  assert.deepEqual(infos.at(-1).events.map(e=>e.minuteLabel),['23','45+2']);
  assert.deepEqual(serializeMatch(lastRow,[]).events.map(e=>e.minuteLabel),['23','45+2'],'cold REST snapshot carries provider times');

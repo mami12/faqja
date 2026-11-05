@@ -351,11 +351,14 @@ ledgerRouter.get(
 ledgerRouter.get(
   '/matches/:id',
   guard(async (req, res) => {
-    const row = await getMatchRow(Number(req.params.id));
+    let row = await getMatchRow(Number(req.params.id));
     if (!row || matchOverride(row.match_id)?.hidden || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
     // somebody is looking at this match: make sure it gets its full market list (corners,
     // cards, every total) on the next subscribe cycle, instead of base markets only
     boostMatch(row.match_id);
+    statsProviders.warm(row);
+    await req.app.locals.loadMatchDetail?.(row.match_id);
+    row=await getMatchRow(Number(req.params.id))??row;
     const [serialized] = await withOdds([row],Date.now(),{displayStats:true});
     const match = toClientMatch(serialized);
     if (ledger.isLedgerReady()) await builders.decorateMatches([match]);
@@ -371,9 +374,11 @@ ledgerRouter.get(
 ledgerRouter.get(
   '/matches/:id/tracker',
   guard(async (req, res) => {
-    const row = await getMatchRow(Number(req.params.id));
-    if (!row || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
+    let row = await getMatchRow(Number(req.params.id));
+    if (!row || matchOverride(row.match_id)?.hidden || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
     boostMatch(row.match_id);
+    await req.app.locals.loadMatchDetail?.(row.match_id);
+    row=await getMatchRow(Number(req.params.id))??row;
 
     const [serialized] = await withOdds([row],Date.now(),{displayStats:true});
     const m = toClientMatch(serialized);

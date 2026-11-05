@@ -478,11 +478,13 @@ const matchDetail = guard(async (req, res) => {
   if (!Number.isSafeInteger(matchId) || matchId <= 0) {
     return res.status(404).json({ message: 'match not found' });
   }
-  const row = await getMatchRow(matchId);
+  let row = await getMatchRow(matchId);
   if (!row) return res.status(404).json({ message: 'match not found' });
   // Like the public detail view, ask the feed for this fixture's full markets.
   boostMatch(row.match_id);
-  const [serialized] = await withOdds([row]);
+  await req.app.locals.loadMatchDetail?.(row.match_id);
+  row = await getMatchRow(matchId) ?? row;
+  const [serialized] = await withOdds([row],Date.now(),{displayStats:true});
   const id = String(row.match_id);
   const relevantOverrides = (await overrides.list()).filter((entry) =>
     entry.kind === 'match' ? entry.ref === id : entry.ref.startsWith(`${id}|`));

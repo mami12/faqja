@@ -1,3 +1,4 @@
+import {MANAGER_CASINO_SQL} from '../casino/manager-settings.mjs';
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
 /**
@@ -291,12 +292,14 @@ create table if not exists app_manager_commission (
 );
 create index if not exists app_manager_commission_owner_idx on app_manager_commission(manager_id,kind,created_at);
 create index if not exists app_manager_commission_player_idx on app_manager_commission(player_id,kind);
+${MANAGER_CASINO_SQL}
 create or replace function app_record_casino_commission() returns trigger language plpgsql as $$
-declare owner_id uuid; pct numeric(5,2);
+declare owner_id uuid; agent_owner_id uuid; pct numeric(5,2);
 begin
  select manager_id into owner_id from app_user where id=NEW.user_id;
  if owner_id is not null then
-   select casino_pct into pct from app_commission_config where id=1;
+   select agent_id into agent_owner_id from app_user where id=owner_id;
+   select coalesce(a.commission_pct,m.commission_pct,c.casino_pct) into pct from app_commission_config c left join app_manager_casino_settings m on m.manager_id=owner_id left join app_manager_casino_settings a on a.manager_id=agent_owner_id where c.id=1;
    insert into app_manager_commission(manager_id,player_id,kind,round_id,stake,rate_pct,amount)
    values(owner_id,NEW.user_id,'CASINO',NEW.id,NEW.stake,coalesce(pct,0),round(NEW.stake*coalesce(pct,0)/100,2))
    on conflict(round_id) do nothing;

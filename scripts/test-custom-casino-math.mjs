@@ -30,8 +30,8 @@ for(const [gameId,freeEnabled] of variants){
  assert(Object.isFrozen(entry)&&Object.isFrozen(entry.trajectories)&&Object.isFrozen(entry.reels[0]));
  assert.deepEqual(validateControls(gameId,{mode:'original'}),{mode:'original',rtp:95,hitFrequency:20});
  assert.deepEqual(validateControls(gameId,{mode:'original',rtp:1,hitFrequency:99}),{mode:'original',rtp:1,hitFrequency:99},'inactive drafts do not alter original math');
- for(const invalid of [null,{}, {mode:'custom',rtp:0,hitFrequency:1},{mode:'custom',rtp:1,hitFrequency:0},{mode:'custom',rtp:-1,hitFrequency:1},{mode:'custom',rtp:1000.01,hitFrequency:100},{mode:'custom',rtp:600,hitFrequency:100.01},{mode:'custom',rtp:'95',hitFrequency:20},{mode:'custom',rtp:NaN,hitFrequency:20},{mode:'custom',rtp:90.001,hitFrequency:20},{mode:'custom',rtp:90,hitFrequency:20,playerId:'forbidden'}])assert.throws(()=>validateControls(gameId,invalid),error=>error.status===400);
- assert.deepEqual(summary.controlLimits,{rtp:{min:0,max:1000},hitFrequency:{min:0,max:100}});
+ for(const invalid of [null,{}, {mode:'custom',rtp:0,hitFrequency:1},{mode:'custom',rtp:1,hitFrequency:0},{mode:'custom',rtp:-1,hitFrequency:1},{mode:'custom',rtp:Number.MAX_SAFE_INTEGER,hitFrequency:100},{mode:'custom',rtp:600,hitFrequency:100.01},{mode:'custom',rtp:'95',hitFrequency:20},{mode:'custom',rtp:NaN,hitFrequency:20},{mode:'custom',rtp:90.001,hitFrequency:20},{mode:'custom',rtp:90,hitFrequency:20,playerId:'forbidden'}])assert.throws(()=>validateControls(gameId,invalid),error=>error.status===400);
+ assert.deepEqual(summary.controlLimits,{rtp:{min:0,max:Math.floor(Math.min(...entry.bounds.map(b=>b.maxWinMultiplier))*10000)/100},hitFrequency:{min:0,max:100}});
  const limit=summary.customLimits;
  assert.throws(()=>validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:.01}),/Incompatible/,'unreachable upper means must be rejected');
  assert.throws(()=>validateControls(gameId,{mode:'custom',rtp:.01,hitFrequency:100}),/Incompatible/,'unreachable lower means must be rejected');

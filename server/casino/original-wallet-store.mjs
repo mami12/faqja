@@ -1,3 +1,4 @@
+import {managerCasinoSettings} from './manager-settings.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {pool} from '../db.mjs';
 import {assertPlayerCanBet} from '../ledger/player-controls.mjs';
@@ -43,13 +44,14 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    const lookup=await db.query('select manager_id from app_user where id=$1',[userId]);
    if(!lookup.rows.length)throw walletFault(401,'Player not found');
    const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
-   const locked=await db.query('select id,username,role,status,balance,currency,manager_id,financial_epoch from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+   const locked=await db.query('select id,username,role,status,balance,currency,manager_id,agent_id,financial_epoch from app_user where id=any($1::uuid[]) order by id for update',[ids]);
    const player=locked.rows.find(x=>x.id===userId),manager=locked.rows.find(x=>x.id===player?.manager_id);
    if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw walletFault(403,'Player account disabled');
    if(expectedEpoch!==undefined&&Number(expectedEpoch)!==Number(player.financial_epoch??0))throw walletFault(401,'Game session expired. Reopen the game.');
    if(player.manager_id!==lookup.rows[0].manager_id)throw walletFault(409,'Manager changed. Retry.');
    if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw walletFault(409,'Manager unavailable');
    const settings=await db.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
+   settings.rows[0]=await managerCasinoSettings(db.query.bind(db),settings.rows[0],player.manager_id,{lock:true,agentId:player.agent_id});
    const saved=(await db.query('select * from app_casino_original_state where user_id=$1 and game_id=$2 for update',[userId,gameId])).rows[0];
    const context={db,player,manager,game,saved,enabled:!!settings.rows[0]?.enabled,gameProfiles:settings.rows[0]?.game_profiles??{},settings:settings.rows[0]??{}};
    const answer=await fn(context);

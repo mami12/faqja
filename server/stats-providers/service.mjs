@@ -12,11 +12,13 @@ const live=row=>!finished(row)&&String(row.service??row.status).toUpperCase()===
 export const providerUrls=Object.fromEntries(Object.entries(specs).map(([k,v])=>[k,v.base]));
 export function createStatsService({runQuery=query,env=process.env,request=fetch,now=Date.now,saveEvidence,loadMatch,loadSnapshots,getWatchIds,getEventWatchIds}={}){
  let initFlight,busy=false,active=0;const offers=new Map(),inflight=new Map();
- const displayCache=new Map(),displayFlights=new Map();let displayActive=0;
+ const viewed=new Map();
+ const displayCache=new Map(),displayFlights=new Map();let displayActive=0;const displayWaiters=[];
  const displayTtl=refreshMs;
  const health={lastRunAt:null,lastError:null,providers:{}};
  const enabled=()=>env.STATS_PROVIDERS_ENABLED==='true';
- const watchIds=async()=>new Set([...(getWatchIds?await getWatchIds():(await runQuery("select distinct l.match_id from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING' order by l.match_id")).rows.map(row=>row.match_id))].map(String));
+ const betWatchIds=async()=>new Set([...(getWatchIds?await getWatchIds():(await runQuery("select distinct l.match_id from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING' order by l.match_id")).rows.map(row=>row.match_id))].map(String));
+ const watchIds=async()=>{const ids=await betWatchIds();for(const[id,until]of viewed){if(until>now())ids.add(id);else viewed.delete(id);}return ids;};
  const watched=async id=>(await watchIds()).has(String(id));
  const init=()=>initFlight??=(async()=>{
   await runQuery('create table if not exists app_stats_cache(cache_key text primary key,payload jsonb not null,updated_at timestamptz not null default now())');
@@ -187,7 +189,7 @@ export function createStatsService({runQuery=query,env=process.env,request=fetch
   return d.events?.find(x=>String(x.id)===String(m.id))?.competitions?.[0]?.status?.type?.completed===true;
  }
  async function warmStatistics(row){
-  if(!enabled()||!row||(!live(row)&&!finished(row)))return;
+  if(!enabled()||!row||(!live(row)&&!finished(row)&&!viewed.has(String(row.match_id??row.id))))return;
   let final=finished(row);
   const primary=teamStatisticsFromRow(row),id=String(row.match_id??row.id),identity=identityOf(row);
   const cached=displayCache.get(id);
@@ -195,8 +197,9 @@ export function createStatsService({runQuery=query,env=process.env,request=fetch
   // Check the durable FT archive before reusing a live timer: the catalogue
   // can still say LIVE after the final result has already been verified.
   if(displayFlights.has(id))return displayFlights.get(id);
-  if(displayActive>=2)return;displayActive++;
+  const slot=displayActive<2?(displayActive++,null):new Promise(resolve=>displayWaiters.push(resolve));
   const flight=(async()=>{
+   if(slot)await slot;
    if(!(await watched(id)))return;
    const result=(await runQuery('select * from app_match_result where match_id=$1',[Number(id)])).rows[0];
    if(result)final=true;
@@ -281,7 +284,7 @@ export function createStatsService({runQuery=query,env=process.env,request=fetch
    }
    entry.next=now()+displayTtl;entry.at=now();entry.mapping=mapping;
    await write('display:'+id,entry);displayCache.set(id,entry);if(displayCache.size>3000)displayCache.delete(displayCache.keys().next().value);
-  })().finally(()=>{displayFlights.delete(id);displayActive--;});displayFlights.set(id,flight);return flight;
+  })().finally(()=>{displayFlights.delete(id);const next=displayWaiters.shift();if(next)next();else displayActive--;});displayFlights.set(id,flight);return flight;
  }
  function displayStatistics(row){
   const entry=displayCache.get(String(row.match_id??row.id));
@@ -303,7 +306,8 @@ export function createStatsService({runQuery=query,env=process.env,request=fetch
   return entry?.identity===identityOf(row)&&now()-entry.at<=displayTtl*2?entry.goalIntervals??null:null;
  }
  function warm(row){
-  // Detail views share the same watched-match refresh; visitors never start a preflight.
+  if(row)viewed.set(String(row.match_id??row.id),now()+12*60000);
+  // Detail viewers share the same durable ten-minute cache and quota schedule.
   void warmStatistics(row).catch(()=>{});
  }
  async function tick(){

@@ -73,7 +73,12 @@ try{
   create table app_stats_usage(provider text,period text,calls int,primary key(provider,period));
   create table app_stat_review(match_id bigint primary key,payload jsonb not null,updated_at timestamptz default now());`);
 
- // A detail view, a prematch bet, a closed parent and a settled line spend nothing.
+ // Opening a single detail opts that match into shared enrichment without a bet.
+ {const h=await harness();h.service.warm(row());await h.service.warmStatistics(row());assert.ok(h.calls.length>0);const count=h.calls.length;h.service.warm(row());await h.service.warmStatistics(row());assert.equal(h.calls.length,count,'repeat viewers share the ten-minute cache');h.advance(tenMinutes);h.service.warm(row());await h.service.warmStatistics(row());assert.ok(h.calls.length>count,'viewed fixture refreshes after ten minutes');h.verify();}
+ // Three concurrent viewed fixtures are queued, never silently dropped by the two-job limit.
+ {const rows=[row(),row(102),row(103)],h=await harness({rows});for(const r of rows)h.service.warm(r);await Promise.all(rows.map(r=>h.service.warmStatistics(r)));for(const r of rows)assert.equal(h.stats(h.service,r).home.fouls,7);assert.equal(h.calls.filter(c=>c.path.endsWith('/plays')).length,3);h.verify();}
+ {const r=row(101,{service:'PREMATCH'}),h=await harness({rows:[r]});h.service.warm(r);await h.service.warmStatistics(r);assert.ok(h.calls.length>0,'opening prematch also starts enrichment');const count=h.calls.length;h.advance(12*60000+1);await h.service.tick();assert.equal(h.calls.length,count,'closed unbet view stops background polling after interest expires');h.verify();}
+ // A non-viewed detail, a prematch bet, a closed parent and a settled line spend nothing.
  {
   const h=await harness({env:{BSD_API_KEY:'test-key'},rows:[row(),row(102,{service:'PREMATCH'}),row(103),row(104)]});
   await h.service.warmStatistics(row());await h.service.update(row());
