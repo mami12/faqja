@@ -10,7 +10,7 @@ const yesNo=line=>{
  if(['no','jo'].includes(label))return false;
  return null;
 };
-const sideOf=v=>['1','home','home team','team 1'].includes(norm(v))?'home':['2','away','away team','team 2'].includes(norm(v))?'away':['none','no goal','no corner','no more goals','no more corners'].includes(norm(v))?'none':null;
+const sideOf=v=>['1','home','home team','team 1'].includes(norm(v))?'home':['2','away','away team','team 2'].includes(norm(v))?'away':['none','x','draw','no goal','no corner','no more goals','no more corners','no team'].includes(norm(v))?'none':null;
 const typeOf=name=>/\b(?:corners?|corner kicks?|kornera?)\b/.test(name)?'corner':
  /\b(?:goals?|scores?|golat?|gola?)\b/.test(name)?'goal':
  /\b(?:cards?|bookings?|kartona?)\b/.test(name)?'card':
@@ -43,7 +43,7 @@ export function parseSequenceBet(line,counts={}) {
  const event=/\bcorner/.test(name)?'corner':/\bgoal/.test(name)?'goal':null;
  if(!event)return null;
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
- const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:who (?:scores|takes) )?(?:goal|corner)\s*(\d+)\b/);
+ const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:(?:who (?:scores|takes)|which team (?:scores|wins)) (?:the )?)?(?:goal|corner)\s*(\d+)\b|^which team (?:scores|wins) (?:the )?goal (\d+)\b/);
  const race=name.match(/\brace to (\d{1,3}) corners?\b/);
  if(!isNext&&!numbered&&!race)return null;
  const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
@@ -53,7 +53,7 @@ export function parseSequenceBet(line,counts={}) {
   if(!Number.isInteger(threshold)||threshold<1||threshold>100||side==='none')return null;
   return {version:1,kind:'race',event:'corner',target:threshold,side};
  }
- let target=numbered?Number(numbered[1]??numbered[2]):null;
+ let target=numbered?Number(numbered[1]??numbered[2]??numbered[3]):null;
  if(isNext){
   const c=counts[event];
   const home=nonNeg(c?.home),away=nonNeg(c?.away);
