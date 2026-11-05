@@ -87,7 +87,7 @@ export const liveContract=(line,{counts={},clock=null}={})=>
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
- const valid=all.every(e=>Number.isFinite(Number(e.minute))&&Number(e.minute)>=0&&
+ const valid=all.every(e=>number(e.minute)!==null&&Number(e.minute)>=0&&
   (e.team==='home'||e.team==='away'||event==='card'||event==='foul'));
  if(!valid)return null;
  // Preserve explicit unique provider order where available. A same-minute
@@ -145,7 +145,7 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
   return null;
  }
  if(count===null)return null;
- if(contract.kind==='over')return count>contract.threshold?'WON':(scopeEnded||ended)?'LOST':null;
+ if(contract.kind==='over')return count>contract.threshold?'WON':(scopeEnded||ended)?count===contract.threshold&&Number.isInteger(contract.threshold)?'VOID':'LOST':null;
  if(contract.kind==='under')return count>contract.threshold?'LOST':(scopeEnded||ended)?count===contract.threshold&&Number.isInteger(contract.threshold)?'VOID':'WON':null;
  if(contract.kind==='atLeast')return count>=contract.target?'WON':(scopeEnded||ended)?'LOST':null;
  if(contract.kind==='exact')return count>contract.target?'LOST':(scopeEnded||ended)?count===contract.target?'WON':'LOST':null;
