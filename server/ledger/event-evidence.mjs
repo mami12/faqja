@@ -12,7 +12,24 @@ export function createEventEvidenceStore({runQuery=query,now=Date.now,cacheMs=10
   if(!watchFlight)watchFlight=(async()=>{const r=await runQuery("select l.match_id,l.market_name,l.live_contract from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING'");pending=new Set(r.rows.filter(r=>r.live_contract!=null||needsEvents(r)).map(r=>String(r.match_id)));pendingAt=now();return pending;})().finally(()=>{watchFlight=null;});
   return watchFlight;
  };
- return {eventWatchIds,async saveEventEvidence(id,payload){
+ return {eventWatchIds,async pruneUnbetMatchEvidence(){
+  await init();
+  // The latest raw evidence is temporary for unbet fixtures. Keep the
+  // snapshot used by Finished Favorites until its separate 48-hour window.
+  return runQuery(`with expired_evidence as (
+   delete from app_match_event_evidence e using app_match_result r
+   where r.match_id=e.match_id and r.finished_at<now()-interval '24 hours'
+     and not exists(select 1 from app_ticket_line l where l.match_id=e.match_id)
+   returning e.match_id
+  ), expired_snapshots as (
+   delete from app_match_snapshot s using app_match_result r
+   where r.match_id=s.match_id and r.finished_at<now()-interval '48 hours'
+     and not exists(select 1 from app_ticket_line l where l.match_id=s.match_id)
+   returning s.match_id
+  )
+  select (select count(*)::int from expired_evidence) as evidence,
+         (select count(*)::int from expired_snapshots) as snapshots`);
+ },async saveEventEvidence(id,payload){
   if(!payload||!Array.isArray(payload.events)||payload.events.length>20000)throw new Error('Invalid event evidence');
   if(!(await eventWatchIds()).has(String(id)))return false;
   await init();
@@ -29,6 +46,7 @@ export function createEventEvidenceStore({runQuery=query,now=Date.now,cacheMs=10
 }
 const store=createEventEvidenceStore();
 export const eventWatchIds=()=>store.eventWatchIds();
+export const pruneUnbetMatchEvidence=()=>store.pruneUnbetMatchEvidence();
 export const saveEventEvidence=(id,payload)=>store.saveEventEvidence(id,payload);
 export const loadEventEvidence=id=>store.loadEventEvidence(id);
 export function normalizeEvents(data,source){
