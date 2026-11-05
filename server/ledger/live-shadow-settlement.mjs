@@ -1,7 +1,7 @@
 import {query} from '../db.mjs';
 import {gradeLiveContract,gradeFromAcceptedCounters} from './live-contract-rules.mjs';
 export const LIVE_PREVIEW_ROWS_SQL=
- 'select l.id as line_id,l.ticket_id,l.match_id,l.live_contract, '+
+ 'select l.id as line_id,l.ticket_id,l.match_id,l.live_contract,t.placed_at, '+
  'f.payload as provider_frame,f.observed_at as frame_at, '+
  "(select count(*)::int from app_live_event_recovery q where q.match_id=l.match_id "+
  "and q.status='AWAITING_BACKUP_API' and l.id=any(q.line_ids)) as open_recovery_gaps "+
@@ -26,7 +26,9 @@ export async function createLiveSettlementPreviews({
   const frame=typeof row.provider_frame==='string'?JSON.parse(row.provider_frame):row.provider_frame;
   if(!frame){await clear(row.line_id);held++;continue;}
   const frameAt=new Date(row.frame_at).getTime();
-  if((!frame.ended&&(!Number.isFinite(frameAt)||now()-frameAt>120000))||
+  const placedAt=row.placed_at==null?NaN:new Date(row.placed_at).getTime();
+  if(!Number.isFinite(placedAt)||!Number.isFinite(frameAt)||frameAt<placedAt||frameAt>now()+5000||
+     (!frame.ended&&now()-frameAt>120000)||
      Number(row.open_recovery_gaps)>0){await clear(row.line_id);held++;continue;}
   const timeline=gradeLiveContract(contract,frame,{ended:frame.ended===true});
   const delta=gradeFromAcceptedCounters(contract,frame);
