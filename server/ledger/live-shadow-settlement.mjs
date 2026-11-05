@@ -1,0 +1,51 @@
+import {query} from '../db.mjs';
+import {gradeLiveContract} from './live-contract-rules.mjs';
+export const LIVE_PREVIEW_ROWS_SQL=
+ 'select l.id as line_id,l.ticket_id,l.match_id,l.live_contract, '+
+ 'f.payload as provider_frame,f.observed_at as frame_at, '+
+ "(select count(*)::int from app_live_event_recovery q where q.match_id=l.match_id "+
+ "and q.status='AWAITING_BACKUP_API' and l.id=any(q.line_ids)) as open_recovery_gaps "+
+ 'from app_ticket_line l join app_ticket t on t.id=l.ticket_id '+
+ 'left join lateral (select payload,observed_at from app_live_event_frame '+
+ 'where match_id=l.match_id order by observed_at desc,id desc limit 1) f on true '+
+ "where l.status='PENDING' and t.status='PENDING' and l.live_contract is not null "+
+ 'and not exists(select 1 from app_settlement_override o where o.line_id=l.id) '+
+ 'order by l.match_id,l.id limit $1';
+/** Preview only. This MUST NOT update app_ticket_line, app_ticket or wallets.
+ * Administrator can verify results before explicitly enabling any real payout.
+ */
+export async function createLiveSettlementPreviews({
+ runQuery=query,now=Date.now,limit=400
+}={}){
+ const cap=Math.max(1,Math.min(1000,Math.trunc(Number(limit)||400)));
+ const rows=(await runQuery(LIVE_PREVIEW_ROWS_SQL,[cap])).rows;
+ let proposed=0,held=0;
+ for(const row of rows){
+  const contract=typeof row.live_contract==='string'?JSON.parse(row.live_contract):row.live_contract;
+  const frame=typeof row.provider_frame==='string'?JSON.parse(row.provider_frame):row.provider_frame;
+  if(!frame){held++;continue;}
+  const frameAt=new Date(row.frame_at).getTime();
+  if((!frame.ended&&(!Number.isFinite(frameAt)||now()-frameAt>120000))||
+     Number(row.open_recovery_gaps)>0){held++;continue;}
+  const status=gradeLiveContract(contract,frame,{ended:frame.ended===true});
+  if(!['WON','LOST','VOID'].includes(status)){held++;continue;}
+  const evidence={contract,frame:{source:frame.source,clock:frame.clock,counts:frame.counts,
+    coverage:frame.coverage,ended:frame.ended,events:frame.events},frameAt:row.frame_at,
+    recoveriesOpen:0,decision:'TEST_ONLY_NO_WALLET_WRITE'};
+  await runQuery(
+   'insert into app_live_settlement_preview(line_id,match_id,proposed_status,payload,updated_at) '+
+   'values($1,$2,$3,$4::jsonb,now()) '+
+   'on conflict(line_id) do update set proposed_status=excluded.proposed_status, '+
+   'payload=excluded.payload,updated_at=excluded.updated_at',
+   [row.line_id,row.match_id,status,JSON.stringify(evidence)]);
+  proposed++;
+ }
+ return {examined:rows.length,proposed,held,mode:'SHADOW_ONLY'};
+}
+export const LIVE_SHADOW_ADMIN_SQL=
+ 'select p.line_id,p.match_id,p.proposed_status,p.payload,p.updated_at, '+
+ 'l.ticket_id,l.market_name,l.outcome_name,l.match_name,l.status as line_status '+
+ 'from app_live_settlement_preview p join app_ticket_line l on l.id=p.line_id '+
+ 'join app_ticket t on t.id=l.ticket_id '+
+ "where l.status='PENDING' and t.status='PENDING' "+
+ 'order by p.updated_at desc limit $1';
