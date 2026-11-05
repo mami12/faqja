@@ -1,5 +1,7 @@
 import MarketCatalog from '../components/Admin/MarketCatalog';
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
+import {apiClient} from '../api/client';
+import ManualReviewQueue from '../components/Admin/ManualReviewQueue';
 import Header from '../components/Layout/Header';
 import AdminDashboard from '../components/Admin/AdminDashboard';
 import UserManagement from '../components/Admin/UserManagement';
@@ -16,9 +18,9 @@ import CasinoSettings from '../components/Admin/CasinoSettings';
 import FinancialReset from '../components/Admin/FinancialReset';
 import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -34,6 +36,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
       { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
     ],
   },
@@ -54,6 +57,18 @@ export default function AdminPage() {
   const { t, lang } = useLanguage();
   const tr = (value: string) => adminUiText(value, lang);
   const [tab, setTab] = useState<AdminTab>('dashboard');
+  const [reviewCount,setReviewCount]=useState(0);
+  useEffect(()=>{
+    let active=true;
+    const refresh=async()=>{
+      try{const res=await apiClient.get('/admin/settlement-review-queue',{params:{limit:200}});
+        if(active)setReviewCount(Number(res.data?.count)||0);
+      }catch{if(active)setReviewCount(0);}
+    };
+    void refresh();
+    const timer=window.setInterval(()=>void refresh(),15000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[tab]);
   const active = allItems.find(item => item.id === tab)!;
   const ActiveIcon = active.icon;
 
@@ -92,7 +107,8 @@ export default function AdminPage() {
                           <span className="block text-sm font-bold">{tr(item.label)}</span>
                           <span className="block truncate text-[11px] opacity-75">{tr(item.description)}</span>
                         </span>
-                        {selected && <ChevronRight size={15} />}
+                        {item.id==='manual-review'&&reviewCount>0&&<span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white" aria-label={`${reviewCount} bileta për kontroll`}>{reviewCount}</span>}
+                         {selected && <ChevronRight size={15} />}
                       </button>
                     );
                   })}
@@ -115,7 +131,7 @@ export default function AdminPage() {
                     onClick={() => setTab(item.id)}
                     className={`shrink-0 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold whitespace-nowrap transition-colors ${selected ? 'bg-accent-green text-primary' : 'bg-primary text-text-secondary hover:text-white'}`}
                   >
-                    <Icon size={15} /> {tr(item.label)}
+                    <Icon size={15} /> {tr(item.label)}{item.id==='manual-review'&&reviewCount>0&&<span className="rounded-full bg-rose-600 text-white px-1.5 text-[10px]">{reviewCount}</span>}
                   </button>
                 );
               })}
@@ -141,6 +157,7 @@ export default function AdminPage() {
             {tab === 'builders' && <BetBuilderManager />}
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
+             {tab === 'manual-review' && <ManualReviewQueue />}
             {tab === 'match-exposure' && <MatchExposure />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
