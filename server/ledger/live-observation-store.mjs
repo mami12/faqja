@@ -71,8 +71,8 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
   const watching=(await client.query(WATCHED_LIVE_LINES_SQL,[matchId])).rows;
   if(!watching.length){await client.query('commit');return {stored:false,reason:'NO_RELEVANT_TICKETS'};}
   const previous=(await client.query('select last_seen_at from app_live_event_cursor where match_id=$1 for update',[matchId])).rows[0];
-  const start=previous?new Date(previous.last_seen_at).getTime():
-    Math.min(...watching.map(item=>new Date(item.placed_at).getTime()).filter(Number.isFinite));
+  const earliestOpenBet=Math.min(...watching.map(item=>new Date(item.placed_at).getTime()).filter(Number.isFinite));
+  const start=previous?Math.max(new Date(previous.last_seen_at).getTime(),earliestOpenBet):earliestOpenBet;
   let recovery=false;
   if(Number.isFinite(start)&&seenAt-start>Math.max(60000,thresholdMs)){
    const eventTypes=[...new Set(watching.map(x=>x.live_contract?.event).filter(Boolean))];
