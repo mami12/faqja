@@ -368,6 +368,10 @@ alter table app_casino_freespin_state add column if not exists custom_round json
 
 ${ORIGINAL_WALLET_SQL}
 ${SETTLEMENT_REVIEW_SQL}
+create table if not exists app_manual_review_notice (
+  line_id uuid primary key references app_ticket_line(id) on delete cascade,
+  first_seen_at timestamptz not null
+);
 ${LIVE_OBSERVATION_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
