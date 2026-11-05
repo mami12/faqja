@@ -43,11 +43,11 @@ export function normalizeEvents(data,source){
  let coverage;
  if(source==='zizobet'&&Array.isArray(data.TimeLines)){
   const game=data.Match??{},rawClock=String(game.MatchTimeExtended??'').trim();
-  const full=rawClock.match(/^(\\d{1,3}):(\\d{2})$/);
+  const full=rawClock.match(/^(\d{1,3}):(\d{2})$/);
   const minute=full?Number(full[1])+Number(full[2])/60:
    game.MatchTime!=null&&String(game.MatchTime).trim()!==''?Number(game.MatchTime):NaN;
   const h=game.CornersTeam1,a=game.CornersTeam2;
-  const count=[h,a].map(v=>v!=null&&String(v).trim()!==''&&/^\\d+$/.test(String(v))?Number(v):null);
+  const count=[h,a].map(v=>v!=null&&String(v).trim()!==''&&/^\d+$/.test(String(v))?Number(v):null);
   const corners=events.filter(e=>e.type==='corner'&&!e.disabled);
   const actual=[corners.filter(e=>e.team==='home').length,corners.filter(e=>e.team==='away').length];
   const verified=Number.isFinite(minute)&&minute>=0&&minute<=130&&
