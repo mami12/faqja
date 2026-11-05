@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {parseEventWindow,parseSequenceBet,parseCountMarket,gradeLiveContract} from '../server/ledger/live-contract-rules.mjs';
+import {parseEventWindow,parseSequenceBet,parseCountMarket,gradeLiveContract,gradeFromAcceptedCounters} from '../server/ledger/live-contract-rules.mjs';
 
 const windowLine=(market,side)=>({market_name:market,outcome_name:side});
 const w=parseEventWindow(windowLine('Will there be a goal in minutes 20-45','Yes'));
@@ -68,4 +68,17 @@ assert.equal(gradeLiveContract(band,{counts:{card:5}}),'LOST');
 assert.equal(gradeLiveContract(band,{counts:{card:3}},{ended:true}),'WON');
 const fouls=parseCountMarket(windowLine('Total Fouls','2+'));
 assert.equal(gradeLiveContract(fouls,{counts:{foul:2}}),'WON');
+const deltaNext={...g,baseline:{home:1,away:0}};
+assert.equal(gradeFromAcceptedCounters(deltaNext,{teams:{goal:{home:1,away:1}}}),'WON');
+assert.equal(gradeFromAcceptedCounters({...deltaNext,side:'home'},{teams:{goal:{home:1,away:1}}}),'LOST');
+assert.equal(gradeFromAcceptedCounters(deltaNext,{teams:{goal:{home:2,away:1}}}),null,
+ 'Two goals between snapshots require history from the backup API');
+assert.equal(gradeFromAcceptedCounters(deltaNext,{teams:{goal:{home:0,away:1}}}),null,
+ 'Score rollback or VAR correction must not pay');
+assert.equal(gradeFromAcceptedCounters({...deltaNext,side:'none'},
+ {teams:{goal:{home:1,away:0}},ended:true}),'WON');
+const deltaRace={...race,baseline:{home:2,away:1}};
+assert.equal(gradeFromAcceptedCounters(deltaRace,{teams:{corner:{home:3,away:2}}}),'WON');
+assert.equal(gradeFromAcceptedCounters(deltaRace,{teams:{corner:{home:3,away:3}}}),null,
+ 'If both sides crossed the threshold, order is unknown');
 console.log('PASS live event window yes/no, next goal, race, irreversible totals, exact and range');
