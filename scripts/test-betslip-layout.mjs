@@ -25,6 +25,8 @@ import {FavoritesProvider} from '/src/context/FavoritesContext.tsx';
 import {LiveFeedProvider} from '/src/api/liveFeed.tsx';
 import SportsbookPage from '/src/pages/SportsbookPage.tsx';
 import '/src/index.css';
+import '/src/styles/zshop.css';
+import '/src/styles/ecco-sports.css';
 function Probe(){window.slip=useBetslip();return null;}
 createRoot(document.getElementById('root')).render(React.createElement(BrowserRouter,null,
   React.createElement(LanguageProvider,null,React.createElement(AuthProvider,null,

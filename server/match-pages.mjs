@@ -1,7 +1,7 @@
 /** Traverse the authoritative match catalog once per server poll. Offset pages
  * can overlap during a live update, so preserve IDs and prefer the LIVE copy.
  */
-export async function fetchMatchPages(requestPage, { pageSize = 1000, maxPages = 20 } = {}) {
+export async function fetchMatchPages(requestPage, { pageSize = 1000, maxPages = Infinity } = {}) {
   const limit = Math.max(1, Math.min(2000, Number(pageSize) || 1000));
   const matches = new Map(); let received = 0, offset = 0;
   const live = item => String(item?.service ?? '').toUpperCase() === 'LIVE';

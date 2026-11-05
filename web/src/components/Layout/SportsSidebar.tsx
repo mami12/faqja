@@ -7,6 +7,7 @@ import {
   Dribbble, Target, Circle, Trophy,
 } from 'lucide-react';
 import { isMainFootballCompetition } from '../../utils/sportsbookFilters';
+import CountryFlag from '../Sports/CountryFlag';
 
 interface Props {
   selectedTournamentId?: string;
@@ -26,16 +27,7 @@ interface Props {
 }
 
 /** White outlined football, like the supplied compact sportsbook navigation. */
-export function FootballIcon({ size = 25 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <circle cx="16" cy="16" r="13.6" stroke="currentColor" strokeWidth="1.8"/>
-      <path d="M16 8.1 22.9 13l-2.6 8H11.7L9.1 13 16 8.1Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
-      <path d="m16 8.1-.3-5.5M22.9 13l5.4-1.6M20.3 21l3.1 5.7M11.7 21l-3.1 5.7M9.1 13l-5.4-1.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      <path d="M10 5.1 6.1 9.8M22 5.1l3.9 4.7M4.6 20.1l6 5.8M27.4 20.1l-6 5.8" stroke="currentColor" strokeWidth="1.2"/>
-    </svg>
-  );
-}
+export function FootballIcon({size=25}:{size?:number}){return <img src={import.meta.env.BASE_URL+'zshop/football.svg'} width={size} height={size} alt="" aria-hidden="true"/>;}
 
 const sportIcons: Record<string, typeof Trophy> = {
   Basketball: Dribbble, Tennis: Target, 'Ice Hockey': Circle,
@@ -48,7 +40,8 @@ type SportItem = {
   categories?: {
     id: string | number;
     name: string;
-    tournaments?: { id: string | number; name: string }[];
+    countryCode?: string;
+    tournaments?: { id: string | number; name: string;protectedPrematch?:boolean }[];
   }[];
 };
 
@@ -87,7 +80,7 @@ export default function SportsSidebar({
     !selectedSportId && !isLiveOnly && !isFavoritesOnly;
 
   return (
-    <aside className="flex h-full w-[230px] shrink-0 select-none flex-col border-r border-[#101923] bg-[#192330] text-white xl:w-[242px]" aria-label={t("Sportet dhe kampionatet")}>
+    <aside className="zshop-sidebar flex h-full w-[230px] shrink-0 select-none flex-col border-r border-[#101923] bg-[#192330] text-white xl:w-[242px]" aria-label={t("Sportet dhe kampionatet")}>
       {/* Three short icon tabs: the reference photo uses this compact navigation. */}
       <div className="grid shrink-0 grid-cols-3 border-b border-[#344254] bg-[#0e1622]">
         <button type="button" onClick={onSelectAll} aria-pressed={isAllActive}
@@ -140,12 +133,12 @@ export default function SportsSidebar({
           const categories = (s.categories ?? []).map(category => ({
             ...category,
             tournaments: isFootball
-              ? (category.tournaments ?? []).filter(tour => isMainFootballCompetition(tour.name, category.name))
+              ? (category.tournaments ?? []).filter(tour => tour.protectedPrematch || isMainFootballCompetition(tour.name, category.name))
               : (category.tournaments ?? []),
           })).filter(cat => cat.tournaments.length > 0);
           return (
             <section key={sportId} className="mb-2 border border-[#111b28]">
-              <div className={`flex h-[30px] items-center bg-[#4c596c] text-[12px] ${isSportSelected ? 'font-bold text-white' : 'text-[#e4ebf4]'}`}>
+              <div data-sports-group-heading className={`flex h-[30px] items-center bg-[#4c596c] text-[12px] ${isSportSelected ? 'font-bold text-white' : 'text-[#e4ebf4]'}`}>
                 <button type="button" onClick={() => onSelectSport(sportId)}
                   aria-pressed={isSportSelected}
                   className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-left hover:text-white">
@@ -160,7 +153,7 @@ export default function SportsSidebar({
                 </button>
               </div>
               {open && (
-                <div className="bg-[#202a38]">
+                <div data-sports-country-list className="bg-[#202a38]">
                   {isFootball && (
                     <button type="button" onClick={onSelectLive}
                       className={`flex h-[34px] w-full items-center justify-between border-b border-[#151e29] px-2 text-left text-[12px] font-semibold text-white transition-colors hover:bg-[#387548] ${isLiveOnly ? 'bg-[#347c41]' : 'bg-[#2c6335]'}`}>
@@ -173,7 +166,7 @@ export default function SportsSidebar({
                     const expanded = !!expandedCategories[categoryId];
                     return (
                       <div key={categoryId} className="border-b border-[#101923] last:border-b-0">
-                        <div className={`flex min-h-[29px] items-center text-[12px] transition-colors hover:bg-[#314154] ${selected ? 'bg-[#344759] text-white' : 'text-[#c3cfde]'}`}>
+                        <div data-sports-country-row data-selected={selected} className={`flex min-h-[29px] items-center text-[12px] transition-colors hover:bg-[#314154] ${selected ? 'bg-[#344759] text-white' : 'text-[#c3cfde]'}`}>
                           <button type="button" aria-label={`Filtro ${category.name}`}
                             onClick={() => onSelectCategory(categoryId)} aria-pressed={selected}
                             className="flex h-[29px] shrink-0 items-center px-[6px]">
@@ -182,8 +175,8 @@ export default function SportsSidebar({
                             </span>
                           </button>
                           <button type="button" onClick={() => onSelectCategory(categoryId)}
-                            className="min-w-0 flex-1 truncate px-[6px] py-[6px] text-left">
-                            {category.name}
+                            className="flex min-w-0 flex-1 items-center gap-1.5 px-[6px] py-[6px] text-left">
+                            <CountryFlag country={category.name} countryCode={category.countryCode}/><span className="truncate">{category.name}</span>
                           </button>
                           <button type="button" onClick={() => setExpandedCategories(prev => ({...prev,[categoryId]:!expanded}))}
                             aria-label={`${expanded ? t("Mbyll") : t("Hap")} ligat e ${category.name}`}
@@ -193,12 +186,12 @@ export default function SportsSidebar({
                           </button>
                         </div>
                         {expanded && (
-                          <div className="border-t border-[#152232] bg-[#151f2c]">
+                          <div data-sports-league-list className="border-t border-[#152232] bg-[#151f2c]">
                             {category.tournaments.map(tour => {
                               const selected = selectedTournamentId === String(tour.id);
                               return (
                                 <button type="button" key={tour.id} onClick={() => onSelectTournament(String(tour.id))}
-                                  title={tour.name}
+                                  data-sports-league-row aria-pressed={selected} title={tour.name}
                                   className={`flex min-h-[28px] w-full items-center gap-2 px-[7px] py-1 text-left text-[11px] transition-colors hover:bg-[#2d3d50] ${selected ? 'font-bold text-[#f2bc42]' : 'text-[#b9c6d7]'}`}>
                                   <span className={`h-[13px] w-[13px] shrink-0 border ${selected ? 'border-[#f2bc42] bg-[#f2bc42]' : 'border-[#78889e]'}`}/>
                                   <span className="truncate">{tour.name}</span>

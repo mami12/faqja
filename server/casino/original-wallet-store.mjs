@@ -11,8 +11,12 @@ import {getGameProfile,getPaidGameProfile} from './game-rtp-profiles.mjs';
 import {casinoControls,assertCasinoMathAcknowledged} from './casino-controls.mjs';
 import {selectCustomRound} from './custom-math.mjs';
 import {casinoStakeCents,walletCtDenoms} from './bet-limits.mjs';
+import {createFireJokerProtocol} from './firejoker-protocol.mjs';
+import {createFortuneTellerProtocol} from './fortune-teller-protocol.mjs';
 
 export const ORIGINAL_GAMES={
+ 'fortune-teller':{title:'Fortune Teller',kind:'ct',folder:'fortune-teller',app:'FortuneTeller',lines:20},
+ 'firejoker':{title:'Fire Joker',kind:'ct',folder:'firejoker',app:'FireJoker'},
  'lucky-clover-x3':{title:'Lucky Clover X3',kind:'ct',folder:'lucky-clover-x3',app:'LuckyCloverX3'},
  'vikings-fun':{title:"Viking's Fun",kind:'ct',folder:'vikings-fun',app:'VikingsFun'},
  'fruit-queen':{title:'Fruit Queen',kind:'agt',app:'fruitqueen'},
@@ -27,11 +31,11 @@ const uuid=x=>/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
 
 // All account, round, pending-win and protocol changes commit together. The same
 // account locks serialize sportsbook wagers, cashier transfers and casino tabs.
-export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),agt=createAgtProtocol(),chooseRound=selectCustomRound}={}){
- const protocol=id=>id==='vikings-fun'?vikings:ORIGINAL_GAMES[id]?.kind==='ct'?ct:agt;
+export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),firejoker=createFireJokerProtocol(),fortuneTeller=createFortuneTellerProtocol(),agt=createAgtProtocol(),chooseRound=selectCustomRound}={}){
+ const protocol=id=>id==='vikings-fun'?vikings:id==='firejoker'?firejoker:id==='fortune-teller'?fortuneTeller:ORIGINAL_GAMES[id]?.kind==='ct'?ct:agt;
  const hydrate=s=>({...s,results:new Map()});
  const encode=s=>JSON.stringify({...s,results:undefined});
- async function transaction(userId,gameId,fn){
+ async function transaction(userId,gameId,fn,expectedEpoch){
   const game=ORIGINAL_GAMES[gameId];if(!game)throw walletFault(404,'Unknown game');
   const db=await database.connect();
   try{
@@ -39,9 +43,10 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    const lookup=await db.query('select manager_id from app_user where id=$1',[userId]);
    if(!lookup.rows.length)throw walletFault(401,'Player not found');
    const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
-   const locked=await db.query('select id,username,role,status,balance,currency,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+   const locked=await db.query('select id,username,role,status,balance,currency,manager_id,financial_epoch from app_user where id=any($1::uuid[]) order by id for update',[ids]);
    const player=locked.rows.find(x=>x.id===userId),manager=locked.rows.find(x=>x.id===player?.manager_id);
    if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw walletFault(403,'Player account disabled');
+   if(expectedEpoch!==undefined&&Number(expectedEpoch)!==Number(player.financial_epoch??0))throw walletFault(401,'Game session expired. Reopen the game.');
    if(player.manager_id!==lookup.rows[0].manager_id)throw walletFault(409,'Manager changed. Retry.');
    if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw walletFault(409,'Manager unavailable');
    const settings=await db.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
@@ -68,11 +73,11 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    and t.reference_id=r.id and t.type='CASINO_WIN'),0)+$2::numeric where r.id=$1`,[roundId,money(pending)]);
  }
  return {
-  async inspect(userId,gameId,sessionId){return transaction(userId,gameId,async ctx=>{
+  async inspect(userId,gameId,sessionId,{epoch}={}){return transaction(userId,gameId,async ctx=>{
    if(!ctx.saved||ctx.saved.session_id!==sessionId||ctx.saved.state.closed)throw walletFault(401,'Game session expired');
    return {balance:Number(ctx.player.balance)};
-  });},
-  async launch(userId,gameId,{mathVersion}={}){return transaction(userId,gameId,async ctx=>{
+  },epoch);},
+  async launch(userId,gameId,{mathVersion,epoch}={}){return transaction(userId,gameId,async ctx=>{
    const old=ctx.saved?hydrate(ctx.saved.state):null;
    // Awarded free games survive a reload, explicit close, process restart and
    // later profile changes. A fresh session invalidates the older game frame.
@@ -94,13 +99,13 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
    const s=protocol(gameId).initialState(ORIGINAL_GAMES[gameId].app,{mathProfile:initialProfile,walletLimits:true}),sessionId=randomUUID();
    Object.assign(s,{credit:cents(ctx.player.balance),cash:cents(ctx.player.balance),currency:ctx.player.currency||'LEK',gameId,maxSequence:-1,mathVersion:mathVersion?acknowledged:undefined});
    await writeState(ctx,s,sessionId);return {sessionId,mathVersion:acknowledged};
-  });},
-  async close(userId,gameId,sessionId){return transaction(userId,gameId,async ctx=>{
+  },epoch);},
+  async close(userId,gameId,sessionId,{epoch}={}){return transaction(userId,gameId,async ctx=>{
    if(!ctx.saved||ctx.saved.session_id!==sessionId)throw walletFault(401,'Game session expired');
    const s=hydrate(ctx.saved.state);await settle(ctx,s);s.closed=true;
    await writeState(ctx,s,sessionId);return {balance:Number(ctx.player.balance)};
-  });},
-  async act(userId,gameId,sessionId,params){return transaction(userId,gameId,async ctx=>{
+  },epoch);},
+  async act(userId,gameId,sessionId,params,{epoch}={}){return transaction(userId,gameId,async ctx=>{
    if(!ctx.saved||ctx.saved.session_id!==sessionId||ctx.saved.state.closed)throw walletFault(401,'Game session expired. Reopen the game.');
    const s=hydrate(ctx.saved.state),isCt=ctx.game.kind==='ct';
    const commands=isCt?params:[params],responses=[];
@@ -126,7 +131,7 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
     // Replayed events above retain their original unit. New paid spins use the
     // current total limits even if the browser held a pre-update session open.
     if(paidSpin)s.walletLimits=true;
-    const denoms=isCt?(s.walletLimits?walletCtDenoms(gameId==='vikings-fun'?25:5):DENOMS):null;
+    const denoms=isCt?(s.walletLimits?walletCtDenoms(ctx.game.lines??(gameId==='vikings-fun'?25:5)):DENOMS):null;
     let stake=paidSpin?casinoStakeCents(isCt?Number(command.total_bet)*denoms.find(d=>d.id===command.game_denom)?.cents/100:command.amount):0;
     if(paidSpin||gambling){
      if(!ctx.enabled)throw walletFault(403,'Casino disabled');
@@ -159,8 +164,7 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
      s.roundId=result.rows[0].id;
      await ctx.db.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,money(balance)]);ctx.player.balance=money(balance);
      await ctx.db.query("insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",[userId,-money(stake),s.roundId,money(balance),ctx.game.title+' · spin']);
-     if(ctx.manager){const net=cents(ctx.manager.balance)+stake;await ctx.db.query('update app_user set balance=$2,updated_at=now() where id=$1',[ctx.manager.id,money(net)]);ctx.manager.balance=money(net);
-      await ctx.db.query("insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",[ctx.manager.id,money(stake),s.roundId,money(net),ctx.game.title+' · stake '+ctx.player.username]);}
+     // Manager earnings are reported separately; no automatic wallet transfer.
     }else if(s.roundId&&(credited||gambling||action==='freespin')){
      await syncPayout(ctx,s.roundId,s.pending);
     }
@@ -169,6 +173,6 @@ export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCa
     responses.push(response);
    }
    await writeState(ctx,s,sessionId);return isCt?responses:responses[0];
-  });}
+  },epoch);}
  };
 }

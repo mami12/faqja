@@ -31,7 +31,7 @@ export async function lockLiveRiskSettings(client) {
   return validateLiveRiskSettings(rows[0].settings);
 }
 
-export async function writeLiveRiskSettings(value, actor, { database = pool } = {}) {
+export async function writeLiveRiskSettings(value, actor, { database = pool, comboOnly = false } = {}) {
   const candidate = validateLiveRiskSettings(value);
   const client = await database.connect();
   try {
@@ -39,7 +39,7 @@ export async function writeLiveRiskSettings(value, actor, { database = pool } = 
     const persisted = await lockLiveRiskSettings(client);
     // A previously opened admin screen may omit the new switch. Preserve the
     // locked value so saving unrelated rules cannot accidentally enable combos.
-    const settings = {
+    const settings = comboOnly ? {...persisted,combosEnabled:candidate.combosEnabled} : {
       ...candidate,
       combosEnabled: value.combosEnabled === undefined
         ? persisted.combosEnabled : candidate.combosEnabled,
@@ -51,6 +51,7 @@ export async function writeLiveRiskSettings(value, actor, { database = pool } = 
       [JSON.stringify(settings),actor.id],
     );
     if (!rows.length) throw new Error('Live risk settings row missing.');
+    if(comboOnly)await client.query('update app_bet_builder_template set active=$1,updated_at=now() where active is distinct from $1',[settings.combosEnabled]);
     await client.query(
       `insert into app_admin_audit
          (actor_id,actor_name,actor_role,action,target_type,target_id,details)
@@ -64,4 +65,9 @@ export async function writeLiveRiskSettings(value, actor, { database = pool } = 
     await client.query('rollback').catch(() => {});
     throw e;
   } finally { client.release(); }
+}
+
+export function setAllCombosEnabled(enabled,actor,options={}) {
+  if(typeof enabled!=='boolean')throw Object.assign(new Error('enabled must be boolean'),{status:400});
+  return writeLiveRiskSettings({...DEFAULT_LIVE_RISK_SETTINGS,combosEnabled:enabled},actor,{...options,comboOnly:true});
 }

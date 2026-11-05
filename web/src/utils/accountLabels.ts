@@ -3,6 +3,7 @@ const TRANSACTION_LABELS: Record<string,string> = {
   BET_PLACED:'Bast i vendosur', BET_WON:'Bast fitues', BET_REFUND:'Rimbursim basti', TICKET_REVERT:'Anulim bilete',
   CASINO_SPIN:'Rrotullim kazinoje', CASINO_WIN:'Fitim kazinoje', CASINO_MANAGER_NET:'Diferencë kazinoje e menaxherit',
   MANAGER_PLAYER_FUNDING:'Fonde dhënë lojtarit', MANAGER_PLAYER_RETURN:'Fonde të kthyera nga lojtari',
+  AGENT_MANAGER_FUNDING:'Fonde dhënë menaxherit',AGENT_MANAGER_RETURN:'Fonde të kthyera nga menaxheri',
   MANAGER_COMMISSION_DEBIT:'Komision i zbritur', MANAGER_COMMISSION_REFUND:'Komision i kthyer',
   MANAGER_PAYOUT_DEDUCTION:'Pagesë fitimi', MANAGER_LOST_COLLECTED:'Fonde nga bast humbës',
   PLAYER_DELETE_TRANSFER_OUT:'Kalimi i bilancit pas fshirjes', PLAYER_DELETE_TRANSFER_IN:'Bilanc nga lojtar i fshirë',
@@ -23,6 +24,7 @@ export function transactionDescription(description:string|null|undefined,type:st
 
 export const auditTargetLabel=(target:string):string=>({user:'Përdorues',match:'Ndeshje',market:'Treg',outcome:'Zgjedhje',ticket:'Biletë',settings:'Cilësime',system:'Sistem',casino:'Kazino'}[target]??'Objekt');
 export function auditActionLabel(action:string):string {
+  if(action==='FINANCIAL_RESET')return 'Zerim i plotë financiar';
   if(action==='UPDATE LIVE_RISK')return 'Ndryshim i rregullave të rrezikut';
   const [method,path='']=action.split(' ');
   if(path.includes('/casino/controls'))return 'Ndryshim i cilësimeve të lojës';

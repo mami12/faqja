@@ -1,3 +1,6 @@
+import {statsProviders} from '../stats-providers/index.mjs';
+import {filterFixtureRowsByDay} from '../fixture-dates.mjs';
+import {isSyntheticFootballMatch} from '../football-competitions.mjs';
 /**
  * API for the React app, mounted at /app/api.
  *
@@ -14,11 +17,17 @@ import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } f
 import { withOdds } from '../collector.mjs';
 import { sportsTree, toClientMatch, toClientMatches } from './view.mjs';
 import { getPlayerControls, requestSelfExclusion, updatePlayerLimits } from './player-controls.mjs';
-import { refreshLiveRiskSettings, writeLiveRiskSettings } from './live-risk-store.mjs';
+import { refreshLiveRiskSettings, writeLiveRiskSettings, setAllCombosEnabled } from './live-risk-store.mjs';
 import { DEFAULT_LIVE_RISK_SETTINGS } from '../live-risk-settings.mjs';
-import { projectBoardMatches } from './board-projection.mjs';
+import {detailProjection,CATEGORIES} from '../market-delivery.mjs';
+import { projectClientBoardMatches,projectBoardMatches } from './board-projection.mjs';
 import { freshFeed } from '../feed-sync.mjs';
+import {trackerTeamStatistics} from '../match-statistics.mjs';
+import {publishedBoard,filterPublishedRows,refreshBoardSettings,saveBoardSettings} from './board-settings-store.mjs';
+import {DEFAULT_BOARD_SETTINGS} from '../board-settings.mjs';
 
+import {catalogRows,categoryPolicies,marketFamily,scopeBlockRows} from '../market-catalog.mjs';
+import {refreshMarketCatalog,saveMarketPolicy,saveScopePolicy} from './market-catalog-store.mjs';
 export const ledgerRouter = express.Router();
 ledgerRouter.use(freshFeed);
 
@@ -181,6 +190,8 @@ ledgerRouter.get('/admin/bet-builders/catalog', requireLedger, requireAuth, requ
   (req,res) => res.json(builders.builderCatalog()));
 ledgerRouter.get('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,
   guard(async (req,res) => res.json(await builders.listTemplates())));
+ledgerRouter.patch('/admin/bet-builders/enabled',requireLedger,requireAuth,requireAdmin,
+  guard(async(req,res)=>res.json(await setAllCombosEnabled(req.body?.enabled,req.user))));
 ledgerRouter.post('/admin/bet-builders', requireLedger, requireAuth, requireAdmin,
   guard(async (req,res) => res.json(await builders.saveTemplate(req.body ?? {}))));
 ledgerRouter.delete('/admin/bet-builders/:id', requireLedger, requireAuth, requireAdmin,
@@ -272,13 +283,42 @@ ledgerRouter.get(
   }),
 );
 
+ledgerRouter.get('/market-policy',(_req,res)=>res.set('Cache-Control','no-store').json({markets:catalogRows(),categories:categoryPolicies(),scopes:scopeBlockRows()}));
+ledgerRouter.get('/admin/market-catalog',requireLedger,requireAuth,requireAdmin,guard(async(_req,res)=>res.json({markets:await refreshMarketCatalog(),categories:categoryPolicies(),scopes:scopeBlockRows()})));
+ledgerRouter.patch('/admin/market-catalog',requireLedger,requireAuth,requireAdmin,guard(async(req,res)=>res.json({markets:await saveMarketPolicy(req.body,req.user),categories:categoryPolicies(),scopes:scopeBlockRows()})));
+ledgerRouter.get('/admin/market-catalog/scopes',requireLedger,requireAuth,requireAdmin,guard(async(_req,res)=>res.json({scopes:scopeBlockRows()})));
+ledgerRouter.put('/admin/market-catalog/scopes',requireLedger,requireAuth,requireAdmin,guard(async(req,res)=>{const scopes=await saveScopePolicy(req.body?.scopes,req.user);res.json({scopes,markets:await refreshMarketCatalog()});}));
+ledgerRouter.get('/admin/market-catalog/matches',requireLedger,requireAuth,requireAdmin,guard(async(req,res)=>{
+ const family=String(req.query.family??'').trim();
+ if(!family)return res.status(400).json({message:'Zgjidh nje treg.'});
+ const selected=await publishedBoard();
+ const rows=filterPublishedRows(selected.rows,{});
+ const serialized=await withOdds(rows,Date.now(),{board:false});
+ const matches=[];
+ for(const row of serialized){
+  const match=toClientMatch(row);
+  const hits=(match.markets??[]).filter(m=>marketFamily(m)?.key===family);
+  if(!hits.length)continue;
+  matches.push({id:match.id,home:match.home?.name??'',away:match.away?.name??'',league:match.tournament?.name??'',country:match.tournament?.category?.name??'',startTime:match.startTime??null,live:match.status==='LIVE',markets:hits.length,outcomes:hits.reduce((n,m)=>n+(m.outcomes??[]).length,0)});
+ }
+ matches.sort((a,b)=>Number(b.live)-Number(a.live)||String(a.startTime??'').localeCompare(String(b.startTime??'')));
+ res.json({family,count:matches.length,matches});
+}));
 /* ------------------------------------------------------------ board views */
+
+ledgerRouter.get('/admin/board-settings',requireLedger,requireAuth,requireAdmin,guard(async(req,res)=>{
+ if(req.user.status!=='ACTIVE')return res.status(403).json({message:'Vetëm administratori aktiv.'});
+ const saved=await refreshBoardSettings(),board=await publishedBoard();res.json({...saved,defaults:DEFAULT_BOARD_SETTINGS,summary:board.summary,protectedCompetitions:board.protectedCompetitions});
+}));
+ledgerRouter.put('/admin/board-settings',requireLedger,requireAuth,requireAdmin,guard(async(req,res)=>{
+ const saved=await saveBoardSettings(req.body?.settings,req.user),board=await publishedBoard();res.json({...saved,summary:board.summary,protectedCompetitions:board.protectedCompetitions});
+}));
 
 /** the sidebar tree (also served at /sports, which the sidebar tries first) */
 ledgerRouter.get(
   ['/sports', '/sports/tree'],
   guard(async (_req, res) => {
-    const rows = await getMatchRows({ includeEnded: true, limit: 2000 });
+    const {rows} = await publishedBoard();
     res.json(sportsTree(rows));
   }),
 );
@@ -289,19 +329,18 @@ ledgerRouter.get(
     const { tournamentId, categoryId, sportId, status, q } = req.query;
     const service = status === 'LIVE' ? 'LIVE' : status === 'PREMATCH' ? 'PREMATCH' : null;
 
-    const rows = await getMatchRows({
+    const selected = await publishedBoard();
+    const rows = filterPublishedRows(filterFixtureRowsByDay(selected.rows,req.query.day),{
       service,
       league: categoryId ? String(categoryId) : null,
       tournamentId: tournamentId ? String(tournamentId) : null,
       sportId: sportId ? String(sportId) : null,
       q: q ? String(q) : null,
-      limit: asLimit(req.query.limit, 500, 2000),
-      includeEnded: status === 'ENDED',
     });
 
     const board = req.query.view === 'board';
-    const serialized = await withOdds(rows);
-    const matches = toClientMatches(board?projectBoardMatches(serialized):serialized);
+    const serialized = await withOdds(rows,Date.now(),{board});
+    const matches = (board?projectClientBoardMatches(toClientMatches(projectBoardMatches(serialized))):toClientMatches(serialized));
     // Board cards show base odds; build the complete automatic menu when a
     // visitor opens /matches/:id rather than sending it for 500 matches per poll.
     res.json(!board&&ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
@@ -312,14 +351,15 @@ ledgerRouter.get(
   '/matches/:id',
   guard(async (req, res) => {
     const row = await getMatchRow(Number(req.params.id));
-    if (!row) return res.status(404).json({ message: 'match not found' });
+    if (!row || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
     // somebody is looking at this match: make sure it gets its full market list (corners,
     // cards, every total) on the next subscribe cycle, instead of base markets only
     boostMatch(row.match_id);
-    const [serialized] = await withOdds([row]);
+    const [serialized] = await withOdds([row],Date.now(),{displayStats:true});
     const match = toClientMatch(serialized);
     if (ledger.isLedgerReady()) await builders.decorateMatches([match]);
-    return res.json(match);
+    const category=CATEGORIES.includes(req.query.category)?req.query.category:'all';
+    return res.json(detailProjection(match,category));
   }),
 );
 
@@ -331,31 +371,24 @@ ledgerRouter.get(
   '/matches/:id/tracker',
   guard(async (req, res) => {
     const row = await getMatchRow(Number(req.params.id));
-    if (!row) return res.status(404).json({ message: 'match not found' });
+    if (!row || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
     boostMatch(row.match_id);
 
-    const [serialized] = await withOdds([row]);
+    const [serialized] = await withOdds([row],Date.now(),{displayStats:true});
     const m = toClientMatch(serialized);
-    const stats = {
-      possession: 50,
-      shots: 0,
-      shotsOnTarget: 0,
-      corners: 0,
-      yellow: 0,
-      red: 0,
-    };
+    const stats=trackerTeamStatistics({...row,stats:statsProviders.displayStatistics(row)});
 
     return res.json({
       matchId: m.id,
       ballX: 50,
       ballY: 50,
-      possessionTeam: 'home',
+      possessionTeam: null,
       /* the feed's own state, e.g. "2nd Half" */
       eventText: m.period ?? '',
       minute: m.currentMinute,
       score: { home: m.homeScore, away: m.awayScore },
-      homeStats: { ...stats, corners: m.corners?.home ?? 0, yellow: Math.max(0, (m.cards?.home ?? 0)) },
-      awayStats: { ...stats, corners: m.corners?.away ?? 0, yellow: Math.max(0, (m.cards?.away ?? 0)) },
+      homeStats: stats.home,
+      awayStats: stats.away,
     });
   }),
 );
@@ -365,10 +398,10 @@ ledgerRouter.get(
   '/sports/:sportId/matches',
   guard(async (req, res) => {
     if (String(req.params.sportId) !== '18') return res.json([]);
-    const rows = await getMatchRows({ limit: asLimit(req.query.limit, 500, 2000) });
+    const selected=await publishedBoard();const rows=filterPublishedRows(selected.rows,{sportId:req.params.sportId});
     const board = req.query.view === 'board';
-    const serialized = await withOdds(rows);
-    const matches = toClientMatches(board?projectBoardMatches(serialized):serialized);
+    const serialized = await withOdds(rows,Date.now(),{board});
+    const matches = (board?projectClientBoardMatches(toClientMatches(projectBoardMatches(serialized))):toClientMatches(serialized));
     return res.json(!board&&ledger.isLedgerReady() ? await builders.decorateMatches(matches,{includeAutomatic:false}) : matches);
   }),
 );

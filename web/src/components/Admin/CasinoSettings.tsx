@@ -2,22 +2,31 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useEffect, useState } from 'react';
 import { Dices, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import {casinoPercent as percent, casinoStakeLimits, type CasinoSettingsData as Settings, type CasinoGameSettings} from '../../types/casino';
+import {casinoPercent as percent, casinoStakeLimits, casinoControlLimits, casinoHitCompatibility, CASINO_CONTROLS_UNRESTRICTED, type CasinoSettingsData as Settings, type CasinoGameSettings} from '../../types/casino';
 import {userError} from '../../utils/userError';
 
 type Totals={casinoStake:number;casinoPayout:number;casinoSpins:number};
 type Draft={mode:'original'|'custom';rtp:string;hitFrequency:string};
 const toDraft=(game:CasinoGameSettings):Draft=>({mode:game.controls?.mode??'original',rtp:String(game.controls?.rtp??game.effectiveRtp??game.theoreticalRtp??95),hitFrequency:String(game.controls?.hitFrequency??10)});
-const draftError=(draft:Draft)=>{
+const draftError=(draft:Draft,game:CasinoGameSettings,en=false)=>{
  if(draft.mode!=='custom')return '';
- const rtp=Number(draft.rtp),hit=Number(draft.hitFrequency);
- if(draft.rtp.trim()===''||draft.hitFrequency.trim()===''||!Number.isFinite(rtp)||!Number.isFinite(hit)||rtp<0||rtp>100||hit<0||hit>100)return 'RTP dhe shpeshtësia e fitimit duhet të jenë nga 0% deri në 100%.';
- if((rtp===0)!==(hit===0))return 'Për RTP 0% vendos edhe shpeshtësinë e fitimit 0%. Për RTP mbi 0%, shpeshtësia e fitimit duhet të jetë mbi 0%.';
+ const tr=(sq:string,english:string)=>en?english:sq;
+ const rtp=Number(draft.rtp),hit=Number(draft.hitFrequency),limits=casinoControlLimits(game);
+ if(draft.rtp.trim()===''||draft.hitFrequency.trim()===''||!Number.isFinite(rtp)||!Number.isFinite(hit)||rtp<0||rtp>limits.rtp.max||hit<0||hit>limits.hitFrequency.max)return tr(`RTP duhet të jetë nga 0% deri në ${limits.rtp.max}%; shpeshtësia nga 0% deri në ${limits.hitFrequency.max}%.`,`RTP must be between 0% and ${limits.rtp.max}%; hit frequency between 0% and ${limits.hitFrequency.max}%.`);
+ if([rtp,hit].some(value=>Math.abs(value*100-Math.round(value*100))>1e-7))return tr('Përdor deri në dy shifra pas presjes për përqindjet.','Use up to two decimal places for percentages.');
+ if((rtp===0)!==(hit===0))return tr('Për RTP 0% vendos edhe shpeshtësinë e fitimit 0%. Për RTP mbi 0%, shpeshtësia e fitimit duhet të jetë mbi 0%.','For 0% RTP, set hit frequency to 0% too. Above 0% RTP, hit frequency must also be above 0%.');
+ const bounds=game.customLimits,compatibility=casinoHitCompatibility(game,rtp);
+ if(!CASINO_CONTROLS_UNRESTRICTED&&rtp>0&&bounds&&compatibility&&(rtp/hit<bounds.minWinMultiplier||rtp/hit>bounds.maxWinMultiplier)){
+  if(!compatibility.available)return tr('Ky RTP është tepër i ulët për një shpeshtësi të vlefshme me dy shifra pas presjes. Rrite RTP-në ose përdor 0% / 0%.','This RTP is too low for a valid hit frequency with two decimal places. Increase RTP or use 0% / 0%.');
+  if(hit===100&&rtp<compatibility.minRtpForFullHit)return tr(`Me shpeshtësi 100%, kjo lojë kërkon RTP të paktën ${compatibility.minRtpForFullHit}%. Rrite RTP-në ose ul shpeshtësinë.`,`At 100% hit frequency, this game needs at least ${compatibility.minRtpForFullHit}% RTP. Increase RTP or lower hit frequency.`);
+  return tr(`Për RTP ${rtp}%, shpeshtësia e vlefshme është ${compatibility.minHit}%–${compatibility.maxHit}%.`,`For ${rtp}% RTP, valid hit frequency is ${compatibility.minHit}%–${compatibility.maxHit}%.`);
+ }
  return '';
 };
 
 export default function CasinoSettings(){
-  const { t } = useLanguage();
+  const { t,lang } = useLanguage();
+ const en=lang==='en',tr=(sq:string,english:string)=>en?english:sq;
  const [data,setData]=useState<Settings|null>(null),[totals,setTotals]=useState<Totals|null>(null);
  const [drafts,setDrafts]=useState<Record<string,Draft>>({});
  const [selected,setSelected]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -34,11 +43,12 @@ export default function CasinoSettings(){
  const save=async(gameId:string)=>{
   const draft=drafts[gameId];
   if(!draft)return;
-  const invalid=draftError(draft);
+  const previous=data?.games.find(item=>item.gameId===gameId);
+  if(!previous)return;
+  const invalid=draftError(draft,previous,en);
   if(invalid){setError(invalid);return;}
   setBusy(true);setError('');
   try{
-   const previous=data?.games.find(item=>item.gameId===gameId);
    if(draft.mode==='original'&&selected[gameId]!==previous?.profile){
     const profileResponse=await apiClient.patch<Settings>('/admin/casino/profile',{gameId,profile:selected[gameId]});
     setData(profileResponse.data);
@@ -71,34 +81,37 @@ export default function CasinoSettings(){
    </div>
    <p className="mt-4 text-sm text-text-secondary">{t("Profili i çdo loje zbatohet njësoj për të gjithë përdoruesit, nga rrotullimi tjetër me pagesë. Bonusët e nisur dhe fitimet në pritje ruajnë kushtet e tyre.")}</p>
    <p className="mt-2 text-sm text-text-secondary">{t("RTP është kthimi mesatar afatgjatë. Shpeshtësia e fitimit është përqindja e rrotullimeve me pagesë që kthejnë një shumë mbi zero, duke përfshirë bonusin e atij rrotullimi, përpara dyfishimit opsional të fitimit. Edhe një kthim më i vogël se basti llogaritet si rrotullim që paguan.")}</p>
-   <p className="mt-2 text-sm text-text-secondary">{t("Modaliteti origjinal përdor profilin e motorit. Modaliteti i personalizuar ndryshon shpërndarjen e rezultateve sipas dy vlerave që ruan; lojtarit i shfaqen këto kushte përpara hapjes së lojës.")}</p>
+   <p className="mt-2 text-sm text-text-secondary">{tr('RTP mund të jetë mbi 100%: p.sh. 200% do të thotë kthim mesatar 200 lekë për çdo 100 lekë të luajtura. Shpeshtësia 100% do të thotë pagesë mbi zero në çdo raund; nuk garanton fitim mbi bastin çdo herë.','RTP can exceed 100%: for example, 200% means an average return of 200 ALL per 100 ALL wagered. A 100% hit frequency means every round pays more than zero; it does not guarantee a profit on every round.')}</p>
+   <p className="mt-2 text-sm text-text-secondary">{t("Modaliteti origjinal përdor profilin e motorit. Modaliteti i personalizuar zbaton vetëm çifte RTP dhe shpeshtësie që realizohen nga tabela reale e pagesave. Shpeshtësia është probabilitet dhe nuk mund të kalojë 100%.")}</p>
    {data?.stakeLimits&&<p className="mt-3 font-semibold text-white">{t("Basti për të gjitha lojërat:") + " "}{casinoStakeLimits(data.stakeLimits)}.</p>}
-   <div className="mt-4 rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">{t("Kthimi i vëzhguar në të gjitha lojërat")}</p><p className="mt-1 font-bold text-white">{totals?.casinoStake?percent(100*totals.casinoPayout/totals.casinoStake):'Pa rrotullime'}</p><p className="mt-1 text-xs text-text-secondary">{t("Nga") + " "}{totals?.casinoSpins??0} {" " + t("rrotullime; kjo shifër ndryshon nga RTP teorike.")}</p></div>
+   
   </div>
   <div className="grid gap-4 md:grid-cols-2">
    {(data?.games??[]).map(game=>{
     const id=selected[game.gameId]??'',index=game.profiles.findIndex(profile=>profile.id===id);
     const choice=game.profiles[index],supported=index>=0;
-    const draft=drafts[game.gameId]??toDraft(game),invalid=draftError(draft);
+    const draft=drafts[game.gameId]??toDraft(game),invalid=draftError(draft,game,en),limits=casinoControlLimits(game),compatibility=casinoHitCompatibility(game,Number(draft.rtp));
     const original=toDraft(game),changed=draft.mode!==original.mode||draft.rtp!==original.rtp||draft.hitFrequency!==original.hitFrequency||(draft.mode==='original'&&id!==game.profile);
     const edit=(patch:Partial<Draft>)=>setDrafts(previous=>({...previous,[game.gameId]:{...draft,...patch}}));
     return <article key={game.gameId} className="space-y-4 rounded-xl border border-tertiary bg-secondary p-4 sm:p-5">
      <h3 className="flex items-center gap-2 font-bold text-white"><Dices size={19} className="text-amber-300"/>{game.title}</h3>
-     <div className="rounded-lg bg-primary p-3"><p className="text-xs text-text-secondary">{t("Aktive:") + " "}{game.controls?.mode==='custom'?'E personalizuar':'Origjinale'}</p><p className="mt-1 text-lg font-black text-white">RTP {percent(game.effectiveRtp??game.theoreticalRtp)}</p><p className="mt-1 text-sm text-text-secondary">{t("Shpeshtësia e fitimit:") + " "}{percent(game.effectiveHitFrequency)}</p></div>
+     <p className="text-xs text-text-secondary">{t("Aktive:") + " "}{game.controls?.mode==='custom'?'E personalizuar':'Origjinale'}</p>
      {(game.configurationError||game.configurationWarning)&&<p role="alert" className="text-sm text-amber-200">{userError(game.configurationError||game.configurationWarning,'Konfigurimi i lojës duhet kontrolluar. Zgjidh një profil të mbështetur. Ruaj cilësimet për të vazhduar.')}</p>}
      <label className="block space-y-1 text-sm text-white"><span>{t("Modaliteti për këtë lojë")}</span>
       <select aria-label={`${game.title}: modaliteti`} value={draft.mode} disabled={busy} onChange={event=>edit({mode:event.target.value as Draft['mode']})} className="block min-h-11 w-full rounded-lg border border-tertiary bg-primary px-3">
-       <option value="original">{t("Origjinal · profilet e motorit")}</option><option value="custom">{t("I personalizuar · RTP dhe shpeshtësia e fitimit")}</option>
+      <option value="original">{t("Origjinal · profilet e motorit")}</option><option value="custom" disabled={!game.supportsCustomMath}>{t("I personalizuar · RTP dhe shpeshtësia e fitimit")}</option>
       </select>
      </label>
      {draft.mode==='custom'?<div className="space-y-4">
       {([{key:'rtp',label:'RTP'},{key:'hitFrequency',label:t("Shpeshtësia e fitimit")}] as const).map(control=><label key={control.key} className="block space-y-2 text-sm text-white"><span>{control.label} {" " + t("e re (%)")}</span>
-       <div className="flex items-center gap-3"><input type="range" aria-label={`${game.title}: ${control.label} rrëshqitës`} min={0} max={100} step={0.01} value={Number(draft[control.key])||0} disabled={busy} onChange={event=>edit({[control.key]:event.target.value})} className="min-w-0 flex-1 accent-amber-400"/>
-        <input type="number" aria-label={`${game.title}: ${control.label}`} min={0} max={100} step={0.01} value={draft[control.key]} disabled={busy} onChange={event=>edit({[control.key]:event.target.value})} className="min-h-11 w-24 rounded-lg border border-tertiary bg-primary px-2 text-white"/>
-       </div><span className="flex justify-between text-xs text-text-secondary"><span>0%</span><span>100%</span></span>
+       <div className="flex items-center gap-3"><input type="range" aria-label={`${game.title}: ${control.label} rrëshqitës`} min={0} max={limits[control.key].max} step={0.01} value={Number(draft[control.key])||0} disabled={busy} onChange={event=>edit({[control.key]:event.target.value})} className="min-w-0 flex-1 accent-amber-400"/>
+        <input type="number" aria-label={`${game.title}: ${control.label}`} min={0} max={limits[control.key].max} step={0.01} value={draft[control.key]} disabled={busy} onChange={event=>edit({[control.key]:event.target.value})} className="min-h-11 w-24 rounded-lg border border-tertiary bg-primary px-2 text-white"/>
+       </div><span className="flex justify-between text-xs text-text-secondary"><span>0%</span><span>{limits[control.key].max}%</span></span>
       </label>)}
       {Number(draft.rtp)===0&&Number(draft.hitFrequency)===0&&<p className="rounded-lg border border-rose-400/40 bg-rose-400/10 p-3 text-sm text-rose-200">{t("Me 0% rrotullimet e reja me pagesë nuk japin asnjë fitim. Bonusët e pranuar më parë ruajnë kushtet e tyre.")}</p>}
       {invalid&&<p role="alert" className="text-sm text-rose-200">{invalid}</p>}
+      {!invalid&&CASINO_CONTROLS_UNRESTRICTED&&compatibility?.advisory&&<p role="status" className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">{tr(`Ky çift RTP / shpeshtësi është jashtë kufijve natyrorë të kësaj loje (${compatibility.minHit}%–${compatibility.maxHit}% për RTP ${Number(draft.rtp)}%). Ruajtja lejohet; motori do ta përafrojë me bandën më të afërt të pagesave.`,`This RTP / hit-frequency pair sits outside the game's natural bounds (${compatibility.minHit}%–${compatibility.maxHit}% for RTP ${Number(draft.rtp)}%). Saving is allowed; the engine will approximate it with the nearest reachable payout band.`)}</p>}
+      
       {game.customLimits&&<p className="text-xs text-text-secondary">{t("Kthimi mesatar për një rrotullim që paguan duhet të jetë brenda") + " "}{game.customLimits.minWinMultiplier}×–{game.customLimits.maxWinMultiplier}{t("× basti. Serveri kontrollon nëse çifti RTP / shpeshtësia e fitimit realizohet nga loja.")}</p>}
      </div>:<>
      <label className="block space-y-2 text-sm text-white"><span>{t("Zgjedhja e re:") + " "}{choice?percent(choice.theoreticalRtp):t("Zgjidh një profil të mbështetur")}</span>

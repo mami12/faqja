@@ -7,17 +7,17 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Arial', 'Helvetica', 'sans-serif'],
       },
       colors: {
-        primary: '#0b1018',
-        secondary: '#252d3a',
-        tertiary: '#424e60',
-        'card-bg': '#252d3a',
+        primary: '#0b0f17',
+        secondary: '#272d38',
+        tertiary: '#556071',
+        'card-bg': '#272d38',
         'card-hover': '#323d4c',
         'accent-green': '#329448',
         'accent-red': '#e33d45',
-        'accent-yellow': '#ffb300',
+        'accent-yellow': '#e8af1e',
         'accent-blue': '#8ab7e4',
         'text-primary': '#f1f4f9',
         'text-secondary': '#c1ccdc',

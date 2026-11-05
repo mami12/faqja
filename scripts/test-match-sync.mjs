@@ -86,5 +86,5 @@ try {
   store.upsert([{...row,match_id:9,sport_id:18,tournament_id:2,category_slug:'chosen'}]);
   assert.equal(store.getMatches({limit:1,tournamentId:'2',league:'chosen',sportId:'18'})[0].match_id,9,'memory filters selected competition before global limit');
   assert.deepEqual(store.getMatches({limit:1,sportId:'99'}),[]);
-} finally {db.pool.query=originalQuery;await sql.close();store.clear();}
+} finally {db.pool.query=originalQuery;await db.pool.end();await sql.close();store.clear();}
 console.log('PASS match synchronization: stale snapshot ordering, source score/clock anchors, corrections, locks, long matches, quote timestamps and fresh compact feeds');

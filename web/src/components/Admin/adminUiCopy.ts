@@ -1,5 +1,8 @@
 /** Presentation copy only. Native match, market and outcome identities remain unchanged. */
 const copy: Record<string, string> = {
+  'Kufiri para fillimit dhe ligat kryesore':'Prematch limit and main leagues',
+  'Zerimi financiar':'Financial reset',
+  'Backup, bileta dhe bilance nga zero':'Backup, tickets and balances from zero',
   'Ora nuk është konfirmuar': 'Kickoff time is not confirmed',
   'Ndeshjet nuk u ngarkuan. Provo rifreskimin.': 'Matches could not be loaded. Try refreshing.',
   'Tregjet nuk u rifreskuan. Veprimet janë bllokuar derisa të rifreskosh me sukses.': 'Markets could not be refreshed. Actions are blocked until a refresh succeeds.',
@@ -70,6 +73,36 @@ const copy: Record<string, string> = {
   'Rregullo kuotat e tregut': 'Adjust market odds',
   'Hiq pezullimin e tregut': 'Remove market suspension',
   'Pezullo tregun': 'Suspend market',
+  'Pezullim masiv i tregjeve': 'Bulk market suspension',
+  'Zgjidh vendin, kampionatin dhe kategorinë që do të ndryshosh.': 'Choose the country, competition and market category to change.',
+  'Shteti': 'Country',
+  'Zgjidh shtetin': 'Select a country',
+  'Zgjidh kampionatin': 'Select a competition',
+  'Kategoria e tregut': 'Market category',
+  'Veprimi': 'Action',
+  'Të gjitha tregjet': 'All markets',
+  'Totale': 'Totals',
+  'Rezultati / 1X2': 'Result / 1X2',
+  'Gola': 'Goals',
+  'Intervale': 'Intervals',
+  'Këndore': 'Corners',
+  'Kartona': 'Cards',
+  'Faulle': 'Fouls',
+  'Goditje': 'Shots',
+  'Lojtarë': 'Players',
+  'Kombinime': 'Combos',
+  'Të tjera': 'Other',
+  'Pezullo': 'Suspend',
+  'Rihap': 'Reopen',
+  'Zbato në bulk': 'Apply in bulk',
+  'Po përditësohen tregjet…': 'Updating markets…',
+  'Konfirmo veprimin masiv': 'Confirm bulk action',
+  'Tregjet do të': 'Markets will be',
+  'pezullohen': 'suspended',
+  'rihapen': 'reopened',
+  'Veprimi masiv dështoi.': 'Bulk action failed.',
+  'Zgjidh shtetin, kampionatin, kategorinë dhe veprimin.': 'Choose the country, competition, category and action.',
+  'Kategori tregu e pavlefshme.': 'Invalid market category.',
   'E ndryshuar': 'Overridden',
   'Ndrysho kuotën': 'Edit odds',
   'Rreziku': 'Risk rules',
@@ -147,6 +180,8 @@ export function adminUiText(value: string, lang: string): string {
   if (lang === 'en') {
     if (copy[value]) return copy[value];
     return value
+      .replace(/^U pezulluan (\d+) tregje\.$/, '$1 markets were suspended.')
+      .replace(/^U rihapën (\d+) tregje\.$/, '$1 markets were reopened.')
       .replace(/^Përditësuar /, 'Updated ')
       .replace(/^Rregullo kuotat: /, 'Adjust odds: ')
       .replace(/^Ndrysho kuotën: /, 'Edit odds: ')
@@ -156,6 +191,8 @@ export function adminUiText(value: string, lang: string): string {
   }
   if (reverse[value]) return reverse[value];
   return value
+    .replace(/^(\d+) markets were suspended\.$/, 'U pezulluan $1 tregje.')
+    .replace(/^(\d+) markets were reopened\.$/, 'U rihapën $1 tregje.')
     .replace(/^Updated /, 'Përditësuar ')
     .replace(/^Adjust odds: /, 'Rregullo kuotat: ')
     .replace(/^Edit odds: /, 'Ndrysho kuotën: ')

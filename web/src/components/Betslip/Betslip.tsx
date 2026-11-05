@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import {formatBuilderSelection} from '../../utils/sportsbookLabels';
+import { useState, useRef,useEffect } from 'react';
 import { useBetslip } from '../../context/BetslipContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -15,23 +16,29 @@ import { formatOdds } from '../../utils/formatOdds';
 import SystemTicketSummary from './SystemTicketSummary';
 import { filterDecidedOutcomes } from '../../utils/marketExpiry';
 import { isImpossibleLiveCombination } from '../../../../server/ledger/combo-feasibility.mjs';
+import {quoteExpired} from '../../../../server/ledger/quote-validity.mjs';
+import {useQuoteExpiry} from '../../hooks/useQuoteExpiry';
+import {selectionQuoteDeadline,earliestQuoteDeadline} from '../../utils/quoteValidity';
 import './betslip.css';
+import {totalFromColumnStake} from '../../utils/zshopStake';
 
 export default function Betslip() {
   const { 
     selections, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType,
     removeSelection, clearAll, updateOdds, totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet 
   } = useBetslip();
-  const { t } = useLanguage();
+  const { t,lang } = useLanguage();
+  const tr=(sq:string,en:string)=>lang==='en'?en:sq;
   const { user, refreshUser } = useAuth();
-  const { combosEnabled, lockedOutcomes, lockedMarkets, lockedMatches, riskLockedOutcomes, livePatches, invalidateSelections } = useLiveFeed();
+  const { combosEnabled, lockedOutcomes, lockedMarkets, lockedMatches, riskLockedOutcomes, livePatches, invalidateSelections,oddsDeltas,feedMode } = useLiveFeed();
+  useQuoteExpiry(earliestQuoteDeadline(selections.map(s=>selectionQuoteDeadline(s,oddsDeltas))));
   const unavailableSelections = selections.filter(s=> {
     const match={...s.matchSnapshot,...livePatches[s.matchId]};
     const outcome={name:s.outcomeName,code:s.outcomeCode};
-    const market={name:s.marketName,marketType:s.marketType,line:s.marketLine,period:s.period,comboLegs:s.comboLegs,outcomes:[outcome]};
+    const market={id:s.marketId,name:s.marketName,marketType:s.marketType,line:s.marketLine,period:s.period,comboLegs:s.comboLegs,outcomes:[outcome]};
     const locked=lockedOutcomes[s.outcomeId]||riskLockedOutcomes[s.outcomeId]||lockedMarkets[s.marketId]||lockedMatches[s.matchId]||
       s.builderLegs?.some(leg=>lockedOutcomes[leg.outcomeId]||riskLockedOutcomes[leg.outcomeId]||lockedMarkets[leg.marketId]);
-    return locked||isImpossibleLiveCombination(match,market)||filterDecidedOutcomes([outcome],market,match).length===0;
+    return feedMode!=='live'||quoteExpired(selectionQuoteDeadline(s,oddsDeltas))||locked||isImpossibleLiveCombination(match,market)||filterDecidedOutcomes([outcome],market,match).length===0;
   });
   const hasUnavailable = unavailableSelections.length>0;
   const blockedCombos = !combosEnabled && selections.some(s => s.outcomeId.startsWith('BB|') || isComboMarket(s.marketName));
@@ -54,6 +61,12 @@ export default function Betslip() {
   const [stakeError, setStakeError] = useState('');
   const placeBetClickLock = useRef(false);
   const hasMultipleColumns = ticketType === 'SYSTEM';
+  const [columnDraft,setColumnDraft]=useState<string|null>(null);
+  useEffect(()=>setColumnDraft(null),[columns.length]);
+  const invalidColumnInput=hasMultipleColumns&&columnDraft!==null&&totalFromColumnStake(columnDraft,columns.length)===null;
+  const matchGroups=[...selections.reduce((groups,selection)=>{const items=groups.get(selection.matchId)??[];items.push(selection);groups.set(selection.matchId,items);return groups;},new Map<string,typeof selections>())];
+  const setTotal=(value:string)=>{setColumnDraft(null);setStake(value);};
+  const setColumn=(value:string)=>{setColumnDraft(value);const total=totalFromColumnStake(value,columns.length);if(total!==null)setStake(total);};
   const perColumnMinimum = Math.min(...columnStakes) / 100;
   const perColumnMaximum = Math.max(...columnStakes) / 100;
 
@@ -65,7 +78,7 @@ export default function Betslip() {
   const [showTicketSearch, setShowTicketSearch] = useState(false);
 
   const handlePlaceBet = async () => {
-    if (placeBetClickLock.current) return;
+    if (placeBetClickLock.current || invalidColumnInput) return;
     const stakeCents = stakeToCents(stake);
     if (stakeCents == null || stakeCents < 10000) {
       setStakeError(stakeCents == null ? 'Vendos një shumë me maksimumi 2 shifra pas presjes.' : 'Shuma minimale totale është 100 Lek.');
@@ -92,7 +105,7 @@ export default function Betslip() {
           matchName: errData?.matchName || foundSel?.matchName || '',
         });
       } else if (errData?.code === 'LIVE_RISK_SUSPENDED' ||
-                 errData?.code === 'MARKET_DECIDED' || errData?.code === 'SELECTION_UNAVAILABLE' ||
+                 ['MARKET_DECIDED','SELECTION_UNAVAILABLE','QUOTE_STALE','FEED_REFRESHING','MARKET_EVIDENCE_UNSUPPORTED'].includes(errData?.code) ||
                  /pezulluar|përfunduar|nuk është më e disponueshme/i.test(String(errData?.message ?? ''))) {
         invalidateSelections([errData?.outcomeId,errData?.sourceOutcomeId].filter(Boolean));
       } else {
@@ -118,7 +131,7 @@ export default function Betslip() {
       clearAll();
     } catch (e: any) {
       const detail = e.response?.data;
-      if (detail?.code === 'LIVE_RISK_SUSPENDED' || detail?.code === 'MARKET_DECIDED' || detail?.code === 'SELECTION_UNAVAILABLE' ||
+      if (['LIVE_RISK_SUSPENDED','MARKET_DECIDED','SELECTION_UNAVAILABLE','QUOTE_STALE','FEED_REFRESHING','MARKET_EVIDENCE_UNSUPPORTED'].includes(detail?.code) ||
           /pezulluar|përfunduar/i.test(String(detail?.message ?? ''))) {
         invalidateSelections([detail?.outcomeId,detail?.sourceOutcomeId].filter(Boolean));
       } else {
@@ -206,7 +219,7 @@ export default function Betslip() {
 
   return (
     <>
-    <div className="betslip flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-secondary text-white">
+    <div className="betslip zshop-betslip flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-secondary text-white">
       {/* Compact slip heading and ticket type. */}
       <div className="betslip-heading shrink-0 border-b border-tertiary bg-[#424e60]">
         <div className="betslip-heading-row flex items-center justify-between gap-2 px-3 py-2">
@@ -221,22 +234,7 @@ export default function Betslip() {
             {t('betslip.search_ticket')}
           </button>
         </div>
-        <div className="betslip-heading-row flex items-center justify-between gap-2 border-t border-[#24303d] bg-[#252d3a] px-3 py-2">
-          <select
-            disabled
-            value={ticketType}
-            aria-label={t("Lloji i skedinës")}
-            className="max-w-[155px] border border-tertiary bg-[#424e60] px-2 py-1 text-xs font-semibold text-white focus:outline-none focus:border-accent-yellow"
-          >
-            {(['SINGLE','COMBO','SYSTEM'] as const).map(type => (
-              <option key={type} value={type}>{t(`betslip.${type.toLowerCase()}`)}</option>
-            ))}
-          </select>
-          {selections.length > 0 && (
-            <button type="button" onClick={clearAll} className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-rose-300">
-              <Trash2 size={12}/> {" " + t("Fshij Të Gjitha")}</button>
-          )}
-        </div>
+        <div className="betslip-config"><div className="flex items-center gap-2"><select disabled value={ticketType} aria-label={t('Lloji i skedinës')}>{(['SINGLE','COMBO','SYSTEM'] as const).map(type=><option key={type} value={type}>{t('betslip.'+type.toLowerCase())}</option>)}</select>{hasMultipleColumns&&<span className="text-[11px] text-amber-300">{columnsOverflow?'24+':columns.length} {tr('kolona','columns')}</span>}</div>{selections.length>0&&<button type="button" onClick={clearAll} className="flex items-center gap-1 text-[11px] text-[#94a7c9]"><Trash2 size={12}/>{t('Fshij Të Gjitha')}</button>}</div>
       </div>
 
       <div className="betslip-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#1b2530]" data-betslip-scroll>
@@ -274,32 +272,7 @@ export default function Betslip() {
         </div>
       ) : (
         <>
-          <div>
-            {selections.map((s, index) => (
-              <div key={s.outcomeId} className="border-b border-[#0b1018] bg-[#252d3a] px-3 py-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="break-words text-xs font-semibold leading-snug text-white">
-                      <span className="mr-1 text-[10px] text-text-muted">{index + 1}.</span>{s.matchName}
-                    </p>
-                    <p className="mt-1 break-words text-[11px] text-text-secondary">
-                      {formatMarketSelectionLabel(s.marketName, s.marketLine, t)}
-                      {' · '}
-                      <span className="font-semibold text-slate-200">{formatTicketSelection(s.outcomeName, s.marketName, s.matchName, t, s.outcomeCode, s.marketLine)}</span>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-start gap-2">
-                    {unavailableSelections.some(row=>row.outcomeId===s.outcomeId)
-                      ? <strong className="pt-0.5 text-[11px] font-bold text-rose-300">{t("Pezulluar")}</strong>
-                      : <strong className="pt-0.5 font-mono text-sm font-bold tabular-nums text-accent-yellow">{formatOdds(s.odds)}</strong>}
-                    <button type="button" onClick={() => removeSelection(s.outcomeId)}
-                      title={t('betslip.remove_selection')} aria-label={t('betslip.remove_selection')}
-                      className="p-0.5 text-text-secondary hover:text-rose-300"><X size={15}/></button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div data-zshop-slip-matches>{matchGroups.map(([matchId,items])=><article key={matchId} className="betslip-match" data-slip-match={matchId}><div className="betslip-match-title">{items[0].matchName}</div>{items.map(selection=><div className="betslip-match-bet" key={selection.outcomeId} data-slip-selection={selection.outcomeId}><span>{selection.matchSnapshot?.status==='LIVE'&&<small className="mr-1">(L)</small>}{formatMarketSelectionLabel(selection.marketName,selection.marketLine,t)} - <b>{((selection.outcomeId.startsWith('BB|')?formatBuilderSelection(selection.comboLegs,t):null)??formatTicketSelection(selection.outcomeName,selection.marketName,selection.matchName,t,selection.outcomeCode,selection.marketLine))}</b></span><div>{unavailableSelections.some(row=>row.outcomeId===selection.outcomeId)?<span className="text-rose-300">{t('Pezulluar')}</span>:<strong>{formatOdds(selection.odds)}×</strong>}<button type="button" onClick={()=>removeSelection(selection.outcomeId)} aria-label={t('betslip.remove_selection')}><X size={14}/></button></div></div>)}</article>)}</div>
 
           {hasMultipleColumns && (
             <details className="border-t border-accent-yellow/30 bg-[#1d2835] px-3 py-2 text-xs" data-betslip-columns>
@@ -327,67 +300,26 @@ export default function Betslip() {
             </div>
           )}
 
-          <div className="space-y-2 border-t border-tertiary px-3 py-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300">{t('betslip.total_odds')}:</span>
-                <strong className="font-mono text-sm font-bold tabular-nums text-accent-yellow">
-                  {hasMultipleColumns ? 'Sipas kolonave' : formatOdds(totalOdds)}
-                </strong>
-              </div>
-              {hasMultipleColumns && !columnsOverflow && (
-                <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
-                  <span>{t("Shuma Për Kolonë (")}{columns.length}):</span>
-                  <strong className="font-mono text-white">{perColumnMinimum === perColumnMaximum ? perColumnMinimum.toFixed(2) : `${perColumnMinimum.toFixed(2)}–${perColumnMaximum.toFixed(2)}`} {" " + t("Lek")}</strong>
-                </div>
-              )}
-              {hasMultipleColumns && columnStakes.some(amount => amount !== columnStakes[0]) && (
-                <p className="text-[10px] text-text-secondary">{t("Diferenca prej 0.01 Lek ndahet te kolonat e para; totali ruhet saktësisht.")}</p>
-              )}
-              {hasMultipleColumns && !columnsOverflow && (
-                <div className="space-y-1 text-[10px] text-text-secondary">
-                  <div className="flex justify-between gap-2"><span>{t("Kthimi më i vogël për kolonë, nëse fiton:")}</span><strong className="shrink-0">{Math.min(...columnPreviews.map(column => column.payout)).toFixed(2)} {" " + t("Lek")}</strong></div>
-                  <div className="flex justify-between gap-2"><span>{t("Kthimi më i madh për kolonë, nëse fiton:")}</span><strong className="shrink-0">{Math.max(...columnPreviews.map(column => column.payout)).toFixed(2)} {" " + t("Lek")}</strong></div>
-                  <p>{t("Çdo kolonë vlerësohet veçmas. Mblidhen vetëm kthimet e kolonave fituese; shuma e shfaqur kërkon që të gjitha kolonat të fitojnë.")}</p>
-                </div>
-              )}
-          </div>
+          <p className="zs-slip-help px-1 py-2 text-[10px] text-text-secondary">{hasMultipleColumns?tr('Një zgjedhje për ndeshje në çdo kolonë. Shuma totale ndahet mes kolonave.','One selection per match in each column. The total stake is divided between columns.'):tr('Kuotat verifikohen kur vendoset bileta.','Odds are verified when the ticket is placed.')}</p>
         </>
       )}
       </div>
 
       {selections.length > 0 && (
           <div className="betslip-footer shrink-0 border-t border-tertiary bg-[#252d3a]" data-betslip-footer>
-            <div className="betslip-footer-fields space-y-2 px-3 py-2">
-              <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
-                <label htmlFor="betslip-stake" className="min-w-0 text-slate-300">{t("Shuma Totale:")}</label>
-                <div className="flex w-[155px] max-w-[55%] shrink-0 items-center border border-[#53657c] bg-[#17212c]">
-                  <input id="betslip-stake" type="number" inputMode="decimal" min="100" step="0.01" value={stake}
-                    onChange={e => setStake(e.target.value)}
-                    className="min-w-0 w-full bg-transparent px-2 py-1.5 text-right font-mono text-base font-semibold text-white focus:outline-none" />
-                  <span className="shrink-0 pr-2 text-[10px] text-text-secondary">{t("Lëk")}</span>
-                </div>
-              </div>
-              <div className="betslip-notices max-h-16 overflow-y-auto text-[11px]">
-                {stakeError && <p role="alert" className="font-semibold text-rose-300">{t(stakeError)}</p>}
-                {blockedCombos && <p role="alert" className="font-semibold text-rose-300">{t("Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.")}</p>}
-                {invalidQuote && <p role="alert" className="font-semibold text-rose-300">{t("Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.")}</p>}
-              </div>
-              <div className="betslip-quick-stakes grid grid-cols-4 gap-1">
-                {[100, 500, 1000, 5000].map(amount => (
-                  <button type="button" key={amount} onClick={() => setStake(String(amount))}
-                    className={`border border-tertiary py-1 text-[10px] font-semibold transition-colors ${Number(stake) === amount ? 'bg-[#465870] text-white' : 'bg-[#19232f] text-text-secondary hover:bg-[#424e60] hover:text-white'}`}>
-                    {amount >= 1000 ? `${amount / 1000}k` : amount}
-                  </button>
-                ))}
-              </div>
-              <div className="flex min-w-0 items-center justify-between gap-2 border-t border-tertiary pt-2 text-xs">
-                <span className="min-w-0 text-slate-300">{hasMultipleColumns ? 'Shuma e kthimeve të mundshme' : t('betslip.potential_payout')}:</span>
-                <strong className="shrink-0 font-mono text-sm font-bold tabular-nums text-accent-yellow">{invalidQuote ? '—' : potentialPayout.toFixed(2)} {" " + t("Lëk")}</strong>
-              </div>
+            <div className="betslip-footer-fields space-y-1">
+              <div className="zs-currency flex justify-between text-[11px] text-slate-300"><span>{tr('Valuta','Currency')}</span><strong>{tr('Lek','ALL')}</strong></div>
+              {!hasMultipleColumns&&<div className="zs-return-row"><span>{t('betslip.total_odds')}</span><strong>{formatOdds(totalOdds)}</strong></div>}
+              <div className="zs-stake-row"><label htmlFor="betslip-stake">{tr('Shuma totale','Total stake')}</label><div className="zs-stake-control"><input id="betslip-stake" type="number" inputMode="decimal" min="100" step="0.01" value={stake} onChange={e=>setTotal(e.target.value)}/></div></div>
+              {hasMultipleColumns&&!columnsOverflow&&<div className="zs-stake-row"><label htmlFor="betslip-column-stake">{tr('Shuma për kolonë','Stake per column')}</label><div className="zs-stake-control"><span>{columns.length} ×</span><input id="betslip-column-stake" type="number" inputMode="decimal" min="0.01" step="0.01" value={columnDraft??perColumnMinimum.toFixed(2)} onChange={e=>setColumn(e.target.value)} onBlur={()=>{if(!invalidColumnInput)setColumnDraft(null);}} aria-invalid={invalidColumnInput}/></div></div>}
+              {hasMultipleColumns&&perColumnMinimum!==perColumnMaximum&&<p className="text-[10px] text-text-secondary" data-stake-rounding>{perColumnMinimum.toFixed(2)}–{perColumnMaximum.toFixed(2)} {tr('Lek për kolonë; diferenca 0.01 ndahet te kolonat e para.','ALL per column; the 0.01 remainder goes to the first columns.')}</p>}
+              <div className="betslip-notices max-h-12 overflow-y-auto text-[11px]">{stakeError&&<p role="alert" className="text-rose-300">{t(stakeError)}</p>}{invalidColumnInput&&<p role="alert" className="text-rose-300">{tr('Vendos shumën për kolonë me maksimumi 2 shifra pas presjes.','Enter a column stake with at most 2 decimal places.')}</p>}{blockedCombos&&<p role="alert" className="text-rose-300">{t('Combot janë çaktivizuar. Hiqi nga bileta për të vazhduar.')}</p>}{invalidQuote&&<p role="alert" className="text-rose-300">{t('Një koeficient ose kthim është i pavlefshëm. Rifresko kuotat ose hiqe zgjedhjen.')}</p>}</div>
+              <div className="betslip-quick-stakes grid grid-cols-4 gap-1">{[100,500,1000,5000].map(amount=><button type="button" key={amount} onClick={()=>setTotal(String(amount))}>{amount.toLocaleString(lang==='en'?'en-GB':'sq-AL')}</button>)}</div>
+              {hasMultipleColumns&&!columnsOverflow?<div data-zshop-column-returns><div className="zs-return-row"><span>{tr('Kthimi minimal për kolonë fituese','Min. return per winning column')}</span><strong>{invalidQuote?'—':Math.min(...columnPreviews.map(c=>c.payout)).toFixed(2)}</strong></div><div className="zs-return-row"><span>{tr('Kthimi maksimal për kolonë fituese','Max. return per winning column')}</span><strong>{invalidQuote?'—':Math.max(...columnPreviews.map(c=>c.payout)).toFixed(2)}</strong></div></div>:<div className="zs-return-row"><span>{t('betslip.potential_payout')}</span><strong>{invalidQuote?'—':potentialPayout.toFixed(2)} {tr('Lek','ALL')}</strong></div>}
             </div>
             <div className="betslip-actions grid gap-px bg-[#0b1018] p-px">
               {user ? (
-                <button type="button" data-betslip-place onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote || hasUnavailable}
+                <button type="button" data-betslip-place onClick={handlePlaceBet} disabled={isPlacingBet || columnsOverflow || blockedCombos || invalidQuote || hasUnavailable || invalidColumnInput}
                   aria-busy={isPlacingBet}
                   className="bg-accent-yellow py-3 text-sm font-bold text-[#17212c] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-60">
                   {isPlacingBet ? 'Duke vendosur bastin...' : t('betslip.place_bet')}
@@ -397,7 +329,7 @@ export default function Betslip() {
               )}
               <button type="button" onClick={handleBook} disabled={hasMultipleColumns || isPlacingBet || blockedCombos || invalidQuote || hasUnavailable}
                 title={hasMultipleColumns ? 'Prenotimi për shumë kolona nuk është aktiv' : undefined}
-                className="bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
+                className="betslip-book bg-[#424e60] py-2 text-xs font-semibold text-white hover:bg-[#465870]">
                 {t('betslip.book_ticket')}
               </button>
             </div>

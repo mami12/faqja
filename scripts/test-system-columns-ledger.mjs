@@ -7,6 +7,7 @@ import { createColumnsPlacer, toClientTicket, revertTicket, placeBet, bookTicket
 import { listPlayerBetActivity } from '../server/ledger/bet-history.mjs';
 import { listTransactions, managerFinancials, ledgerStats } from '../server/ledger/store.mjs';
 import { recalcTicket, gradeLine } from '../server/ledger/settler.mjs';
+import { managerCommissionReport } from '../server/ledger/manager-finance.mjs';
 import { DEFAULT_LIVE_RISK_SETTINGS } from '../server/live-risk-settings.mjs';
 import { upsert } from '../server/match-store.mjs';
 
@@ -97,7 +98,11 @@ try {
   const financial=await managerFinancials(managerId,{runQuery});
   assert.equal(financial.manager.ticketCount,1);assert.equal(financial.players[0].ticketCount,1);
   assert.equal(financial.manager.totalStake,100,'logical ticket counts do not double the actual financial stake');
-  assert.equal(await balance(managerId), managerBefore - 5, 'commission charges actual 50 stakes once');
+  assert.equal(await balance(managerId), managerBefore, 'system commissions are informational and do not debit the manager');
+  assert.equal(financial.manager.sportCommission,5,'two actual 50 stakes at 5% produce 5 of reported sport commission');
+  assert.equal(financial.manager.casinoCommission,0,'sport commission is kept separate from casino');
+  assert.equal(financial.players[0].sportCommission,5);
+  assert.equal(financial.players[0].commissionByTier.double,5);
   const placed = (await sql.query("select amount,balance_after from app_transaction where user_id=$1 and type='BET_PLACED' order by balance_after desc", [user.id])).rows;
   assert.deepEqual(placed.map(t => Number(t.amount)), [-50, -50]);
   assert.deepEqual(placed.map(t => Number(t.balance_after)), [50, 0]);
@@ -130,6 +135,8 @@ try {
     }
   }
   assert.equal(await balance(user.id), 5388.9);
+  assert.equal(await balance(managerId),managerBefore,'settlement credits the player while leaving the manager wallet unchanged');
+  assert.equal((await managerCommissionReport(runQuery)).players.get(user.id).sportCommission,5,'settlement preserves frozen commission terms');
   assert.equal(Number((await sql.query("select count(*) n from app_transaction where user_id=$1 and type='BET_WON'", [user.id])).rows[0].n), 2);
   assert.equal((await read(batch.id)).actualPayout,5388.9);
   assert.equal((await listHistory(user.id,{runQuery})).length,1);
@@ -165,14 +172,16 @@ try {
     } };
   } };
   const failingPlace = createColumnsPlacer({ database: failingDatabase, runQuery, getTicket, resolve });
-  const beforeTickets = await count('app_ticket'), beforeTransactions = await count('app_transaction'), beforeManager = await balance(managerId);
+  const beforeTickets = await count('app_ticket'), beforeTransactions = await count('app_transaction'), beforeReports = await count('app_manager_commission'), beforeManager = await balance(managerId);
   await assert.rejects(failingPlace(input(failingUser)), /injected/);
   assert.equal(await count('app_ticket'), beforeTickets); assert.equal(await count('app_transaction'), beforeTransactions);
+  assert.equal(await count('app_manager_commission'),beforeReports,'failed column placement rolls back its commission reports too');
   assert.equal(await balance(failingUser.id), 1000); assert.equal(await balance(managerId), beforeManager);
 
   const threeUser = await player(100);
   const three = await place({ ...input(threeUser), selections: [selections[0], selections[1], { outcomeId: '1497|btts||yes', oddsAtPlacement: 3.2 }] });
   assert.deepEqual(three.system.columns.map(t => t.stake), [33.34, 33.33, 33.33]);
+  assert.equal((await managerCommissionReport(runQuery)).players.get(threeUser.id).sportCommission,3,'single-selection columns report rounded per-column commission');
   // One win, one loss, one void: settlement and void refund are independent.
   for (let i = 0; i < three.system.columns.length; i++) {
     await sql.query('update app_ticket_line set status=$2 where ticket_id=$1', [three.system.columns[i].id, ['WON', 'LOST', 'VOID'][i]]);
@@ -181,6 +190,7 @@ try {
     assert.equal(await recalcTicket(three.system.columns[i].id, { database }), null);
   }
   assert.equal(await balance(threeUser.id), 200.03); //33.34*5 +33.33 refund
+  assert.equal((await managerCommissionReport(runQuery)).players.get(threeUser.id).sportCommission,2,'the wholly VOID column is excluded from commission earnings');
 
   const cancelUser = await player(100), cancelManager = await balance(managerId);
   const cancel = await place(input(cancelUser));
@@ -207,6 +217,7 @@ try {
     assert.equal(await recalcTicket(ticket.id, { database }), null);
   }
   assert.equal(await balance(cancelUser.id), 100); assert.equal(await balance(managerId), cancelManager);
+  assert.equal((await managerCommissionReport(runQuery)).players.has(cancelUser.id),false,'reverted columns are excluded from the report without a wallet refund');
   assert.equal((await read(cancel.id)).status,'REVERTED');assert.equal((await read(cancel.id)).actualPayout,100);
 
   // Preserve the price contract accepted by legacy tickets. With a removed VOID
@@ -336,14 +347,18 @@ try {
   for(const system of [true,false]){
     const reassigned=await player(100),originalManagerBalance=await balance(managerId);
     const placed=system?await place(input(reassigned)):await regular({user:reassigned,stake:100,selections:[selections[0]],clientRequestId:randomUUID()});
-    assert.ok((await balance(managerId))<originalManagerBalance);
+    assert.equal(await balance(managerId),originalManagerBalance,'new commission report does not debit the original manager');
+    const frozen=(await sql.query('select manager_id,amount from app_manager_commission where player_id=$1',[reassigned.id])).rows;
+    assert.equal(frozen.length,system?2:1);assert.ok(frozen.every(row=>row.manager_id===managerId),'commission ownership is frozen at placement');
+    assert.equal(frozen.reduce((sum,row)=>sum+Number(row.amount),0),system?5:3);
     await sql.query('update app_user set manager_id=$2 where id=$1',[reassigned.id,newManager]);
     await assert.rejects(revertTicket(placed.id,managerId,{database}),error=>error.status===403,'previous manager cannot cancel a reassigned player ticket');
     assert.equal(await balance(reassigned.id),0);
     assert.equal((await revertTicket(placed.id,newManager,{database})).refunded,100);
     assert.equal(await balance(reassigned.id),100);
-    assert.equal(await balance(managerId),originalManagerBalance,'placement commission is refunded to the original debited manager');
-    assert.equal(await balance(newManager),5000,'new manager receives no commission refund that they never paid');
+    assert.equal(await balance(managerId),originalManagerBalance,'cancellation does not create an unearned wallet credit');
+    assert.equal(await balance(newManager),5000,'new manager receives no commission wallet credit either');
+    assert.equal((await managerCommissionReport(runQuery)).players.has(reassigned.id),false,'reverted commission is excluded after player reassignment');
   }
   // Simulate pre-unified batches: the migration backfills only metadata, never funds.
   const balancesBeforeMigration=(await sql.query('select id,balance from app_user order by id')).rows;
@@ -357,5 +372,7 @@ try {
   assert.equal(migrated.lines.length,3);assert.equal(migrated.stake,100);assert.equal(migrated.actualPayout,5388.9);
   await sql.exec(LEDGER_SQL);
   assert.equal((await read(batch.system.columns[0].id)).id,migrated.id,'idempotent metadata migration preserves the public ticket ID');
-  console.log('PASS system SQL ledger: total minimum100, exact50/33.34 split, server Cartesian validation, idempotent race/retry, atomic rollback, manager commissions, exclusions/limits, cancellation, additive wins/losses/VOID and no double credits');
+  assert.equal(await balance(managerId),10000,'all placements, cancellations and settlements leave the manager wallet unchanged');
+  assert.equal(Number((await sql.query('select count(*) n from app_transaction where user_id=$1',[managerId])).rows[0].n),0,'report-only commissions and match results never post manager wallet movements');
+  console.log('PASS system SQL ledger: total minimum100, exact50/33.34 split, server Cartesian validation, idempotent race/retry, atomic rollback, report-only commissions, exclusions/limits, cancellation, additive wins/losses/VOID and no double credits');
 } finally { await sql.close(); }

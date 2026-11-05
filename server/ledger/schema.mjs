@@ -1,4 +1,5 @@
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
+import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
 /**
  * Ledger schema - users, money, tickets.
  *
@@ -28,6 +29,29 @@ create index if not exists app_user_manager_idx on app_user (manager_id);
 alter table app_user add column if not exists deleted_at timestamptz;
 alter table app_user add column if not exists deleted_by uuid references app_user(id) on delete set null;
 create index if not exists app_user_deleted_idx on app_user(deleted_at,id) where deleted_at is not null;
+alter table app_user add column if not exists agent_id uuid references app_user(id) on delete set null;
+create index if not exists app_user_agent_idx on app_user(agent_id);
+alter table app_user add column if not exists financial_epoch bigint not null default 0;
+create table if not exists app_financial_reset (
+ request_id uuid primary key,
+ actor_id uuid not null references app_user(id) on delete restrict,
+ response jsonb not null,
+ created_at timestamptz not null default now()
+);
+create table if not exists app_staff_transfer (
+ actor_id uuid not null references app_user(id) on delete restrict,
+ request_id uuid not null,
+ payload text not null,
+ response jsonb not null,
+ created_at timestamptz not null default now(),
+ primary key(actor_id,request_id)
+);
+-- Latest observed provider facts survive a restart; only confirmed FT facts settle bets.
+create table if not exists app_match_snapshot (
+ match_id bigint primary key,
+ snapshot jsonb not null,
+ observed_at timestamptz not null default now()
+);
 
 create table if not exists app_commission_config (
   id         smallint primary key check (id = 1),
@@ -38,6 +62,7 @@ create table if not exists app_commission_config (
   updated_at timestamptz not null default now()
 );
 insert into app_commission_config (id) values (1) on conflict (id) do nothing;
+alter table app_commission_config add column if not exists casino_pct numeric(5,2) not null default 0 check (casino_pct >= 0 and casino_pct <= 100);
 
 create table if not exists app_player_controls (
   user_id                uuid primary key references app_user(id) on delete cascade,
@@ -70,6 +95,11 @@ create table if not exists app_admin_audit (
   details       jsonb not null default '{}'::jsonb,
   created_at    timestamptz not null default now()
 );
+create table if not exists app_board_settings (
+ id smallint primary key check(id=1),settings jsonb not null default '{"prematchLimit":0}'::jsonb,
+ updated_by uuid references app_user(id) on delete set null,updated_at timestamptz not null default now()
+);
+insert into app_board_settings(id) values(1) on conflict(id) do nothing;
 create index if not exists app_admin_audit_created_idx on app_admin_audit (created_at desc);
 create index if not exists app_admin_audit_actor_idx on app_admin_audit (actor_id, created_at desc);
 
@@ -100,6 +130,21 @@ create table if not exists app_ticket (
   placed_at        timestamptz not null default now(),
   settled_at       timestamptz
 );
+-- Preserve the accepted quote independently from the historical settled payout.
+create table if not exists app_market_scope_policy(id serial primary key,country text not null default '',league text not null default '',categories text[] not null default '{}',families text[] not null default '{}',updated_at timestamptz not null default now());
+alter table app_ticket add column if not exists original_potential_payout numeric(14,2);
+alter table app_ticket add column if not exists potential_quote_reconstructed boolean not null default false;
+update app_ticket set original_potential_payout=case when status in ('PENDING','WON') then potential_payout
+ else round(stake*total_odds,2) end,
+ potential_quote_reconstructed=(status not in ('PENDING','WON'))
+ where original_potential_payout is null;
+create or replace function app_preserve_ticket_quote() returns trigger language plpgsql as $quote$ begin
+ if TG_OP='INSERT' then NEW.original_potential_payout=NEW.potential_payout;NEW.potential_quote_reconstructed=false;
+ else NEW.original_potential_payout=OLD.original_potential_payout;NEW.potential_quote_reconstructed=OLD.potential_quote_reconstructed;end if;
+ return NEW;
+end $quote$;
+drop trigger if exists app_ticket_quote on app_ticket;
+create trigger app_ticket_quote before insert or update on app_ticket for each row execute function app_preserve_ticket_quote();
 -- A request from the browser may be retried or delivered twice. Enforce exactly
 -- one real ticket per player + request key at the database boundary.
 alter table app_ticket add column if not exists client_request_id uuid;
@@ -189,6 +234,7 @@ create table if not exists app_match_result (
   finished_at  timestamptz not null default now(),
   settled_at   timestamptz
 );
+alter table app_match_result add column if not exists statistics jsonb not null default '{}';
 
 alter table app_match_result add column if not exists half_home_score int;
 alter table app_match_result add column if not exists half_away_score int;
@@ -225,6 +271,39 @@ create table if not exists app_casino_round (
  unique(user_id,client_request_id)
 );
 create index if not exists app_casino_round_user_date_idx on app_casino_round(user_id,created_at desc);
+-- Frozen report for manual settlement: commissions never move wallet funds.
+create table if not exists app_manager_commission (
+ id uuid primary key default gen_random_uuid(),
+ manager_id uuid not null references app_user(id) on delete cascade,
+ player_id uuid not null references app_user(id) on delete cascade,
+ kind text not null check(kind in ('SPORT','CASINO')),
+ ticket_id uuid unique references app_ticket(id) on delete cascade,
+ round_id uuid unique references app_casino_round(id) on delete cascade,
+ stake numeric(14,2) not null check(stake >= 0),
+ selection_count integer,
+ rate_pct numeric(5,2) not null check(rate_pct >= 0 and rate_pct <= 100),
+ amount numeric(14,2) not null check(amount >= 0),
+ created_at timestamptz not null default now(),
+ check ((kind='SPORT' and ticket_id is not null and round_id is null) or
+        (kind='CASINO' and round_id is not null and ticket_id is null))
+);
+create index if not exists app_manager_commission_owner_idx on app_manager_commission(manager_id,kind,created_at);
+create index if not exists app_manager_commission_player_idx on app_manager_commission(player_id,kind);
+create or replace function app_record_casino_commission() returns trigger language plpgsql as $$
+declare owner_id uuid; pct numeric(5,2);
+begin
+ select manager_id into owner_id from app_user where id=NEW.user_id;
+ if owner_id is not null then
+   select casino_pct into pct from app_commission_config where id=1;
+   insert into app_manager_commission(manager_id,player_id,kind,round_id,stake,rate_pct,amount)
+   values(owner_id,NEW.user_id,'CASINO',NEW.id,NEW.stake,coalesce(pct,0),round(NEW.stake*coalesce(pct,0)/100,2))
+   on conflict(round_id) do nothing;
+ end if;
+ return NEW;
+end $$;
+drop trigger if exists app_casino_commission_report on app_casino_round;
+create trigger app_casino_commission_report after insert on app_casino_round
+ for each row execute function app_record_casino_commission();
 -- Credit units can be sub-cent while every wallet debit remains whole cents.
 -- Avoid repeating a table type change and its lock on subsequent startups.
 do $$ begin
@@ -280,6 +359,7 @@ alter table app_casino_freespin_state add column if not exists math_profile text
 alter table app_casino_freespin_state add column if not exists custom_round jsonb;
 
 ${ORIGINAL_WALLET_SQL}
+${SETTLEMENT_REVIEW_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.

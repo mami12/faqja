@@ -14,16 +14,80 @@ import { spawnSync } from 'node:child_process';
 import {applyPixiClientCompat} from './pixi-client-compat.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const output = join(root, 'web/public/casino-original/bookofra');
 const sourceSha = '507f7fdb7aee883f0d78cef0b02d6c4358462c69';
 const sourceFolder = 'Book of Ra Deluxe';
+
+async function validatePackagedBookofra(output) {
+  const requireFile = async (file) => {
+    if (typeof file !== 'string' || file.startsWith('/') || file.includes('\\') || file.split('/').includes('..'))
+      throw new Error('Invalid original asset path: ' + file);
+    const info = await stat(join(output, file));
+    if (!info.isFile() || info.size < 10) throw new Error('Missing or empty original game asset: ' + file);
+    if (file.endsWith('.json')) JSON.parse(await readFile(join(output, file), 'utf8'));
+  };
+  const manifest = JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8'));
+  const hashed = JSON.parse(await readFile(join(output, 'manifest-ecc4347a48712.json'), 'utf8'));
+  if (JSON.stringify(manifest) !== JSON.stringify(hashed)) throw new Error('Book of Ra resource manifests differ');
+  const engine = 'scripts/c2d-6242421041.js';
+  for (const file of ['index.html', 'index-real.html', 'head.html', 'body.html',
+    'responsive-desktop.html', 'libs/assembler.js', engine,
+    'scripts/game-e8dc547825.js', 'scripts/bundle-60f2610b1f.js']) await requireFile(file);
+  const [entry, real, head, body, code] = await Promise.all(['index.html', 'index-real.html', 'head.html', 'body.html', engine]
+    .map(file => readFile(join(output, file), 'utf8')));
+  for (const page of [entry, real]) {
+    if (!page.includes('<head attach-element="./head.html">') || !page.includes('<body attach-element="./body.html">') ||
+        !page.includes('"desktop":true') || /https?:\/\//.test(page)) throw new Error('Book of Ra local assembler entry is outdated');
+  }
+  if (!entry.includes('"playURL":"/app/api/casino/bookofra/play"') ||
+      !real.includes('"playURL":"/app/api/casino/bookofra/real/play"')) throw new Error('Book of Ra local wallet URLs are missing');
+  if (!code.includes('faqja-pixi-render-budget-v1') || !head.includes(engine + '?render-budget=1') ||
+      !body.includes('#slotCanvas {touch-action:none}')) throw new Error('Book of Ra renderer compatibility patch is missing');
+  for (const match of head.matchAll(/\bsrc="\{\$game_path\}([^"?]+)(?:\?[^" ]*)?"/g)) await requireFile(match[1]);
+  // The pinned archive advertises optional mobile, MP3 and locale alternatives
+  // which it does not ship. Validate the desktop/English resources actually used.
+  for (const key of ['data/application.json', 'images/logo.png', 'data/reelsetConfig-hd.json',
+    'data/reelsetResources-hd.json', 'data/paytableConfig-hd.json', 'data/paytableConfigFreespins-hd.json',
+    'data/linesConfig-hd.json', 'data/mudConfig-hd.json', 'data/mudResources-hd.json',
+    'images/bg_0-hd.json', 'images/bg_0-hd.webp', 'images/reelset_0-hd.webp', 'images/reelset_1-hd.webp',
+    'images/reelset_2-hd.webp', 'images/reelset_3-hd.webp', 'images/reelset_4-hd.webp', 'images/reelset_5-hd.webp',
+    'audio/reelset_moving.ogg', 'audio/reelset_reel_stop.ogg']) {
+    if (!manifest[key]) throw new Error('Missing original resource mapping: ' + key);
+    await requireFile(manifest[key]);
+  }
+  for (let symbol = 0; symbol <= 9; symbol++) {
+    const key = 'animations/' + symbol + '_symbol-hd.json';
+    if (!manifest[key] || manifest['animations/' + symbol + '_symbol.json'] !== manifest[key])
+      throw new Error('Book of Ra original HD animation mapping is missing: ' + symbol);
+    await requireFile(manifest[key]);
+  }
+  const configs = (await readdir(join(output, 'data'))).filter(file => file.endsWith('.json'));
+  if (configs.length < 25) throw new Error('Original Book of Ra data folder is incomplete');
+  for (const needed of ['paytableConfig', 'spoolsConfig', 'linesConfig', 'mudConfig']) {
+    if (!configs.some(file => file.startsWith(needed))) throw new Error('Missing original config: ' + needed);
+  }
+}
+
+export async function syncOriginalBookofra({rootDir = root, fetcher = globalThis.fetch, log = console.log} = {}) {
+const output = join(rootDir, 'web/public/casino-original/bookofra');
+let cacheError;
+try {
+  await validatePackagedBookofra(output);
+  log('[bookofra-original] Verified packaged Pixi/Spine/Howler client reused; no download needed (' + sourceSha.slice(0, 12) + ')');
+  return {cached: true, sourceSha};
+} catch (error) { cacheError = error; }
 const scratch = await mkdtemp(join(tmpdir(), 'bookofra-original-'));
 try {
   const archiveUrl = 'https://codeload.github.com/mami12/New-folder/tar.gz/' + sourceSha;
-  const response = await fetch(archiveUrl, { signal: AbortSignal.timeout(180000) });
-  if (!response.ok) throw new Error('Cannot fetch original Book of Ra client: HTTP ' + response.status);
   const archive = join(scratch, 'client.tar.gz');
-  await writeFile(archive, Buffer.from(await response.arrayBuffer()));
+  try {
+    const response = await fetcher(archiveUrl, { signal: AbortSignal.timeout(180000) });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    await writeFile(archive, Buffer.from(await response.arrayBuffer()));
+  } catch (error) {
+    throw new Error('Book of Ra packaged assets are missing or incomplete (' + cacheError.message + '). ' +
+      'The pinned original client could not be downloaded: ' + error.message + '. ' +
+      'Copy the complete web/public/casino-original/bookofra folder from the working laptop, or retry with internet access.', {cause: error});
+  }
   const unpack = spawnSync('tar', ['-xzf', archive, '-C', scratch], { encoding: 'utf8' });
   if (unpack.status !== 0) throw new Error('Cannot extract Book of Ra browser client: ' + unpack.stderr);
   const archiveRoots = (await readdir(scratch, { withFileTypes: true })).filter((x) => x.isDirectory());
@@ -105,8 +169,16 @@ html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#000}
   for (const needed of ['paytableConfig', 'spoolsConfig', 'linesConfig', 'mudConfig']) {
     if (!configs.some((f) => f.startsWith(needed))) throw new Error('Missing original config: ' + needed);
   }
-  console.log('[bookofra-original] Pixi/Spine/Howler client synchronized (' +
+  await validatePackagedBookofra(output);
+  log('[bookofra-original] Pixi/Spine/Howler client synchronized (' +
     sourceSha.slice(0, 12) + '), ' + dirs.join(', ') + ', local playURL');
+  return {cached: false, sourceSha};
 } finally {
   await rm(scratch, { recursive: true, force: true });
+}
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { await syncOriginalBookofra(); }
+  catch (error) { console.error('[bookofra-original] ' + error.message); process.exitCode = 1; }
 }

@@ -26,25 +26,22 @@ interface FavoritesContextType {
 
 const FavoritesContext = createContext<FavoritesContextType>({} as FavoritesContextType);
 
+function savedMatchIds(key: string): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(saved)
+      ? [...new Set(saved.filter((id): id is string => typeof id === 'string' && id.trim().length > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export const FavoritesProvider = ({ children }: { children: React.ReactNode }) => {
   const { t } = useLanguage();
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_favorite_matches');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [favorites, setFavorites] = useState<string[]>(() => savedMatchIds('app_favorite_matches'));
 
-  const [alerts, setAlerts] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('app_alert_matches');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [alerts, setAlerts] = useState<string[]>(() => savedMatchIds('app_alert_matches'));
 
   const [notifications, setNotifications] = useState<MatchAlertNotification[]>([]);
   const [lastSeenScores, setLastSeenScores] = useState<Record<string, { home: number; away: number; period?: string }>>({});
@@ -128,7 +125,7 @@ export const FavoritesProvider = ({ children }: { children: React.ReactNode }) =
   useEffect(() => {
     if (!livePatches || Object.keys(livePatches).length === 0) return;
 
-    const monitoredIds = new Set([...favorites, ...alerts]);
+    const monitoredIds = new Set(alerts);
     if (monitoredIds.size === 0) return;
 
     monitoredIds.forEach(matchId => {

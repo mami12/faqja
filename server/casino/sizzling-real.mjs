@@ -49,6 +49,7 @@ async function getWalletPlayer(req,getUser=getUserById){
   if(claim.kind!=='casino-pixi-wallet'||typeof claim.jti!=='string')throw fault(401,'CASINO_SESSION_INVALID');
   const user=await getUser(claim.sub);
   if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
+  if(Number(claim.epoch??0)!==Number(user.financialEpoch??user.financial_epoch??0))throw fault(401,'CASINO_SESSION_EXPIRED');
   return {user,nonce:claim.jti,mathVersion:claim.mathVersion};
 }
 function spinProtocol(round,bet,lines,denomination,reqId){
@@ -122,7 +123,7 @@ casinoSessionRouter.post('/casino/session',requireAuth,async(req,res)=>{
     if(req.user.role!=='PLAYER'||req.user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
     const settings=await ensureAdminEnabled();
     const mathVersion=assertCasinoMathAcknowledged('sizzling',settings,req.body?.mathVersion);
-    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet',mathVersion};
+    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-pixi-wallet',mathVersion,epoch:Number(req.user.financialEpoch??0)};
     const token=jwt.sign(claim,config.jwtSecret,{expiresIn:MAX_AGE});
     res.cookie(COOKIE,token,{
       httpOnly:true,sameSite:'strict',secure:req.secure||req.headers['x-forwarded-proto']==='https',

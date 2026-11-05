@@ -1,4 +1,6 @@
 import { translateFito24MarketLabel } from '../i18n/fito24MarketLabels';
+import { translateZizobetMarketLabel } from '../i18n/zizobetMarketLabels';
+import { repairDisplayText } from './repairDisplayText';
 
 export type Translate = ((key: string) => string) & { lang?: 'al' | 'en' };
 
@@ -433,10 +435,11 @@ function translateQualifiedScoringMarket(raw: string, t: Translate): string | nu
     const subject = goal[1].toLowerCase().startsWith('next') ? 'Goli i radhës' : 'Gol';
     return subject + ' ' + translateScoringQualifier(goal[2] + goal[3]);
   }
-  const team = raw.match(/^(.+?)\s+(not\s+to\s+score|to\s+score|will\s+score|scores?)(?:\s+(?:a\s+)?goal)?(?:\s+(in|before|until|by|up\s+to|within|between)\b(.*))?$/i);
-  if (team && !/^(?:both|home|away|first|last)\s+teams?$/i.test(team[1].trim())) {
+  const team = raw.match(/^(.+?)\s+(not\s+to\s+score|will\s+not\s+score|does\s+not\s+score|to\s+score|will\s+score|scores?)(?:\s+(?:a\s+)?goal)?(?:\s+(in|before|until|by|up\s+to|within|between)\b(.*))?$/i);
+  if (team && !/^(?:both|first|last)\s+teams?$/i.test(team[1].trim())) {
     const extra = team[3] ? translateScoringQualifier(team[3] + (team[4] ?? '')) : '';
-    return team[1].trim() + (/^not/i.test(team[2]) ? ' nuk shënon gol' : ' shënon gol') + (extra ? ' ' + extra : '');
+    const subject=/^home team$/i.test(team[1])?'Skuadra vendase':/^away team$/i.test(team[1])?'Skuadra udhëtuese':/^player$/i.test(team[1])?'Lojtari':team[1].trim();
+    return subject + (/^(?:not|will not|does not)/i.test(team[2]) ? ' nuk shënon gol' : ' shënon gol') + (extra ? ' ' + extra : '');
   }
   return null;
 }
@@ -457,11 +460,28 @@ function translateExactGoalsLabel(value: string) {
 /* ------------------------------------------------------------------ */
 
 export function translateMarketName(name: string | undefined, t: Translate): string {
-  const raw = String(name ?? '').trim();
+  const raw = repairDisplayText(name).trim().replace(/\[([\d\s:.,+–-]+)\]/g,'($1)');
   if (!raw) return '';
   // Provider titles are already English. Do not pass them through any of the
   // Albanian phrase replacements when the selected translator is English.
   if (t.lang === 'en') return raw;
+  const named=raw.match(/^(.+?) · (.+)$/);
+  if(named)return translateMarketName(named[1],t)+' · '+named[2];
+  const namedCount=raw.match(/^(.+?) to score (exactly )?(\d+)(\+| or more)?(?: goals?)?$/i);
+  if(namedCount&&!/^player$/i.test(namedCount[1])){
+    const subject=/^home team$/i.test(namedCount[1])?'Skuadra vendase':/^away team$/i.test(namedCount[1])?'Skuadra udhëtuese':namedCount[1];
+    return subject+' shënon '+(namedCount[2]?'saktësisht ':'')+namedCount[3]+(namedCount[4]?' ose më shumë':'')+(namedCount[3]==='1'&&!namedCount[4]?' gol':' gola');
+  }
+  const nativeCombo=raw.match(/^(Outcome|Double Chance) And (Both To Score|Total Goals)(?:\s+(\d+(?:\.\d+)?))?$/i);
+  if(nativeCombo)return (/^outcome$/i.test(nativeCombo[1])?'Rezultati':t('markets.double_chance'))+' & '+(/^both/i.test(nativeCombo[2])?t('markets.both_teams_score'):t('markets.totals'))+(nativeCombo[3]?' '+nativeCombo[3]:'');
+  if(/^anytime\s+goalscorers?$/i.test(raw))return 'Shënues goli gjatë ndeshjes';
+  // Combined contracts are translated by their conditions below. Provider alias
+  // tables must not shorten them or replace the selected dictionary wording.
+  const zizobetLabel=!(isResultBttsMarket(raw)||isResultTotalMarket(raw)||isTotalBttsMarket(raw)||isBttsGoalsComboMarket(raw))?translateZizobetMarketLabel(raw):null;
+  if(zizobetLabel)return zizobetLabel;
+  const exactWin=raw.match(/^Team ([12]) Will Win and Score Exact (\d+) Goals?$/i);
+  if(exactWin)return `Ekipi ${exactWin[1]} fiton dhe shënon saktësisht ${exactWin[2]} gola`;
+  if(/^Outcome$/i.test(raw))return 'Rezultati (1X2)';
   if (isHalfTimeFullTimeMarket(raw)) return t('markets.halftime_fulltime');
   const builder = raw.match(/^bet\s+builder\s*:\s*(.*)$/i);
   if (builder) return 'Kombinim ndeshjeje: ' + translateMarketName(builder[1], t);
@@ -472,7 +492,7 @@ export function translateMarketName(name: string | undefined, t: Translate): str
   const period = raw.match(/^(?:(1st|first|2nd|second)\s+half|half[ -]?time|extra\s+time)\s*[.:–-]?\s+(.+)$/i);
   if (period) {
     const first = /^(?:1st|first|half)/i.test(period[0]);
-    const title = /^extra/i.test(period[0]) ? 'Koha shtesë' : first ? 'Pjesa e parë' : 'Pjesa e dytë';
+    const title = /^extra/i.test(period[0]) ? 'Zgjatjet' : first ? 'Pjesa e parë' : 'Pjesa e dytë';
     return title + ': ' + translateMarketName(period[2], t);
   }
   if (isFirstHalfResultBtts(raw)) return 'Pjesa e parë: Rezultati & ' + t('markets.both_teams_score');
@@ -541,9 +561,9 @@ export function translateMarketName(name: string | undefined, t: Translate): str
     const cardType = value.startsWith('yellow') ? 'Të verdha' : value.startsWith('red') ? 'Të kuqe' : t('markets.cards');
     return withLine(cardType);
   }
-  if (/^(correct score)( |$)/.test(value)) return t('markets.correct_score');
-  if (/^(odd even|odd even goals)( |$)/.test(value)) return t('markets.odd_even');
-  if (/^(next goal|last goal|first goal)( |$)/.test(value)) {
+  if (/^correct score$/i.test(raw)) return t('markets.correct_score');
+  if (/^(odd even|odd even goals)$/.test(value)) return t('markets.odd_even');
+  if (/^(next goal|last goal|first goal)(?: \d+)?$/.test(value)) {
     const title = /^last/.test(value) ? 'Goli i fundit' : /^first/.test(value) ? 'Goli i parë' : t('markets.next_goal');
     return line ? `${title} ${line}` : title;
   }
@@ -557,11 +577,16 @@ export function translateMarketName(name: string | undefined, t: Translate): str
 }
 
 /** Translate known contract phrases literally; unknown proper names remain intact. */
-function translateProviderPhrases(raw: string, t: Translate): string {
-  const line = raw.match(/\d+(?:[.,]\d+)?/)?.[0];
+function translateProviderPhrases(raw: string, t: Translate, names: string[]=[]): string {
+  const protectedNames=new Map<string,string>();
+  for(const name of [...new Set(names.filter(Boolean))].sort((a,b)=>b.length-a.length)){
+    const token=String.fromCharCode(0xE100+protectedNames.size);
+    const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    raw=raw.replace(new RegExp(escaped,'gi'),match=>{protectedNames.set(token,match);return token;});
+  }
   const phrases: Array<[RegExp, string]> = [
     [/\bbet\s+builder\b/gi, 'Kombinim ndeshjeje'],
-    [/\bboth\s+teams?\s+(?:not\s+to|will\s+not)\s+score\b/gi, 'Nuk shënojnë të dyja skuadrat'],
+    [/\bboth\s+teams?\s+(?:not\s+to|will\s+not)\s+score\b/gi, 'Të paktën njëra skuadër nuk shënon'],
     [/\bbtts\b/gi, t('markets.both_teams_score')],
     [/\b(?:gg\s*\/\s*ng|g\s*\/\s*g)\b/gi, t('markets.both_teams_score')],
     [/\b(?:1st|first)\s+half\b/gi, 'Pjesa e parë'],
@@ -617,7 +642,7 @@ function translateProviderPhrases(raw: string, t: Translate): string {
     [/\bboth\s+halves\b/gi, 'Të dyja pjesët'],
     [/\beach\s+half\b/gi, 'secilën pjesë'],
     [/\beither\s+half\b/gi, 'njërën nga pjesët'],
-    [/\bincluding\s+(?:extra\s+time|overtime)\b/gi, 'përfshirë kohën shtesë'],
+    [/\bincluding\s+(?:extra\s+time|overtime)\b/gi, 'përfshirë zgjatjet'],
     [/\bextra\s+time\b/gi, 'Koha shtesë'],
     [/\bregular\s+time\b/gi, 'Koha e rregullt'],
     [/\bto\s+qualify\b/gi, 'Kualifikohet'],
@@ -629,10 +654,10 @@ function translateProviderPhrases(raw: string, t: Translate): string {
     [/\btotal\s+cards?\b|\bcards?\s+total\b/gi, t('markets.cards')],
     [/\byellow\s+cards?\b/gi, 'Kartonat e verdhë'],
     [/\bred\s+cards?\b/gi, 'Kartonat e kuq'],
-    [/\bcorners?\b/gi, 'Këndet'],
+    [/\bcorners?\b/gi, 'Goditjet këndore'],
     [/\bcards?\b/gi, 'Kartonat'],
-    [/\bgoals?\b/gi, 'Golat'],
-    [/\bgoal\b/gi, 'Goli'],
+    [/\bgoals\b/gi, 'gola'],
+    [/\bgoal\b/gi, 'gol'],
     [/\bover\s*\/\s*under\b|\bover\s+under\b|\bunder\s+over\b/gi, t('markets.over_under')],
     [/\bover\b/gi, t('outcomes.over')],
     [/\bunder\b/gi, t('outcomes.under')],
@@ -684,9 +709,7 @@ function translateProviderPhrases(raw: string, t: Translate): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (line && /(?:minut[eë]n?|minute)\s*$/i.test(result)) {
-    result += ` ${line}`;
-  }
+  for(const[token,name]of protectedNames)result=result.split(token).join(name);
 
   return result;
 }
@@ -706,6 +729,7 @@ export function compactOutcomeTeams(label: string, matchName?: string): string {
       (_whole, prefix: string) => prefix + number);
   }
   return result
+    .replace(/\bW1\b/gi, '1').replace(/\bW2\b/gi, '2')
     .replace(/\b(?:home\s+team|home|vendas(?:i)?|vend[aë]s(?:i)?)\b/gi, '1')
     .replace(/\b(?:away\s+team|away|udhetues(?:i)?|udh[eë]tues(?:i)?|vizitor(?:i)?)\b/gi, '2')
     .replace(/\b(?:draw|tie|barazim(?:i)?)\b/gi, 'X')
@@ -783,14 +807,20 @@ function englishOutcomeName(raw: string, t: Translate, marketName?: string, matc
 /* ------------------------------------------------------------------ */
 
 export function translateOutcomeName(name: string | undefined, t: Translate, marketName?: string, matchName?: string, outcomeCode?: string) {
-  const raw = String(name ?? '').trim();
+  const raw = repairDisplayText(name).trim().replace(/\[([\d\s:.,+–-]+)\]/g,'($1)');
   if (!raw && !outcomeCode) return '';
   if (t.lang === 'en') return englishOutcomeName(raw, t, marketName, matchName, outcomeCode);
-  if (/^nil$/i.test(raw)) return 'Jo';
+  const playerName=String(marketName??'').split(' · ')[1]??String(marketName??'').match(/^(.+?) (?:to score|shots on target|total shots|assists|to be yellow carded)\b/i)?.[1];
+  if(playerName&&normalized(raw)===normalized(playerName))return raw;
+  const protectedNames=[...String(matchName??'').split(/\s+(?:vs\.?|v)\s+/i),...(playerName?[playerName]:[])];
+  const fallback=(value:string)=>translateProviderPhrases(value,t,protectedNames);
+  const noGoal=raw.match(/^no goals?(?: (\d+))?$/i);
+  if(noGoal&&!/both.*score|btts|gg\s*[/&]\s*ng/i.test(marketName??''))return 'Pa gol'+(noGoal[1]?' (goli nr. '+noGoal[1]+')':'');
+  if (/^nil$/i.test(raw)) return /both.*score|btts/i.test(marketName??'')?'Jo':'Pa gol';
   const plainBtts = raw.match(/^(?:both teams? (?:to )?score|both score|btts)\s*[:=]?\s*(yes|no|po|jo)$/i);
   if (plainBtts) return /^(yes|po)$/i.test(plainBtts[1]) ? t('outcomes.yes') : t('outcomes.no');
   if (isHalfTimeFullTimeMarket(marketName)) {
-    return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? translateProviderPhrases(raw, t);
+    return parseHalfTimeFullTimeOutcome(raw, matchName, outcomeCode) ?? fallback(raw);
   }
   if (isResultTotalMarket(marketName)) {
     const candidate = raw.match(/^(.+?)\s+and\s+(over|under)\s+(\d+(?:[.,]\d+)?)$/i);
@@ -800,7 +830,7 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
         return teamResult.toUpperCase() + ' & ' + t(/^over$/i.test(candidate[2]) ? 'outcomes.over' : 'outcomes.under') + ' ' + candidate[3].replace(',', '.');
       }
     }
-    return translateCombinationOutcome(raw, t, matchName) ?? translateProviderPhrases(compactOutcomeTeams(raw, matchName), t);
+    return translateCombinationOutcome(raw, t, matchName) ?? fallback(compactOutcomeTeams(raw, matchName));
   }
   if (isTotalBttsMarket(marketName)) {
     const candidate = raw.match(/^(over|under)\s+(\d+(?:[.,]\d+)?)\s+and\s+(yes|no)$/i);
@@ -808,12 +838,12 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
       return t(/^over$/i.test(candidate[1]) ? 'outcomes.over' : 'outcomes.under') + ' ' +
         candidate[2].replace(',', '.') + ' & ' + t(/^yes$/i.test(candidate[3]) ? 'outcomes.yes' : 'outcomes.no');
     }
-    return translateCombinationOutcome(raw, t, matchName) ?? translateProviderPhrases(compactOutcomeTeams(raw, matchName), t);
+    return translateCombinationOutcome(raw, t, matchName) ?? fallback(compactOutcomeTeams(raw, matchName));
   }
   if (isResultBttsMarket(marketName)) {
     // Explicit home/away Po/Jo + 1X2 result. Never infer an unknown selection.
     return formatResultBttsOutcome(raw, matchName, outcomeCode)
-      ?? translateProviderPhrases(raw.replace(/\bnil\b/gi, 'Jo'), t);
+      ?? fallback(raw.replace(/\bnil\b/gi, 'Jo'));
   }
   if (!raw) return '';
 
@@ -835,7 +865,7 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
     if (noScoring) return noScoring[1] + ' nuk shënon gol';
     const scoresFirst = compact.match(/^([12])\s+(?:to score first|scores first)$/i);
     if (scoresFirst) return 'Goli i parë: ' + scoresFirst[1];
-    return translateProviderPhrases(compact, t);
+    return fallback(compact);
   }
 
   const qualifiedScoring = translateQualifiedScoringMarket(raw, t);
@@ -892,9 +922,15 @@ export function translateOutcomeName(name: string | undefined, t: Translate, mar
   // 2. Nëse shkurtimi ndryshoi diçka, kthe shkurtimin
   if (short !== raw) return short;
 
-  return translateProviderPhrases(raw, t);
+  return fallback(raw);
 }
 
+export function formatBuilderSelection(legs: {market:string;outcome:string;line?:string}[]|undefined,t:Translate):string|null {
+ if(!legs||legs.length!==2)return null;
+ const order=['1X2','DC','BTTS','TOTAL'];
+ const sorted=[...legs].sort((a,b)=>order.indexOf(a.market)-order.indexOf(b.market));
+ return translateCombinationOutcome(sorted.map(l=>l.market+' '+l.outcome+(l.line?' '+l.line:'')).join(' + '),t);
+}
 export function formatTicketSelection(
   outcomeName: string | undefined,
   marketName: string | undefined,
@@ -904,6 +940,10 @@ export function formatTicketSelection(
   marketLine?: string,
 ) {
   const rawOutcome = String(outcomeName ?? '').trim();
+  if(/^bet builder\s*:/i.test(String(marketName??''))){
+    const combined=translateCombinationOutcome(rawOutcome,t,matchName);
+    if(combined)return combined;
+  }
   const numericOutcome = formatOrdinalOutcomeLabel(rawOutcome, marketName, marketLine, matchName);
   if (numericOutcome !== null) return numericOutcome;
   if (isHalfTimeFullTimeMarket(marketName)) return translateOutcomeName(rawOutcome, t, marketName, matchName);
@@ -939,9 +979,9 @@ export function translateTicketStatus(status: string | undefined, t: Translate) 
  * Protect fixture names before translating phrases (e.g. "Red Star").
  */
 export function translateMatchEventText(text: string | undefined, homeTeam = '', awayTeam = '', lang: 'al' | 'en' = 'al'): string {
-  if (lang === 'en') return String(text ?? '');
-  const names = [homeTeam, awayTeam].filter(Boolean).sort((a, b) => b.length - a.length);
-  let value = String(text ?? '');
+  if (lang === 'en') return repairDisplayText(text);
+  const names = [homeTeam, awayTeam].map(repairDisplayText).filter(Boolean).sort((a, b) => b.length - a.length);
+  let value = repairDisplayText(text);
   names.forEach((name, index) => {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     value = value.replace(new RegExp(escaped, 'gi'), '\uE000' + index + '\uE001');

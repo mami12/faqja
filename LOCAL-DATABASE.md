@@ -72,9 +72,18 @@ dhe të kërkon të hapësh `start.bat` përsëri. Ruaj një kopje të arkivit n
 tjetër së bashku me `.env`; databaza lokale nuk ka kopjen rezervë të Supabase.
 Mos kopjo pjesërisht skedarët e databazës ndërkohë që serveri po shkruan në të.
 
-Arkivi mund të ngarkohet në një **folder të ri bosh** me opsionin `loadDataDir`
-të PGlite. Restaurimi duhet kontrolluar përpara ndryshimit të `LOCAL_DATABASE_DIR`;
-serveri nuk mbishkruan një databazë ekzistuese gjatë restaurimit.
+Për restaurim, vendos arkivin pranë `start.bat` me emrin
+`database-transfer.tgz` dhe hape **`restore-db.bat`**, pastaj `start.bat`.
+Mund edhe ta tërheqësh një arkiv tjetër `.tgz` mbi `restore-db.bat`.
+Nëse ke `DATABASE-TRANSFER.json`, mbaje pranë arkivit pa ia ndryshuar emrin.
+Mjeti kontrollon hash-in e arkivit dhe përmbajtjen e çdo tabele kundrejt manifestit.
+
+Restaurimi ndal serverin dhe ngarkon kopjen në një **folder të ri bosh**
+`data/database-restored-...`. Kontrollon llogaritë, fjalëkalimet e ruajtura,
+tabelat dhe vlerat financiare përpara ndryshimit të `LOCAL_DATABASE_DIR`.
+Databaza e mëparshme dhe sekretet e kompjuterit ruhen; `.env` i mëparshëm ruhet
+privatisht si `.env.before-restore-...`. Një dështim verifikimi nuk aktivizon
+databazën e rikthyer. Mos zëvendëso aktivitet financiar të ri me një kopje më të vjetër.
 
 Nëse procesi ndërpritet gjatë migrimit ose backup-it, mund të mbetet
 `.runtime/database-maintenance.lock`. Pasi të verifikosh se as serveri, as migrimi

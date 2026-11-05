@@ -43,9 +43,10 @@ new paid spins under undisclosed settings. Cached accepted replies bypass this
 check. Accepted bonus trajectories and their settings remain frozen; changing
 settings or switching wagering off cannot replace or forfeit an owed bonus.
 
-All six real-wallet games accept total paid-spin stakes from 0.20 through
+All eight real-wallet games accept total paid-spin stakes from 20 through
 5,000 ALL. These are total limits, not per-line minimums. CT's Viking credit
-unit is 0.008 ALL to represent 0.20 on 25 lines; persisted denomination uses
+unit remains 0.008 ALL for compatibility; new native line bets start at 100,
+which represents a total 20 ALL on 25 lines. Persisted denomination uses
 six decimals while wallet debits and awards remain integer cents. Historical
 accepted request identifiers and awarded free games keep their original terms.
 
@@ -56,8 +57,9 @@ maps already vendored from Slotopol commit
 `2a6fd837feea1b52bbfd65035a7698d0c70e096a`. Profile RTP values are the upstream
 published theoretical expectations for those reel maps and scanners. The ports
 retain their original paytables. Runtime tests verify all 67 available reel maps
-and the original golden grading cases. Administrator choices are limited to
-profiles whose stated theoretical RTP does not exceed 100%.
+and the original golden grading cases. Administrator choices include the supplied
+profiles in the authorized 1–1000% range, including source profiles above 100%.
+An expected return above 100% is reported as such; it is not silently capped.
 
 ## Sizzling and Book adapters
 
@@ -88,10 +90,9 @@ the existing rule grants ten additional rounds without retriggers. The model
 adds `P(trigger) × 10 × E(free round)`, averaging the nine uniformly selected
 expanding symbols and their extra reel awards. Book profiles therefore report
 the expectation for the currently enabled feature configuration. The existing
-original-reel configuration with this bonus is approximately 108.716872% and is
-explicitly flagged rather than offered as a standard administrator choice.
-With free spins enabled, a new installation therefore defaults to the highest
-supported profile below 100% (approximately 91.252440%). Existing accepted
+original-reel configuration with this bonus is approximately 108.716872%.
+It remains selectable under the authorized 1–1000% rule and is reported with that
+effective expectation. Its original strips remain the default. Existing accepted
 bonuses retain their stored reel profile even if the current choice changes.
 
 New Book round payouts include the selected denomination. A pre-update bonus
@@ -111,3 +112,10 @@ check profile changes, frozen bonuses, denomination payouts, request replays,
 collection and player/manager ledger conservation. The admin suite checks real
 HTTP authorization, concurrent SQL persistence and audit entries. None of these
 tests uses production database credentials or live customer funds.
+
+The per-game support matrix and mathematical restrictions are recorded in
+`SUPPORT-MATRIX.md`. `scripts/test-casino-protected-simulation.mjs` performs seeded
+paid-round diagnostics for all eight original engines, the Book bonus variant,
+and supported custom examples. Its machine-readable observations are written to
+`test-artifacts/protected-casino-simulation.json`. Sampling does not certify RTP;
+the exact rational and independent analytic tests remain the primary checks.

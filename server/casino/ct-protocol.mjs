@@ -2,7 +2,7 @@ import {randomInt} from 'node:crypto';
 import {spin} from './lucky-clover-engine.mjs';
 import {ctConfig,DENOMS,rows,symbol} from './clover-ct-config.mjs';
 import {casinoStakeCents,walletCtDenoms} from './bet-limits.mjs';
-export function createCtProtocol({spinFn=spin,cardRandom=randomInt,configFn=ctConfig,initialGrid=options=>spin(5,5,options).grid,selectedLines=5,mapRound}={}){
+export function createCtProtocol({spinFn=spin,cardRandom=randomInt,configFn=ctConfig,initialGrid=options=>spin(5,5,options).grid,selectedLines=5,mapRound,allowGamble=true,walletDenoms=walletCtDenoms,walletMaxLineBet=25000}={}){
  const initialState=(_id,options={})=>({credit:10000000,grid:initialGrid(options),results:new Map(),round:0,pending:0,history:[],...(options.walletLimits?{walletLimits:true}:{}),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})});
  const account=s=>({credit:s.credit,currency:s.currency||'FUN',currency_code:s.currency||'FUN',currency_sign:'',digits_after_decimal_separator:2,decimal_separator:'.',thousands_separator:',',freeround_limit:0});
  function run(s,commands,options={}){
@@ -13,11 +13,11 @@ export function createCtProtocol({spinFn=spin,cardRandom=randomInt,configFn=ctCo
    let r={_req_sequence_number:c.sequence_number,_req_session_id:'local-demo',_req_command:c.command,status:{status:'ok'},icasino_messages:[],freeround_limit:0};
    try{
     switch(c.command){
-     case 'create_session':Object.assign(r,{session_id:'local-demo',server_denom:{value:1},enabled_denoms:s.walletLimits?walletCtDenoms(selectedLines):DENOMS,preferred_languages:['en_GB'],ping_interval:30,client_request_timeout:10,gameplay_mintime:0,credit_display_mode:'cash_only',use_currency_locale:1,last_game_recall_enabled:0});break;
+     case 'create_session':Object.assign(r,{session_id:'local-demo',server_denom:{value:1},enabled_denoms:s.walletLimits?walletDenoms(selectedLines):DENOMS,preferred_languages:['en_GB'],ping_interval:30,client_request_timeout:10,gameplay_mintime:0,credit_display_mode:'cash_only',use_currency_locale:1,last_game_recall_enabled:0});break;
      case 'init_game':Object.assign(r,{game_config:configFn(s.grid,{mathProfile:s.mathProfile??options.mathProfile,walletLimits:s.walletLimits,selectedLines}),show_win:'last_win',finish_game_command:'normal',resume:0,freeround_limit:0});break;
      case 'play':{
-      const d=(s.walletLimits?walletCtDenoms(selectedLines):DENOMS).find(d=>d.id===c.game_denom),rawBet=Number(c.total_bet)*d?.cents;
-      if(!d||c.lines!==selectedLines||!Number.isSafeInteger(c.line_bet)||c.line_bet<1||c.line_bet>(s.walletLimits?25000:100)||c.total_bet!==c.line_bet*selectedLines)throw new Error('Invalid bet or insufficient credit.');
+      const d=(s.walletLimits?walletDenoms(selectedLines):DENOMS).find(d=>d.id===c.game_denom),rawBet=Number(c.total_bet)*d?.cents;
+      if(!d||c.lines!==selectedLines||!Number.isSafeInteger(c.line_bet)||c.line_bet<1||c.line_bet>(s.walletLimits?walletMaxLineBet:100)||c.total_bet!==c.line_bet*selectedLines)throw new Error('Invalid bet or insufficient credit.');
       const bet=s.walletLimits?casinoStakeCents(rawBet/100):rawBet;
       if(!Number.isSafeInteger(bet)||bet<5||s.credit<bet)throw new Error('Invalid bet or insufficient credit.');
       if(s.phase&&s.phase!=='finished')throw new Error('Finish the current game first.');
@@ -37,7 +37,7 @@ export function createCtProtocol({spinFn=spin,cardRandom=randomInt,configFn=ctCo
       if(!mapRound){ const lines=result.wins.filter(w=>w.line).map(w=>({line_number:w.line-1,symbol:symbol(w.symbol),symbols:Array(w.count).fill(symbol(w.symbol)),symbol_count:w.count,win:w.amount/d.cents,positions:w.cells.map((_,x)=>x),subgame_win_factor:result.multiplier,paytable_factor:w.amount/(c.line_bet*d.cents*result.multiplier),wilds:[]}));
       const scatters=result.wins.filter(w=>!w.line).map(w=>({symbol:symbol(w.symbol),count:w.count,symbol_count:w.count,win:w.amount/d.cents,positions:w.cells.map(([x,y])=>[y,x]),paytable_factor:w.amount/(bet*result.multiplier),subgame_win_factor:result.multiplier,bonus_type:'none',bonus_value:0}));
       s.subgame={type:'slot_subgame',step_number:0,subgame_label:'main',reels_sets_name:'main',stop_reels:result.grid.map(r=>r.map(symbol)),result_reels:rows(result.grid),lines_win:lines,scatters_win:scatters,subgame_bonus:[],win:result.winCents/d.cents,total_win:result.winCents/d.cents,subgame_factor:result.multiplier,is_free:0,is_last:true,expanded_wilds:result.wildReels.flatMap((v,x)=>v?[{col_index:x,symbol:11,wild_position:[result.grid[x].indexOf(1),x],expanded_positions:[0,1,2].map(y=>[y,x])}]:[])};
-      } r.result=mapRound?mapRound(result,c,d):[s.subgame];s.nextStep=r.result.length;if(s.pending>0){s.phase='gamble';r.result.push({type:'can_play_red_black_double',step_number:s.nextStep++,wait_for_continue:1,double_cards_history:s.history,continue_params:[{label:'double_betpart',values:['skip','all','half']}]});}r.gameplay_id=s.round;break;
+    } r.result=mapRound?mapRound(result,c,d):[s.subgame];s.nextStep=r.result.length;if(s.pending>0&&allowGamble){s.phase='gamble';r.result.push({type:'can_play_red_black_double',step_number:s.nextStep++,wait_for_continue:1,double_cards_history:s.history,continue_params:[{label:'double_betpart',values:['skip','all','half']}]});}else if(s.pending>0)s.phase='settling';r.gameplay_id=s.round;break;
      }
      case 'subgame_finished':r.result=[];break;
      case 'continue':{

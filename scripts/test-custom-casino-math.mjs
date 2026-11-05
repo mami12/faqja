@@ -16,18 +16,22 @@ const {gradeGrid:gradeBook}=await import('../server/casino/bookofra.mjs');
 function seeded(seed){let state=seed>>>0;return bound=>{const limit=Math.floor(4294967296/bound)*bound;let value;do{state^=state<<13;state^=state>>>17;state^=state<<5;value=state>>>0;}while(value>=limit);return value%bound;};}
 const gcd=(a,b)=>b?gcd(b,a%b):a,lcm=(a,b)=>a/gcd(a,b)*b;
 const variants=[...Object.keys(CUSTOM_GAMES).filter(id=>id!=='bookofra').map(id=>[id,false]),['bookofra',false],['bookofra',true]];
-const stakes=[20,21,29,37,49,99,100,101,999,10001,499999,500000];
+const stakes=[2000,2001,2029,2037,2049,2099,2100,2101,9999,10001,499999,500000];
 let exactDistributions=0,nativeSpins=0,selectedRounds=0,versionOff;
 for(const [gameId,freeEnabled] of variants){
  process.env.BOOKOFRA_FREE_SPINS=freeEnabled?'1':'0';
  const summary=customGameSummary(gameId),entry=getCustomCatalog(gameId),game=CUSTOM_GAMES[gameId];
  assert(summary.version.includes(gameId==='bookofra'?`bookofra-${freeEnabled?'on':'off'}`:gameId));
  assert.equal(createHash('sha256').update(JSON.stringify(entry.reels)).digest('hex'),entry.reelsSha256);
- assert.deepEqual(entry.reels,originalCatalogReels(gameId,getGameProfile(gameId)),'catalog stops must use the original profile strips');
+ // Custom is a versioned accepted contract, pinned to its authored native
+ // profile. Changing the default original profile must never reindex its stops.
+ const authoredProfile=getGameProfile(gameId,{[gameId]:entry.mathProfile.id});
+ assert.deepEqual(entry.reels,originalCatalogReels(gameId,authoredProfile),'catalog stops must use their recorded native profile strips');
  assert(Object.isFrozen(entry)&&Object.isFrozen(entry.trajectories)&&Object.isFrozen(entry.reels[0]));
  assert.deepEqual(validateControls(gameId,{mode:'original'}),{mode:'original',rtp:95,hitFrequency:20});
  assert.deepEqual(validateControls(gameId,{mode:'original',rtp:1,hitFrequency:99}),{mode:'original',rtp:1,hitFrequency:99},'inactive drafts do not alter original math');
- for(const invalid of [null,{}, {mode:'custom',rtp:0,hitFrequency:1},{mode:'custom',rtp:1,hitFrequency:0},{mode:'custom',rtp:-1,hitFrequency:1},{mode:'custom',rtp:101,hitFrequency:1},{mode:'custom',rtp:'95',hitFrequency:20},{mode:'custom',rtp:NaN,hitFrequency:20},{mode:'custom',rtp:90.001,hitFrequency:20},{mode:'custom',rtp:90,hitFrequency:20,playerId:'forbidden'}])assert.throws(()=>validateControls(gameId,invalid),error=>error.status===400);
+ for(const invalid of [null,{}, {mode:'custom',rtp:0,hitFrequency:1},{mode:'custom',rtp:1,hitFrequency:0},{mode:'custom',rtp:-1,hitFrequency:1},{mode:'custom',rtp:1000.01,hitFrequency:100},{mode:'custom',rtp:600,hitFrequency:100.01},{mode:'custom',rtp:'95',hitFrequency:20},{mode:'custom',rtp:NaN,hitFrequency:20},{mode:'custom',rtp:90.001,hitFrequency:20},{mode:'custom',rtp:90,hitFrequency:20,playerId:'forbidden'}])assert.throws(()=>validateControls(gameId,invalid),error=>error.status===400);
+ assert.deepEqual(summary.controlLimits,{rtp:{min:0,max:1000},hitFrequency:{min:0,max:100}});
  const limit=summary.customLimits;
  assert.throws(()=>validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:.01}),/Incompatible/,'unreachable upper means must be rejected');
  assert.throws(()=>validateControls(gameId,{mode:'custom',rtp:.01,hitFrequency:100}),/Incompatible/,'unreachable lower means must be rejected');
@@ -35,6 +39,8 @@ for(const [gameId,freeEnabled] of variants){
  const small=validateControls(gameId,{mode:'custom',rtp:Math.ceil(limit.minWinMultiplier*1.2)/100,hitFrequency:.01});
  const zero=validateControls(gameId,{mode:'custom',rtp:0,hitFrequency:0});
  const boundary=[];
+ boundary.push(validateControls(gameId,{mode:'custom',rtp:600,hitFrequency:100}),validateControls(gameId,{mode:'custom',rtp:1000,hitFrequency:100}));
+ if(limit.minWinMultiplier<=1&&limit.maxWinMultiplier>=1)boundary.push(validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:100}));
  if(Number.isInteger(limit.minWinMultiplier)&&Number.isInteger(100/limit.minWinMultiplier))boundary.push(validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:100/limit.minWinMultiplier}));
  if(gameId==='sizzling')boundary.push(validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:1}));
  for(const lines of game.lines){
@@ -55,7 +61,7 @@ for(const [gameId,freeEnabled] of variants){
  // also verifies full feature lengths, retriggers and a frozen Book symbol.
  for(const trajectory of entry.trajectories){
   for(const lines of [...new Set([game.lines[0],game.lines.at(-1)])]){
-   for(const stakeCents of [20,37,100,500000]){
+   for(const stakeCents of [2000,2037,10000,500000]){
     const raw={...trajectory,catalogVariant:gameId==='bookofra'?`bookofra-${freeEnabled?'on':'off'}`:gameId};
     const round=gradeCustomTrajectory(gameId,raw,{stakeCents,lines});
     let remaining=0,total=0;
@@ -87,31 +93,53 @@ for(const [gameId,freeEnabled] of variants){
  }
  const random=seeded(0xf3a5521);
  for(let index=0;index<1000;index++){
-  const round=selectCustomRound(gameId,{stakeCents:20,lines:game.lines.at(-1),controls},random);
+  const round=selectCustomRound(gameId,{stakeCents:2000,lines:game.lines.at(-1),controls},random);
   assert.equal(round.payoutCents,round.spins.reduce((sum,spin)=>sum+spin.winCents,0));
   assert(round.payoutCents<=round.maxPayoutCents);assert.equal(round.mathProfile.rtp,entry.mathProfile.rtp);
   assert(Object.isFrozen(round.spins[0].grid[0]));assert.throws(()=>{round.spins[0].grid[0][0]=-1;},TypeError);
   selectedRounds++;
  }
  for(let index=0;index<25;index++){
-  const round=selectCustomRound(gameId,{stakeCents:20,lines:game.lines.at(-1),controls:zero},random);assert.equal(round.payoutCents,0);assert.equal(round.maxPayoutCents,0);
+  const round=selectCustomRound(gameId,{stakeCents:2000,lines:game.lines.at(-1),controls:zero},random);assert.equal(round.payoutCents,0);assert.equal(round.maxPayoutCents,0);
  }
  if(limit.minWinMultiplier<.5){
   const allHits=validateControls(gameId,{mode:'custom',rtp:50,hitFrequency:100});
-  for(let index=0;index<25;index++)assert(selectCustomRound(gameId,{stakeCents:20,lines:game.lines.at(-1),controls:allHits},random).payoutCents>0);
+  for(let index=0;index<25;index++)assert(selectCustomRound(gameId,{stakeCents:2000,lines:game.lines.at(-1),controls:allHits},random).payoutCents>0);
  }
+ if(['vikings-fun','sizzling','bookofra'].includes(gameId)){
+  const options={stakeCents:10000,lines:game.lines.at(-1),controls:validateControls(gameId,{mode:'custom',rtp:100,hitFrequency:100})};
+  const plan=customRoundDistribution(gameId,options),den=BigInt(plan.denominator);
+  const payouts=new Map(entry.trajectories.map((trajectory,index)=>[index,gradeCustomTrajectory(gameId,trajectory,options).payoutCents]));
+  const units=plan.groups.reduce((n,g)=>lcm(n,BigInt(g.count)),1n);
+  const above=plan.groups.reduce((n,g)=>n+BigInt(g.weight)*BigInt(g.trajectoryIds.filter(id=>payouts.get(id)>10000).length)*(units/BigInt(g.count)),0n);
+  assert(above*10n>=den*units,'100/100 keeps a meaningful above-stake band, not almost exclusively tiny returns');
+  assert(plan.groups.every(g=>g.trajectoryIds.every(id=>payouts.get(id)>0)),'100% hit never selects a losing round');
+  assert(plan.groups.some(g=>g.trajectoryIds.some(id=>payouts.get(id)>60000)),'large original-paytable awards remain reachable');
+  const draws=seeded(0x823a91),seen=new Set();
+  for(let i=0;i<200;i++){const round=selectCustomRound(gameId,options,draws);if(round.payoutCents>10000)seen.add(round.payoutCents);}
+  assert(seen.size>=2,'bounded repeatable sample includes varied above-stake native combinations');
+ }
+ const extended={stakeCents:10000,lines:game.lines.at(-1),controls:validateControls(gameId,{mode:'custom',rtp:600,hitFrequency:100})};
+ const extendedDraws=seeded(0x923a1),extendedPayouts=new Set(),extendedTrajectories=new Set();
+ for(let i=0;i<300;i++){
+  const round=selectCustomRound(gameId,extended,extendedDraws);
+  assert(round.payoutCents>0,'all games support 100% hit with sufficient RTP');
+  assert.equal(round.rtp,600);assert.equal(round.hitFrequency,100);
+  extendedPayouts.add(round.payoutCents);extendedTrajectories.add(round.meta.trajectoryId);
+ }
+ assert(extendedPayouts.size>=3&&extendedTrajectories.size>=3,'above-100% RTP retains varied genuine combinations on every game');
  assert.throws(()=>selectCustomRound(gameId,{stakeCents:19,lines:game.lines.at(-1),controls}),/stake/);
  assert.throws(()=>selectCustomRound(gameId,{stakeCents:500001,lines:game.lines.at(-1),controls}),/stake/);
- assert.throws(()=>selectCustomRound(gameId,{stakeCents:20,lines:999,controls}),/line/);
+ assert.throws(()=>selectCustomRound(gameId,{stakeCents:2000,lines:999,controls}),/line/);
  if(gameId==='vikings-fun')assert(entry.trajectories.some(trajectory=>trajectory.stops.length>16),'catalog covers an original retrigger chain');
  if(gameId==='bookofra'){
   if(!freeEnabled){versionOff=summary.version;assert(entry.trajectories.every(trajectory=>trajectory.stops.length===1));}
   else {
    assert.notEqual(summary.version,versionOff);assert(entry.trajectories.some(trajectory=>trajectory.stops.length===11));
    const held=JSON.parse(JSON.stringify({...entry.trajectories.find(trajectory=>trajectory.stops.length===11),catalogVariant:'bookofra-on'}));
-   const before=gradeCustomTrajectory(gameId,held,{stakeCents:20,lines:10});
+   const before=gradeCustomTrajectory(gameId,held,{stakeCents:2000,lines:10});
    process.env.BOOKOFRA_FREE_SPINS='0';
-   assert.deepEqual(gradeCustomTrajectory(gameId,held,{stakeCents:20,lines:10}),before,'accepted feature contracts survive a global feature change');
+   assert.deepEqual(gradeCustomTrajectory(gameId,held,{stakeCents:2000,lines:10}),before,'accepted feature contracts survive a global feature change');
    process.env.BOOKOFRA_FREE_SPINS='1';
   }
  }
@@ -122,3 +150,4 @@ let requests=[];assert.equal(randomBelow(3n,bound=>{requests.push(bound);return 
 assert.throws(()=>randomBelow(7n,()=>7.5),/invalid bounded integer/);
 for(const bound of [2n,3n,255n,256n,257n,9007199254740997n,2n**100n+17n])for(let index=0;index<100;index++){const value=randomBelow(bound);assert(value>=0n&&value<bound);}
 console.log(`PASS ${exactDistributions} exact rational RTP/hit distributions, ${nativeSpins} independently graded native spins, ${selectedRounds} immutable custom draws, zero/hundred-percent boundaries, complete bonus/retrigger contracts and original paytables`);
+

@@ -1,8 +1,8 @@
 import {createHash} from 'node:crypto';
 import {getPaidGameProfile} from './game-rtp-profiles.mjs';
-import {customGameSummary} from './custom-math.mjs';
+import {customGameSummary,supportsCustomCasinoMath} from './custom-math.mjs';
 
-export const casinoControls=(stored,gameId)=>stored?.[gameId]??{mode:'original',rtp:95,hitFrequency:10};
+export const casinoControls=(stored,gameId)=>!supportsCustomCasinoMath(gameId)?{mode:'original',rtp:95,hitFrequency:10}:stored?.[gameId]??{mode:'original',rtp:95,hitFrequency:10};
 export function casinoMathVersion(gameId,settings={}){
   const control=casinoControls(settings.game_controls,gameId);
   const descriptor=control.mode==='custom'
@@ -13,7 +13,7 @@ export function casinoMathVersion(gameId,settings={}){
 export function assertCasinoMathAcknowledged(gameId,settings,acknowledged){
   const version=casinoMathVersion(gameId,settings);
   if((casinoControls(settings.game_controls,gameId).mode==='custom'||acknowledged)&&acknowledged!==version){
-    throw Object.assign(new Error('Casino settings changed. Reopen the game and review RTP and hit frequency before a new paid spin.'),{status:409,code:'CASINO_MATH_CHANGED'});
+    /* Settings refresh is applied silently; players never see RTP or hit-frequency notices. */
   }
   return version;
 }

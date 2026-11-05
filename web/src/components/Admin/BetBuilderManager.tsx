@@ -22,11 +22,18 @@ export default function BetBuilderManager(){
  const [templates,setTemplates]=useState<Template[]>([]),[catalog,setCatalog]=useState<Category[]>([]);
  const [draft,setDraft]=useState<Template>(initial),[category,setCategory]=useState('1X2');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [allEnabled,setAllEnabled]=useState<boolean|null>(null);
+ const toggleAll=async(enabled:boolean)=>{
+  if(busy)return;setBusy(true);setError('');setNotice('');
+  try{const {data}=await apiClient.patch<{settings:{combosEnabled:boolean}}>('/admin/bet-builders/enabled',{enabled});setAllEnabled(data.settings.combosEnabled);await refresh();setNotice(enabled?'Të gjitha kombinimet janë aktivizuar.':'Të gjitha kombinimet janë çaktivizuar.');}
+  catch(e:any){setError(e.response?.data?.message||'Nuk u ndryshua gjendja e kombinimeve.');}finally{setBusy(false);}
+ };
  const refresh=async()=>{
   const [saved,options]=await Promise.all([apiClient.get<Template[]>('/admin/bet-builders'),apiClient.get<Category[]>('/admin/bet-builders/catalog')]);
   setTemplates(saved.data);setCatalog(options.data);
  };
  useEffect(()=>{void refresh().catch(e=>setError(e.response?.data?.message||'Nuk u ngarkuan tregjet.'));},[]);
+ useEffect(()=>{void apiClient.get<{settings:{combosEnabled:boolean}}>('/admin/live-risk').then(({data})=>setAllEnabled(data.settings.combosEnabled)).catch(()=>setError('Nuk u lexua gjendja e kombinimeve.'));},[]);
  const sorted=[...draft.legs].sort((a,b)=>order.indexOf(a.market)-order.indexOf(b.market));
  const presets=catalog.flatMap(item=>item.presets||[]);
  const matchesPreset=(preset:Preset)=>draft.legs.length===preset.legs.length&&preset.legs.every(leg=>draft.legs.some(l=>key(l)===key(leg)));
@@ -65,6 +72,13 @@ export default function BetBuilderManager(){
   setDraft({...item,legs:item.legs.length===2?item.legs.map(l=>({...l})):[]});
  };
  return <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6">
+  <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-tertiary bg-secondary p-4">
+   <div><h2 className="font-bold text-white">{t('Të gjitha kombinimet')}</h2><p role="status" className="mt-1 text-sm text-text-secondary">{allEnabled===null?t('Duke ngarkuar...'):allEnabled?t('Kombinimet janë aktive'):t('Kombinimet janë joaktive')}</p></div>
+   <div className="flex flex-wrap gap-2">
+    <button type="button" disabled={busy||allEnabled===null||allEnabled} onClick={()=>void toggleAll(true)} className="min-h-11 rounded-lg bg-emerald-500 px-4 py-2 font-bold text-slate-950 disabled:opacity-40">{t('Aktivizo të gjitha')}</button>
+    <button type="button" disabled={busy||allEnabled===null||!allEnabled} onClick={()=>void toggleAll(false)} className="min-h-11 rounded-lg bg-rose-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t('Çaktivizo të gjitha')}</button>
+   </div>
+  </section>
   <div className="rounded-xl border border-tertiary bg-secondary p-4 text-sm text-text-secondary">
    {t("Zgjidh një kategori, kliko saktësisht 2 zgjedhje nga dy tregje të ndryshme dhe shtyp Ruaj. Emri krijohet automatikisht.")}<p className="mt-2">{t("Kombinimet standarde krijohen automatikisht. Aktivizimi dhe çaktivizimi gjenden te Menaxhimi i rrezikut. Çdo kombinim shfaqet vetëm kur të dyja zgjedhjet janë aktive; koeficienti është prodhimi i tyre.")}</p>
   </div>

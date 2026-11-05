@@ -1,8 +1,18 @@
+import {repairDisplayText} from './repairDisplayText';
 /** Translate display copy without changing the API error or its diagnostic data. */
 export function userError(value: unknown, fallback = 'Kërkesa nuk u përfundua. Provo përsëri.'): string {
-  const message = typeof value === 'string' ? value.trim() : value instanceof Error ? value.message.trim() : '';
+  const message = repairDisplayText(typeof value === 'string' ? value.trim() : value instanceof Error ? value.message.trim() : '');
   if (!message) return fallback;
   const exact: Record<string, string> = {
+    'invalid username or password': 'Emri i përdoruesit ose fjalëkalimi është i pasaktë.',
+    'Invalid username or password': 'Emri i përdoruesit ose fjalëkalimi është i pasaktë.',
+    'not authenticated': 'Duhet të identifikohesh për të vazhduar.',
+    'account no longer exists': 'Kjo llogari nuk është më e disponueshme.',
+    'account is banned': 'Kjo llogari është e bllokuar.',
+    'User not found': 'Përdoruesi nuk u gjet.',
+    'Username already exists': 'Ky emër përdoruesi është përdorur tashmë.',
+    'Forbidden': 'Nuk ke leje për këtë veprim.',
+    'Unauthorized': 'Duhet të identifikohesh për të vazhduar.',
     'Unsupported casino game': 'Kjo lojë kazinoje nuk mbështetet.',
     'Unknown casino game': 'Loja e kazinosë nuk u gjet.',
     'Unsupported casino line count': 'Numri i linjave nuk mbështetet për këtë lojë.',
@@ -25,9 +35,9 @@ export function userError(value: unknown, fallback = 'Kërkesa nuk u përfundua.
     'Failed to fetch': 'Lidhja me serverin dështoi. Kontrollo internetin dhe provo përsëri.',
   };
   if (exact[message]) return exact[message];
-  if (/^Casino stake must be between 0\.20 and 5000(?:\.00| ALL)?$/.test(message)) return 'Basti i kazinosë duhet të jetë nga 0.20 deri në 5000 lekë.';
-  const percentage = message.match(/^(RTP|Hit frequency) must be a number from 0 to 100 with at most two decimal places$/);
-  if (percentage) return `${percentage[1] === 'RTP' ? 'RTP' : 'Shpeshtësia e fitimit'} duhet të jetë nga 0 deri në 100, me deri në dy shifra pas presjes.`;
+  if (/^Casino stake must be between (?:20|20\.00) and 5000(?:\.00| ALL)?$/.test(message)) return 'Basti i kazinosë duhet të jetë nga 20 deri në 5000 lekë.';
+  const percentage = message.match(/^(RTP|Hit frequency) must be a number from 0 to (100|1000) with at most two decimal places$/);
+  if (percentage) return `${percentage[1] === 'RTP' ? 'RTP' : 'Shpeshtësia e fitimit'} duhet të jetë nga 0 deri në ${percentage[2]}, me deri në dy shifra pas presjes.`;
   const incompatible = message.match(/^Incompatible RTP and hit frequency\. RTP \/ hit frequency must be between ([\d.]+) and ([\d.]+) for every supported stake and line count$/);
   if (incompatible) return `RTP dhe shpeshtësia e fitimit nuk përputhen. Raporti mes tyre duhet të jetë nga ${incompatible[1]} deri në ${incompatible[2]} për çdo bast dhe numër linjash të mbështetur.`;
   if (/^Unsupported reel profile for /.test(message)) return 'Profili i zgjedhur nuk mbështetet për këtë lojë.';
@@ -36,4 +46,16 @@ export function userError(value: unknown, fallback = 'Kërkesa nuk u përfundua.
   // text stays in the original error object and is not presented as English UI.
   if (/[ëç]/i.test(message) || /\b(?:nuk|gabim|provo|duhet|eshte|zgjedh|ruajt|llogaria|loja|basti|bilanci|perdoruesi|shuma|ju|kjo|ky|vetem|pritje|anuluar|pavlefshme)\b/i.test(message)) return message;
   return fallback;
+}
+
+/** Localized error view. Keep the original response available for diagnostics. */
+export function localizeApiError(error:any,lang:'al'|'en'='al') {
+  if(lang==='en'||!error||typeof error!=='object')return error;
+  const response=error.response,data=response?.data;
+  const original=typeof data?.message==='string'?data.message:typeof data?.error_txt==='string'?data.error_txt:error.message;
+  const fallback=response?.status===403?'Nuk ke leje për këtë veprim.':response?.status===404?'Të dhënat e kërkuara nuk u gjetën.':response?.status>=500?'Serveri nuk e përfundoi kërkesën. Provo përsëri.':'Kërkesa nuk u përfundua. Provo përsëri.';
+  const message=userError(original,fallback);
+  const localized=Object.assign(Object.create(Object.getPrototypeOf(error)),error,{message,serverMessage:original,serverResponse:response});
+  if(data&&typeof data==='object'&&!Array.isArray(data))localized.response={...response,data:{...data,message,...(typeof data.error_txt==='string'?{error_txt:message}:{})}};
+  return localized;
 }

@@ -65,10 +65,10 @@ export default {
     "result": "Rezultati (1X2)",
     "totals": "Totali i golave",
     "corners": "Goditje këndore",
-    "cards": "Kartonat",
+    "cards": "Kartonët",
     "other": "Tregje të tjera",
     "market": "Tregu",
-    "match_result": "Rezultati i Ndeshjes (1X2)",
+    "match_result": "Rezultati i ndeshjes (1X2)",
     "over_under": "Lart / Poshtë",
     "both_teams_score": "Shënojnë të dyja skuadrat",
     "double_chance": "Dopio shans",
@@ -111,7 +111,7 @@ export default {
     "correct_score": "Rezultati i Saktë",
     "odd_even": "Tek / Çift",
     "next_goal": "Goli i Radhës",
-    "halftime_fulltime": "Pjesa e Parë / Ndeshja",
+    "halftime_fulltime": "Pjesa e parë / Rezultati përfundimtar",
     "first_half_result": "Rezultati i Pjesës së Parë",
     "second_half_result": "Rezultati i Pjesës së Dytë"
   },
@@ -134,7 +134,7 @@ export default {
     "home_or_draw": "1X",
     "home_or_away": "12",
     "draw_or_away": "X2",
-    "draw_no_bet": "Barazim pa bast"
+    "draw_no_bet": "Në barazim, basti kthehet"
   },
   "betslip": {
     "betslip": "Skedina Ime",

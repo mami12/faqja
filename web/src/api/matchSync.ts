@@ -17,6 +17,9 @@ export interface MatchFacts {
   awayScore?: number;
   corners?: { home: number; away: number } | null;
   cards?: { home: number; away: number } | null;
+  shots?: { home: number; away: number } | null;
+  shotsOnTarget?: { home: number; away: number } | null;
+  fouls?: { home: number; away: number } | null;
   marketCount?: number;
   isSuspended?: boolean;
   homeTeam?: string;
@@ -53,7 +56,7 @@ export function mergeMatchFacts<T extends MatchFacts>(previous: T | undefined, i
     [['currentMinute', 'currentSecond', 'clockAt'],
       timestamp(previous.clockAt) || snapshotTime(previous), timestamp(incoming.clockAt) || snapshotTime(incoming)],
     [['status', 'period', 'phaseAt'], ...sourceOrder(previous, incoming, 'phaseAt')],
-    [['corners', 'cards', 'marketCount', 'isSuspended', 'homeTeam', 'awayTeam', 'displayOrder', 'competitionOrder', 'listingStale'],
+    [['corners', 'cards', 'shots', 'shotsOnTarget', 'fouls', 'marketCount', 'isSuspended', 'homeTeam', 'awayTeam', 'displayOrder', 'competitionOrder', 'listingStale'],
       snapshotTime(previous), snapshotTime(incoming)],
   ];
   for (const [keys, before, after] of groups) {

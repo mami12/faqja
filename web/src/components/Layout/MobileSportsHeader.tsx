@@ -86,7 +86,7 @@ export default function MobileSportsHeader({ onOpenLeagues, onOpenBetslip }: Pro
         <>
           <button type="button" aria-label={t('common.close_panel')} onClick={() => setPanel(null)}
             className="fixed inset-0 z-30 bg-black/20" />
-          <div className="absolute inset-x-2 top-[53px] z-40 rounded-b border border-[#607087] bg-[#202c3d] p-3 shadow-2xl">
+          <div className="sports-account-panel absolute inset-x-2 top-[53px] z-40 rounded-b border border-[#607087] bg-[#202c3d] p-3 shadow-2xl">
             <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#47546a] pb-2">
               <h3 className="text-sm font-bold text-white">
                 {panel === 'account' ? (user?.username ?? t('nav.account')) : t('nav.match_notifications')}

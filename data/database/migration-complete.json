@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "tables": {
+    "app_admin_audit": {
+      "count": 47,
+      "sha256": "2b78eee3c2eb9e081dd2d04daf797ac7fcc6925e1daf4fc8b1c121c9dac0d819"
+    },
+    "app_bet_builder_template": {
+      "count": 12,
+      "sha256": "3fb9646d6d3fc209959aa44bcc07f8038a30d9f446619c58854b6a40c1587498"
+    },
+    "app_bet_rejection": {
+      "count": 30,
+      "sha256": "d34faf69ec24c7033654dacaca4c522f6773522b4d68c0bde1d0b0b87f084dee"
+    },
+    "app_casino_freespin_state": {
+      "count": 1,
+      "sha256": "0cba82ffdd8a7b58e1cc66d7bcb63fbdbf327a94441c323bdbc55f28caa2d377"
+    },
+    "app_casino_gamble_event": {
+      "count": 62,
+      "sha256": "a1ba8e138fa1ef0f76fb772276e9428f2ed5dcdd7fb685063542c7b2193868a7"
+    },
+    "app_casino_gamble_state": {
+      "count": 1,
+      "sha256": "07a6356507944a8f5f1d6f9467d1ff00600add7b721418beeec9302c78da6c21"
+    },
+    "app_casino_original_event": {
+      "count": 407,
+      "sha256": "d27c7b2292432a2592521cb0bccbe598e017cca8d138fff0552453124cbb965a"
+    },
+    "app_casino_original_state": {
+      "count": 4,
+      "sha256": "e52e2e891260262733408842323145158a96aa3269e70a533aeb0d3ef89caf66"
+    },
+    "app_casino_round": {
+      "count": 285,
+      "sha256": "8ee59a799a3374a38e959cead042442d6e620e6d388fbf1990a2ba13eef3f6ff"
+    },
+    "app_casino_settings": {
+      "count": 1,
+      "sha256": "20bd858fd3ec0ba39013a6bdb638a48f3dabff63584a40e31b0d8d864825ce58"
+    },
+    "app_commission_config": {
+      "count": 1,
+      "sha256": "792e720fd3cbfe5c58c99a1a3da3e4d5a35148887ee33384b8e0a0367a7a0d06"
+    },
+    "app_feed_override": {
+      "count": 11,
+      "sha256": "a457475c47ab51b3e62768b734c9fa8af8268c0dc83ec084d1516d55cad509c0"
+    },
+    "app_live_risk_settings": {
+      "count": 1,
+      "sha256": "d3fb8999b1e2090596bf18f4d40afba5b13def93787c97e8fb906ea28ec13a7e"
+    },
+    "app_match_result": {
+      "count": 3366,
+      "sha256": "41e9896f04855bdcf2aa9ca6cac11d8ed8db65e4bbfcd00b9993b6a72884b8f5"
+    },
+    "app_player_controls": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "app_ticket": {
+      "count": 175,
+      "sha256": "24d7066645fbcda7176ba6cdfedce0434bde57f85a308766ef16cfa0458299c9"
+    },
+    "app_ticket_batch": {
+      "count": 4,
+      "sha256": "9425d20acaa25b346b5a4b43f9a4be580e5f999306607cdbeae5aadb02d4b317"
+    },
+    "app_ticket_line": {
+      "count": 208,
+      "sha256": "f39410bd601e0f5154638a2d0c7866cb92de89b964e42c7a47dcde825570db05"
+    },
+    "app_transaction": {
+      "count": 1059,
+      "sha256": "ae7037c12f979ac351135e77508f4cf5d531a32e7d663987fc756b1710baeabd"
+    },
+    "app_user": {
+      "count": 15,
+      "sha256": "86cbc1337979d032ac85cc059eb8fc42a4306046b389bd3b9a74f0810569b1c0"
+    }
+  },
+  "balance": "234851.8",
+  "completedAt": "2026-10-26T00:47:09.138Z"
+}

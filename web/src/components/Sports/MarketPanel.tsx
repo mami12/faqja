@@ -1,7 +1,10 @@
+﻿import { marketDiagnosticAll } from '../../utils/marketExpiry';
 import { useMemo, useState } from 'react';
 import { Trophy, Target, Flag, Clock, ShieldAlert, ListOrdered, Layers, Search, UserRound } from 'lucide-react';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
+import MarketInfoButton from './MarketInfoButton';
+import ComboOddsGrid from './ComboOddsGrid';
 import LiveMatchTime from './LiveMatchTime';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLiveFeed } from '../../api/liveFeed';
@@ -11,12 +14,13 @@ import {
   isOutcomeDisplayable,
   filterDecidedOutcomes,
 } from '../../utils/marketExpiry';
-import { betBuilderGroup, marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue, marketSelectionLabel } from '../../utils/marketCatalog';
+import { marketBaseName, isHandicapMarket, isIdentifiedMarket, marketCategoryOf, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue, marketSelectionLabel } from '../../utils/marketCatalog';
 import type { MarketCategory } from '../../utils/marketCatalog';
 import { isComboMarket } from '../../utils/comboPolicy';
+import { repairDisplayText } from '../../utils/repairDisplayText';
 
 /* ------------------------------------------------------------------ */
-/* Kategoritë                                                          */
+/* Kategoritë                                                            */
 /* ------------------------------------------------------------------ */
 
 type Category = MarketCategory;
@@ -78,7 +82,7 @@ const dedupeOutcomes = (outcomes: Market['outcomes'] = []) => {
 };
 
 /* ------------------------------------------------------------------ */
-/* MarketCard — karta e një market-i                                   */
+/* MarketCard — karta e një market-i                                     */
 /* ------------------------------------------------------------------ */
 
 interface MarketCardProps {
@@ -92,7 +96,8 @@ function MarketCard({ market, match, title }: MarketCardProps) {
   if (!outcomes.length) return null;
   return (
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
-      <div className="bg-[#424d60] px-2 py-1.5 text-xs font-semibold text-white">{title}</div>
+      <div className="flex items-center justify-between gap-2 bg-[#424d60] px-2 py-1.5 text-xs font-semibold text-white"><span>{title}</span><MarketInfoButton market={market} title={title}/></div>
+      {isComboMarket(market) ? <ComboOddsGrid markets={[market]} match={match} /> : (
       <div className="grid gap-px bg-tertiary/80" style={{gridTemplateColumns: `repeat(${Math.min(outcomes.length,3)}, minmax(0,1fr))`}}>
         {outcomes.map(outcome => (
           <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2">
@@ -100,6 +105,7 @@ function MarketCard({ market, match, title }: MarketCardProps) {
           </div>
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -117,26 +123,13 @@ function GroupCard({ group, match, title }: GroupCardProps) {
     <section className="overflow-hidden border border-tertiary/80 bg-secondary">
       <div className="flex items-center justify-between bg-[#424d60] px-2 py-1.5">
         <span className="text-xs font-semibold text-white">{title}</span>
-        <span className="text-[10px] text-slate-300">{group.markets.length} {" " + t("linja")}</span>
+        <span className="text-[10px] text-slate-300">{group.markets.length} {" " + t("linja")}</span><MarketInfoButton market={{...group.markets[0],name:group.base,line:''}} title={title}/>
       </div>
+      {group.markets.every(isComboMarket) ? <ComboOddsGrid markets={group.markets} match={match} /> : (
       <div className="divide-y divide-tertiary/70">
         {group.markets.map(market => {
           const outcomes = filterDecidedOutcomes(dedupeOutcomes(market.outcomes), market, match);
           if (!outcomes.length) return null;
-          if (betBuilderGroup(market)) {
-            return (
-              <div key={market.id} className="flex min-h-[42px] items-stretch gap-px bg-tertiary/80">
-                <div className="flex min-w-0 flex-1 items-center bg-[#424d60] px-2 py-1.5 text-[11px] font-semibold text-slate-100">
-                  <span className="break-words">{marketSelectionLabel(outcomes[0]?.name ?? '', lang, market.name, `${match.homeTeam} vs ${match.awayTeam}`, outcomes[0]?.code, market.line)}</span>
-                </div>
-                <div className="flex min-w-0 flex-[1.4] flex-col bg-[#252e3b] [&_button]:min-h-[42px] [&_button]:w-full [&_button]:flex-1 [&_button]:rounded-none">
-                  {outcomes.map(outcome => (
-                    <OddsButton key={outcome.id} match={match} market={market} outcome={outcome} isWide showRawLabel />
-                  ))}
-                </div>
-              </div>
-            );
-          }
           return (
             <div key={market.id} className="flex items-stretch min-h-[40px]">
               <div className="w-[48px] sm:w-[74px] shrink-0 flex items-center justify-center bg-[#424d60] text-xs font-semibold text-slate-200 px-1">
@@ -154,6 +147,7 @@ function GroupCard({ group, match, title }: GroupCardProps) {
           );
         })}
       </div>
+      )}
     </section>
   );
 }
@@ -182,7 +176,7 @@ export default function MarketPanel({ match }: { match: Match }) {
     const query = marketSearch.trim().toLowerCase();
     for (const market of match.markets ?? []) {
       if (!combosEnabled && isComboMarket(market)) continue;
-      if (!isIdentifiedMarket(market) || isHandicapMarket(market)) continue;
+      if (!marketDiagnosticAll() && (!isIdentifiedMarket(market) || isHandicapMarket(market))) continue;
       if (query && ![market.name, marketDisplayTitle(market, lang, true), market.line, ...(market.outcomes ?? []).flatMap(o => [o.name, marketSelectionLabel(o.name, lang, market.name, `${match.homeTeam} vs ${match.awayTeam}`, o.code, market.line)])]
         .some(value => String(value ?? '').toLowerCase().includes(query))) continue;
       if (!isMarketVisible(liveMatch, market, lockedMarkets, lockedOutcomes, riskLockedOutcomes)) continue;
@@ -197,12 +191,17 @@ export default function MarketPanel({ match }: { match: Match }) {
     }
 
     for (const key of Object.keys(result) as Category[]) {
-      result[key].sort(
-        (a, b) =>
+      result[key].sort((a,b)=>{
+        if(marketBaseName(a).toLowerCase()===marketBaseName(b).toLowerCase()){
+          const left=marketLineValue(a),right=marketLineValue(b);
+          if(left!==''&&right!==''&&Number.isFinite(Number(left))&&Number.isFinite(Number(right))&&Number(left)!==Number(right))return Number(left)-Number(right);
+        }
+        return (
           Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0) ||
           String(a.name).localeCompare(String(b.name)) ||
-          String(a.line ?? '').localeCompare(String(b.line ?? '')),
-      );
+          String(a.line ?? '').localeCompare(String(b.line ?? ''))
+        );
+      });
     }
 
     return { categorized: result, counts: c };
@@ -230,7 +229,7 @@ export default function MarketPanel({ match }: { match: Match }) {
         {liveMatch.status === 'LIVE' && (
           <span className="font-bold text-accent-red flex items-center gap-1 sm:gap-1.5 bg-rose-500/10 px-1.5 sm:px-2 py-0.5 rounded sm:rounded-md border border-rose-500/20">
             <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-accent-red animate-ping"></span>
-            <LiveMatchTime minute={liveMatch.currentMinute} second={liveMatch.currentSecond} period={liveMatch.period} seconds />{liveMatch.period ? ` · ${liveMatch.period}` : ''}
+            <LiveMatchTime minute={liveMatch.currentMinute} second={liveMatch.currentSecond} period={liveMatch.period} seconds />{liveMatch.period ? ` · ${repairDisplayText(liveMatch.period)}` : ''}
           </span>
         )}
         {match.corners && (
@@ -334,7 +333,7 @@ export default function MarketPanel({ match }: { match: Match }) {
               {marketGroups.map(group => {
                 if (group.markets.length === 1) {
                   const market = group.markets[0];
-                  const title = marketDisplayTitle(market, lang, true);
+                  const title = marketDisplayTitle(market, lang, !isComboMarket(market));
                   return (
                     <MarketCard
                       key={market.id}
@@ -345,7 +344,7 @@ export default function MarketPanel({ match }: { match: Match }) {
                   );
                 }
 
-                const baseTitle = marketDisplayTitle(group.markets[0], lang);
+                const baseTitle = marketDisplayTitle({...group.markets[0],name:group.base,line:''}, lang);
                 return (
                   <GroupCard
                     key={marketGroupKey(group.markets[0])}

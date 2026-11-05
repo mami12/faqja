@@ -16,6 +16,7 @@ export const CUSTOM_GAMES=Object.freeze({
  sizzling:Object.freeze({lines:Object.freeze([5]),kind:'sizzling'}),
  bookofra:Object.freeze({lines:Object.freeze([10]),kind:'book'}),
 });
+export const supportsCustomCasinoMath=gameId=>Object.hasOwn(CUSTOM_GAMES,gameId);
 export const customVariant=gameId=>gameId==='bookofra'?`bookofra-${process.env.BOOKOFRA_FREE_SPINS==='1'?'on':'off'}`:gameId;
 export function customGrid(reels,stops,rows=3){
  if(!Array.isArray(stops)||stops.length!==5)throw new Error('Invalid catalog stops');

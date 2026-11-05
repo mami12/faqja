@@ -9,8 +9,9 @@ import {createServer} from 'vite';
 const root=fileURLToPath(new URL('../web',import.meta.url));
 process.chdir(root);
 const definitions=[['lucky-clover-x3','Lucky Clover X3'],['vikings-fun',"Viking's Fun"],['fruit-queen','Fruit Queen'],['seven-hot','Seven Hot'],['sizzling','Sizzling Hot Deluxe'],['bookofra','Book of Ra Deluxe']];
-const makeGame=([gameId,title])=>({gameId,title,profile:'p95',theoreticalRtp:95,profiles:[{id:'p90',label:'90%',theoreticalRtp:90},{id:'p95',label:'95%',theoreticalRtp:95}],configurationError:null,configurationWarning:null,controls:{mode:'original',rtp:95,hitFrequency:20},effectiveRtp:95,effectiveHitFrequency:null,mathVersion:gameId+'-original',customLimits:{minWinMultiplier:.01,maxWinMultiplier:5000}});
-const settings={enabled:true,warning:null,games:definitions.map(makeGame),stakeLimits:{min:.20,max:5000,currency:'ALL'}};
+const nativeBounds={'lucky-clover-x3':[2,390],'vikings-fun':[.225,123.95],'fruit-queen':[5,200],'seven-hot':[2,170],sizzling:[.425,100],bookofra:[.225,1002.425]};
+const makeGame=([gameId,title])=>({gameId,title,profile:'p95',theoreticalRtp:95,profiles:[{id:'p90',label:'90%',theoreticalRtp:90},{id:'p95',label:'95%',theoreticalRtp:95}],configurationError:null,configurationWarning:null,controls:{mode:'original',rtp:95,hitFrequency:20},effectiveRtp:95,effectiveHitFrequency:null,mathVersion:gameId+'-original',customLimits:{minWinMultiplier:nativeBounds[gameId][0],maxWinMultiplier:nativeBounds[gameId][1]},controlLimits:{rtp:{min:0,max:1000},hitFrequency:{min:0,max:100}}});
+const settings={enabled:true,warning:null,games:definitions.map(makeGame),stakeLimits:{min:20,max:5000,currency:'ALL'}};
 const html=`<!doctype html><html><body><div id="root"></div><script type="module">
 import React from 'react';import {createRoot} from 'react-dom/client';
 import CasinoSettings from '/src/components/Admin/CasinoSettings.tsx';
@@ -73,7 +74,30 @@ try{
   assert.deepEqual(saved.at(-1),{gameId,mode:'custom',rtp:0,hitFrequency:0});
  }
  assert.equal(saved.length,6,'all six games have independent 0% controls');
- assert.ok((await page.$eval('body',element=>element.textContent)).includes('0.20–5,000 lekë'));
+ assert.ok((await page.$eval('body',element=>element.textContent)).includes('20.00–5,000 lekë'));
+
+ // All games can reach full hit frequency through an explicit, sufficiently
+ // funded RTP choice. An impossible 100/100 pair is explained, never forced.
+ for(const [index,[gameId,title]] of definitions.entries()){
+  await page.setViewport({width:index%2?320:1366,height:900});
+  assert.equal(await page.$eval(`input[aria-label="${title}: RTP"]`,el=>el.max),'1000');
+  assert.equal(await page.$eval(`input[aria-label="${title}: Shpeshtësia e fitimit"]`,el=>el.max),'100');
+  await setNumber(`input[aria-label="${title}: RTP"]`,100);
+  await setNumber(`input[aria-label="${title}: Shpeshtësia e fitimit"]`,100);
+  if(nativeBounds[gameId][0]>1){
+   assert.equal(await page.$eval(`article:nth-child(${index+1}) button`,el=>el.disabled),true);
+   assert.ok((await page.$eval(`article:nth-child(${index+1})`,el=>el.textContent)).includes(`RTP të paktën ${nativeBounds[gameId][0]*100}%`));
+  }
+  assert.equal(await page.$eval(`input[aria-label="${title}: RTP"]`,el=>el.value),'100','incompatible drafts do not silently raise RTP');
+  await setNumber(`input[aria-label="${title}: RTP"]`,600);
+  assert.equal(await page.$eval(`article:nth-child(${index+1}) button`,el=>el.disabled),false);
+  await clickSave(index);
+  await page.waitForFunction(index=>{const article=document.querySelectorAll('article')[index];return article.textContent.includes('RTP 600%')&&article.querySelector('button').disabled&&!article.querySelector('input').disabled;},{timeout:10000},index);
+  assert.deepEqual(saved.at(-1),{gameId,mode:'custom',rtp:600,hitFrequency:100});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'extended controls fit mobile and desktop');
+ }
+ for(const [gameId] of definitions)setCustom(gameId,0,0);
+ await page.setViewport({width:1100,height:820});
 
  // No session, game frame, or paid-round API is opened before custom terms.
  await page.evaluate(()=>window.mountWallet('lucky-clover-x3'));
@@ -109,11 +133,37 @@ try{
   await page.evaluate(gameId=>window.mountWallet(gameId),gameId);await page.waitForSelector(`iframe[title="${title} · bilanci i llogarisë"]`);
   assert.equal(sessions.at(-1).gameId,gameId);assert.equal(sessions.at(-1).mathVersion,gameId+'-original');
   assert.equal(await page.$('section[aria-label="Kushtet e lojës"]'),null);
-  assert.ok((await page.$eval('body',element=>element.textContent)).includes('Basti: 0.20–5,000 lekë'));
+  assert.ok((await page.$eval('body',element=>element.textContent)).includes('Basti: 20.00–5,000 lekë'));
+ }
+ // Compact in-game information keeps the canvas clear and remains available
+ // without reconnecting or changing the accepted session on all six adapters.
+ for(const [index,[gameId]] of definitions.entries()){
+  await page.setViewport({width:[320,390,1366][index%3],height:820});
+  setCustom(gameId,8.28,10);
+  await page.evaluate(gameId=>window.mountWallet(gameId),gameId);
+  await page.waitForSelector('section[aria-label="Kushtet e lojës"]');
+  const intro=await page.$eval('section[aria-label="Kushtet e lojës"]',element=>({text:element.textContent,detailsOpen:element.querySelector('details').open}));
+  assert.ok(intro.text.includes('8.28%')&&intro.text.includes('10%'));
+  assert.equal(intro.detailsOpen,false,'long explanation stays collapsed');
+  await page.click('section[aria-label="Kushtet e lojës"] button');await page.waitForSelector('iframe');
+  const frameUrl=await page.$eval('iframe',element=>element.src),sessionCount=sessions.length;
+  const bar=await page.$eval('.casino-session-terms',element=>element.textContent);
+  assert.ok(!bar.includes('8.28%')&&!bar.includes('Shpeshtësia'),'no repeated numeric badge during play');
+  await page.click('button[aria-haspopup="dialog"]');
+  await page.waitForSelector('section[role="dialog"]');
+  const info=await page.$eval('section[role="dialog"]',element=>({text:element.textContent,rect:element.getBoundingClientRect().toJSON(),width:innerWidth}));
+  assert.ok(info.text.includes('8.28%')&&info.text.includes('10%')&&info.text.includes('RTP origjinale e ofruesit nuk zbatohet'));
+  assert.ok(info.rect.left>=0&&info.rect.right<=info.width,'information fits phone and desktop');
+  await page.click('section[role="dialog"] summary');
+  assert.equal(await page.$eval('section[role="dialog"] details',element=>element.open),true);
+  await page.keyboard.press('Escape');await page.waitForSelector('section[role="dialog"]',{hidden:true});
+  assert.equal(await page.$eval('button[aria-haspopup="dialog"]',element=>document.activeElement===element),true);
+  assert.equal(await page.$eval('iframe',element=>element.src),frameUrl);assert.equal(sessions.length,sessionCount);
  }
  assert.deepEqual(errors,[]);
- console.log('casino controls browser: six 0% settings, invalid pair, disclosure, version race, bonus-preserving change notice, and all six launch contracts PASS');
+ console.log('casino controls browser: six0% settings, above100% RTP/100% hit on all six, impossible-pair guidance/no silent adjustment, mobile/desktop fit, disclosure/version race/bonus preservation and all six launch contracts PASS');
 }finally{
  await browser?.close();await vite?.close();
  if(server){server.closeAllConnections?.();await new Promise(resolve=>server.close(resolve));}
 }
+

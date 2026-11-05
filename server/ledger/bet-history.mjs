@@ -30,7 +30,7 @@ function validHistoryDate(value, field) {
   return date.toISOString();
 }
 
-const TICKET_COLUMNS = 't.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout, ' +
+const TICKET_COLUMNS = 't.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout, t.original_potential_payout, t.potential_quote_reconstructed, ' +
   't.ticket_type, t.system_type, t.status, t.placed_at, t.settled_at';
 
 export async function listPlayerBetActivity({ userId, status = 'ALL', from = null, to = null, limit = 200 } = {}, {runQuery = query} = {}) {

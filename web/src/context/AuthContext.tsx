@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { User } from '../types';
 import { apiClient, invalidateAuthRequests } from '../api/client';
+import { installUserActivityTracking, isUserActive } from '../utils/userActivity';
 
 interface AuthContextType {
   user: User | null;
@@ -57,6 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     mounted.current = true;
+    installUserActivityTracking();
     void refreshUser();
     const onStorage = (event: StorageEvent) => {
       if (event.storageArea !== localStorage || (event.key !== null && event.key !== 'token')) return;
@@ -66,11 +68,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       void refreshUser();
     };
     window.addEventListener('storage', onStorage);
+    const refreshActive=()=>{if(localStorage.getItem('token')&&document.visibilityState!=='hidden')void refreshUser();};
+    // The 30s poll runs only while the player is really on the page: a hidden tab
+    // or an idle session makes no API call at all.
+    const pollActive=()=>{if(localStorage.getItem('token')&&isUserActive())void refreshUser();};
+    const timer=window.setInterval(pollActive,30000);
+    window.addEventListener('focus',refreshActive);
+    window.addEventListener('finance:reset',refreshActive);
+    document.addEventListener('visibilitychange',refreshActive);
     return () => {
       mounted.current = false;
       session.current += 1;
       latestRead.current += 1;
       window.removeEventListener('storage', onStorage);
+      window.clearInterval(timer);
+      window.removeEventListener('focus',refreshActive);
+      window.removeEventListener('finance:reset',refreshActive);
+      document.removeEventListener('visibilitychange',refreshActive);
     };
   }, [refreshUser, invalidateSession]);
 

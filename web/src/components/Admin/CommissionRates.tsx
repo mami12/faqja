@@ -7,11 +7,12 @@ interface Rates {
   single: number;
   double: number;
   multi: number;
+  casino: number;
 }
 
 export default function CommissionRates() {
   const { t } = useLanguage();
-  const [rates, setRates] = useState<Rates>({ single: 3, double: 5, multi: 7 });
+  const [rates, setRates] = useState<Rates>({ single: 3, double: 5, multi: 7, casino: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -63,7 +64,7 @@ export default function CommissionRates() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
           <h3 className="text-base sm:text-lg font-bold text-white">{t("Komisionet e menaxherëve")}</h3>
-          <p className="mt-0.5 text-xs text-text-secondary">{t("Ndryshimi zbatohet për bastet e reja. Bastet ekzistuese ruajnë komisionin origjinal.")}</p>
+          <p className="mt-0.5 text-xs text-text-secondary">{t("Përqindjet llogariten mbi shumën e luajtur, veçmas për sport dhe slot machine. Janë vetëm raport për llogaritje manuale: bilanci nuk ndryshon. Ndryshimet vlejnë për bastet e reja.")}</p>
         </div>
         {saveSuccess && (
           <span className="self-start sm:self-auto text-xs px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 animate-pulse">
@@ -72,13 +73,14 @@ export default function CommissionRates() {
       </div>
       <form onSubmit={save} className="flex flex-col gap-3 sm:flex-row sm:items-end">
         {([
-          ['single', 'Teke (1 zgjedhje)'],
-          ['double', 'Dyshe (2 zgjedhje)'],
-          ['multi', 'Shumëfishe (3+)'],
+          ['single', 'Sport: Teke (1 zgjedhje)'],
+          ['double', 'Sport: Dyshe (2 zgjedhje)'],
+          ['multi', 'Sport: Shumëfishe (3+)'],
+          ['casino', 'Slot machine'],
         ] as const).map(([tier, label]) => (
           <div key={tier} className="flex-1 bg-primary/60 p-2.5 sm:p-3 rounded-xl border border-tertiary/70">
             <span className="block text-[11px] sm:text-xs font-semibold text-text-secondary mb-1.5">
-              {label}
+              {t(label)}
             </span>
             <div className="flex items-center gap-1.5">
               <button

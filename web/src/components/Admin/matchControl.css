@@ -47,6 +47,13 @@
 .mc-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
 .mc-filters label { display: grid; gap: 6px; font-size: 11px; color: var(--mc-muted); min-width: 0; }
 .match-control select { max-width: 100%; min-width: 0; border: 1px solid var(--mc-line); border-radius: 8px; background: #182435; color: #dce7f4; min-height: 42px; padding: 8px 30px 8px 11px; width: 100%; }
+.mc-bulk-controls { border: 1px solid #34485f; background: #14202e; padding: 14px; margin: -4px 0 20px; border-radius: 8px; }
+.mc-bulk-controls > div:first-child { display: grid; gap: 4px; margin-bottom: 12px; }
+.mc-bulk-controls strong { font-size: 12px; }
+.mc-bulk-controls small { color: var(--mc-muted); font-size: 10px; line-height: 1.5; }
+.mc-bulk-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(135px, auto); align-items: end; gap: 10px; }
+.mc-bulk-fields label { display: grid; gap: 6px; color: var(--mc-muted); font-size: 10px; min-width: 0; }
+.mc-bulk-fields .mc-button { width: 100%; min-height: 42px; white-space: normal; }
 .mc-message { display: flex; align-items: center; gap: 10px; padding: 13px; border-radius: 10px; margin: 0 0 16px; line-height: 1.6; overflow-wrap: anywhere; }
 .mc-message span { flex: 1; min-width: 0; }
 .mc-message button { background: none; border: 0; color: inherit; display: grid; place-items: center; min-height: 28px; min-width: 28px; }
@@ -209,6 +216,9 @@
   .mc-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .mc-filters label:last-child { grid-column: 1 / -1; }
   .mc-filters select { font-size: 12px; min-height: 44px; padding-left: 8px; padding-right: 20px; }
+  .mc-bulk-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .mc-bulk-fields label:nth-child(3), .mc-bulk-fields button { grid-column: 1 / -1; }
+  .mc-bulk-fields select { font-size: 12px; min-height: 44px; padding-left: 8px; padding-right: 20px; }
   .mc-fixture { padding: 15px; }
   .mc-fixture-title { gap: 12px; }
   .mc-fixture-title h3 { font-size: 18px; }

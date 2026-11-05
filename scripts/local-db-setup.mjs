@@ -1,8 +1,8 @@
 /** Windows operator tools. Importing this file never reads .env or contacts a database. */
 import net from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, stat, writeFile, unlink } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
+import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseEnv } from 'node:util';
 import { localDatabaseDirectory, maintenancePath } from '../server/database-location.mjs';
@@ -86,8 +86,106 @@ async function backupStoppedLocalDatabase({rootDir=repository,stop=stopWindowsSe
   } finally {await database.end();}
 }
 
+const quoteIdentifier=value=>'"'+String(value).replaceAll('"','""')+'"';
+/** Read-only validation; returned hashes never contain usernames/password hashes. */
+export async function inspectRestoredDatabase(database) {
+  await database.query("set time zone 'UTC'");
+  const tables=(await database.query(`select tablename as name from pg_tables
+    where schemaname='public' and left(tablename,4)='app_' order by tablename collate "C"`)).rows.map(row=>row.name);
+  for(const required of ['app_user','app_ticket','app_transaction','app_casino_round'])
+    if(!tables.includes(required))throw Error('The backup is not a complete application database.');
+  const columns=(await database.query(`select table_name,column_name,data_type from information_schema.columns
+    where table_schema='public' and left(table_name,4)='app_'`)).rows;
+  const required={app_user:['id','username','password_hash','role','balance'],
+    app_ticket:['stake','potential_payout'],app_transaction:['user_id','amount','balance_after'],
+    app_casino_round:['stake','payout','balance_after']};
+  for(const [table,names]of Object.entries(required))for(const name of names)
+    if(!columns.some(column=>column.table_name===table&&column.column_name===name))throw Error('The backup has an incompatible application schema.');
+  const users=(await database.query('select id::text as id,username,password_hash from app_user order by id::text collate "C"')).rows;
+  if(!users.length||users.some(user=>typeof user.username!=='string'||!user.username.trim()||typeof user.password_hash!=='string'||!user.password_hash))
+    throw Error('The backup does not contain usable application accounts.');
+  if(!users.some(user=>/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(user.password_hash)))
+    throw Error('The backup does not contain application password hashes.');
+  const credentials=createHash('sha256');
+  for(const user of users)credentials.update(JSON.stringify([user.id,user.username,user.password_hash])).update('\0');
+  const report={version:1,accounts:users.length,credentialsSha256:credentials.digest('hex'),tables:{},balance:null};
+  for(const table of tables){
+    const numeric=columns.filter(column=>column.table_name===table&&['numeric','real','double precision'].includes(column.data_type));
+    if(numeric.length){
+      const predicate=numeric.map(column=>`${quoteIdentifier(column.column_name)}::text in ('NaN','Infinity','-Infinity')`).join(' or ');
+      const bad=(await database.query(`select count(*)::int as count from public.${quoteIdentifier(table)} where ${predicate}`)).rows[0].count;
+      if(bad)throw Error('The backup contains non-finite financial values.');
+    }
+    const rows=(await database.query(`select to_jsonb(t)::text as row from public.${quoteIdentifier(table)} t
+      order by to_jsonb(t)::text collate "C"`)).rows;
+    const hash=createHash('sha256');for(const row of rows)hash.update(row.row).update('\0');
+    report.tables[table]={rows:rows.length,sha256:hash.digest('hex')};
+  }
+  report.balance=(await database.query('select trim_scale(coalesce(sum(balance),0))::text as balance from app_user')).rows[0].balance;
+  return report;
+}
+
+function compareTransferReport(actual,expected){
+  if(!expected||typeof expected!=='object')throw Error('The database transfer manifest is invalid.');
+  if(expected.accounts!==actual.accounts)throw Error('Restored account count does not match the transfer manifest.');
+  const names=Object.keys(actual.tables).sort();
+  if(JSON.stringify(names)!==JSON.stringify(Object.keys(expected.tables||{}).sort()))throw Error('Restored tables do not match the transfer manifest.');
+  for(const name of names){
+    const wanted=expected.tables[name],got=actual.tables[name];
+    if(!wanted||!Number.isSafeInteger(wanted.rows)||wanted.rows<0||!/[a-f0-9]{64}/i.test(wanted.sha256)||wanted.rows!==got.rows||wanted.sha256!==got.sha256)
+      throw Error('Restored database contents do not match the transfer manifest.');
+  }
+}
+
+/** Restore into a NEW directory; preserve the existing database and server secrets. */
+export async function restoreLocalDatabase(options={}) {
+  const rootDir=options.rootDir||repository;
+  return withMaintenance(rootDir,()=>restoreStoppedLocalDatabase({...options,rootDir}));
+}
+async function restoreStoppedLocalDatabase({archivePath='database-transfer.tgz',rootDir=repository,
+  expectedReport,stop=stopWindowsServer,assertStopped=assertServerPortFree,log=console.log}={}) {
+  const selected=resolve(rootDir,archivePath),info=await stat(selected);
+  if(!info.isFile()||!/(?:\.tgz|\.tar\.gz)$/i.test(selected))throw Error('Choose a PGlite .tgz database backup.');
+  const archive=await readFile(selected);
+  if(archive.length<18||archive[0]!==0x1f||archive[1]!==0x8b||archive[2]!==8)throw Error('The selected file is not a gzip database backup.');
+  const archiveSha256=createHash('sha256').update(archive).digest('hex');
+  if(!expectedReport){
+    try {expectedReport=JSON.parse(await readFile(resolve(dirname(selected),'DATABASE-TRANSFER.json'),'utf8'));}
+    catch(error){if(error.code!=='ENOENT')throw Error('The database transfer manifest could not be read.');}
+  }
+  if(expectedReport){
+    if(expectedReport.verified!==true||expectedReport.archive!==basename(selected)||expectedReport.archiveSha256!==archiveSha256||
+      (expectedReport.archiveBytes!==undefined&&expectedReport.archiveBytes!==archive.length))throw Error('The database backup does not match its verified transfer manifest.');
+  }
+  const path=resolve(rootDir,'.env'),original=await readFile(path,'utf8'),env=parseEnv(original);
+  await stop({rootDir,log});await assertStopped(env);
+  const directory=localDatabaseDirectory('data/database-restored-'+stamp()+'-'+randomUUID().slice(0,8),rootDir);
+  await mkdir(dirname(directory),{recursive:true,mode:0o700});await mkdir(directory,{mode:0o700});
+  const {createLocalPool}=await import('../server/local-database.mjs');
+  let database,verified=false;
+  try {
+    database=createLocalPool({dataDir:directory,loadDataDir:new Blob([archive])});
+    const report=await inspectRestoredDatabase(database);
+    if(expectedReport)compareTransferReport(report,expectedReport);
+    await database.end();database=null;verified=true;
+    if(await readFile(path,'utf8')!==original)throw Error('The server configuration changed during restore. It was not replaced.');
+    const backupPath=resolve(rootDir,'.env.before-restore-'+stamp()+'-'+randomUUID().slice(0,8));
+    await writeFile(backupPath,original,{flag:'wx',mode:0o600});
+    const temporary=resolve(rootDir,'.env.restore-switch-'+randomUUID());
+    const file=await open(temporary,'wx',0o600);
+    try{await file.writeFile(localEnvironment(original,relative(rootDir,directory)));await file.sync();}finally{await file.close();}
+    await rename(temporary,path);
+    log('Database restored and verified: '+report.accounts+' accounts. The previous database and server secrets were preserved. Run start.bat.');
+    return {directory,backupPath,archiveSha256,report};
+  } catch(error){
+    if(database)await database.end().catch(()=>{});
+    if(!verified)await writeFile(resolve(directory,'migration.incomplete'),'Restore verification did not finish. Do not use this database.\n',{flag:'wx',mode:0o600}).catch(()=>{});
+    throw error;
+  }
+}
+
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url) {
   const action=process.argv[2];
-  const work=action==='migrate'?switchDatabaseToLocal():action==='backup'?backupLocalDatabase():Promise.reject(Error('Use migrate-db-local.bat or backup-db.bat.'));
-  work.catch(()=>{console.error('The database operation did not finish. The previous configuration is preserved unless migration was fully verified. Keep the server stopped and check LOCAL-DATABASE.md; no private database values are printed.');process.exitCode=1;});
+  const work=action==='migrate'?switchDatabaseToLocal():action==='backup'?backupLocalDatabase():action==='restore'?restoreLocalDatabase({archivePath:process.argv[3]||'database-transfer.tgz'}):Promise.reject(Error('Use migrate-db-local.bat, backup-db.bat or restore-db.bat.'));
+  work.catch(()=>{console.error('The database operation did not finish. The previous configuration and database were preserved unless a full verification succeeded. Check that the selected backup and DATABASE-TRANSFER.json belong together, keep the server stopped, and read LOCAL-DATABASE.md. No private database values are printed.');process.exitCode=1;});
 }

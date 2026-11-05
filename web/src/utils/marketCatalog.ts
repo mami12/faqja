@@ -3,6 +3,7 @@ import al from '../i18n/al';
 import en from '../i18n/en';
 import { formatOddsButtonLabel, translateMarketName, translateOutcomeName } from './sportsbookLabels';
 import type { Translate } from './sportsbookLabels';
+import {isComboMarket} from './comboPolicy';
 
 /**
  * Contract identity and grouping always use the original provider text.
@@ -23,6 +24,7 @@ export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): b
   const name = normalized(market.name);
   const type = normalized(market.marketType);
   return type === 'handicap'
+    || /\b(?:asian|aziatik\w*)\b/i.test(name)
     || /\b(handicap|handicaps|fora|spread|spreads)\b/i.test(name)
     || /^asian (?:corners?|cards?)\b/.test(name)
     || /^(?:corners?|cards?)\.\s*asian\b/.test(name);
@@ -34,6 +36,7 @@ export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): b
 export function isIdentifiedMarket(market: Market): boolean {
   const name = String(market.name ?? '').trim();
   if (!name) return false;
+  if (/[{}]|\[[^\[\]]*[a-z!_][^\[\]]*\]/i.test(name)) return false;
   return !/^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name);
 }
 
@@ -101,6 +104,14 @@ export function marketGroupKey(market: Market): string {
   const syntheticGroup = betBuilderGroup(market);
   if (syntheticGroup) return syntheticGroup.key;
   const identity = String(market.extId ?? '').trim() || normalized(marketBaseName(market));
+  const native=identity.match(/^(yb\d+)@([\w-]*)$/);
+  if(native){
+    try{
+      const spec=atob(native[2].replace(/-/g,'+').replace(/_/g,'/'));
+      const fixed=spec.split('|').filter(p=>!p.startsWith('bc_id=')&&!p.startsWith('hcp=')).sort().join('|');
+      return [normalized(market.marketType),market.period??0,native[1],fixed,normalized(marketBaseName(market))].join('::');
+    }catch{/* An unfamiliar identity keeps its original isolated group. */}
+  }
   const family = [normalized(market.marketType), market.period ?? 0, identity, normalized(marketBaseName(market))].join('::');
   return marketLineValue(market) ? family : family + '::' + String(market.id);
 }
@@ -111,7 +122,7 @@ export function marketGroupKey(market: Market): string {
 export function marketCategoryOf(market: Market): MarketCategory {
   const name = normalized(market.name);
   const type = normalized(market.marketType);
-  if (/^bet builder\b/.test(name)) return 'mixed';
+  if (isComboMarket(market)) return 'mixed';
   if (type === 'corners' || /\bcorners?\b|\bcorner kicks?\b/.test(name)) return 'corners';
   if (type === 'cards' || /\bcards?\b|\bbookings?\b|yellow card|red card|disciplin/.test(name)) return 'cards';
   if (/\bplayers?\b|goalscorer|scorer|to be booked|player shots?/.test(name)) return 'players';
@@ -160,7 +171,7 @@ const EN_CATEGORY_LABELS: Record<MarketCategory, string> = {
   cards: 'Cards', htft: 'Halves / Periods', players: 'Players', other: 'Other',
 };
 const AL_CATEGORY_LABELS: Record<MarketCategory, string> = {
-  main: 'Kryesore', goals: 'Golat', mixed: 'Të kombinuara', corners: 'Kornet',
+  main: 'Kryesore', goals: 'Golat', mixed: 'Kombinime', corners: 'Kornet',
   cards: 'Kartonët', htft: 'Pjesët / Periudhat', players: 'Lojtarët', other: 'Të tjera',
 };
 export function marketCategoryLabel(category: MarketCategory, lang: MarketLanguage): string {

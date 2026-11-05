@@ -1,21 +1,26 @@
 /**
- * Run with a disposable PostgreSQL database, never a production database.
- * Tests real balance debits/payouts, replay protection, manager liability,
+ * Uses its own disposable local PostgreSQL-compatible database.
+ * Tests real balance debits/payouts, replay protection, manager report-only funds,
  * staff scoping, and player self-exclusion.
  */
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {resolve,join,sep} from 'node:path';
 import express from 'express';
-import {signToken} from '../server/ledger/auth.mjs';
-import {casinoSessionRouter,createSizzlingRealRouter} from '../server/casino/sizzling-real.mjs';
-import {casinoWalletRouter} from '../server/casino/wallet.mjs';
-import {initLedgerSchema,createUser,getUserById} from '../server/ledger/store.mjs';
-import {query,closePool} from '../server/db.mjs';
-import {placeCasinoSpin,settlePendingWin} from '../server/casino/transactions.mjs';
-import {generateCasinoFinanceReport} from '../server/casino/finance.mjs';
+const parent=resolve('tmp');await mkdir(parent,{recursive:true});
+const root=await mkdtemp(join(parent,'casino-ledger-test-'));
+Object.assign(process.env,{DB_DRIVER:'local',LOCAL_DATABASE_DIR:join(root,'database'),DATABASE_URL:'invalid-test-only-cloud-url',JWT_SECRET:'isolated-casino-ledger-test-only-key',SEED_DEFAULT_ACCOUNTS:'false',CASINO_REAL_MONEY_ENABLED:'true',CASINO_MATH_APPROVED:'true'});
+const {signToken}=await import('../server/ledger/auth.mjs');
+const {casinoSessionRouter,createSizzlingRealRouter}=await import('../server/casino/sizzling-real.mjs');
+const {casinoWalletRouter}=await import('../server/casino/wallet.mjs');
+const {initLedgerSchema,createUser,getUserById}=await import('../server/ledger/store.mjs');
+const {query,closePool,initSchema}=await import('../server/db.mjs');
+const {placeCasinoSpin,settlePendingWin}=await import('../server/casino/transactions.mjs');
+const {generateCasinoFinanceReport}=await import('../server/casino/finance.mjs');
 const round=x=>Number(Number(x).toFixed(2));
-if(!process.env.DATABASE_URL?.includes('/casino_test'))throw new Error('Run only against a disposable casino_test database');
 try{
+  await initSchema();
   // A new or migrated database should make Sizzling available to the sports
   // wallet without requiring environment variables on Railway.
   await initLedgerSchema();
@@ -32,42 +37,42 @@ try{
   const other=await createUser({username:'m'+randomUUID(),passwordHash:'unused',role:'MANAGER',balance:10000});
   const player=await createUser({username:'p'+randomUUID(),passwordHash:'unused',role:'PLAYER',balance:10000,managerId:manager.id});
   const requestId=randomUUID();
-  const a=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:1,lines:5});
-  const b=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:1,lines:5});
+  const a=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:4,lines:5});
+  const b=await placeCasinoSpin({userId:player.id,requestId,bet:1,denomination:4,lines:5});
   assert.equal(a.roundId,b.roundId);
   assert.equal(b.replayed,true);
-  assert.equal(a.stake,5);
+  assert.equal(a.stake,20);
   const latest=await getUserById(player.id);
-  assert.equal(latest.balance,round(10000-5),'a spin only debits the stake');
+  assert.equal(latest.balance,round(10000-20),'a spin only debits the stake');
   const m=await getUserById(manager.id);
-  assert.equal(m.balance,round(10000+5),'the house keeps the stake until the player collects');
+  assert.equal(m.balance,10000,'casino stakes never credit the manager wallet');
   let tx=await query('select type,amount from app_transaction where reference_id=$1 order by created_at',[a.roundId]);
   assert.equal(tx.rows.filter(x=>x.type==='CASINO_SPIN').length,1);
-  assert.equal(tx.rows.filter(x=>x.type==='CASINO_MANAGER_NET').length,1);
+  assert.equal(tx.rows.filter(x=>x.type==='CASINO_MANAGER_NET').length,0);
   assert.equal(tx.rows.filter(x=>x.type==='CASINO_WIN').length,0,'the win is not paid before collect');
   let report=await generateCasinoFinanceReport({managerId:manager.id,userId:player.id});
   assert.equal(report.players.length,1);
   assert.equal(report.players[0].casinoSpins,1);
-  assert.equal(report.players[0].casinoStake,5);
+  assert.equal(report.players[0].casinoStake,20);
   assert.equal(report.players[0].casinoPayout,a.payout);
-  assert.equal(report.players[0].net,round(a.payout-5));
+  assert.equal(report.players[0].net,round(a.payout-20));
   const unauthorized=await generateCasinoFinanceReport({managerId:other.id,userId:player.id});
   assert.equal(unauthorized.players.length,0);
   assert.deepEqual(unauthorized.transactions,[]);
   // A second Sizzling wager is settled into the same shared wallet.
-  const second=await placeCasinoSpin({userId:player.id,requestId:randomUUID(),bet:2,denomination:1,lines:5});
-  assert.equal(second.stake,10);
+  const second=await placeCasinoSpin({userId:player.id,requestId:randomUUID(),bet:2,denomination:4,lines:5});
+  assert.equal(second.stake,40);
   report=await generateCasinoFinanceReport({managerId:manager.id,userId:player.id});
   assert.equal(report.players[0].casinoSpins,2);
-  assert.equal(report.players[0].casinoStake,15);
+  assert.equal(report.players[0].casinoStake,60);
   assert.equal(report.players[0].casinoPayout,round(a.payout+second.payout));
   const currentPlayer=await getUserById(player.id);
   const currentManager=await getUserById(manager.id);
   // The first win was still pending, so it is auto-collected before the second
   // wager; the second win itself stays pending until collect.
-  assert.equal(currentPlayer.balance,round(10000-5+a.payout-10),
+  assert.equal(currentPlayer.balance,round(10000-20+a.payout-40),
     'an uncollected win is credited automatically before the next spin');
-  assert.equal(currentManager.balance,round(10000+5-a.payout+10));
+  assert.equal(currentManager.balance,10000);
   // The actual Pixi client uses a same-origin cookie rather than Bearer on
   // its multipart spin requests; prove that its balance is the SPORT balance.
   const app=express();
@@ -112,21 +117,21 @@ try{
     const init=await play({action:'init',request_id:'0'});
     assert.equal(init.status,200);
     assert.equal(init.body.balance.after,before.balance,'Pixi cabinet must start at sports balance');
-    const request={action:'spin',bet:1,lines:5,denomination:1,request_id:'1'};
+    const request={action:'spin',bet:1,lines:5,denomination:4,request_id:'1'};
     const spin=await play(request);
     assert.equal(spin.status,200);
     assert.ok(spin.body.spin.symbols&&spin.body.spin.wins,'Pixi receives graphical reel outcome');
     const after=await getUserById(player.id);
     assert.equal(after.balance,spin.body.balance.after,'sports header must equal Pixi wallet');
-    assert.equal(after.balance,round(before.balance-5),'the spin debits the stake only');
+    assert.equal(after.balance,round(before.balance-20),'the spin debits the stake only');
     const pending=Number(spin.body.spin.wins.total);
     // The legacy Pixi client treats every non-200 response as a fatal
     // "Internal Server Error" and exits to lobby. Expected rejects instead
     // use the client's documented JSON error envelope (HTTP 200).
-    const invalid=await play({action:'spin',bet:999,lines:5,denomination:1,request_id:'777'});
+    const invalid=await play({action:'spin',bet:1001,lines:5,denomination:1,request_id:'777'});
     assert.equal(invalid.status,200,'Pixi must not drop to lobby on invalid virtual bets');
     assert.equal(invalid.body.error?.code,400);
-    assert.match(invalid.body.error?.message||'',/Invalid Sizzling bet/);
+    assert.match(invalid.body.error?.message||'',/Casino stake must be between 20 and 5000 ALL/);
     assert.equal((await getUserById(player.id)).balance,after.balance,
       'rejected Pixi bet must never change the virtual wallet');
     const replay=await play(request);
@@ -183,10 +188,16 @@ try{
     "insert into app_player_controls(user_id,self_excluded_until) values($1,now()+interval '1 day') on conflict(user_id) do update set self_excluded_until=excluded.self_excluded_until",
     [player.id]);
   await assert.rejects(
-    placeCasinoSpin({userId:player.id,requestId:randomUUID(),bet:1,denomination:1,lines:5}),
+    placeCasinoSpin({userId:player.id,requestId:randomUUID(),bet:1,denomination:4,lines:5}),
     error => error?.status === 403);
+  const playerLedger=await query('select coalesce(sum(amount),0) as amount from app_transaction where user_id=$1',[player.id]);
+  assert.equal((await getUserById(player.id)).balance,round(10000+Number(playerLedger.rows[0].amount)),'player balance reconciles to posted casino debits and collections');
+  assert.equal((await getUserById(manager.id)).balance,10000,'stakes, payouts and gambles never change manager funds');
+  assert.equal(Number((await query('select count(*) as n from app_transaction where user_id=$1',[manager.id])).rows[0].n),0,'no automatic manager transaction');
   console.log('Casino wallet integration OK: player, manager, Sizzling ledger, idempotency, scoped finances, exclusion');
 }finally{
   await query('update app_casino_settings set enabled=false where id=1').catch(()=>{});
   await closePool();
+  assert.ok(resolve(root).startsWith(parent+sep));
+  await rm(root,{recursive:true,force:true});
 }

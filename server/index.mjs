@@ -1,3 +1,5 @@
+import {statsProviders} from './stats-providers/index.mjs';
+import {toClientMatches} from './ledger/view.mjs';
 import express from 'express';
 import cors from 'cors';
 import { existsSync } from 'node:fs';
@@ -13,28 +15,50 @@ import * as overrides from './ledger/overrides.mjs';
 import { ensureDefaultAccounts } from './ledger/auth.mjs';
 import { ledgerRouter } from './ledger/routes.mjs';
 import { adminRouter } from './ledger/admin.mjs';
+import {financialMonitoringRouter} from './ledger/financial-monitoring.mjs';
+import { directoryRouter } from './ledger/directory.mjs';
+import {matchSnapshots} from './ledger/match-snapshots.mjs';
+import {mergeTeamStats} from './match-statistics.mjs';
+import {pool as financialDatabase} from './db.mjs';
+import {withDatabaseRequest} from './database-request-context.mjs';
+import {createFinancialResetRouter} from './ledger/financial-reset.mjs';
 import { settleAll, voidUnresolved } from './ledger/settler.mjs';
 import { isFinished, archiveFinishedMatch } from './ledger/results.mjs';
 import { createPendingResultTracker } from './pending-results.mjs';
 import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
-  getSubscriptionIds, getFeedFreshness, matchStats, boostMatch,
+  getSubscriptionIds, getFeedFreshness, matchStats, boostMatch, upsertMatches, expireStaleMatches,
 } from './matches.mjs';
 import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
 import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
+import {startYbetsFeed} from './ybets-feed.mjs';
+import {startZizoFeed,isZizoId} from './zizobet-feed.mjs';
+import {startLegacyYbetsResults} from './legacy-ybets-results.mjs';
+import {isYbetsMatchId} from './ybets-normalize.mjs';
 import { startCollector, withOdds, buildMarkets, toDbOddsShape, statsFromRow } from './collector.mjs';
 import { liveClock } from './minute.mjs';
 import { liveRiskReason, riskMinute } from './live-risk.mjs';
 import { liveRiskSettings, subscribeLiveRiskSettings } from './live-risk-settings.mjs';
 import { freshFeed, freshSocketHeaders, liveBoardFacts } from './feed-sync.mjs';
 import { refreshLiveRiskSettings } from './ledger/live-risk-store.mjs';
-import { createIdleMonitor, getFeedMode } from './idle-mode.mjs';
+import { createIdleMonitor, getFeedMode, feedIsStopped } from './idle-mode.mjs';
+import {quoteValidUntil} from './ledger/quote-validity.mjs';
+import {projectOddsDelta} from './ledger/odds-delta.mjs';
+import {refreshMarketCatalog,onMarketPolicy} from './ledger/market-catalog-store.mjs';
+import {emitScopedOdds,setSocketScope,detailProjection,offeredMarket} from './market-delivery.mjs';
+import {isBoardOddsRow,projectClientBoardMatches} from './ledger/board-projection.mjs';
+import {catalogRows,categoryPolicies,scopeBlockRows} from './market-catalog.mjs';
+import {refreshBoardSettings} from './ledger/board-settings-store.mjs';
+import {subscribeBoardSettings,selectPublishedMatches,filterBoardSubscriptionPlan} from './board-settings.mjs';
 import { createVikingsRouter } from './casino/vikings-ct-router.mjs';
 import { createAgtRouter } from './casino/agt-router.mjs';
 import { createCtProtocolRouter } from './casino/clover-ct-router.mjs';
+import { fireJokerConfig, mapFireJokerRound } from './casino/firejoker-protocol.mjs';
+import { initialFireJokerGrid, spinFireJokerRound } from './casino/firejoker-engine.mjs';
 import {createOriginalWalletRouter,originalFrameShellRouter} from './casino/original-wallet.mjs';
+import { createFireJokerLauncherRouter } from './casino/firejoker-launcher.mjs';
 import { casinoWalletRouter } from './casino/wallet.mjs';
 import { casinoFinanceRouter } from './casino/finance.mjs';
 import {createSizzlingDemoRouter} from './casino/sizzling-demo.mjs';
@@ -43,9 +67,11 @@ import {createBookOfRaDemoRouter, createBookOfRaRealRouter, casinoBookOfRaSessio
 import { installGracefulShutdown } from './lifecycle.mjs';
 
 const app = express();
+app.use((_req,_res,next)=>withDatabaseRequest(financialDatabase,financialDatabase.generation,next));
 const corsOrigin = config.allowedOrigins.includes('*') ? true : config.allowedOrigins;
 
 let collector = null;
+let legacyYbetsResults=null;
 let pusher = null;
 let oddsStatus = { connected: false };
 let shuttingDown = false;
@@ -65,6 +91,7 @@ oddsStore.configure({ pinProvider: config.oddsProviderPin });
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '4mb' }));
+app.use(express.urlencoded({ extended: false, limit: '4mb' }));
 app.use(['/api', '/app/api'], freshFeed);
 
 const requireToken = (req, res, next) => {
@@ -118,7 +145,7 @@ let settlementBusy = false;
 let lastUnresolvedCheck = 0;
 // De-duplicate repeated full-time frames after durable result persistence.
 const archivedTerminalMatches = new Set();
-const pendingResults = createPendingResultTracker({query,archive:archiveFinishedMatch,isFinished,onArchived:()=>void runSettlement('pending provider final score')});
+const pendingResults = createPendingResultTracker({query,archive:archiveFinishedMatch,isFinished,saveSnapshot:row=>matchSnapshots.save(row),loadSnapshots:ids=>matchSnapshots.load(ids),onArchived:()=>void runSettlement('pending provider final score')});
 async function ensureLedgerSchema() {
   if (shuttingDown) return false;
   if (ledgerReady) return true;
@@ -126,6 +153,8 @@ async function ensureLedgerSchema() {
     await initSchema();
     await initLedgerSchema(); // users / transactions / tickets (additive, create-only)
     await refreshLiveRiskSettings({ initialize: true });
+    await refreshBoardSettings();
+    await refreshMarketCatalog({initialize:true});
     await ensureDefaultAccounts();
     // admin overrides live in the database and are read through a snapshot: warm it now so a
     // restart does not silently drop a suspension or a pinned price until someone edits again
@@ -160,9 +189,9 @@ function stopProbe() {
 
 armProbe();
 
-/* ------------------------------------------------------ always-on metrics
- * Visitor counts are informational. They never pause the feed or settlement.
- * ---------------------------------------------------------------------------- */
+/* --------------------------------------------------------- feed idle state
+ * App visitors keep the live provider feed and background settlement active.
+ * -------------------------------------------------------------------------- */
 
 const feedState = () => ({
   ...idle.state(),
@@ -189,6 +218,7 @@ async function runSettlement(why = 'periodic') {
   settlementBusy = true;
   settlementHealth.lastAttemptAt = new Date().toISOString();
   try {
+    trackBackground(statsProviders.tick().catch(()=>{}));
     const out = await settleAll();
     settlementHealth.lastSuccessAt = new Date().toISOString();
     settlementHealth.lastError = null;
@@ -237,7 +267,29 @@ function armSettlement() {
   settleTimer.unref?.();
 }
 
-const idle = createIdleMonitor({ onMode: () => broadcastFeedState() });
+const idle = createIdleMonitor({
+  enabled: process.env.FEED_IDLE_ENABLED !== 'false',
+  idleAfterMs: Number(process.env.FEED_IDLE_AFTER_MS ?? 60_000),
+  coldBootIdleMs: Number(process.env.FEED_IDLE_COLD_BOOT_MS ?? 60_000),
+  onIdle: () => {
+    collector?.pause?.();
+    pusher?.pause?.();
+    legacyYbetsResults?.pause?.();
+    stopProbe();
+    clearInterval(settleTimer);
+    settleTimer = null;
+    broadcastFeedState();
+  },
+  onWake: () => {
+    armProbe();
+    armSettlement();
+    collector?.resume?.();
+    pusher?.resume?.();
+    legacyYbetsResults?.resume?.();
+    broadcastFeedState();
+  },
+  onMode: () => broadcastFeedState(),
+});
 
 /**
  * What counts as a visitor: a board socket (see io.on('connection')) or a call to the app's
@@ -266,6 +318,7 @@ app.get('/health', (_req, res) => {
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
     pusher: pusher?.stats() ?? null,
+    statsProviders: statsProviders.health(),
     settlementWatch: pendingResults.stats(),
     settlement: {...settlementHealth,running:settlementBusy},
     // idle mode: 'live' | 'idle' | 'waking' plus the visitor counters, and what the tiers cost
@@ -274,7 +327,7 @@ app.get('/health', (_req, res) => {
       ...idle.state(),
       // the database probe is outbound traffic too: whether it is currently stopped is what
       // decides if the instance is really free to sleep
-      stopDbProbeOnIdle: config.idleStopDbProbe,
+      stopDbProbeOnIdle: idle.state().enabled,
       dbProbeStopped: probeTimer === null,
     },
     tiers: {
@@ -284,7 +337,8 @@ app.get('/health', (_req, res) => {
       unpricedMs: config.prematchUnpricedRefreshMs,
       enabled: config.prematchRefreshMs > 0,
     },
-    upstream: config.gateway,
+    sportsProvider: config.sportsProvider,
+    upstream: config.sportsProvider==='zizobet'?'https://zizobet.com':config.sportsProvider==='ybets'?'https://sportsbook.ybets.net':config.gateway,
     at: new Date().toISOString(),
   });
 });
@@ -329,8 +383,9 @@ app.get('/api/matches/:id', async (req, res, next) => {
     const row = await getMatchById(Number(req.params.id));
     if (!row) return res.status(404).json({ error: 'match not found' });
     boostMatch(row.match_id); // opened matches always get their full market list
-    pusher?.subscribeFull(row.match_id); // request full lines now, not next subscription tick
-    const [match] = await withOdds([row]);
+    if (['ybets','zizobet'].includes(config.sportsProvider) && (isYbetsMatchId(row.match_id)||isZizoId(row.match_id))) {await collector?.focus(row.match_id).catch(()=>{});await flushFeedBuffer();}
+    else pusher?.subscribeFull(row.match_id);
+    const [match] = await withOdds([row],Date.now(),{displayStats:true});
     res.json(match);
   } catch (e) {
     return next(e);
@@ -405,9 +460,11 @@ subscribeLiveRiskSettings(() => {
     for (const row of rows) await broadcastLiveRiskLocks(row.match_id ?? row.id, row);
   })().catch(e => console.error('[live risk] lock refresh failed:',e.message));
 });
+subscribeBoardSettings(()=>io?.emit('board:settings',{at:new Date().toISOString()}));
 
 /* ------------------------------------------------------------ odds ingestion */
 
+const publishedBoardKeys=new Map();
 async function broadcastOdds(changed) {
   if (!io || !changed.length) return;
   const byMatch = groupByMatch(changed);
@@ -416,7 +473,7 @@ async function broadcastOdds(changed) {
     // already hides it via serializeMatch, and pushing placeholder prices (41.00 / 1.29)
     // would only confuse the frontend.
     const row = await getMatchById(Number(matchId));
-    if (row && row.has_open_odds === false) continue;
+    if (!row || row.has_open_odds === false) continue;
     // Include live minute so the frontend can advance the clock even when
     // match-info-snapshot frames are rare
     const now = Date.now();
@@ -426,15 +483,19 @@ async function broadcastOdds(changed) {
         (row.clock_at ? Math.max(0, Math.floor((now - new Date(row.clock_at).getTime()) / 60000)) : 0)
       : null;
     const minute = feedMinute ?? clock.minute;
-    io.emit('odds:update', {
+    const payload={
       matchId,
       at: new Date().toISOString(),
       minute: Number.isFinite(minute) ? minute : undefined,
       clockAt: row.clock_at ? new Date(row.clock_at).toISOString() : undefined,
       phaseAt: row.feed_status_at ? new Date(row.feed_status_at).toISOString() : undefined,
       phase: row.phase ?? clock.phase ?? null,
-      markets: buildMarkets(toDbOddsShape(list)),
-    });
+      markets: projectOddsDelta(row,buildMarkets(toDbOddsShape(list.filter(o=>offeredMarket({market_name:o.marketName,market_key:o.marketKey},row))),{includeRemoved:true}),{matchOverride:overrides.matchOverride,marketOverride:overrides.marketOverride,outcomeOverride:overrides.outcomeOverride,prematchMaxAgeMs:config.prematchStaleMs,now}),
+    };
+    let boardKeys=new Set();
+    const boardConsidered=io.sockets.adapter.rooms.get('feed:board:'+matchId)?.size&&list.some(o=>isBoardOddsRow({market_name:o.marketName,period:o.period}));if(boardConsidered){const [full]=await withOdds([row],Date.now(),{board:true});const [board]=projectClientBoardMatches(toClientMatches([full]));boardKeys=new Set((board.markets??[]).map(m=>m.extId+'|'+(m.line??'')));}
+    const before=publishedBoardKeys.get(String(matchId));if(boardConsidered){payload.boardChanged=!!before&&[...new Set([...before,...boardKeys])].some(key=>before.has(key)!==boardKeys.has(key));publishedBoardKeys.set(String(matchId),boardKeys);if(before)boardKeys=new Set([...boardKeys,...before]);}
+    emitScopedOdds(io,payload,boardKeys);
     await broadcastLiveRiskLocks(matchId, row);
   }
 }
@@ -465,6 +526,7 @@ async function applyInfoFromFeed(info) {
   }
 
   const updated = await applyMatchInfo(enriched);
+  if(ledgerReady&&updated){try{await matchSnapshots.save(updated);}catch(error){console.error('[settle] provider snapshot persistence failed:',info.matchId,error.message);}}
   if (ledgerReady) {
     try { await pendingResults.observe(enriched, updated); }
     catch(error) { console.error('[settle] pending final snapshot could not be saved:',info.matchId,error.message); }
@@ -505,7 +567,8 @@ function mergeInfo(prev, next) {
     homeScore: Number.isFinite(next.homeScore) ? next.homeScore : prev.homeScore,
     awayScore: Number.isFinite(next.awayScore) ? next.awayScore : prev.awayScore,
     periodsScore: next.periodsScore?.length ? next.periodsScore : prev.periodsScore,
-    stats: next.stats ? { ...(prev.stats ?? {}), ...next.stats } : prev.stats,
+    events: Array.isArray(next.events)?next.events:prev.events,
+    stats: next.stats ? mergeTeamStats(prev.stats,next.stats) : prev.stats,
     feedStatus: next.feedStatus ?? prev.feedStatus,
     hasOpenOdds: next.hasOpenOdds ?? prev.hasOpenOdds,
     broadcastUrl: next.broadcastUrl ?? prev.broadcastUrl,
@@ -643,9 +706,14 @@ app.post('/ingest/frames', requireToken, async (req, res, next) => {
 
 // Detail-page GETs need complete markets immediately, including distant prematch
 // fixtures which otherwise stay on the hourly base-only subscription tier.
-app.use('/app/api/matches/:id', (req, _res, next) => {
-  if (req.method === 'GET') pusher?.subscribeFull(req.params.id);
-  next();
+app.use('/app/api/matches/:id', async (req, _res, next) => {
+  try {
+    if (req.method === 'GET') {
+      if(['ybets','zizobet'].includes(config.sportsProvider)&&(isYbetsMatchId(req.params.id)||isZizoId(req.params.id))) {await collector?.focus(Number(req.params.id)).catch(()=>{});await flushFeedBuffer();}
+      else pusher?.subscribeFull(req.params.id);
+    }
+    next();
+  } catch(error) { next(error); }
 });
 
 // Sizzling Hot Deluxe — REAL player wallet (sportsbook balance).
@@ -659,8 +727,83 @@ app.use('/app/api', casinoBookOfRaSessionRouter);
 app.use('/app/api/casino/original',createOriginalWalletRouter());
 app.use('/app/casino-original',originalFrameShellRouter);
 
+// Play'n GO Fire Joker 8.1.3 ContainerLauncher resolves game metadata from
+// `/games/getgamebygid/:gid` on the SAME origin as the game URL. Without it the
+// loader stalls at getGameByGid and the canvas stays black. The endpoint is a
+// pure metadata shim: it never touches balances or balances math. Real
+// spins still settle against `original-wallet.mjs`.
+app.get('/games/getgamebygid/:gid', (req, res) => {
+  const gid = String(req.params.gid || 'firejoker');
+  res.json({
+    Gid: gid,
+    GameId: 'firejoker',
+    GameName: 'Fire Joker',
+    gId: gid,
+    gameId: 'firejoker',
+    name: 'Fire Joker',
+    ProductGroup: 2,
+    Practice: 0,
+    Language: 'en_GB',
+    Channel: 'desktop',
+    Currency: 'ALL',
+    Brand: 'png',
+    ContextId: '',
+    ShowPoweredBy: false,
+    CoreWebUrl: (req.protocol || 'http') + '://' + (req.get('host') || 'localhost') + '/app/casino-original/firejoker/provider-original/8.1.3-firejoker.292/',
+    ResourceRoot: '/app/casino-original/firejoker/provider-original/8.1.3-firejoker.292/',
+    Country: 'AL',
+    Region: 'AL',
+    Jurisdiction: 'AL',
+    ExternalId: '',
+    Ticket: '',
+    SessionId: 'wallet-session',
+  });
+});
+app.get('/games/getgamebygameid/:gameId', (req, res) => {
+  const gid = 'firejoker';
+  res.json({
+    Gid: gid,
+    GameId: String(req.params.gameId || 'firejoker'),
+    GameName: 'Fire Joker',
+    gId: gid,
+    gameId: String(req.params.gameId || 'firejoker'),
+    name: 'Fire Joker',
+    ProductGroup: 2,
+    Practice: 0,
+    Language: 'en_GB',
+    Channel: 'desktop',
+    Currency: 'ALL',
+    Brand: 'png',
+    ContextId: '',
+    ShowPoweredBy: false,
+    CoreWebUrl: (req.protocol || 'http') + '://' + (req.get('host') || 'localhost') + '/app/casino-original/firejoker/provider-original/8.1.3-firejoker.292/',
+    ResourceRoot: '/app/casino-original/firejoker/provider-original/8.1.3-firejoker.292/',
+    Country: 'AL',
+    Region: 'AL',
+    Jurisdiction: 'AL',
+    ExternalId: '',
+    Ticket: '',
+    SessionId: 'wallet-session',
+  });
+});
+
+// Play'n GO 8.1.3's ContainerLauncher replaces the pathname with
+// `/configuration/v2` when it requests its configuration. It therefore calls
+// the domain root, even when the game assets live under the versioned folder.
+// Keep this root route pointed at the same local Fire Joker assets.
+app.use('/', createFireJokerLauncherRouter());
+
 // Isolated demo protocol (virtual credits, no wallet) — kept for staff testing.
 app.use('/app/api/casino/luckycloverx3',createCtProtocolRouter());
+app.use('/app/api/casino/firejoker', createCtProtocolRouter({
+  spinFn: (bet, _lines, options = {}) => spinFireJokerRound({ stakeCents: Number(bet), mathProfile: options.mathProfile }),
+  configFn: fireJokerConfig,
+  initialGrid: options => initialFireJokerGrid(options),
+  selectedLines: 5,
+  mapRound: mapFireJokerRound,
+  cookieName: 'ct_firejoker_demo',
+  apiPath: '/app/api/casino/firejoker',
+}));
 app.use('/app/api/casino/vikingsfun', createVikingsRouter());
 app.use('/app/api/casino/agt', createAgtRouter());
 app.use('/app/api/casino/sizzlinghotdeluxe',createSizzlingDemoRouter());
@@ -670,6 +813,9 @@ app.use('/app/api/casino/bookofra',createBookOfRaDemoRouter());
 app.use('/app/api', casinoWalletRouter);
 app.use('/app/api', casinoFinanceRouter);
 app.use('/app/api', adminRouter);
+app.use('/app/api', financialMonitoringRouter);
+app.use('/app/api', directoryRouter);
+app.use('/app/api',createFinancialResetRouter({onReset:async()=>{await pendingResults.refresh();io?.emit('finance:reset',{requiresLogin:true});}}));
 app.use('/app/api', ledgerRouter);
 
 const webDist = fileURLToPath(new URL('../web/dist/', import.meta.url));
@@ -688,6 +834,22 @@ if (existsSync(webDist)) {
       fallthrough:false,
       setHeaders:staticCacheHeaders,
     }));
+  app.use('/app/casino-original/prophecy-ra-demo',
+    express.static(path.join(webDist,'casino-original/prophecy-ra-demo'),{
+      fallthrough:false,
+      setHeaders:staticCacheHeaders,
+    }));
+  // Play'n GO 8.1.3 ContainerLauncher shim: the launcher fetches
+  // configuration/v2 and configuration/prelaunchconfiguration from the same
+  // origin as the game. Mount these BEFORE the static handler so they take
+  // precedence over any stale JSON left in the build.
+  app.use('/app/casino-original/firejoker/provider-original/8.1.3-firejoker.292', createFireJokerLauncherRouter());
+  app.use('/app/casino-original/firejoker',
+    express.static(path.join(webDist,'casino-original/firejoker'),{
+      fallthrough:false,
+      setHeaders:staticCacheHeaders,
+    }));
+  app.use('/app/casino-original/fortune-teller',express.static(path.join(webDist,'casino-original/fortune-teller'),{fallthrough:false,setHeaders:staticCacheHeaders}));
   app.use('/app', express.static(webDist,{setHeaders:staticCacheHeaders}));
   // deep links (/app/login, /app/admin, ...) fall through to the SPA shell
   app.get(/^\/app(?!\/api)(\/.*)?$/, (_req, res) => {
@@ -721,10 +883,26 @@ const io = new SocketServer(server, {
   cors: { origin: corsOrigin },
   path: '/socket.io',
 });
+onMarketPolicy(()=>io.emit('markets:policy',{markets:catalogRows(),categories:categoryPolicies(),scopes:scopeBlockRows()}));
 io.engine.on('headers', freshSocketHeaders);
 
 io.on('connection', async (socket) => {
   if (shuttingDown) return socket.disconnect(true);
+  socket.join('feed:legacy');
+  socket.on('feed:scope',value=>{
+    const version=socket.data.scopeVersion=(socket.data.scopeVersion??0)+1;
+    socket.data.scopeQueue=(socket.data.scopeQueue??Promise.resolve()).catch(()=>{}).then(async()=>{
+    if(version!==socket.data.scopeVersion||!socket.connected||shuttingDown)return;socketTasks++;
+    try{const previous=socket.data.feedScope;const scope=await setSocketScope(socket,value);const interested=new Set([...scope.boardIds,...(scope.detail?[scope.detail.id]:[]),...scope.selectionIds.map(id=>id.split('|')[0])]);const pending=socket.data.pendingScopeSnapshots??new Set();socket.data.pendingScopeSnapshots=pending;for(const id of [...pending])if(!interested.has(id))pending.delete(id);for(const id of scope.boardIds)if(!previous?.boardIds.includes(id))pending.add(id);if(scope.detail&&(scope.detail.id!==previous?.detail?.id||scope.detail.category!==previous?.detail?.category))pending.add(scope.detail.id);for(const key of scope.selectionIds)if(!previous?.selectionIds.includes(key))pending.add(key.split('|')[0]);const ids=[...pending];
+      for(const id of ids){if(!socket.connected||socket.data.scopeVersion!==version)return;const row=await getMatchById(Number(id));if(!row){pending.delete(id);continue;}const [full]=await withOdds([row],Date.now(),{board:scope.detail?.id!==id&&!scope.selectionIds.some(key=>key.startsWith(id+'|')),displayStats:scope.detail?.id===id});const [client]=toClientMatches([full]);
+        const board=projectClientBoardMatches([client])[0],keys=new Set((board.markets??[]).map(m=>m.extId+'|'+(m.line??''))),selected=new Set(scope.selectionIds);if(scope.boardIds.includes(id))publishedBoardKeys.set(id,keys);
+        const detail=scope.detail?.id===id?new Set(detailProjection(client,scope.detail.category).markets.map(m=>m.extId+'|'+(m.line??''))):new Set();
+        const markets=(full.markets??[]).filter(m=>offeredMarket(m)).map(m=>({...m,outcomes:(m.outcomes??[]).filter(o=>(scope.boardIds.includes(id)&&keys.has(m.key+'|'+(m.line??'')))||detail.has(m.key+'|'+(m.line??''))||selected.has(id+'|'+m.key+'|'+(m.line??'')+'|'+o.key)).map(o=>({...o,priceValidUntil:quoteValidUntil(o.priceUpdatedAt,row,config.prematchStaleMs)}))})).filter(m=>m.outcomes.length);
+        if(socket.data.scopeVersion===version){if(markets.length)socket.emit('odds:update',{matchId:id,at:new Date().toISOString(),markets:projectOddsDelta(row,markets,{matchOverride:overrides.matchOverride,marketOverride:overrides.marketOverride,outcomeOverride:overrides.outcomeOverride,prematchMaxAgeMs:config.prematchStaleMs})});pending.delete(id);}
+      }
+    }catch(e){console.warn('[feed scope]',e.message);}finally{socketTasks--;}
+    });
+  });
   // a visitor: the feed must be live while this socket is open (idle mode wakes it here)
   idle.clientOpen();
   socket.on('disconnect', () => idle.clientClose());
@@ -740,7 +918,7 @@ io.on('connection', async (socket) => {
     // while waking, the collector's own broadcast carries the first board (it emits to every
     // socket), so this must not send an empty list first
     if (getFeedMode() !== 'live') return;
-    const rows = await getMatches({ service: 'LIVE', limit: 500 });
+    const rows = await getMatches({ service: 'LIVE', catalog:true });
     socket.emit('matches:live', {
       at: new Date().toISOString(),
       counts,
@@ -771,14 +949,17 @@ const soonWindowMs = () => (tieredPrematch() ? Math.max(0, config.prematchSoonMi
  * "hide matches without prices" rule would keep a new fixture invisible for up to an hour.
  */
 async function subscriptionPlan() {
+  if(['ybets','zizobet'].includes(config.sportsProvider))return {live:[],prematch:[],prematchSoon:[],prematchLater:[],unpriced:[],pendingResults:pendingResults.ids().filter(id=>!isYbetsMatchId(id)&&!isZizoId(id))};
   const ids = await getSubscriptionIds({
-    liveLimit: Number(process.env.SUBSCRIBE_LIVE_LIMIT ?? 250),
-    prematchLimit: Number(process.env.SUBSCRIBE_PREMATCH_LIMIT ?? 150),
+    liveLimit: 0,
+    prematchLimit: 0,
     soonMs: soonWindowMs(),
   });
-  const prematch = ids.prematch ?? [];
+  const visible=selectPublishedMatches(await getMatches({catalog:true})).rows;
+  const filtered=filterBoardSubscriptionPlan(ids,visible,{prematchLimit:0,soonMs:soonWindowMs()});
+  const prematch = filtered.prematch ?? [];
   return {
-    ...ids,
+    ...filtered,
     pendingResults: pendingResults.ids(),
     // ODDS_STORE=db keeps prices in Postgres, where there is no cheap "has a price?" check
     unpriced: config.oddsStore === 'db' ? [] : oddsStore.missingPrices(prematch),
@@ -799,7 +980,9 @@ async function boot() {
   // DB remains authoritative when multiple instances serve the sportsbook.
   // For betting, the policy is reread under the singleton row lock regardless.
   riskRefreshTimer = setInterval(() => {
-    if (!shuttingDown && ledgerReady) trackBackground(refreshLiveRiskSettings().catch(e =>
+    if(!shuttingDown&&!feedIsStopped()&&ledgerReady)trackBackground(refreshMarketCatalog().catch(e=>console.warn('[market catalog]',e.message)));
+    if (!shuttingDown && !feedIsStopped() && ledgerReady) trackBackground(refreshBoardSettings().catch(e=>console.warn('[board settings] refresh failed:',e.message)));
+    if (!shuttingDown && !feedIsStopped() && ledgerReady) trackBackground(refreshLiveRiskSettings().catch(e =>
       console.warn('[live risk] refresh failed:',e.message)));
   }, 10000);
   riskRefreshTimer.unref?.();
@@ -809,9 +992,34 @@ async function boot() {
   armSettlement();
   if (!ledgerReady) console.warn('[settle] waiting for ledger; will start automatically after DB recovery');
 
-  collector = startCollector({ io });
+  if(['ybets','zizobet'].includes(config.sportsProvider)) {
+    if(config.oddsStore==='db'||config.matchStore==='db')throw new Error('Ybets requires MATCH_STORE=memory and ODDS_STORE=memory; the financial database remains local.');
+    collector=(config.sportsProvider==='zizobet'?startZizoFeed:startYbetsFeed)({
+      pollMs:config.pollIntervalMs,
+      onMatch:row=>upsertMatches([row]),
+      onOdds:rows=>{oddsBuffer.push(...rows);},
+      onInfo:info=>{if(info.homeScore==null&&info.matchTimeMs==null)return applyMatchInfo(info);infoBuffer.set(info.matchId,mergeInfo(infoBuffer.get(info.matchId),info));},
+      onStatus:s=>{oddsStatus={...oddsStatus,...s,provider:config.sportsProvider.toUpperCase()};io.emit('odds:socket',oddsStatus);},
+      onCycle:async()=>{
+        idle.markLive();
+        broadcastFeedState();
+        await expireStaleMatches(180);
+        const rows=await getMatches({service:'LIVE',catalog:true});
+        const matches=await withOdds(rows),counts=await getCounts();
+        io.emit('matches:live',{at:new Date().toISOString(),counts,matches:liveBoardFacts(matches)});
+      },
+      selectRows:rows=>{
+        const visible=selectPublishedMatches(rows.filter(r=>!['closed','uncovered','ended'].includes(r.status))).rows;
+        return visible;
+      },
+      getWatchedIds:()=>pendingResults.ids(),
+    });
+  } else if(config.sportsProvider==='luckybet') {
+    collector=startCollector({io,onCycle:()=>{idle.markLive();broadcastFeedState();}});
+  } else throw new Error('SPORTS_PROVIDER must be zizobet, ybets or luckybet');
 
-  if (process.env.ODDS_SOCKET === 'true') {
+  if(config.sportsProvider==='zizobet'&&process.env.LEGACY_YBETS_RESULTS==='true')legacyYbetsResults=startLegacyYbetsResults({getIds:()=>pendingResults.ids(),onFinal:(info,row)=>pendingResults.observe(info,row)});
+  if (process.env.ODDS_SOCKET === 'true' && config.sportsProvider === 'luckybet') {
     const resubscribeMs = Number(process.env.RESUBSCRIBE_MS ?? 20000);
     pusher = startPusher({
       getIds: () => subscriptionPlan(),
@@ -826,11 +1034,10 @@ async function boot() {
       prematchSoonMs: tieredPrematch() ? config.prematchSoonRefreshMs : resubscribeMs,
       prematchLaterMs: tieredPrematch() ? config.prematchRefreshMs : resubscribeMs,
       prematchUnpricedMs: tieredPrematch() ? config.prematchUnpricedRefreshMs : resubscribeMs,
-      onOdds: (rows) => oddsBuffer.push(...rows),
+      onOdds: (rows) => {if(!['ybets','zizobet'].includes(config.sportsProvider))oddsBuffer.push(...rows);},
       onInfo: (info) => infoBuffer.set(info.matchId, mergeInfo(infoBuffer.get(info.matchId), info)),
       onStatus: (s) => {
-        oddsStatus = { ...oddsStatus, ...s };
-        io.emit('odds:socket', oddsStatus);
+        if(!['ybets','zizobet'].includes(config.sportsProvider)){oddsStatus = { ...oddsStatus, ...s };io.emit('odds:socket', oddsStatus);}
       },
     });
     console.log(
@@ -845,7 +1052,8 @@ async function boot() {
     console.log('[odds] server-side subscription off (set ODDS_SOCKET=true); the browser relay still feeds /ingest/frames');
   }
 
-  console.log('[server] always-on: feed, database checks and settlement continue without visitors.');
+  idle.start();
+  console.log(`[idle] ${idle.state().enabled ? 'enabled' : 'disabled'}; feed pauses after ${Math.round(idle.state().idleAfterMs / 1000)}s without visitors.`);
 
 }
 
@@ -857,6 +1065,7 @@ installGracefulShutdown({
     shuttingDown = true;
     idle.stop();
     collector?.stop();
+    legacyYbetsResults?.stop();
     pusher?.close();
     stopProbe();
     clearInterval(settleTimer);
@@ -864,6 +1073,8 @@ installGracefulShutdown({
     clearInterval(riskRefreshTimer);
   },
   async waitForBackground() {
+    await collector?.drain?.();
+    await legacyYbetsResults?.drain();
     while (backgroundTasks.size || collector?.state.running || settlementBusy || flushing || socketTasks) {
       await new Promise(resolve => setTimeout(resolve, 20));
     }

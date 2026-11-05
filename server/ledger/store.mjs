@@ -7,7 +7,7 @@
  */
 import { query, pool } from '../db.mjs';
 import { LEDGER_SQL } from './schema.mjs';
-import { getManagerCommissionRates } from './manager-finance.mjs';
+import { getManagerCommissionRates, managerCommissionReport } from './manager-finance.mjs';
 import { removePlayer } from './user-removal.mjs';
 
 export async function initLedgerSchema() {
@@ -24,7 +24,7 @@ export const isLedgerReady = () => ledgerReady;
 
 /** the only columns ever returned to clients - never the password hash */
 const USER_COLUMNS = `u.id, u.username, u.role, u.status, u.balance, u.currency,
-                      u.manager_id as "managerId", u.created_at, u.updated_at`;
+                      u.manager_id as "managerId", u.agent_id as "agentId", u.financial_epoch as "financialEpoch", u.created_at, u.updated_at`;
 
 export const publicUser = (row) =>
   row
@@ -35,7 +35,9 @@ export const publicUser = (row) =>
         status: row.status,
         balance: Number(row.balance ?? 0),
         currency: row.currency ?? 'LEK',
-        managerId: row.managerId ?? null,
+        managerId: row.managerId ?? row.manager_id ?? null,
+        agentId: row.agentId ?? row.agent_id ?? null,
+        financialEpoch: Number(row.financialEpoch ?? row.financial_epoch ?? 0),
         manager: row.managerUsername ? { id: row.managerId, username: row.managerUsername } : null,
         _count: row.managedUsers !== undefined ? { managedUsers: Number(row.managedUsers) } : undefined,
         createdAt: row.created_at,
@@ -211,11 +213,13 @@ export async function moveManagerFunds(managerId, playerId, amount, direction) {
 
 export async function managerFinancials(managerId = null, {runQuery = query} = {}) {
   const commissionRates = await getManagerCommissionRates(runQuery);
+  const commissions = await managerCommissionReport(runQuery);
   const managers = await runQuery(
     `select m.id, m.username, m.balance,
             coalesce(p.player_balance, 0) as player_balance,
             coalesce(t.total_stake, 0) as total_stake,
             coalesce(t.won_payouts, 0) as won_payouts,
+            coalesce(t.settled_stake, 0) as settled_stake,
             coalesce(t.lost_stake, 0) as lost_stake,
             coalesce(c.commission, 0) as commission,
             coalesce(t.ticket_count, 0) as ticket_count,
@@ -227,7 +231,8 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
        ) p on true
        left join lateral (
          select coalesce(sum(t.stake) filter (where t.status not in ('REVERTED', 'VOID')), 0) as total_stake,
-                coalesce(sum(t.potential_payout) filter (where t.status = 'WON'), 0) as won_payouts,
+                coalesce(sum(coalesce((select sum(x.amount) from app_transaction x where x.reference_id=t.id and x.user_id=t.user_id and x.type='BET_WON'),0)) filter (where t.status = 'WON'), 0) as won_payouts,
+                coalesce(sum(t.stake) filter (where t.status in ('WON','LOST')),0) as settled_stake,
                 coalesce(sum(t.stake) filter (where t.status = 'LOST'), 0) as lost_stake,
                 count(distinct coalesce('SYS-'||b.id::text,t.id::text))::int as ticket_count
            from app_ticket t
@@ -257,11 +262,13 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
       totalStake,
       wonPayouts,
       lostStake: Number(row.lost_stake ?? 0),
-      commission: Number(row.commission ?? 0),
+      commission: 0, sportCommission: 0, casinoCommission: 0,
+      ...commissions.managers.get(row.id),
+      commissionBasis: 'REPORT_ONLY_ON_STAKE',
       commissionRates,
       ticketCount: Number(row.ticket_count ?? 0),
       playerCount: Number(row.player_count ?? 0),
-      netDifference: Number((totalStake - wonPayouts).toFixed(2)),
+      netDifference: Number((Number(row.settled_stake ?? row.settledStake ?? 0) - wonPayouts).toFixed(2)),
     };
   });
   if (managerId) {
@@ -270,6 +277,7 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
               coalesce(t.ticket_count, 0) as "ticketCount",
               coalesce(t.total_stake, 0) as "totalStake",
               coalesce(t.won_payouts, 0) as "wonPayouts",
+              coalesce(t.settled_stake, 0) as "settledStake",
               coalesce(t.lost_stake, 0) as "lostStake",
               coalesce(c.commission, 0) as commission,
               coalesce(c.single_commission, 0) as single_commission,
@@ -279,7 +287,8 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
          left join lateral (
            select count(distinct coalesce('SYS-'||b.id::text,t.id::text))::int as ticket_count,
                   coalesce(sum(t.stake) filter (where t.status not in ('REVERTED', 'VOID')), 0) as total_stake,
-                  coalesce(sum(t.potential_payout) filter (where t.status = 'WON'), 0) as won_payouts,
+                  coalesce(sum(coalesce((select sum(x.amount) from app_transaction x where x.reference_id=t.id and x.user_id=t.user_id and x.type='BET_WON'),0)) filter (where t.status = 'WON'), 0) as won_payouts,
+                  coalesce(sum(t.stake) filter (where t.status in ('WON','LOST')),0) as settled_stake,
                   coalesce(sum(t.stake) filter (where t.status = 'LOST'), 0) as lost_stake
              from app_ticket t left join app_ticket_batch b on b.ticket_ids @> ARRAY[t.id] and t.user_id=b.user_id
              where t.user_id = u.id
@@ -317,14 +326,12 @@ export async function managerFinancials(managerId = null, {runQuery = query} = {
           totalStake,
           wonPayouts,
           lostStake: Number(row.lostStake ?? 0),
-          commission: Number(row.commission ?? 0),
-          commissionByTier: {
-            single: Number(row.single_commission ?? 0),
-            double: Number(row.double_commission ?? 0),
-            multi: Number(row.multi_commission ?? 0),
-          },
+          commission: 0,
+          commissionByTier: { single: 0, double: 0, multi: 0 },
+          sportCommission: 0, casinoCommission: 0,
+          ...commissions.players.get(row.id),
           commissionRates,
-          netDifference: Number((totalStake - wonPayouts).toFixed(2)),
+          netDifference: Number((Number(row.settledStake ?? 0) - wonPayouts).toFixed(2)),
         };
       }),
     };

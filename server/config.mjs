@@ -13,6 +13,7 @@ const list = (v, fallback) =>
     .filter(Boolean);
 
 export const config = {
+  sportsProvider: (process.env.SPORTS_PROVIDER ?? 'zizobet').trim().toLowerCase(),
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: process.env.NODE_ENV ?? 'development',
 

@@ -17,8 +17,10 @@ interface PlayerFinancial {
   wonPayouts: number;
   lostStake: number;
   commission: number;
-  commissionByTier: { single: number; double: number; multi: number };
-  commissionRates: { single: number; double: number; multi: number };
+  sportCommission: number;
+  casinoCommission: number;
+  commissionByTier: { single: number; double: number; multi: number; casino: number };
+  commissionRates: { single: number; double: number; multi: number; casino: number };
   netDifference: number;
 }
 
@@ -29,7 +31,9 @@ interface ManagerFinancial {
   wonPayouts: number;
   lostStake: number;
   commission: number;
-  commissionRates: { single: number; double: number; multi: number };
+  sportCommission: number;
+  casinoCommission: number;
+  commissionRates: { single: number; double: number; multi: number; casino: number };
   netDifference: number;
 }
 
@@ -272,14 +276,15 @@ export default function ManagerPage() {
                     <div className="mt-2 text-2xl font-black text-white">{users.filter(u => u.status === 'ACTIVE').length}</div>
                   </div>
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><Wallet size={15} /> {" " + t("Fonde në dispozicion")}</div>
-                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{financials.manager.balance.toFixed(2)} {" " + t("Lëk")}</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><Wallet size={15} /> {" " + t("Komisioni i sporteve")}</div>
+                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{(financials.manager.sportCommission ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                   <div className="rounded-xl border border-tertiary bg-secondary p-4">
-                    <div className="flex items-center gap-2 text-xs text-text-secondary"><BarChart3 size={15} /> {" " + t("Diferenca neto")}</div>
-                    <div className={`mt-2 text-lg sm:text-xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} {" " + t("Lëk")}</div>
+                    <div className="flex items-center gap-2 text-xs text-text-secondary"><BarChart3 size={15} /> {" " + t("Komisioni i slot machine")}</div>
+                    <div className="mt-2 text-lg sm:text-xl font-black text-white">{(financials.manager.casinoCommission ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
                   </div>
                 </div>
+                <p className="text-xs leading-relaxed text-text-secondary">{t("Komisionet janë vetëm raport; llogaritjet bëhen veçmas, pa ndryshuar bilancin.")}</p>
                 <button
                   type="button"
                   onClick={() => setShowFinancialDetails(open => !open)}
@@ -295,28 +300,29 @@ export default function ManagerPage() {
                   <div className={`mt-1 text-2xl font-black ${financials.manager.netDifference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {financials.manager.netDifference >= 0 ? '+' : ''}{financials.manager.netDifference.toFixed(2)} {" " + t("Lëk") + " "}{t(financials.manager.netDifference >= 0 ? 'në PLUS' : 'në MINUS')}
                   </div>
-                  <div className="mt-1 text-xs text-text-secondary">{t("Diferenca = fonde të luajtura − pagesat fituese")}</div>
+                  <div className="mt-1 text-xs text-text-secondary">{t("Diferenca = baste të mbyllura − pagesat reale të fitimeve")}</div>
                 </div>
                 <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
                   {([
-                    [t("Fonde në dispozicion"), financials.manager.balance],
+                    [t("Komisioni i sporteve"), financials.manager.sportCommission],
                     [t("Fonde të luajtura"), financials.manager.totalStake],
                     ['Fitime të paguara', financials.manager.wonPayouts],
                     ['Humbje të lojtarëve', financials.manager.lostStake],
                     [t("Bilanci i lojtarëve"), financials.manager.playerBalance],
-                    [t("Komision i zbritur"), financials.manager.commission],
+                    [t("Komisioni i slot machine"), financials.manager.casinoCommission],
                   ] as const).map(([label, value]) => (
-                    <div key={label} className={`rounded-xl border bg-secondary p-4 ${label === t('Fonde në dispozicion') ? 'border-amber-500/30' : 'border-tertiary'}`}>
+                    <div key={label} className={`rounded-xl border bg-secondary p-4 ${label === t('Komisioni i sporteve') ? 'border-amber-500/30' : 'border-tertiary'}`}>
                       <div className="text-xs text-text-secondary">{t(label)}</div>
-                      <div className={`mt-1 text-lg font-bold ${label === t('Fonde në dispozicion') ? 'text-amber-300' : 'text-white'}`}>{Number(value).toFixed(2)} {" " + t("Lëk")}</div>
+                      <div className={`mt-1 text-lg font-bold ${label === t('Komisioni i sporteve') ? 'text-amber-300' : 'text-white'}`}>{Number(value).toFixed(2)} {" " + t("Lëk")}</div>
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-tertiary bg-secondary px-4 py-3 text-xs text-text-secondary">
-                  <span className="font-semibold text-white">{t("Komisioni zbritet nga bilanci yt kur vendoset basti:")}</span>
+                  <span className="font-semibold text-white">{t("Komisionet janë vetëm raport; llogaritjet bëhen veçmas, pa ndryshuar bilancin.")}</span>
                   <span>{t("1 zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.single}%</b></span>
                   <span>{t("2 zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.double}%</b></span>
                   <span>{t("3+ zgjedhje") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.multi}%</b></span>
+                  <span>{t("Slot machine") + " "}<b className="text-accent-yellow">{financials.manager.commissionRates.casino}%</b></span>
                 </div>
                 <FinancialChart
                   title={t("Grafiku financiar")}
@@ -325,9 +331,9 @@ export default function ManagerPage() {
                     { label: 'Fonde të luajtura', value: financials.manager.totalStake, color: 'bg-sky-400' },
                     { label: 'Pagesa fituese', value: financials.manager.wonPayouts, color: 'bg-emerald-400' },
                     { label: 'Humbje të lojtarëve', value: financials.manager.lostStake, color: 'bg-rose-400' },
-                    { label: 'Komision i zbritur', value: financials.manager.commission, color: 'bg-amber-400' },
+                    { label: 'Komisioni i sporteve', value: financials.manager.sportCommission, color: 'bg-amber-400' },
                     { label: 'Bilanci i lojtarëve', value: financials.manager.playerBalance, color: 'bg-violet-400' },
-                    { label: 'Fonde në dispozicion', value: financials.manager.balance, color: 'bg-cyan-400' },
+                    { label: 'Komisioni i slot machine', value: financials.manager.casinoCommission, color: 'bg-cyan-400' },
                     { label: 'Diferenca neto', value: financials.manager.netDifference, color: 'bg-fuchsia-400' },
                   ]}
                 />
@@ -397,7 +403,8 @@ export default function ManagerPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-2 rounded-lg bg-secondary p-3 text-xs">
                           <div><span className="block text-text-secondary">{t("Fonde të luajtura")}</span><strong className="mt-1 block text-white">{(finance?.totalStake ?? 0).toFixed(2)} {" " + t("Lëk")}</strong></div>
-                          <div><span className="block text-text-secondary">{t("Diferenca neto")}</span><strong className={`mt-1 block ${(finance?.netDifference ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(finance?.netDifference ?? 0).toFixed(2)} {" " + t("Lëk")}</strong></div>
+                          <div><span className="block text-text-secondary">{t("Komisioni i sporteve")}</span><strong className="mt-1 block text-amber-300">{(finance?.sportCommission ?? 0).toFixed(2)} {t("Lëk")}</strong></div>
+                          <div><span className="block text-text-secondary">{t("Komisioni i slot machine")}</span><strong className="mt-1 block text-cyan-300">{(finance?.casinoCommission ?? 0).toFixed(2)} {t("Lëk")}</strong></div>
                         </div>
                         <button type="button" onClick={()=>{setFinanceUserId(u.id);setTab('finance');}} className="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-300">{t("Financat Sport + Kazino")}</button>
                         <div className="grid grid-cols-2 gap-2">
@@ -460,7 +467,8 @@ export default function ManagerPage() {
                                 <div className="text-xs text-text-secondary">{(finance?.lostStake ?? 0).toFixed(2)} {" " + t("Lëk humbje")}</div>
                               </td>
                               <td className="p-4 text-right">
-                                <div className="font-semibold text-white">{(finance?.commission ?? 0).toFixed(2)} {" " + t("Lëk total")}</div>
+                                <div className="font-semibold text-white">{t("Komisioni i sporteve")}: {(finance?.sportCommission ?? 0).toFixed(2)} {t("Lëk")}</div>
+                                <div className="mt-1 text-xs text-cyan-300">{t("Komisioni i slot machine")}: {(finance?.casinoCommission ?? 0).toFixed(2)} {t("Lëk")}</div>
                                 <div className="mt-1 space-y-0.5 text-[11px] text-text-secondary">
                                   <div>{finance?.commissionRates.single ?? financials?.manager.commissionRates.single ?? 3}{t("% teke:") + " "}{(finance?.commissionByTier.single ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
                                   <div>{finance?.commissionRates.double ?? financials?.manager.commissionRates.double ?? 5}{t("% dyshe:") + " "}{(finance?.commissionByTier.double ?? 0).toFixed(2)} {" " + t("Lëk")}</div>
@@ -596,10 +604,12 @@ export default function ManagerPage() {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <div className="text-xs text-text-secondary">{t("Shuma / Fitimi")}</div>
+                            <div className="text-xs text-text-secondary">{t('Shuma / Fitimi i mundshëm')}{ticket.potentialPayoutIsEstimated ? ' · '+t('i rindërtuar') : ''}</div>
                             <div className="text-sm font-bold text-white">
-                              {ticket.stake.toFixed(2)} {" " + t("Lëk →") + " "}<span className="text-accent-green">{(ticket.system && ticket.status !== 'PENDING' ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} {" " + t("Lëk")}</span>
+                              {ticket.stake.toFixed(2)} {" " + t("Lëk →") + " "}<span className="text-accent-green">{ticket.potentialPayout.toFixed(2)} {" " + t("Lëk")}</span>
                             </div>
+                            {ticket.potentialPayoutIsEstimated && <div className="text-xs text-text-secondary" title={t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur; shuma origjinale nuk ishte ruajtur.')}>{t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur.')}</div>}
+                            {ticket.actualPayout != null && (ticket.status !== 'PENDING' || ticket.actualPayout > 0) && <div className="text-xs text-text-secondary">{t('Fitimi real')}: {ticket.actualPayout.toFixed(2)} {t('Lëk')}</div>}
                           </div>
                           {ticket.status === 'PENDING' && (
                             <button

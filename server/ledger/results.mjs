@@ -6,7 +6,12 @@
  * restart, and later (admin "settle") for matches that have long left the board.
  */
 import { query } from '../db.mjs';
+import {loadEventEvidence} from './event-evidence.mjs';
 import { getMatches, getMatchById } from '../matches.mjs';
+import {matchSnapshots} from './match-snapshots.mjs';
+import {eventMarketRequirement} from './event-market-policy.mjs';
+import {teamStatisticsFromRow,verifiedFinalStatistics} from '../match-statistics.mjs';
+import {isStatisticMarket,hasStatisticEvidence} from './statistic-markets.mjs';
 
 /**
  * Do not settle bets from a made-up 0-0 or a kickoff timer. A final score
@@ -16,9 +21,16 @@ import { getMatches, getMatchById } from '../matches.mjs';
  */
 export const isFinished = (row) => {
   if (!row) return false;
+  if(row.raw?.provider==='YBETS'&&row.raw.ybetsFinalScoreVerified!==true)return false;
   if (!row.score_at || row.home_score == null || row.away_score == null) return false;
   const score = [Number(row.home_score), Number(row.away_score)];
   if (!score.every(n => Number.isInteger(n) && n >= 0)) return false;
+  // Apply the same verification to live rows AND durable restart recovery.
+  // A new FT-only flag must never turn an old partial score into a final result.
+  if(row.feed_status_at!=null){
+    const scoreAt=new Date(row.score_at).getTime(),phaseAt=new Date(row.feed_status_at).getTime();
+    if(!Number.isFinite(scoreAt)||!Number.isFinite(phaseAt)||Math.abs(scoreAt-phaseAt)>120000)return false;
+  }
   // Collector expiry and kickoff extrapolation also set status='ended'!
   // Only a provider-delivered FT signal proves the final score.
   const feed = String(row.feed_status ?? '').trim().toLowerCase();
@@ -44,7 +56,7 @@ export function verifiedFirstHalf(periodsScore) {
 }
 
 /**
- * Eleven columns AND eleven parameters. The old nine-placeholder statement
+ * Each stored column has a matching parameter. The old nine-placeholder statement
  * accidentally received eleven parameters once half-time scores were added;
  * PostgreSQL refused every automatic result capture, leaving tickets PENDING.
  *
@@ -54,8 +66,8 @@ export const FINISHED_RESULT_INSERT = `
   insert into app_match_result
     (match_id, home_team, away_team, home_score, away_score,
      corners_home, corners_away, cards_home, cards_away,
-     half_home_score, half_away_score)
-  values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     half_home_score, half_away_score, statistics)
+  values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
   on conflict (match_id) do update set
     home_score = excluded.home_score,
     away_score = excluded.away_score,
@@ -64,7 +76,11 @@ export const FINISHED_RESULT_INSERT = `
     cards_home = coalesce(excluded.cards_home, app_match_result.cards_home),
     cards_away = coalesce(excluded.cards_away, app_match_result.cards_away),
     half_home_score = coalesce(excluded.half_home_score, app_match_result.half_home_score),
-    half_away_score = coalesce(excluded.half_away_score, app_match_result.half_away_score)
+    half_away_score = coalesce(excluded.half_away_score, app_match_result.half_away_score),
+    statistics = coalesce(app_match_result.statistics,'{}'::jsonb) || jsonb_build_object(
+      'shots',coalesce(app_match_result.statistics->'shots','{}'::jsonb)||coalesce(excluded.statistics->'shots','{}'::jsonb),
+      'shotsOnTarget',coalesce(app_match_result.statistics->'shotsOnTarget','{}'::jsonb)||coalesce(excluded.statistics->'shotsOnTarget','{}'::jsonb),
+      'fouls',coalesce(app_match_result.statistics->'fouls','{}'::jsonb)||coalesce(excluded.statistics->'fouls','{}'::jsonb))
   -- A verified admin correction or already-settled result must not be
   -- overwritten by a later stale or conflicting provider frame.
   where app_match_result.source = 'FEED' and app_match_result.settled_at is null
@@ -76,11 +92,7 @@ export function finishedResultParameters(row) {
   // { "87150": {corners:3}, "87155": {corners:4} }, NOT under
   // stats.home/stats.away. Failing to map this made corner/card tickets
   // VOID or eternally pending even when full-time stats were available.
-  const stats = row.stats ?? {};
-  const homeId = row.raw?.homeTeam?.id ?? row.raw?.competitors?.[0]?.id;
-  const awayId = row.raw?.awayTeam?.id ?? row.raw?.competitors?.[1]?.id;
-  const homeTeam = (homeId != null ? stats[String(homeId)] : null) ?? stats.home ?? null;
-  const awayTeam = (awayId != null ? stats[String(awayId)] : null) ?? stats.away ?? null;
+  const {home:homeTeam,away:awayTeam}=teamStatisticsFromRow(row);
   const home = homeTeam ? statNum(homeTeam.corners) : null;
   const away = awayTeam ? statNum(awayTeam.corners) : null;
   const cards = team => {
@@ -91,7 +103,7 @@ export function finishedResultParameters(row) {
   };
   const half = verifiedFirstHalf(row.periods_score);
   return [row.match_id, row.home, row.away, Number(row.home_score), Number(row.away_score),
-    home, away, cards(homeTeam), cards(awayTeam), half?.home ?? null, half?.away ?? null];
+    home, away, cards(homeTeam), cards(awayTeam), half?.home ?? null, half?.away ?? null,JSON.stringify(verifiedFinalStatistics(row))];
 }
 
 /**
@@ -117,6 +129,9 @@ export async function captureFinishedMatches() {
   const pendingMatchIds = new Set(pendingLines.rows.map((r) => Number(r.match_id)));
 
   const candidateMatches = new Map(rows.map(row => [Number(row.match_id), row]));
+  for(const persisted of await matchSnapshots.load([...pendingMatchIds])){
+    if(isFinished(persisted))candidateMatches.set(Number(persisted.match_id),persisted);
+  }
   for (const matchId of pendingMatchIds) {
     if (!candidateMatches.has(matchId)) {
       const match = await getMatchById(matchId);
@@ -143,9 +158,31 @@ export async function captureFinishedMatches() {
   return stored;
 }
 
-export async function getResult(matchId) {
-  const res = await query('select * from app_match_result where match_id = $1', [Number(matchId)]);
-  return res.rows[0] ?? null;
+let evidenceWarningAt=0;
+export async function getResult(matchId,{execute=query,readEvidence=loadEventEvidence,onEvidenceError}={}) {
+  const res = await execute('select * from app_match_result where match_id = $1', [Number(matchId)]);
+  const result=res.rows[0];if(!result)return null;
+  const review=(await execute('select payload from app_stat_review where match_id=$1',[Number(matchId)])).rows[0]?.payload;
+  result.statistics_review=review??null;
+  result.statistics_review_pending=process.env.STATS_PROVIDERS_ENABLED==='true'&&!review;
+  if(review?.complete){
+    result.statistics={...(result.statistics??{})};
+    for(const field of ['shots','shotsOnTarget','fouls'])if(review.consensus?.[field]&&!review.conflicts?.[field]){
+      const pair=result.statistics[field]??{},verified=review.consensus[field];
+      result.statistics[field]={home:pair.home??verified.home,away:pair.away??verified.away};
+    }
+    for(const [field,prefix]of [['corners','corners'],['cards','cards']])if(review.consensus?.[field]&&!review.conflicts?.[field]){
+      result[prefix+'_home']??=review.consensus[field].home;
+      result[prefix+'_away']??=review.consensus[field].away;
+    }
+  }
+  // Optional timeline storage must not stop ordinary result/statistics tickets.
+  try{result.event_evidence=await readEvidence(matchId);}catch(error){
+    result.event_evidence=null;
+    if(onEvidenceError)onEvidenceError(error);
+    else if(Date.now()-evidenceWarningAt>60000){evidenceWarningAt=Date.now();console.warn('[settle] optional event evidence unavailable; event selections remain pending');}
+  }
+  return result;
 }
 
 /** manual result (admin "settle" button): stores the score the admin entered */
@@ -214,8 +251,10 @@ export async function pendingSettlementReview(limit = 100) {
     const finalScore = stored ? `${stored.home_score}-${stored.away_score}` : null;
     const marketNames = row.market_names ?? [];
     const incompleteStats = !!stored && marketNames.some(name =>
+      eventMarketRequirement({name}) ||
       (/\b(?:first|1st)\s*half\b/i.test(name) &&
         (stored.half_home_score == null || stored.half_away_score == null)) ||
+      (isStatisticMarket({market_name:name}) && !hasStatisticEvidence({market_name:name},stored)) ||
       (/\bcorners?\b/i.test(name) && (stored.corners_home == null || stored.corners_away == null)) ||
       (/\bcards?\b|booking/i.test(name) && (stored.cards_home == null || stored.cards_away == null)) ||
       /early\s*payout/i.test(name));

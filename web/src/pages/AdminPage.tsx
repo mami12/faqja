@@ -1,3 +1,4 @@
+import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useState } from 'react';
 import Header from '../components/Layout/Header';
 import AdminDashboard from '../components/Admin/AdminDashboard';
@@ -12,9 +13,12 @@ import AdminAuditLog from '../components/Admin/AdminAuditLog';
 import TransactionHistoryPage from './TransactionHistoryPage';
 import CasinoFinanceCenter from '../components/Finance/CasinoFinanceCenter';
 import CasinoSettings from '../components/Admin/CasinoSettings';
+import FinancialReset from '../components/Admin/FinancialReset';
+import BoardSettings from '../components/Admin/BoardSettings';
+import MatchExposure from '../components/Admin/MatchExposure';
 import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices } from 'lucide-react';
 
-type AdminTab = 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -24,7 +28,9 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
     title: 'Menaxhimi',
     items: [
       { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
+      {id:'market-catalog',label:'Tregjet dhe renditja',description:'Aktivizimi global dhe radha e tregjeve',icon:Layers},
       { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
+      { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
@@ -34,9 +40,11 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
   {
     title: 'Raportet',
     items: [
+      { id: 'match-exposure', label: 'Bastet dhe verifikimi', description: 'Ekspozimi për ndeshje dhe vendime manuale', icon: ShieldAlert },
       { id: 'transactions', label: 'Transaksionet', description: 'Lëvizjet financiare', icon: Receipt },
       { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
       { id: 'audit', label: 'Regjistri', description: 'Historiku i veprimeve', icon: ClipboardList },
+      { id: 'financial-reset', label: 'Zerimi financiar', description: 'Backup, bileta dhe bilance nga zero', icon: ShieldAlert },
     ],
   },
 ];
@@ -127,14 +135,18 @@ export default function AdminPage() {
             </div>}
             {tab === 'dashboard' && <AdminDashboard />}
             {tab === 'users' && <UserManagement />}
+            {tab === 'market-catalog' && <MarketCatalog />}
             {tab === 'matches' && <MatchControl />}
+            {tab === 'board-settings' && <BoardSettings />}
             {tab === 'builders' && <BetBuilderManager />}
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
+            {tab === 'match-exposure' && <MatchExposure />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
             {tab === 'casino-finance' && <CasinoFinanceCenter role="admin" />}
             {tab === 'casino-settings' && <CasinoSettings />}
+            {tab === 'financial-reset' && <FinancialReset />}
           </main>
         </div>
       </div>

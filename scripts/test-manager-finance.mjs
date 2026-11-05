@@ -8,6 +8,7 @@ import {
 
 const managerId = 'manager-1';
 const transactions = [];
+const reportRows = new Map();
 let balance = 1000;
 let configuredRates = { single: 3, double: 5, multi: 7 };
 const client = {
@@ -15,12 +16,18 @@ const client = {
     if (sql.includes('from app_commission_config')) {
       return { rows: [configuredRates] };
     }
-    if (sql.includes("type = 'MANAGER_COMMISSION_DEBIT'")) {
-      return {
-        rows: transactions
-          .filter((transaction) => transaction.userId === values[0] && transaction.referenceId === values[1] && transaction.type === 'MANAGER_COMMISSION_DEBIT')
-          .map((transaction) => ({ amount: transaction.amount })),
-      };
+    if (sql.startsWith('select amount from app_manager_commission')) {
+      return { rows: reportRows.has(values[0]) ? [{ amount: reportRows.get(values[0]).amount }] : [] };
+    }
+    if (sql.startsWith('select -sum(amount)')) {
+      const historical = transactions.filter(tx => tx.referenceId === values[0]);
+      return { rows: [{ amount: historical.length ? historical.reduce((sum, tx) => sum - tx.amount, 0) : null }] };
+    }
+    if (sql.startsWith('insert into app_manager_commission')) {
+      if (reportRows.has(values[1])) return { rows: [] };
+      const record = { managerId: values[0], ticketId: values[1], stake: values[2], selectionCount: values[3], ratePct: values[4], amount: values[5] };
+      reportRows.set(record.ticketId,record);
+      return { rows: [{ amount: record.amount }] };
     }
     if (sql.includes("type in ('MANAGER_COMMISSION_DEBIT', 'MANAGER_COMMISSION_REFUND')")) {
       return {
@@ -57,21 +64,37 @@ assert.equal(managerCommission(100, 1, { single: 4, double: 6, multi: 8 }), 4);
 assert.equal(managerCommissionPercent(2, { single: 4, double: 6, multi: 8 }), 6);
 
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'single', username: 'p', stake: 100, selectionCount: 1 }), 3);
-assert.equal(balance, 997);
+assert.equal(balance, 1000, 'reporting a commission never debits the manager');
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'single', username: 'p', stake: 100, selectionCount: 1 }), 3);
-assert.equal(transactions.length, 1, 'the same ticket is charged only once');
+assert.equal(reportRows.size, 1, 'the same ticket is reported only once');
+assert.deepEqual(reportRows.get('single'), { managerId, ticketId:'single', stake:100, selectionCount:1, ratePct:3, amount:3 });
+assert.equal(transactions.length, 0, 'a report is not a financial ledger movement');
 
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'double', username: 'p', stake: 100, selectionCount: 2 }), 5);
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'multi', username: 'p', stake: 100, selectionCount: 3 }), 7);
-assert.equal(balance, 985);
+assert.equal(balance, 1000);
+assert.deepEqual([...reportRows.values()].map(row=>row.amount), [3,5,7]);
 
-assert.equal(await refundManagerCommission(client, { managerId, ticketId: 'single', username: 'p' }), 3);
-assert.equal(balance, 988);
+assert.equal(await refundManagerCommission(client, { managerId, ticketId: 'single', username: 'p' }), 0, 'report-only commission never creates a wallet refund');
+assert.equal(balance, 1000);
 assert.equal(await refundManagerCommission(client, { managerId, ticketId: 'single', username: 'p' }), 0);
-assert.equal(balance, 988, 'the same ticket commission is refunded only once');
+assert.equal(balance, 1000);
 
 configuredRates = { single: 4, double: 6, multi: 8 };
 assert.equal(await chargeManagerCommission(client, { managerId, ticketId: 'config-change', username: 'p', stake: 100, selectionCount: 1 }), 4);
-assert.equal(balance, 984, 'the configured manager rate is used for newly placed tickets');
+assert.equal(reportRows.get('config-change').ratePct,4,'new tickets freeze the configured rate');
+assert.equal(await chargeManagerCommission(client, {managerId,ticketId:'single',stake:100,selectionCount:1}),3,'new settings never rewrite old commission terms');
+assert.equal(balance,1000);
+assert.equal(await chargeManagerCommission(client,{managerId:null,ticketId:'unmanaged',stake:100,selectionCount:1}),0);
+assert.equal(reportRows.has('unmanaged'),false);
 
-console.log('Manager finance checks passed');
+// A historical debit really did move funds. It is neither silently rewritten
+// nor charged again; cancelling that old ticket refunds the exact old amount.
+balance=997;transactions.push({userId:managerId,amount:-3,referenceId:'legacy',type:'MANAGER_COMMISSION_DEBIT'});
+assert.equal(await chargeManagerCommission(client,{managerId,ticketId:'legacy',stake:100,selectionCount:1}),3);
+assert.equal(reportRows.has('legacy'),false);assert.equal(balance,997);
+assert.equal(await refundManagerCommission(client,{managerId,ticketId:'legacy',username:'p'}),3);
+assert.equal(balance,1000);assert.equal(await refundManagerCommission(client,{managerId,ticketId:'legacy',username:'p'}),0);
+assert.equal(balance,1000,'legacy refund is idempotent');
+
+console.log('Manager finance checks passed: exact rounding, frozen report-only commissions, no wallet movement, and legacy refunds');

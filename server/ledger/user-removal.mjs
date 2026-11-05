@@ -16,23 +16,13 @@ export async function removePlayer(id, actor, { database = pool } = {}) {
       [[id, actor.id]],
     );
     const owner = rows.find(row => row.id === actor.id), player = rows.find(row => row.id === id);
-    if (!owner || !['ADMIN', 'MANAGER'].includes(owner.role) || owner.status !== 'ACTIVE' || owner.deleted_at) throw fail(403, 'Ky veprim lejohet vetëm për administratorin ose menaxherin aktiv.');
+    if (!owner || owner.role !== 'ADMIN' || owner.status !== 'ACTIVE' || owner.deleted_at) throw fail(403, 'Ky veprim lejohet vetëm për administratorin aktiv.');
     if (!player) throw fail(404, 'Lojtari nuk u gjet.');
     if (owner.role === 'MANAGER' && (player.role !== 'PLAYER' || player.manager_id !== owner.id)) throw fail(403, 'Lojtari nuk i përket këtij menaxheri.');
     if (player.deleted_at) {
       if (player.deleted_by !== owner.id) throw fail(404, 'Lojtari nuk u gjet.');
       await client.query('commit');
       return { id, transferred: 0, alreadyDeleted: true };
-    }
-    if (player.role !== 'PLAYER') {
-      const activity = await client.query(`select
-        exists(select 1 from app_user where manager_id=$1) or
-        exists(select 1 from app_ticket where user_id=$1) or
-        exists(select 1 from app_transaction where user_id=$1) or
-        exists(select 1 from app_casino_round where user_id=$1) as present`, [id]);
-      if (owner.role !== 'ADMIN' || Number(player.balance) !== 0 || activity.rows[0].present) throw fail(409, 'Llogaria e stafit ka bilanc, lojtarë ose histori. Transferimi automatik zbatohet vetëm për lojtarët.');
-      await client.query('delete from app_user where id=$1', [id]);
-      await client.query('commit'); return { id, transferred: 0, alreadyDeleted: false };
     }
     // Arithmetic stays in NUMERIC(14,2), avoiding binary floating-point money.
     const amount = String(player.balance);
@@ -74,48 +64,7 @@ export function deletedHistoryCutoff(now = new Date()) {
   return new Date(instant);
 }
 
-/** Delete only removed players whose retained obligations have all finished.
- * Active accounts, their history and every account balance are untouched.
- */
-export async function purgeDeletedPlayerHistory({ now = new Date(), database = pool, limit = 50 } = {}) {
-  const cutoff = deletedHistoryCutoff(now).toISOString();
-  const candidates = await database.query(`select u.id from app_user u where deleted_at < $1::timestamptz and role='PLAYER' and balance=0
-    and not exists(select 1 from app_ticket where user_id=u.id and status='PENDING')
-    and not exists(select 1 from app_casino_gamble_state where user_id=u.id and pending>0)
-    and not exists(select 1 from app_casino_freespin_state where user_id=u.id and left_spins>0)
-    and not exists(select 1 from app_casino_original_state where user_id=u.id and
-      (coalesce(state->>'pending','0') !~ '^0+([.]0+)?$' or coalesce(state->>'remaining','0') !~ '^0+([.]0+)?$'
-      or coalesce(state->'free'->>'left','0') !~ '^0+([.]0+)?$'))
-    order by deleted_at,id limit $2`, [cutoff, Math.max(1, Math.min(500, Number(limit) || 50))]);
-  let purged = 0, deferred = 0;
-  for (const { id } of candidates.rows) {
-    const client = await database.connect();
-    try {
-      await client.query('begin');
-      await client.query("set local lock_timeout='500ms'");
-      const locked = await client.query('select id,balance from app_user where id=$1 and deleted_at < $2::timestamptz for update skip locked', [id, cutoff]);
-      if (!locked.rows.length) { await client.query('rollback'); deferred++; continue; }
-      const obligations = await client.query(`select
-        exists(select 1 from app_ticket where user_id=$1 and status='PENDING') or
-        exists(select 1 from app_casino_gamble_state where user_id=$1 and pending>0) or
-        exists(select 1 from app_casino_freespin_state where user_id=$1 and left_spins>0) as pending`, [id]);
-      const saved = await client.query('select state from app_casino_original_state where user_id=$1', [id]);
-      const unfinished = saved.rows.some(({ state }) => [state?.pending, state?.remaining, state?.free?.left].some(value => value != null && (!Number.isFinite(Number(value)) || Number(value) > 0)));
-      if (Number(locked.rows[0].balance) !== 0 || obligations.rows[0].pending || unfinished) {
-        await client.query('rollback'); deferred++; continue;
-      }
-      await client.query('delete from app_ticket where user_id=$1', [id]);
-      await client.query('delete from app_casino_round where user_id=$1', [id]);
-      await client.query("delete from app_admin_audit where target_type='user' and target_id=$1::text", [id]);
-      // User-owned transactions, protocol events, controls and batch mappings
-      // cascade here. The recipient's transfer receipt remains their history.
-      await client.query('delete from app_user where id=$1', [id]);
-      await client.query('commit'); purged++;
-    } catch (error) {
-      await client.query('rollback').catch(() => {});
-      if (['55P03', '40P01'].includes(error.code)) { deferred++; continue; }
-      throw error;
-    } finally { client.release(); }
-  }
-  return { purged, deferred, cutoff };
+/** Kept for old scheduled callers. Protected financial history is retained indefinitely. */
+export async function purgeDeletedPlayerHistory({ now = new Date() } = {}) {
+  return { purged: 0, deferred: 0, cutoff: deletedHistoryCutoff(now).toISOString(), retained: true };
 }

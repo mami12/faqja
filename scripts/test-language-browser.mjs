@@ -44,6 +44,7 @@ try {
   const app = express(); app.use(express.json());
   app.use('/app/api', (req, res) => {
     if (req.method !== 'GET') { writes.push(req.originalUrl); return res.status(400).json({ error: 'No financial writes in language tests' }); }
+    if (req.path === '/display-error') return res.status(400).json({message:'invalid username or password',code:'TEST_CREDENTIALS',retryable:false});
     if (req.path === '/auth/me') return res.json({ id: 'language-only-player', username: 'player_language', role: 'PLAYER', status: 'ACTIVE', balance: 999, currency: 'LEK' });
     if (req.path === '/admin/matches') return res.json({ items: [{ ...match, markets: [], marketCount: null }], overrides: [], summary: true });
     if (req.path === '/admin/matches/101') return res.json({ item: match, overrides: [] });
@@ -52,7 +53,7 @@ try {
   app.get('/', async (_req, res) => res.type('html').send(await vite.transformIndexHtml('/', fixture)));
   app.use(vite.middlewares); server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage(); page.setDefaultTimeout(20000); page.on('pageerror', error => errors.push(error.message));
   await page.setRequestInterception(true); page.on('request', request => request.url().startsWith(origin) || request.url().startsWith('data:') ? request.continue() : request.abort());
   await page.evaluateOnNewDocument(() => { localStorage.setItem('token', 'language-fixture-only'); });
@@ -63,6 +64,11 @@ try {
   await page.setViewport({ width: 1366, height: 900 }); await page.goto(origin, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-admin-selected-match="101"]');
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'sq');
+  const displayError=await page.evaluate(async()=>{
+    const {apiClient}=await import('/src/api/client.ts');
+    try{await apiClient.get('/display-error');}catch(error){return {shown:error.response.data.message,original:error.serverResponse.data.message,status:error.response.status,code:error.response.data.code,retryable:error.response.data.retryable};}
+  });
+  assert.deepEqual(displayError,{shown:'Emri i përdoruesit ose fjalëkalimi është i pasaktë.',original:'invalid username or password',status:400,code:'TEST_CREDENTIALS',retryable:false});
   const picker = await visiblePicker();
   assert.deepEqual(await picker.evaluate(select => [...select.options].map(option => option.value)), ['al', 'en']);
   await page.waitForFunction(() => document.querySelector('#playerMarkets').innerText.includes('Shënojnë të dyja skuadrat'));

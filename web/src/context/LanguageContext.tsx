@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import al from '../i18n/al';
 import en from '../i18n/en';
 import { englishInterfaceText } from '../i18n/interfaceText';
+import { repairDisplayText } from '../utils/repairDisplayText';
 
 export type Lang = 'al' | 'en';
 export type Translator = ((key: string) => string) & { lang?: Lang };
@@ -14,7 +15,7 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType>({
   lang: 'al', setLanguage: () => {},
-  t: Object.assign((key: string) => dictionaryValue(al, key) ?? key, { lang: 'al' as const }),
+  t: Object.assign((key: string) => repairDisplayText(dictionaryValue(al, key) ?? key), { lang: 'al' as const }),
 });
 
 const validLanguage = (value: unknown): Lang => value === 'en' ? 'en' : 'al';
@@ -50,8 +51,8 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
     window.addEventListener('storage', changed);
     return () => window.removeEventListener('storage', changed);
   }, []);
-  const t = useMemo<Translator>(() => Object.assign((key: string) => dictionaryValue(lang === 'en' ? en : al, key)
-    ?? (lang === 'en' ? englishInterfaceText[key] : undefined) ?? key, {lang}), [lang]);
+  const t = useMemo<Translator>(() => Object.assign((key: string) => repairDisplayText(dictionaryValue(lang === 'en' ? en : al, key)
+    ?? (lang === 'en' ? englishInterfaceText[key] : undefined) ?? key), {lang}), [lang]);
   const setLanguage = (next: Lang) => { if (next === 'al' || next === 'en') setLang(next); };
 
   return (

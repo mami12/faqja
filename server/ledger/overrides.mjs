@@ -82,6 +82,22 @@ export async function upsert(kind, ref, { suspended = null, price = null } = {})
   return list();
 }
 
+export async function suspendMarkets(refs, suspended) {
+  if (typeof suspended !== 'boolean') throw Object.assign(new Error('suspended must be a boolean'), { status: 400 });
+  const unique = [...new Set((Array.isArray(refs) ? refs : []).map(String).filter(Boolean))];
+  if (unique.length > 50_000) throw Object.assign(new Error('Too many markets in one bulk operation'), { status: 413 });
+  if (!unique.length) return 0;
+  await query(
+    `insert into app_feed_override (kind, ref, suspended, price)
+     select 'market', x.ref, $2, null
+     from jsonb_to_recordset($1::jsonb) as x(ref text)
+     on conflict (kind, ref) do update set suspended = excluded.suspended, updated_at = now()`,
+    [JSON.stringify(unique.map(ref => ({ ref }))), suspended],
+  );
+  await refresh(true);
+  return unique.length;
+}
+
 export async function clear(kind, ref) {
   await query('delete from app_feed_override where kind = $1 and ref = $2', [kind, String(ref)]);
   await refresh(true);

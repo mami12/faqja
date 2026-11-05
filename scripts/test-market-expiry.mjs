@@ -184,18 +184,18 @@ closed(match(2,0,{period:'1H',currentMinute:27}),twoWay('1st Half Total','1.5',{
 // First/ordinal events, races and elapsed time windows.
 closed(match(1,0),{name:'First Goal',outcomes:[outcome('Home'),outcome('Away')]});
 closed(match(1,0),{name:'Time of First Goal',outcomes:[outcome('1-10'),outcome('11-20')]});
-open(match(1,0),{name:'Next Goal',outcomes:[outcome('Home'),outcome('Away')]});
+closed(match(1,0),{name:'Next Goal',outcomes:[outcome('Home'),outcome('Away')]});
 closed(match(2,1),{name:'3rd Goal',outcomes:[outcome('Home')]});
 closed(match(3,0),{name:'Race to 3 Goals',outcomes:[outcome('Home')]});
 closed(match(0,0,{corners:{home:3,away:1}}),{name:'Race to 3 Corners',outcomes:[outcome('Home')]});
 closed(match(0,0,{corners:{home:1,away:0}}),{name:'First Corner',outcomes:[outcome('Home')]});
 closed(match(0,0,{currentMinute:21}),{name:'Goal before 20 minutes',outcomes:[outcome('Yes')]});
-open(match(0,0,{currentMinute:19}),{name:'Goal before 20 minutes',outcomes:[outcome('Yes')]});
+closed(match(0,0,{currentMinute:19}),{name:'Goal before 20 minutes',outcomes:[outcome('Yes')]});
 
 // Scoring-once contracts, but not anytime/next-goalscorer propositions.
 closed(match(1,0),btts('Home Team to Score'));
 open(match(1,0),btts('Away Team to Score'));
-open(match(1,0),{name:'Player to Score Anytime',outcomes:[outcome('Player A')]});
+closed(match(1,0),{name:'Player to Score Anytime',outcomes:[outcome('Player A')]});
 
 // Impossible exact scores/goals disappear *individually*, not the entire market.
 const correct = {name:'Correct Score',outcomes:[
@@ -209,7 +209,7 @@ assert.deepEqual(filterDecidedOutcomes(exact.outcomes,exact,match(2,0)).map(o=>o
 open(match(2,0),correct);
 
 // No guessing: unknown markets, absent stats, and prematch must stay visible.
-open(match(3,3),{name:'Player Shots on Target',outcomes:[outcome('Over')]});
+closed(match(3,3),{name:'Player Shots on Target',outcomes:[outcome('Over')]});
 open(match(3,3),{name:'Other Market',outcomes:[outcome('Yes')]});
 open({status:'PREMATCH',homeScore:2,awayScore:2}, btts());
 closed({status:'ENDED',homeScore:1,awayScore:0},btts());

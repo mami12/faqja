@@ -153,13 +153,7 @@ export async function placeBookOfRaSpin({userId,requestId,bet,denomination=1,lin
       "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",
       [userId,-stake,roundId,balance,LABEL+' · spin']);
     await db.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,balance]);
-    if(manager){
-      const managerAfter=money(Number(manager.balance)+stake);
-      await db.query('update app_user set balance=$2,updated_at=now() where id=$1',[manager.id,managerAfter]);
-      await db.query(
-        "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",
-        [manager.id,stake,roundId,managerAfter,'Casino stake · '+player.username]);
-    }
+    // Stake commission is recorded by the database without changing manager funds.
     // Free spins stay OFF until the client FS handshake is finished.
     if(free){
       await db.query(

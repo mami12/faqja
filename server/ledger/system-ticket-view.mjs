@@ -53,14 +53,14 @@ export function aggregateSystemTicket(batch, columns) {
     orderedMatches.get(line.matchId).push(line);
   }
   const pending = columns.filter(column => column.status === 'PENDING');
-  const paidOut = sumMoney(columns.filter(column => ['WON', 'VOID'].includes(column.status)).map(column => column.potentialPayout));
+  const paidOut = sumMoney(columns.filter(column => ['WON', 'VOID'].includes(column.status)).map(column => column.actualPayout ?? column.potentialPayout));
   const refunded = sumMoney(columns.filter(column => column.status === 'REVERTED').map(column => column.stake));
   const possible = sumMoney(columns.map(column => column.status === 'PENDING' ? column.potentialPayout
     : ['WON', 'VOID'].includes(column.status) ? column.potentialPayout : column.status === 'REVERTED' ? column.stake : 0));
   return {
     id, userId: batch.user_id, bookingCode: null, ticketType: 'SYSTEM', systemType: 'AUTO',
     stake: sumMoney(columns.map(column => column.stake)), totalOdds: 0,
-    potentialPayout: possible, actualPayout: sumMoney([paidOut, refunded]), status,
+    potentialPayout: sumMoney(columns.map(column => column.potentialPayout)), potentialPayoutIsEstimated: columns.some(column=>column.potentialPayoutIsEstimated), remainingPotentialPayout: possible, actualPayout: sumMoney([paidOut, refunded]), status,
     placedAt: batch.created_at ?? columns[0].placedAt,
     settledAt: pending.length ? null : columns.reduce((latest, column) =>
       column.settledAt && (!latest || new Date(column.settledAt) > new Date(latest)) ? column.settledAt : latest, null),

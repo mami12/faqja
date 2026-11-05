@@ -16,6 +16,7 @@ import { query } from '../db.mjs';
 import { getMatches as getMatchRows, getMatchById as getMatchRow, boostMatch } from '../matches.mjs';
 import { withOdds, serializeMatch } from '../collector.mjs';
 import { toClientMatch, toClientMatches } from './view.mjs';
+import { marketCategories, MARKET_CATEGORY_IDS } from '../market-catalog.mjs';
 
 export const adminRouter = express.Router();
 
@@ -38,7 +39,7 @@ const guard = (fn) => (req, res, next) => {
         ['ADMIN', 'MANAGER'].includes(req.user?.role)) {
       try {
         const target = req.path.match(/\/(users|matches|markets|outcomes|tickets)\/([^/]+)/);
-        const safeKeys = ['username', 'role', 'managerId', 'initialBalance', 'amount', 'status', 'isSuspended', 'odds', 'price', 'homeScore', 'awayScore'];
+        const safeKeys = ['username', 'role', 'managerId', 'initialBalance', 'amount', 'status', 'isSuspended', 'odds', 'price', 'homeScore', 'awayScore', 'country', 'competitionId', 'category', 'suspended'];
         const input = Object.fromEntries(
           safeKeys.filter((key) => req.body?.[key] !== undefined).map((key) => [key, req.body[key]]),
         );
@@ -83,6 +84,7 @@ const requireLedger = (req, res, next) =>
   ledger.isLedgerReady() ? next() : res.status(503).json({ message: 'ledger database unavailable' });
 
 const deny = (res, what) => res.status(403).json({ message: `${what} only` });
+const normalizedCompetitionPart = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** admin-only routes */
 const admin = [
@@ -125,10 +127,10 @@ adminRouter.get(
   ...admin,
   guard(async (_req, res) => {
     const result = await query(
-      'select single_pct as single, double_pct as double, multi_pct as multi from app_commission_config where id = 1',
+      'select single_pct as single, double_pct as double, multi_pct as multi, casino_pct as casino from app_commission_config where id = 1',
     );
-    const row = result.rows[0] ?? { single: 3, double: 5, multi: 7 };
-    res.json({ single: Number(row.single), double: Number(row.double), multi: Number(row.multi) });
+    const row = result.rows[0] ?? { single: 3, double: 5, multi: 7, casino: 0 };
+    res.json({ single: Number(row.single), double: Number(row.double), multi: Number(row.multi), casino: Number(row.casino ?? 0) });
   }),
 );
 
@@ -136,19 +138,20 @@ adminRouter.patch(
   '/admin/commission-rates',
   ...admin,
   guard(async (req, res) => {
-    const { single, double, multi } = req.body ?? {};
+    const { single, double, multi, casino } = req.body ?? {};
     const rates = {
       single: commissionRate(single, 'single'),
       double: commissionRate(double, 'double'),
       multi: commissionRate(multi, 'multi'),
+      casino: casino === undefined ? null : commissionRate(casino, 'casino'),
     };
     const result = await query(
       `update app_commission_config
-          set single_pct = $1, double_pct = $2, multi_pct = $3,
+          set single_pct = $1, double_pct = $2, multi_pct = $3, casino_pct = coalesce($5, casino_pct),
               updated_by = $4, updated_at = now()
         where id = 1
-        returning single_pct as single, double_pct as double, multi_pct as multi`,
-      [rates.single, rates.double, rates.multi, req.user.id],
+        returning single_pct as single, double_pct as double, multi_pct as multi, casino_pct as casino`,
+      [rates.single, rates.double, rates.multi, req.user.id, rates.casino],
     );
     res.json(Object.fromEntries(Object.entries(result.rows[0]).map(([key, value]) => [key, Number(value)])));
   }),
@@ -209,19 +212,22 @@ adminRouter.get(
     const money = await query(
       `select
          coalesce(sum(stake) filter (where status = 'PENDING'), 0)          as open_stake,
-         coalesce(sum(stake) filter (where status = 'LOST'), 0)            as lost_stake,
-         coalesce(sum(potential_payout) filter (where status = 'WON'), 0)  as paid_out
+         coalesce(sum(stake) filter (where status in ('WON','LOST')), 0)    as settled_stake,
+         coalesce((select sum(amount) from app_transaction where type='BET_WON'), 0) as paid_out
        from app_ticket`,
     );
     const row = money.rows[0] ?? {};
     const managers = await ledger.managerFinancials();
-    const commissionTotal = managers.reduce((sum, item) => sum + item.commission, 0);
+    const commissionTotal = managers.reduce((sum, item) => sum + item.sportCommission, 0);
+    const casinoCommission = managers.reduce((sum, item) => sum + item.casinoCommission, 0);
     res.json({
       users: base.users,
       activeBets: base.pendingTickets,
       totalStake: Number(row.open_stake ?? 0),
-      revenue: Number(Number(row.lost_stake ?? 0) - Number(row.paid_out ?? 0) + commissionTotal),
+      revenue: Number(Number(row.settled_stake ?? 0) - Number(row.paid_out ?? 0) - commissionTotal),
       commission: commissionTotal,
+      sportCommission: commissionTotal,
+      casinoCommission,
       blocked: base.blocked,
       tickets: base.tickets,
       totalBalance: base.totalBalance,
@@ -485,6 +491,36 @@ const matchDetail = guard(async (req, res) => {
 
 adminRouter.get('/admin/matches/:id', ...admin, matchDetail);
 adminRouter.get('/manager/matches/:id', ...manager, matchDetail);
+
+adminRouter.post('/admin/markets/bulk-suspend', ...admin, guard(async (req, res) => {
+  const country = String(req.body?.country ?? '').trim();
+  const competitionId = String(req.body?.competitionId ?? '').trim();
+  const category = String(req.body?.category ?? '').trim();
+  const suspended = req.body?.suspended;
+  if (!country || !competitionId || !category || typeof suspended !== 'boolean') {
+    throw badRequest('Zgjidh shtetin, kampionatin, kategorinë dhe veprimin.');
+  }
+  if (category !== 'all' && !MARKET_CATEGORY_IDS.includes(category)) {
+    throw badRequest('Kategori tregu e pavlefshme.');
+  }
+
+  const countryKey = normalizedCompetitionPart(country);
+  const rows = (await getMatchRows({ limit: 2000 })).filter(row =>
+    normalizedCompetitionPart(row.category_name) === countryKey &&
+    String(row.tournament_id ?? row.tournament_name ?? '') === competitionId,
+  );
+  if (!rows.length) return res.json({ success: true, count: 0, suspended });
+
+  const refs = [];
+  for (const match of await withOdds(rows)) {
+    for (const market of match.markets ?? []) {
+      if (category !== 'all' && !marketCategories(market.name).includes(category)) continue;
+      refs.push(`${match.id}|${market.key}|${market.line ?? ''}`);
+    }
+  }
+  const count = await overrides.suspendMarkets(refs, suspended);
+  res.json({ success: true, count, suspended });
+}));
 
 /** the toggle the UI sends is `isSuspended`; a market/outcome sends `status` */
 const wantsSuspend = (body = {}) =>

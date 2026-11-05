@@ -31,11 +31,12 @@ export default function Header({ onToggleNav }: Props) {
 
   const links = (
     <>
-      <button type="button" onClick={() => go('/casino')}
+      {user?.role !== 'AGENT' && <button type="button" onClick={() => go('/casino')}
         className={'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ' +
           (location.pathname.startsWith('/casino') ? 'bg-amber-400/15 text-amber-300' : 'text-text-secondary hover:bg-tertiary/60 hover:text-white')}>
         <Coins size={14} /> <span>{t('nav.casino')}</span>
-      </button>
+      </button>}
+      {user?.role === 'AGENT' && <button type="button" onClick={() => go('/agent')} className="flex items-center gap-1.5 rounded-lg bg-accent-green/15 px-3 py-1.5 text-xs font-bold text-accent-green"><Users size={14}/>{lang === 'en' ? 'Agent panel' : 'Paneli i agjentit'}</button>}
       {user?.role === 'ADMIN' && (
         <button
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -105,7 +106,7 @@ export default function Header({ onToggleNav }: Props) {
   );
 
   return (
-    <header className="shrink-0 z-20 border-b border-white/10 bg-[#17294b] ">
+    <header className="zshop-header shrink-0 z-20 border-b border-white/10 bg-[#17294b] ">
       <div className="flex h-14 items-center justify-between gap-1 px-3 sm:h-[68px] sm:gap-2 sm:px-5">
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           {onToggleNav && (
@@ -120,7 +121,7 @@ export default function Header({ onToggleNav }: Props) {
           <button type="button" onClick={() => navigate('/')}
             aria-label={t('common.home_page')}
             className="rounded-sm px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:text-emerald-300">
-            {t('nav.sports')}
+            {user?.role === 'AGENT' ? (lang === 'en' ? 'My network' : 'Rrjeti im') : t('nav.sports')}
           </button>
         </div>
 
@@ -172,7 +173,7 @@ export default function Header({ onToggleNav }: Props) {
       {menuOpen && user && (
         <div className="md:hidden border-t border-tertiary bg-secondary/95 backdrop-blur-md px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
           <div className="text-[10px] font-black uppercase tracking-wider text-text-secondary mb-1">
-            {{ ADMIN: t('admin.administrator'), MANAGER: t('admin.manager'), PLAYER: t('admin.player') }[user.role]} &bull; {user.username}
+            {{ ADMIN: t('admin.administrator'), AGENT: lang === 'en' ? 'Agent' : 'Agjent', MANAGER: t('admin.manager'), PLAYER: t('admin.player') }[user.role]} &bull; {user.username}
           </div>
           <div className="flex flex-col space-y-1">
             {links}

@@ -20,6 +20,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import {normalizeTeamStatistics} from './match-statistics.mjs';
 
 const MAP_FILE = process.env.MARKET_MAP_FILE ?? 'market-map.json';
 
@@ -227,21 +228,21 @@ export function decodePushMessage(message) {
     // per-team live statistics, e.g. {"87150":{"corners":"2","yellowCards":"1","redCards":"0"}, ...}
     // parsed generically so a goals/score field would be picked up too
     const rawResults = data.scoreBoard?.results;
+    const receivedAt=Date.now();
+    const providerAt=data.ts==null?receivedAt:typeof data.ts==='number'?data.ts:/^\d+$/.test(String(data.ts))?Number(data.ts):Date.parse(String(data.ts));
+    // Replayed/stale source packets keep their source age. Invalid or far-future
+    // timestamps are deliberately unverified, never silently marked fresh.
+    const statisticsAt=Number.isFinite(providerAt)&&providerAt>=0&&providerAt<=receivedAt+60000?providerAt:0;
     let stats = null;
     if (rawResults && typeof rawResults === 'object') {
       stats = {};
       for (const [competitorId, r] of Object.entries(rawResults)) {
         if (!r || typeof r !== 'object') continue;
-        const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
-        const entry = {
-          corners: n(r.corners),
-          yellow: n(r.yellowCards),
-          red: n(r.redCards),
-        };
+        const entry = normalizeTeamStatistics(r,{observedAt:statisticsAt,trustTimestamps:false});
         for (const [k, v] of Object.entries(r)) {
           if (/^(corners|yellowCards|redCards)$/i.test(k)) continue;
           if (!/goal|score|point/i.test(k)) continue;
-          const num = n(v);
+          const num = v!=null&&String(v).trim()!==''&&Number.isInteger(Number(v))&&Number(v)>=0?Number(v):null;
           if (num !== null) entry[`goals:${k}`] = num;
         }
         stats[competitorId] = entry;

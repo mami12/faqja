@@ -6,7 +6,7 @@ import MobileSportsHeader from '../components/Layout/MobileSportsHeader';
 import BetslipSidebar from '../components/Layout/BetslipSidebar';
 import MatchList from '../components/Sports/MatchList';
 import MatchDetail from '../components/Sports/MatchDetail';
-import { LiveFeedProvider } from '../api/liveFeed';
+
 import { useBetslip } from '../context/BetslipContext';
 import { useLanguage } from '../context/LanguageContext';
 import { CalendarDays, Search, ListOrdered, Ticket, X } from 'lucide-react';
@@ -22,7 +22,7 @@ import { formatOdds } from '../utils/formatOdds';
 export default function SportsbookPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t,lang } = useLanguage();
   const { selections, totalOdds, ticketType, columns } = useBetslip();
   const [selectedTournament, setSelectedTournament] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -151,45 +151,20 @@ export default function SportsbookPage() {
   );
 
   return (
-    <LiveFeedProvider>
-      <div data-sportsbook-shell className="sportsbook-shell flex flex-col overflow-hidden bg-primary xl:bg-[#0d141c]">
+    <>
+      <div data-sportsbook-shell className="sportsbook-shell zshop-shell flex flex-col overflow-hidden bg-primary xl:bg-[#0d141c]">
         <div className="hidden md:block"><Header onToggleNav={() => setNavOpen(v => !v)}/></div>
         <MobileSportsHeader
           onOpenLeagues={() => {setBetslipOpen(false);setNavOpen(v => !v);}}
           onOpenBetslip={() => {setNavOpen(false);setBetslipOpen(v => !v);}}
         />
-        {/* Compact mobile shortcuts, as on the reference board. */}
-        <nav aria-label={t("Shkurtoret e sporteve")} className="flex h-[63px] shrink-0 items-stretch border-b border-[#111a26] bg-[#0d1420] text-white md:hidden">
-          <button type="button" onClick={handleSelectAll} aria-pressed={viewMode === 'all' && !selectedSport && !selectedCategory && !selectedTournament}
-            className={`flex w-[66px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${viewMode === 'all' ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
-            <CalendarDays size={25} strokeWidth={2.4}/>
-            <span className="text-[10px] font-black leading-tight">{t("TË GJITHA")}</span>
-          </button>
-          <button type="button" onClick={() => {
-              setMobileSearchOpen(v => !v);
-              setViewMode('all');
-              setSelectedSport(''); setSelectedCategory(''); setSelectedTournament('');
-              if (id) navigate('/');
-            }}
-            aria-pressed={mobileSearchOpen || !!searchTerm} aria-expanded={mobileSearchOpen}
-            className={`flex w-[65px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${mobileSearchOpen || searchTerm ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
-            <Search size={26} strokeWidth={3}/>
-            <span className="text-[10px] font-bold leading-tight">{t("Kërko")}</span>
-          </button>
-          <button type="button" onClick={handleSelectLive} aria-pressed={isLiveOnly}
-            className={`flex w-[83px] shrink-0 flex-col items-center justify-center gap-1 border-r border-[#343d4d] border-b-[3px] pt-1 text-center ${isLiveOnly ? 'border-b-[#e2a600]' : 'border-b-transparent'}`}>
-            <span className="relative">
-              <FootballIcon size={25}/>
-              <span className="absolute -right-5 -top-1 rounded-[2px] bg-[#2e873d] px-[3px] text-[9px] font-black leading-4">{t("NË LOJË")}</span>
-            </span>
-            <span className="text-[10px] font-black leading-tight">{t("FUTBOLL")}</span>
-          </button>
-          <div className="min-w-0 flex-1 bg-[#101925]" aria-hidden="true"/>
-          <button type="button" onClick={() => navigate('/casino')}
-            className="flex w-[75px] shrink-0 flex-col items-center justify-center gap-1 border-b-[3px] border-amber-500 pt-1 text-amber-300 transition-colors hover:bg-[#263141]">
-            <span className="text-[25px] leading-7" aria-hidden="true">🎰</span>
-            <span className="text-[10px] font-black leading-tight">{t("KAZINO")}</span>
-          </button>
+        <nav className="zshop-sports-strip" aria-label={t('Shkurtoret e sporteve')}>
+          <button type="button" onClick={handleSelectAll} aria-pressed={viewMode==='all'}><CalendarDays size={25}/><span>{t('TË GJITHA')}</span></button>
+          <button type="button" onClick={handleSelectLive} aria-pressed={isLiveOnly}><FootballIcon size={27}/><span>{t('NË LOJË')}</span></button>
+          <button type="button" onClick={()=>setMobileSearchOpen(v=>!v)} aria-expanded={mobileSearchOpen} className="md:hidden"><Search size={25}/><span>{t('Kërko')}</span></button>
+          <button type="button" onClick={()=>{handleSelectAll();setViewMode('prematch');}} aria-pressed={viewMode==='prematch'}><CalendarDays size={25}/><span>{lang==='en'?'Prematch':'Para ndeshjes'}</span></button>
+          <button type="button" onClick={handleSelectFavorites} aria-pressed={isFavoritesOnly}><Ticket size={25}/><span>{t('FAVORITET')}</span></button>
+          <button type="button" className="zs-strip-extra" onClick={()=>navigate('/casino')}><img src={import.meta.env.BASE_URL+'zshop/casino.png'} alt="" width="42" height="27" className="h-[27px] w-[42px] object-contain"/><span>{t('KAZINO')}</span></button>
         </nav>
         {mobileSearchOpen && (
           <form role="search" onSubmit={e => {e.preventDefault();mobileSearchRef.current?.blur();}}
@@ -309,6 +284,7 @@ export default function SportsbookPage() {
           </div>
         )}
       </div>
-    </LiveFeedProvider>
+    </>
   );
 }
+

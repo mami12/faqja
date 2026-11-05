@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import ViewportList from './ViewportList';
+import {useFeedScope} from '../../api/feedScope';
+import ZshopScoreboard from '../Tracker/ZshopScoreboard';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Trophy, Sparkles, Flame, Clock, Flag, 
@@ -8,14 +11,18 @@ import {
 import { apiClient } from '../../api/client';
 import { Match, Market } from '../../types';
 import OddsButton from './OddsButton';
+import MarketInfoButton from './MarketInfoButton';
+import CountryFlag from './CountryFlag';
+import ComboOddsGrid from './ComboOddsGrid';
 import PitchTracker from '../Tracker/PitchTracker';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLivePatch, useLiveFeed } from '../../api/liveFeed';
 import { liveMatch } from '../../api/matchSync';
 import { filterDecidedOutcomes, isMarketVisible, isOutcomeDisplayable } from '../../utils/marketExpiry';
 import { formatMarketLine } from '../../utils/sportsbookLabels';
-import { betBuilderGroup, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue, marketSelectionLabel } from '../../utils/marketCatalog';
+import { marketBaseName, marketCategoryOf, isHandicapMarket, isIdentifiedMarket, marketCategoryLabel, marketDisplayTitle, marketGroupKey, marketLineValue, marketSelectionLabel } from '../../utils/marketCatalog';
 import type { MarketCategory, MarketLanguage } from '../../utils/marketCatalog';
+import {marketRank} from '../../../../server/market-catalog.mjs';
 import { useFavorites } from '../../context/FavoritesContext';
 import { isComboMarket } from '../../utils/comboPolicy';
 
@@ -95,7 +102,7 @@ const groupMarkets = (markets: Market[], lang: MarketLanguage): GroupedMarket[] 
     entries.sort((a, b) => rankedLine(a) - rankedLine(b));
     result.push({
       baseName: key,
-      title: marketDisplayTitle(entries[0], lang),
+      title: marketDisplayTitle({...entries[0],name:marketBaseName(entries[0]),line:''}, lang),
       category: getGroupCategory(entries[0]),
       markets: entries,
     });
@@ -110,7 +117,21 @@ export default function MatchDetail() {
   const [match, setMatch] = useState<Match | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [activeTab, setActiveTab] = useState<string>('all');
+  const [requestSearch,setRequestSearch]=useState('');
+  const [categoryLoading,setCategoryLoading]=useState(false);
+  const [categoryTotals,setCategoryTotals]=useState<Record<string,number>>({});
+  const [requestError,setRequestError]=useState<{id:string;notFound:boolean}|null>(null);
+  const requestedCategory=requestSearch||activeTab==='favorites'?'all':activeTab;
   const [marketSearch, setMarketSearch] = useState<string>('');
+  useEffect(()=>{
+    setMatch(null);setMarkets([]);setCategoryTotals({});setCollapsedGroups({});setRequestError(null);
+    setActiveTab('all');setMarketSearch('');setRequestSearch('');
+  },[id]);
+  useEffect(()=>{const timer=setTimeout(()=>setRequestSearch(marketSearch.trim()),250);return()=>clearTimeout(timer);},[marketSearch]);
+  useFeedScope('detail',{detail:id?{id,category:requestedCategory}:null,selectionIds:markets.flatMap(m=>(m.builderLegs??[]).map(p=>p.outcomeId))});
+  const [favoriteMarkets,setFavoriteMarkets]=useState<string[]>(()=>{try{const saved=JSON.parse(localStorage.getItem('app_favorite_markets')??'[]');return Array.isArray(saved)?saved.filter(v=>typeof v==='string'):[];}catch{return [];}});
+  const favoriteKey=(key:string)=>id+'|'+key;
+  const toggleMarketFavorite=(key:string)=>setFavoriteMarkets(old=>{const value=favoriteKey(key),next=old.includes(value)?old.filter(v=>v!==value):[...old,value];try{localStorage.setItem('app_favorite_markets',JSON.stringify(next));}catch{}return next;});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isFavorite, toggleFavorite, isAlertEnabled, toggleAlert } = useFavorites();
   const patch = useLivePatch(id);
@@ -120,8 +141,8 @@ export default function MatchDetail() {
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
-    () => match ? liveMatch(match, patch) : null,
-    [match, patch],
+    () => match && String(match.id)===id ? liveMatch(match, patch) : null,
+    [match,id,patch?.homeScore,patch?.awayScore,patch?.scoreAt,patch?.currentMinute,patch?.period,patch?.status,patch?.isSuspended,patch?.corners,patch?.cards,patch?.shots,patch?.shotsOnTarget,patch?.fouls],
   );
 
   useEffect(() => {
@@ -134,17 +155,24 @@ export default function MatchDetail() {
       if (!active) return;
       if (busy) {queued = true; return;}
       busy = true;
-      apiClient.get(`/matches/${id}`, {signal:controller.signal, params:{_snapshot:Date.now()}}).then(res => {
+      apiClient.get(`/matches/${id}`, {signal:controller.signal,timeout:15000,params:{category:requestedCategory,_snapshot:Date.now()}}).then(res => {
         if (!active) return;
+        if(String(res.data?.id)!==id)throw new Error('MATCH_RESPONSE_MISMATCH');
+        setRequestError(null);
         acceptMatches([res.data]);
         setMatch(res.data);
+        setCategoryTotals(res.data.marketCategories??{});
+        if(requestedCategory==='Popular'&&res.data.marketCategories?.Popular===0){const next=CATEGORY_ORDER.find(category=>res.data.marketCategories[category]>0);if(next)setActiveTab(next);}
         setMarkets(res.data?.markets ?? []);
-      }).catch(error => { if (active) console.error(error); }).finally(() => {
+      }).catch(error => {
+        if(active)setRequestError({id,notFound:error.response?.status===404});
+      }).finally(() => {
         busy = false;
+        if(active)setCategoryLoading(false);
         if(active && queued) {queued=false;refresh();}
       });
     };
-    refreshRef.current=refresh;
+    refreshRef.current=refresh;setCategoryLoading(true);
     refresh();
     // Opening a fixture boosts its upstream subscription to FULL markets.
     // The first REST response can predate that push snapshot: re-fetch while open
@@ -156,7 +184,7 @@ export default function MatchDetail() {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [id, acceptMatches]);
+  }, [id,requestedCategory, acceptMatches]);
 
   useEffect(() => {
     if(lastRefreshVersion.current===refreshVersion) return;
@@ -176,22 +204,44 @@ export default function MatchDetail() {
       );
       return outcomes.length ? [{ ...market, outcomes }] : [];
     });
-  }, [markets, liveMarketMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled]);
+  }, [markets, liveMarketMatch, lockedMarkets, lockedOutcomes, riskLockedOutcomes, combosEnabled,refreshVersion]);
 
-  const allGrouped = useMemo(() => groupMarkets(filteredMarkets, lang), [filteredMarkets, lang]);
+  const stableMarketOrder=useRef<{id:string|undefined;keys:Map<string,number>}>({id:undefined,keys:new Map()});
+  const viewportAnchor=useRef<{context:string;items:{key:string;top:number}[]}>({context:'',items:[]});
+  const allGrouped = useMemo(() => {
+    const context=[id,activeTab,marketSearch,lang].join('|');
+    const items=viewportAnchor.current.context===context?Array.from(document.querySelectorAll<HTMLElement>('[data-market-anchor]')).map(el=>({key:el.dataset.marketAnchor!,top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom})).filter(el=>el.bottom>100&&el.top<window.innerHeight).slice(0,5):[];
+    viewportAnchor.current={context,items};
+    if(stableMarketOrder.current.id!==id)stableMarketOrder.current={id,keys:new Map()};
+    const order=stableMarketOrder.current.keys,groups=groupMarkets(filteredMarkets,lang);
+    for(const group of groups)if(!order.has(group.baseName))order.set(group.baseName,order.size);
+    return groups.sort((a,b)=>marketRank(a.markets[0])-marketRank(b.markets[0])||order.get(a.baseName)!-order.get(b.baseName)!);
+  }, [filteredMarkets, lang,id]);
+  useLayoutEffect(()=>{
+    for(const saved of viewportAnchor.current.items){
+      const el=Array.from(document.querySelectorAll<HTMLElement>('[data-market-anchor]')).find(el=>el.dataset.marketAnchor===saved.key);
+      if(!el)continue;
+      const delta=el.getBoundingClientRect().top-saved.top;if(Math.abs(delta)<1)break;
+      let parent=el.parentElement;
+      while(parent&&!(parent.scrollHeight>parent.clientHeight&&/(auto|scroll)/.test(getComputedStyle(parent).overflowY)))parent=parent.parentElement;
+      if(parent)parent.scrollTop+=delta;else window.scrollBy(0,delta);break;
+    }
+    viewportAnchor.current.items=[];
+  },[allGrouped]);
 
   // Available categories with count
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allGrouped.length };
+    const counts: Record<string, number> = { ...categoryTotals,all:categoryTotals.all??allGrouped.length };
+    if(Object.keys(categoryTotals).length)return counts;
     allGrouped.forEach(g => {
       counts[g.category] = (counts[g.category] || 0) + 1;
     });
     return counts;
-  }, [allGrouped]);
+  }, [allGrouped,categoryTotals]);
 
   const groupedMarkets = useMemo(() => {
     return allGrouped.filter(group => {
-      if (activeTab !== 'all' && group.category !== activeTab) return false;
+      if(activeTab==='favorites'){if(!favoriteMarkets.includes(favoriteKey(group.baseName)))return false;}else if (activeTab !== 'all' && group.category !== activeTab) return false;
       if (marketSearch.trim()) {
         const q = marketSearch.toLowerCase().trim();
         const titleMatches = group.title.toLowerCase().includes(q);
@@ -205,7 +255,7 @@ export default function MatchDetail() {
       }
       return true;
     });
-  }, [allGrouped, activeTab, marketSearch, lang, match?.homeTeam, match?.awayTeam]);
+  }, [allGrouped, activeTab, marketSearch, lang, match?.homeTeam, match?.awayTeam,favoriteMarkets,id]);
 
   const visibleLines = groupedMarkets.reduce((sum, group) => sum + group.markets.length, 0);
 
@@ -225,9 +275,21 @@ export default function MatchDetail() {
     setCollapsedGroups(nextState);
   };
 
-  if (!match) {
+  const failure=requestError&&requestError.id===id?(
+    <div role="alert" className="rounded-xl border border-tertiary bg-secondary p-6 text-center text-sm text-text-secondary space-y-3">
+      <p>{requestError.notFound
+        ?(lang==='en'?'This match is no longer available.':'Ndeshja nuk është më e disponueshme.')
+        :(lang==='en'?'Unable to load this match. Please try again.':'Nuk u ngarkua ndeshja. Provo përsëri.')}</p>
+      <button type="button" onClick={()=>refreshRef.current?.()} className="rounded-lg bg-tertiary px-4 py-2 font-semibold text-white">
+        {lang==='en'?'Try again':'Provo përsëri'}
+      </button>
+    </div>
+  ):null;
+
+  if (!match || !liveMarketMatch) {
+    if(failure)return failure;
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-text-secondary text-sm font-medium gap-2">
+      <div role="status" className="flex items-center justify-center min-h-[50vh] text-text-secondary text-sm font-medium gap-2">
         <span className="w-3 h-3 rounded-full bg-accent-green animate-ping"></span>
         <span>{t('common.loading')}</span>
       </div>
@@ -240,98 +302,25 @@ export default function MatchDetail() {
   const isAlert = isAlertEnabled(matchIdStr);
 
   const categories = [
-    { id: 'all', label: 'Të gjitha tregjet' },
+    { id: 'all', label: lang==='en'?'All markets':'Të gjitha tregjet' },
+    {id:'favorites',label:lang==='en'?'Favorite markets':'Tregjet e preferuara'},
     ...CATEGORY_ORDER.map(id => ({ id, label: categoryLabel(id, lang) })),
   ];
 
-  const filteredCategories = categories.filter(c => c.id === 'all' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
+  const filteredCategories = categories.filter(c => c.id === 'all' || c.id==='favorites' || (categoryCounts[c.id] && categoryCounts[c.id] > 0));
 
   const formattedDate = new Date(live.startTime);
   const isLive = live.status === 'LIVE';
 
   return (
-    <div className="mx-auto max-w-6xl px-1.5 py-2 sm:px-3 space-y-2">
-      {/* A photographic, dynamic scoreboard: the image is only a background.
-          Scores and statistics always come from the live feed, never from the photo.
-          Photo: Peter Glaser, CC0 (Wikimedia Commons, 2017). */}
-      <section className="overflow-hidden rounded-sm border border-[#303d4b]" aria-label={t("Rezultati dhe statistikat e ndeshjes")}>
-        <div className="flex min-h-[36px] items-center justify-between gap-2 bg-[#414b5b] px-2.5 text-[#eaf0f9]">
-          <button type="button" onClick={() => navigate(-1)}
-            className="inline-flex min-w-0 items-center gap-2 py-2 text-left text-xs hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
-            aria-label={t("Kthehu te lista e ndeshjeve")}>
-            <ArrowLeft size={15} className="shrink-0" />
-            <span className="truncate">
-              {[live.tournament?.category?.name, live.tournament?.name].filter(Boolean).join(' / ') || t('common.match')}
-            </span>
-          </button>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button type="button" onClick={() => toggleFavorite(matchIdStr)}
-              aria-label={isFav ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
-              aria-pressed={isFav} title={isFav ? t("Hiq nga të preferuarat") : t("Shto te të preferuarat")}
-              className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
-              <Star size={15} className={isFav ? 'fill-amber-400 text-amber-400' : ''}/>
-            </button>
-            <button type="button" onClick={() => toggleAlert(matchIdStr)}
-              aria-label={isAlert ? 'Çaktivizo njoftimet gjatë lojës' : 'Aktivizo njoftimet gjatë lojës'}
-              aria-pressed={isAlert} title={isAlert ? 'Çaktivizo njoftimet gjatë lojës' : 'Aktivizo njoftimet gjatë lojës'}
-              className="rounded-sm p-1 text-slate-300 transition-colors hover:bg-white/10 hover:text-white">
-              {isAlert ? <BellRing size={15} className="text-emerald-300" /> : <Bell size={15}/>}
-            </button>
-            <button type="button" onClick={() => navigate('/')} title={t("Mbyll ndeshjen")}
-              aria-label={t("Mbyll ndeshjen dhe kthehu te ndeshjet")}
-              className="rounded-sm p-1 text-slate-200 transition-colors hover:bg-white/10 hover:text-white">
-              <X size={17} strokeWidth={3}/>
-            </button>
-          </div>
-        </div>
-        <div className="relative isolate flex min-h-[151px] items-center overflow-hidden bg-[#336528] px-2 py-3 sm:min-h-[166px] sm:px-4">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 -scale-x-100 bg-cover bg-center"
-            style={{
-              backgroundImage: 'url("https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Adidas_soccer_ball_on_a_grass_pitch_%28Unsplash%29.jpg/960px-Adidas_soccer_ball_on_a_grass_pitch_%28Unsplash%29.jpg")',
-              backgroundPosition: 'center 62%',
-              filter: 'saturate(1.35) brightness(1.08)',
-            }}/>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#10371d]/40 via-[#092a1a]/15 to-[#0f281d]/10" />
-          <div className="relative z-10 mx-auto w-full max-w-[570px] sm:ml-[13%] sm:mr-auto">
-            <div className="overflow-hidden rounded-[3px] border-[3px] border-[#a0a9a0]/75 bg-[#274431]/90 shadow-[0_2px_10px_rgba(0,0,0,0.55)]">
-              <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center bg-[#234a48] px-2 py-1 text-center text-[12px] text-white sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
-                <strong className="min-w-0 truncate text-left text-[11px] sm:text-[13px]">
-                  {isLive
-                    ? (t("NË LOJË") + (live.currentMinute != null ? ' ' + live.currentMinute + "'" : '') +
-                      (live.period ? ' ' + live.period : ''))
-                    : formattedDate.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' +
-                      formattedDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                </strong>
-                <span title={t("Gola")} aria-label={t("Gola")} role="img">⚽</span>
-                <span title={t("Kartonë gjithsej")} aria-label={t("Kartonë gjithsej")} role="img">🟨</span>
-                <span title={t("Kornera")} aria-label={t("Kornera")} role="img">🚩</span>
-              </div>
-              <div className="divide-y divide-white/10 text-xs sm:text-sm">
-                <div className="grid min-h-[27px] grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center px-2 text-center sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
-                  <strong className="min-w-0 truncate text-left text-white" title={live.homeTeam}>{live.homeTeam}</strong>
-                  <strong className="font-mono text-amber-300">{isLive || live.status === 'ENDED' ? (live.homeScore ?? '—') : '—'}</strong>
-                  <span className="font-mono text-white">{live.cards?.home ?? '—'}</span>
-                  <span className="font-mono text-white">{live.corners?.home ?? '—'}</span>
-                </div>
-                <div className="grid min-h-[27px] grid-cols-[minmax(0,1fr)_42px_42px_42px] items-center px-2 text-center sm:grid-cols-[minmax(0,1fr)_55px_50px_50px]">
-                  <strong className="min-w-0 truncate text-left text-white" title={live.awayTeam}>{live.awayTeam}</strong>
-                  <strong className="font-mono text-amber-300">{isLive || live.status === 'ENDED' ? (live.awayScore ?? '—') : '—'}</strong>
-                  <span className="font-mono text-white">{live.cards?.away ?? '—'}</span>
-                  <span className="font-mono text-white">{live.corners?.away ?? '—'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Keep the expandable real event timeline; corners/cards now live in the photo scoreboard. */}
-      {isLive && <PitchTracker matchId={live.id} homeTeam={live.homeTeam} awayTeam={live.awayTeam} eventsOnly />}
+    <div className="zshop-detail space-y-2">
+      <ZshopScoreboard match={live}/>
+      {isLive&&<PitchTracker matchId={live.id} homeTeam={live.homeTeam} awayTeam={live.awayTeam} snapshot={live}/>}
 
       {/* Filter & Search Bar */}
-      <div className="space-y-2">
+      <div className="zs-market-filters space-y-2">
         {/* Search input for instant market find */}
-        <div className="relative">
+        <div className="relative zs-market-search">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary" />
           <input
             type="text"
@@ -351,7 +340,7 @@ export default function MatchDetail() {
         </div>
 
         {/* Category Filter Pills with Icons */}
-        <div className="rounded-sm border border-tertiary bg-primary/90 p-0.5">
+        <div className="zs-market-tabs rounded-sm border border-tertiary bg-primary/90 p-0.5">
           <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pb-0.5">
             {filteredCategories.map((cat) => {
               const count = categoryCounts[cat.id] || 0;
@@ -360,6 +349,8 @@ export default function MatchDetail() {
               return (
                 <button
                   key={cat.id}
+                  type="button"
+                  aria-pressed={isActive}
                   onClick={() => setActiveTab(cat.id)}
                   className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors ${
                     isActive
@@ -392,23 +383,23 @@ export default function MatchDetail() {
         </button>
       </div>
 
-      {/* Markets List - Dense, Elegant & Organized */}
-      <div className="space-y-2">
-        {groupedMarkets.length === 0 ? (
+      {/* Original zshop two-column market layout. */}
+      <div className="zshop-market-list">
+        {failure??(categoryLoading?(<div role="status" className="p-6 text-sm text-text-secondary">{t("common.loading")}</div>):groupedMarkets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-secondary p-8 text-center text-sm text-text-secondary space-y-2">
             <Search size={28} className="mx-auto opacity-30 text-white" />
             <div className="font-bold text-white">{t("Nuk u gjet asnjë treg")}</div>
             <p className="text-xs">{t("Provoni të ndryshoni kategorinë ose fjalën e kërkimit.")}</p>
           </div>
         ) : (
-          groupedMarkets.map((group, idx) => {
+          <ViewportList items={groupedMarkets.map((group,idx)=>({key:group.baseName,estimate:160,node:()=>{
             const isCollapsed = collapsedGroups[group.baseName] ?? false;
             const sectionStart = idx === 0 || groupedMarkets[idx - 1].category !== group.category;
 
             return (
-              <div key={group.baseName} className="space-y-1.5">
+              <div key={group.baseName} data-market-anchor={group.baseName} className="zs-market-group">
                 {sectionStart && (
-                  <div className="flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
+                  <div className="zs-market-category flex items-center gap-2 px-1 pt-2 text-xs font-bold uppercase tracking-wide text-white">
                     {getCategoryIcon(group.category)}
                     <span>{categoryLabel(group.category, lang)}</span>
                     <span className="rounded bg-tertiary/70 px-2 py-0.5 text-[10px] text-text-secondary">
@@ -417,43 +408,26 @@ export default function MatchDetail() {
                   </div>
                 )}
               <section className="overflow-hidden border border-tertiary/80 bg-secondary">
-                <button type="button" onClick={() => toggleGroupCollapse(group.baseName)}
-                  className="w-full flex items-center justify-between gap-2 bg-[#424d60] hover:bg-[#526176] px-2.5 py-1.5 text-left border-b border-tertiary">
-                  <span className="min-w-0 flex items-center gap-1.5 text-xs font-semibold text-white">
-                    <Star size={12} className="shrink-0 text-text-secondary" />
+                <div className="zs-market-toggle w-full flex items-center justify-between gap-2 bg-[#424d60] px-2.5 py-1.5 text-left border-b border-tertiary">
+                  <button type="button" className="shrink-0 p-1" aria-label={(lang==='en'?'Favorite market: ':'Treg i preferuar: ')+group.title} aria-pressed={favoriteMarkets.includes(favoriteKey(group.baseName))} onClick={()=>toggleMarketFavorite(group.baseName)}><Star size={16} className={favoriteMarkets.includes(favoriteKey(group.baseName))?'fill-amber-400 text-amber-400':'text-text-secondary'}/></button>
+                  <button type="button" onClick={() => toggleGroupCollapse(group.baseName)} aria-expanded={!isCollapsed} className="min-w-0 flex flex-1 items-center justify-between gap-2 py-1 text-left text-xs font-semibold text-white">
                     <span className="break-words">{group.title}</span>
-                  </span>
                   <span className="shrink-0 text-[10px] text-text-secondary flex items-center gap-1">
-                    {group.markets.length} {group.markets.length === 1 ? 'linjë' : t("linja")}
+                    {group.markets.length} {group.markets.length === 1 ? (lang==='en'?'line':'linjë') : t("linja")}
                     {isCollapsed ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
                   </span>
-                </button>
-                {!isCollapsed && (
+                  </button>
+                  <MarketInfoButton market={{...group.markets[0],name:marketBaseName(group.markets[0]),line:group.markets.length>1?'':group.markets[0].line}} title={group.title}/>
+                </div>
+                {!isCollapsed && (group.markets.every(isComboMarket) ? (
+                  <ComboOddsGrid markets={group.markets} match={live} />
+                ) : (
                   <div className="divide-y divide-tertiary/70">
                     {group.markets.map(market => {
                       const cleanOutcomes = dedupeOutcomes((market as any).outcomes ?? []);
                       if (!cleanOutcomes.length) return null;
-                      const builder = betBuilderGroup(market);
                       const line = marketLineValue(market);
-                      const showLine = !builder && (group.markets.length > 1 || !!line);
-                      if (builder) {
-                        // Render verified contract legs in Albanian; keep the
-                        // original template and outcome IDs for placement.
-                        return (
-                          <div key={market.id} className="flex min-h-[42px] items-stretch gap-px bg-tertiary/80">
-                            <div className="flex min-w-0 flex-1 items-center bg-[#414b5b] px-2 py-1.5">
-                              <span className="break-words text-[11px] font-semibold text-slate-100">
-                                {marketSelectionLabel(cleanOutcomes[0]?.name ?? '', lang, market.name, `${live.homeTeam} vs ${live.awayTeam}`, cleanOutcomes[0]?.code, market.line)}
-                              </span>
-                            </div>
-                            <div className="flex min-w-0 flex-[1.4] flex-col bg-[#252e3b] [&_button]:min-h-[42px] [&_button]:w-full [&_button]:flex-1 [&_button]:rounded-none">
-                              {cleanOutcomes.map((outcome: any) => (
-                                <OddsButton key={outcome.id} match={live} market={market} outcome={outcome} isWide showRawLabel />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
+                      const showLine = group.markets.length > 1 || !!line;
                       return (
                         <div key={market.id} className="flex items-stretch min-h-[40px] bg-[#252e3b]">
                           {showLine && (
@@ -461,7 +435,7 @@ export default function MatchDetail() {
                               {formatMarketLine(market.name, line) || marketDisplayTitle(market, lang)}
                             </div>
                           )}
-                          <div className="flex-1 min-w-0 grid gap-px bg-tertiary/80"
+                          <div className="zs-market-outcomes flex-1 min-w-0 grid gap-px bg-tertiary/80"
                             style={{gridTemplateColumns: `repeat(${Math.min(cleanOutcomes.length, 3)}, minmax(0, 1fr))`}}>
                             {cleanOutcomes.map((outcome: any) => (
                               <div key={outcome.id} className="min-w-0 bg-[#252e3b] [&_button]:w-full [&_button]:h-full [&_button]:min-h-[40px] [&_button]:rounded-none [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-xs">
@@ -473,13 +447,14 @@ export default function MatchDetail() {
                       );
                     })}
                   </div>
-                )}
+                ))}
               </section>
               </div>
             );
-          })
-        )}
+          }}))}/>
+        ))}
       </div>
     </div>
   );
 }
+

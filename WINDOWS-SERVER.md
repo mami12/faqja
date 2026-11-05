@@ -26,6 +26,17 @@ llogaritë dhe historikun para nisjes lokale. Mbaji të ndalur serverët e tjer�
 këtij kalimi. Sekretet dhe cilësimet e tjera ruhen; databaza burim nuk fshihet.
 Në dështim, konfigurimi i mëparshëm ruhet dhe serveri nuk nis me llogari bosh.
 
+Për një kopje më të vogël në USB, përdor `npm run pack:windows` dhe ndiq
+`USB-TRANSFER.md`. Arkivi përfshin asetet e paketuara të lojërave, pa varësitë e
+instaluara, cache, databazën e laptopit ose kopjen e gjeneruar `web/dist`.
+`start.bat` instalon varësitë dhe ndërton faqen në kompjuterin tjetër.
+
+Sizzling dhe Book of Ra përdorin së pari kopjen lokale të verifikuar të aseteve.
+Shkarkimi nga GitHub bëhet vetëm kur ajo kopje mungon ose është e paplotë.
+Nëse nisja shfaq `TimeoutError` pas kontrollit të Fortune Teller, transfero edhe
+folderët e plotë `web/public/casino-original/sizzling` dhe `bookofra` nga kopja
+funksionale, bashkë me skriptet aktuale. Arkivi USB i përfshin të dy folderët.
+
 Windows 10 i përditësuar përfshin `tar`, që përdoret për dy arkivat origjinale
 të lojërave. Nëse mungon, launcher-i e raporton përpara ndërtimit. Node dhe npm
 duhet të instalohen bashkë nga instaluesi zyrtar.

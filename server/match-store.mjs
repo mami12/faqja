@@ -13,6 +13,7 @@
  * helper, so the subscription tiers are defined in exactly one place.
  */
 import { splitByKickoff, DEFAULT_SOON_MS } from './subscribe-plan.mjs';
+import {mergeTeamStats} from './match-statistics.mjs';
 
 const MATCH_COLUMNS = [
   'match_id', 'sport_id', 'sport_tag', 'category_id', 'category_slug', 'category_name',
@@ -107,7 +108,7 @@ export function expireStale(graceSeconds = 150, at = Date.now()) {
 }
 
 /** Server-owned order is immutable while a fixture stays in its section. */
-export function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false } = {}) {
+export function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false,catalog=false } = {}) {
   const wantService = service ? String(service).toUpperCase() : null;
   const needle = q ? String(q).toLowerCase() : null;
   const out = [];
@@ -135,7 +136,7 @@ export function getMatches({ service = null, league = null, tournamentId = null,
   );
 
   const from = Math.max(0, Number(offset) || 0);
-  return out.slice(from, from + Math.min(Number(limit) || 500, 2000));
+  return catalog?out:out.slice(from, from + Math.min(Number(limit) || 500, 2000));
 }
 
 export function getById(matchId) {
@@ -188,8 +189,8 @@ export function getCounts() {
  * so the pusher can refresh the fixtures that are about to start far more often than the rest.
  */
 export function getSubscriptionIds({
-  liveLimit = 250,
-  prematchLimit = 150,
+  liveLimit = 0,
+  prematchLimit = 0,
   feedEvidenceMs = 900000,
   soonMs = DEFAULT_SOON_MS,
 } = {}) {
@@ -205,7 +206,7 @@ export function getSubscriptionIds({
         return time(m.clock_at) >= cutoff;
       })
       .sort((a, b) => time(a.start_at) - time(b.start_at))
-      .slice(0, Math.max(0, Number(limit) || 0));
+      .slice(0, Number(limit)>0?Math.floor(Number(limit)):undefined);
 
   const liveRows = pick('LIVE', liveLimit);
   const prematchRows = pick('PREMATCH', prematchLimit);
@@ -279,10 +280,10 @@ export function applyInfo(info) {
   }
   if (Array.isArray(info.periodsScore) && info.periodsScore.length) match.periods_score = info.periodsScore;
   if (Number.isFinite(info.enabledOddsCount)) match.odds_count = info.enabledOddsCount;
-  if (info.stats && Object.keys(info.stats).length) match.stats = { ...(match.stats ?? {}), ...info.stats };
+  if (info.stats && Object.keys(info.stats).length) match.stats = mergeTeamStats(match.stats,info.stats,{observedAt:at});
   if (hasClock) {
     match.match_time_ms = info.matchTimeMs;
-    match.clock_at = at;
+    match.clock_at = info.providerClockAt && Number.isFinite(Date.parse(info.providerClockAt)) ? new Date(info.providerClockAt) : at;
   }
   if (typeof info.feedStatus === 'string') {
     match.feed_status = info.feedStatus;

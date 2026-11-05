@@ -1,8 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
+import {OutcomeFeedContext,createOutcomeStore} from './outcomeFeed';
+import {bindFeedScope,hasFeedInterest,hasDetailFeedInterest} from './feedScope';
+import {createSourceReopenTracker} from './sourceReopen';
+import {setCatalogRows,setCategoryPolicies,setScopeBlocks} from '../../../server/market-catalog.mjs';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { Match, MatchEvent, OddsDelta } from '../types';
 import { frozenSelectionPrice } from '../../../server/ledger/system-columns.mjs';
 import { mergeMatchFacts, snapshotTime, timestamp } from './matchSync';
+import {optionalFeedNumber} from './feedNumbers';
 
 /**
  * One shared Socket.IO connection for the whole board.
@@ -38,6 +43,9 @@ export interface LivePatch {
   awayTeam?: string;
   corners?: { home: number; away: number } | null;
   cards?: { home: number; away: number } | null;
+  shots?: { home: number; away: number } | null;
+  shotsOnTarget?: { home: number; away: number } | null;
+  fouls?: { home: number; away: number } | null;
   /** how many markets the board currently prices for this match (0 = nothing to bet yet) */
   marketCount?: number;
   isSuspended?: boolean;
@@ -97,22 +105,23 @@ const compact = <T extends object>(input: T): T => {
   return out as T;
 };
 
-const cornersOf = (stats: any) => {
-  const home = stats?.home?.corners;
-  const away = stats?.away?.corners;
-  if (home === null || home === undefined) {
-    return away === null || away === undefined ? null : { home: 0, away: Number(away) };
-  }
-  return { home: Number(home), away: Number(away ?? 0) };
+const counterOf = (stats:any,field:string) => {
+  const home=stats?.home?.[field],away=stats?.away?.[field];
+  if(home==null&&away==null)return undefined;
+  return [home,away].every(value=>typeof value==='number'&&Number.isInteger(value)&&value>=0)?{home:Number(home),away:Number(away)}:null;
 };
+const cornersOf = (stats:any) => counterOf(stats,'corners');
 
 const cardsOf = (stats: any) => {
-  if (!stats?.home && !stats?.away) return null;
-  const count = (side: any) => Number(side?.yellow ?? 0) + Number(side?.red ?? 0);
+  if(!stats?.home&&!stats?.away)return undefined;
+  if(['home','away'].every(side=>['yellow','red'].every(field=>stats?.[side]?.[field]===undefined)))return undefined;
+  if (!counterOf(stats,'yellow')||!counterOf(stats,'red')) return null;
+  const count = (side: any) => side.yellow + side.red;
   return { home: count(stats.home), away: count(stats.away) };
 };
 
 export function LiveFeedProvider({ children }: { children: ReactNode }) {
+  const outcomeStore=useRef(createOutcomeStore());
   const [oddsDeltas, setOddsDeltas] = useState<Record<string, OddsDelta>>({});
   const [livePatches, setLivePatches] = useState<Record<string, LivePatch>>({});
   const [matchEvents, setMatchEvents] = useState<MatchEvent[]>([]);
@@ -134,8 +143,30 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
   const prevMarketAt = useRef<Record<string, number>>({});
   const prevMatchAt = useRef<Record<string, number>>({});
   const prevRiskAt = useRef<Record<string, number>>({});
+  const prevTimelineAt = useRef<Record<string, number>>({});
+  const reopenRefresh=useRef<(id:string)=>void>(()=>{});
+  const reopenTracker=useRef(createSourceReopenTracker(id=>reopenRefresh.current(id)));
+  const knownScores=useRef<Record<string,{score:string;at:number}>>({});
+  const observeScore=useCallback((id:string,home:unknown,away:unknown,at:number,notify=true)=>{
+    if(typeof home!=='number'||typeof away!=='number'||!Number.isFinite(home)||!Number.isFinite(away)||!at)return;
+    const previous=knownScores.current[id];if(previous&&at<previous.at)return;
+    const score=home+':'+away;knownScores.current[id]={score,at};
+    if(notify&&previous&&previous.score!==score&&hasFeedInterest(id))setRefreshVersion(v=>v+1);
+  },[]);
 
   const acceptMatches = useCallback((matches: Match[]) => {
+    // A delayed REST snapshot must not remove an incident already pushed to
+    // another tab. Order complete timelines by capture time, like score facts.
+    const timelines=matches.filter(match=>{
+      if(!Array.isArray(match.events))return false;
+      const id=String(match.id),at=snapshotTime(match);
+      if(at<(prevTimelineAt.current[id]??0))return false;
+      prevTimelineAt.current[id]=at;return true;
+    });
+    if(timelines.length)setMatchEvents(previous=>{
+      const ids=new Set(timelines.map(match=>String(match.id)));
+      return [...previous.filter(event=>!ids.has(event.matchId)),...timelines.flatMap(match=>match.events??[])].slice(-500);
+    });
     const patches: Record<string, LivePatch> = {};
     const deltas: Record<string, OddsDelta> = {};
     const outcomeLocks: Record<string, boolean> = {}, marketLocks: Record<string, boolean> = {};
@@ -144,36 +175,41 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       if (!match?.id) continue;
       const at = snapshotTime(match);
       const id = String(match.id);
+      observeScore(id,match.homeScore,match.awayScore,timestamp(match.scoreAt),false);
       patches[id] = compact({
         displayOrder: match.displayOrder, competitionOrder: match.competitionOrder, listingStale: match.listingStale,
         status: match.status, currentMinute: match.currentMinute, currentSecond: (match as any).currentSecond,
         homeScore: match.homeScore, awayScore: match.awayScore, scoreAt: match.scoreAt ?? undefined,
         clockAt: match.clockAt, phaseAt: match.phaseAt, snapshotAt: match.snapshotAt, updatedAt: match.updatedAt ?? match.snapshotAt ?? '',
         period: match.period, corners: match.corners, cards: match.cards,
+        shots:match.shots,shotsOnTarget:match.shotsOnTarget,fouls:match.fouls,
         marketCount: (match as any).marketCount, isSuspended: match.isSuspended,
         homeTeam: match.homeTeam, awayTeam: match.awayTeam,
       });
       if (at >= (prevMatchAt.current[id] ?? 0)) {
         prevMatchAt.current[id] = at;
         matchLocks[id] = match.isSuspended === true;
+        reopenTracker.current.observe(id,'match:'+id,matchLocks[id],at);
       }
       for (const market of match.markets ?? []) {
         if (at >= (prevMarketAt.current[market.id] ?? 0)) {
           prevMarketAt.current[market.id] = at;
           marketLocks[market.id] = market.status === 'SUSPENDED';
+          reopenTracker.current.observe(id,'market:'+market.id,marketLocks[market.id],at);
         }
         for (const outcome of market.outcomes ?? []) {
           if (at < (prevOddsAt.current[outcome.id] ?? 0)) continue;
           prevOddsAt.current[outcome.id] = at;
           outcomeLocks[outcome.id] = outcome.feedSuspended ??
             (outcome.status === 'SUSPENDED' && outcome.riskSuspended !== true);
+          reopenTracker.current.observe(id,'outcome:'+outcome.id,outcomeLocks[outcome.id],at);
           if (at >= (prevRiskAt.current[outcome.id] ?? 0)) {
             prevRiskAt.current[outcome.id] = at;
             riskLocks[outcome.id] = outcome.riskSuspended === true;
           }
           if (!Number.isFinite(outcome.odds) || outcome.odds < 1) continue;
           prevOdds.current[outcome.id] = outcome.odds;
-          deltas[outcome.id] = { outcomeId: outcome.id, newOdds: outcome.odds, at, direction: 'up', changed: false };
+          deltas[outcome.id] = { outcomeId: outcome.id, newOdds: outcome.odds, at, direction: 'up', changed: false,priceValidUntil:outcome.priceValidUntil,quoteSuspended:outcome.quoteSuspended };
         }
       }
     }
@@ -198,10 +234,26 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const socket: Socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+    const unbindScope=bindFeedScope(socket);
 
     const refresh = () => setRefreshVersion(value => value + 1);
+    let reopenTimer:ReturnType<typeof setTimeout>|undefined,lastReopenRefresh=-Infinity;
+    const reopenedMatches=new Set<string>();
+    reopenRefresh.current=id=>{
+      if(!hasDetailFeedInterest(id))return;
+      reopenedMatches.add(id);if(reopenTimer)return;
+      reopenTimer=setTimeout(()=>{
+        reopenTimer=undefined;const interested=[...reopenedMatches].some(hasDetailFeedInterest);reopenedMatches.clear();
+        if(interested){lastReopenRefresh=Date.now();refresh();}
+      },Math.max(150,3000-(Date.now()-lastReopenRefresh)));
+    };
     socket.on('connect', () => { setConnected(true); refresh(); });
     socket.on('disconnect', () => setConnected(false));
+    socket.on('finance:reset',()=>window.dispatchEvent(new Event('finance:reset')));
+    socket.on('board:settings',refresh);
+    const applyPolicy=(data:any)=>{if(Array.isArray(data?.markets)){setCatalogRows(data.markets);setCategoryPolicies(data.categories??[]);setScopeBlocks(data.scopes??[]);refresh();}};
+    const readPolicy=()=>fetch('/app/api/market-policy',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(applyPolicy).catch(()=>{});
+    socket.on('markets:policy',applyPolicy);socket.on('connect',readPolicy);void readPolicy();
     // Mobile browsers suspend timers and may miss whole collector cycles. Their
     // next foreground view must request a fresh authoritative snapshot.
     const resume = () => { if (document.visibilityState !== 'hidden') refresh(); };
@@ -221,6 +273,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     socket.on('feed:state', useMode);
 
     socket.on('odds:update', (payload: { matchId: string | number; markets?: any[] }) => {
+      if((payload as any).boardChanged)refresh();
       const incomingAt = Date.parse((payload as any).at) || Date.now();
       const deltas: Record<string, OddsDelta> = {};
       const outcomeLocks: Record<string, boolean> = {};
@@ -239,6 +292,10 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           // stayed open for up to 15s, which is exactly the window nobody may bet in.
           if (outcome?.suspended === true || outcome?.suspended === false) {
             outcomeLocks[outcomeId] = outcome.suspended === true;
+            const validPrice=outcome.price!=null&&Number(outcome.price)>1&&Number.isFinite(Number(outcome.price));
+            const validUntil=outcome.priceValidUntil;
+            const fresh=validPrice&&validUntil!==null&&(validUntil===undefined||(Number.isFinite(validUntil)&&validUntil>=Date.now()));
+            reopenTracker.current.observe(String(payload.matchId),'outcome:'+outcomeId,outcome.suspended,incomingAt,true,fresh);
           }
 
           if (outcome?.price === null || outcome?.price === undefined) continue;
@@ -247,19 +304,26 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
           const next = frozenSelectionPrice(rawPrice);
           const before = prevOdds.current[outcomeId];
           prevOdds.current[outcomeId] = next;
-          deltas[outcomeId] = { outcomeId, newOdds: next, direction: before === undefined || next >= before ? 'up' : 'down', at: incomingAt, changed:before !== undefined && before !== next };
+          deltas[outcomeId] = { outcomeId, newOdds: next, direction: before === undefined || next >= before ? 'up' : 'down', at: incomingAt, changed:before !== undefined && before !== next,priceValidUntil:outcome.priceValidUntil,quoteSuspended:outcome.quoteSuspended };
         }
 
         // only the rows that moved are pushed, so "every row in this frame is suspended" is
         // what a fully locked market looks like over the socket
         const outcomes = market?.outcomes ?? [];
         if (outcomes.length && incomingAt >= (prevMarketAt.current[marketId] ?? 0)) {
-          marketLocks[marketId] = outcomes.every((o: any) => o.suspended === true);
+          // This is a delta, not the complete market. One suspended line
+          // cannot lock every other selection in the market.
+          if(outcomes.some((o:any)=>o.suspended===false))marketLocks[marketId]=false;
+          if(marketLocks[marketId]===false){
+            const fresh=outcomes.some((o:any)=>o.suspended===false&&o.price!=null&&Number(o.price)>1&&Number.isFinite(Number(o.price))&&o.priceValidUntil!==null&&(o.priceValidUntil===undefined||(Number.isFinite(o.priceValidUntil)&&o.priceValidUntil>=Date.now())));
+            reopenTracker.current.observe(String(payload.matchId),'market:'+marketId,false,incomingAt,true,fresh);
+          }
           prevMarketAt.current[marketId] = incomingAt;
         }
       }
 
-      if (Object.keys(deltas).length) setOddsDeltas(prev => ({ ...prev, ...deltas }));
+      // React coalesces updates within the current event; no extra timer delays prices.
+      if(Object.keys(deltas).length)setOddsDeltas(previous=>{const next={...previous};for(const[id,delta]of Object.entries(deltas))if((delta.at??0)>=(previous[id]?.at??0))next[id]=delta;return next;});
       if (Object.keys(outcomeLocks).length) setLockedOutcomes(prev => ({ ...prev, ...outcomeLocks }));
       if (Object.keys(marketLocks).length) setLockedMarkets(prev => ({ ...prev, ...marketLocks }));
       // Reopen a locally refused choice only after a newer, explicitly active
@@ -305,30 +369,36 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     });
 
     // the whole live board, once per collector cycle
+    let liveMembership='';
     socket.on('matches:live', (payload: { matches?: any[] }) => {
       useMode(payload); // the first board after a wake also announces the mode
-      refresh(); // membership, including prematch and removals, comes from REST
+      // List membership also has a 30-second REST fallback. Only a changed
+      // live ID set needs an immediate refetch, not every clock snapshot.
+      const membership=(payload.matches??[]).map(m=>String(m.id)).sort().join(',');
+      if(membership!==liveMembership){liveMembership=membership;refresh();}
       const patches: Record<string, LivePatch> = {};
       for (const m of payload?.matches ?? []) {
         if (!m || m.id === undefined || m.id === null) continue;
-        const minute = Number(m.minute);
-        const home = Number(m?.score?.home);
-        const away = Number(m?.score?.away);
+        const minute = optionalFeedNumber(m.minute);
+        const home = optionalFeedNumber(m?.score?.home);
+        const away = optionalFeedNumber(m?.score?.away);
+        observeScore(String(m.id),m?.score?.home,m?.score?.away,timestamp(m.scoreAt));
         patches[String(m.id)] = compact({
           displayOrder: m.displayOrder, competitionOrder: m.competitionOrder, listingStale: m.listingStale,
           status: m.status === 'live' ? 'LIVE' : m.status === 'ended' ? 'ENDED' : undefined,
-          currentMinute: Number.isFinite(minute) ? minute : undefined,
-          currentSecond: Number.isFinite(Number(m.currentSecond)) ? Number(m.currentSecond) : 0,
-          marketCount: Number.isFinite(Number(m.marketCount)) ? Number(m.marketCount) : undefined,
-          period: m.phase ?? null,
-          homeScore: Number.isFinite(home) ? home : undefined,
-          awayScore: Number.isFinite(away) ? away : undefined,
+          currentMinute: minute,
+          currentSecond: optionalFeedNumber(m.currentSecond),
+          marketCount: optionalFeedNumber(m.marketCount),
+          period: m.phase,
+          homeScore: home,
+          awayScore: away,
           scoreAt: typeof m.scoreAt==='string'?m.scoreAt:undefined,
           clockAt: m.clockAt,
           phaseAt: m.phaseAt,
           corners: cornersOf(m.stats),
           cards: cardsOf(m.stats),
-          isSuspended: m.suspended === true,
+          shots:counterOf(m.stats,'shots'),shotsOnTarget:counterOf(m.stats,'shotsOnTarget'),fouls:counterOf(m.stats,'fouls'),
+          isSuspended: typeof m.suspended==='boolean'?m.suspended:undefined,
           snapshotAt: m.snapshotAt ?? (payload as any).at,
           updatedAt: m.updatedAt ?? (payload as any).at ?? '',
         }) as LivePatch;
@@ -342,10 +412,12 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         // the board's own view: a match whose every market is locked
         const matchLocks: Record<string, boolean> = {};
         for (const [id, p] of Object.entries(patches)) {
+          if(typeof p.isSuspended!=='boolean')continue;
           const at = snapshotTime(p);
           if (at < (prevMatchAt.current[id] ?? 0)) continue;
           prevMatchAt.current[id] = at;
           matchLocks[id] = p.isSuspended === true;
+          reopenTracker.current.observe(id,'match:'+id,matchLocks[id],at,true);
         }
         setLockedMatches(prev => ({ ...prev, ...matchLocks }));
       }
@@ -376,27 +448,24 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
         isSuspended: typeof info.has_open_odds === 'boolean' ? info.has_open_odds === false : undefined,
         corners: cornersOf(info.stats),
         cards: cardsOf(info.stats),
+        shots:counterOf(info.stats,'shots'),shotsOnTarget:counterOf(info.stats,'shotsOnTarget'),fouls:counterOf(info.stats,'fouls'),
         snapshotAt: at,
         updatedAt: info.updated_at ? new Date(info.updated_at).toISOString() : at,
       }) as LivePatch;
 
       const key = String(id);
+      observeScore(key,patch.homeScore,patch.awayScore,timestamp(patch.scoreAt));
       // the feed's own "this match has no open odds" flag locks every price on it
       if (typeof info.has_open_odds === 'boolean' && snapshotTime(patch) >= (prevMatchAt.current[key] ?? 0)) {
         prevMatchAt.current[key] = snapshotTime(patch);
+        reopenTracker.current.observe(key,'match:'+key,info.has_open_odds===false,snapshotTime(patch),true);
         setLockedMatches(prev => ({ ...prev, [key]: info.has_open_odds === false }));
       }
       setLivePatches(prev => ({ ...prev, [key]: mergeMatchFacts(prev[key], patch) }));
-      setMatchEvents(prev => [
-        ...prev.slice(-49),
-        {
-          matchId: key,
-          type: info.feed_status ?? 'update',
-          minute: minute ?? 0,
-          team: 'home',
-          text: `${info.home_score ?? '-'}-${info.away_score ?? '-'}`,
-        },
-      ]);
+      if(Array.isArray(info.events)&&snapshotTime(patch)>=(prevTimelineAt.current[key]??0)){
+        prevTimelineAt.current[key]=snapshotTime(patch);
+        setMatchEvents(prev=>[...prev.filter(event=>event.matchId!==key),...info.events.filter((event:any)=>event.matchId===key&&Number.isFinite(event.minute))].slice(-500));
+      }
     });
 
     socket.on('connect_error', (e: Error) => console.warn('[socket] connect_error:', e.message));
@@ -405,7 +474,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('pageshow', resume);
       window.removeEventListener('online', refresh);
-      socket.close();
+      if(reopenTimer)clearTimeout(reopenTimer);reopenedMatches.clear();reopenRefresh.current=()=>{};
+      unbindScope();socket.close();
     };
   }, []);
 
@@ -416,7 +486,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     [oddsDeltas, livePatches, matchEvents, connected, feedMode, lockedOutcomes, riskLockedOutcomes, lockedMarkets, lockedMatches, combosEnabled, rejectedOutcomes,invalidateSelections, refreshVersion, acceptMatches],
   );
 
-  return <LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider>;
+  useLayoutEffect(()=>outcomeStore.current.publish(value),[value]);
+  return <OutcomeFeedContext.Provider value={outcomeStore.current}><LiveFeedContext.Provider value={value}>{children}</LiveFeedContext.Provider></OutcomeFeedContext.Provider>;
 }
 
 export const useLiveFeed = () => useContext(LiveFeedContext);
@@ -427,4 +498,3 @@ export const useLivePatch = (matchId?: string | number | null): LivePatch | unde
   if (matchId === undefined || matchId === null || matchId === '') return undefined;
   return livePatches[String(matchId)];
 };
-

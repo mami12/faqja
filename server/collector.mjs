@@ -1,3 +1,7 @@
+import {statsProviders} from './stats-providers/index.mjs';
+import {observeMarket,marketIsEnabled} from './market-catalog.mjs';
+import {isBoardOddsRow} from './ledger/board-projection.mjs';
+import {isExcludedOfferMarket} from './market-policy.mjs';
 import { config, dbErrorHint } from './config.mjs';
 import { liveClock } from './minute.mjs';
 import { fetchRealFootball } from './upstream.mjs';
@@ -9,6 +13,7 @@ import { isHandicapOfferMarket } from './market-policy.mjs';
 import { isResultBttsMarket } from './ledger/result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket } from './ledger/mixed-combos.mjs';
 import { liveBoardFacts } from './feed-sync.mjs';
+import {teamStatisticsFromRow} from './match-statistics.mjs';
 
 /** a line we invented ourselves because the feed's odds id carried none (see buildMarkets) */
 const isSyntheticLine = (line) => line === '' || /^#\d+$/.test(String(line));
@@ -34,10 +39,13 @@ export function isGoalTimeMarket(name) {
 }
 
 /** groups odds_current rows into markets for the UI */
-export function buildMarkets(oddsRows) {
+export function buildMarkets(oddsRows,{includeRemoved=false}={}) {
   const markets = new Map();
 
   for (const o of oddsRows) {
+    // Zizobet emits null-price tombstones for removed/deduplicated offers.
+    // Keep those in the store for stale-ticket validation, not on the board.
+    if (!includeRemoved&&/^zz\d+@/.test(String(o.market_key)) && o.price == null && o.suspended === true) continue;
     if (!isIdentifiedMarketName(o.market_name, o.subgames, o.market_key)) continue;
     const key = `${o.market_key}|${o.line}`;
     if (!markets.has(key)) {
@@ -88,6 +96,7 @@ export function buildMarkets(oddsRows) {
       // This prevents duplicates like 1:2 or Home appearing multiple times.
       if (o.price !== null && o.price !== undefined && (existing.price === null || o.price > 0)) {
         existing.price = Number(o.price);
+        existing.priceUpdatedAt = o.updated_at instanceof Date?o.updated_at.toISOString():o.updated_at??null;
       }
       if (o.suspended === true) existing.suspended = true;
     } else {
@@ -96,11 +105,13 @@ export function buildMarkets(oddsRows) {
         name: o.outcome_name,
         price: o.price === null ? null : Number(o.price),
         suspended: o.suspended === true,
+        priceUpdatedAt: o.updated_at instanceof Date?o.updated_at.toISOString():o.updated_at??null,
       });
     }
   }
 
   const list = [...markets.values()];
+  for(const market of list)observeMarket(market);
   for (const m of list) {
     // Secondary pass to guarantee zero duplicates inside the market outcomes
     const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
@@ -125,6 +136,7 @@ export function buildMarkets(oddsRows) {
         const found = cleanOutcomes.find((x) => canon(x) === ocKey);
         if (found && oc.price !== null && (found.price === null || oc.price > 0)) {
           found.price = Number(oc.price);
+          found.priceUpdatedAt = oc.priceUpdatedAt;
         }
         if (found && oc.suspended) found.suspended = true;
       }
@@ -172,7 +184,11 @@ export function buildMarkets(oddsRows) {
 
     let filteredOutcomes = cleanOutcomes;
 
-    if (isHTFT) {
+    if (/^(?:yb|zz)\d+@/.test(m.key)) {
+      // Native provider identities are already resolved from the complete
+      // provider specifier. Do not apply LuckyBet positional-code filters.
+      filteredOutcomes = cleanOutcomes;
+    } else if (isHTFT) {
       // HT/FT: 9 outcomes. Accept both short codes (HH, HD, HA, DH, DD, DA, AH, AD, AA)
       // and slash form (1/1, 1/X, 1/2, X/1, X/X, X/2, 2/1, 2/X, 2/2).
       filteredOutcomes = cleanOutcomes.filter((o) => {
@@ -323,6 +339,9 @@ export const toDbOddsShape = (rows) =>
     period: Number(r.period ?? 0),
     board_column: r.column ?? null,
     subgames: r.subgames ?? null,
+    // This adapter receives newly ingested rows for socket publication only.
+    // REST projections retain the actual stored updated_at instead.
+    updated_at:r.updated_at??r.priceUpdatedAt??new Date(Date.now()-1000).toISOString(),
   }));
 
 /**
@@ -333,10 +352,7 @@ export const toDbOddsShape = (rows) =>
 export function statsFromRow(row) {
   const map = row?.stats;
   if (!map || typeof map !== 'object') return null;
-  const homeId = row.raw?.homeTeam?.id != null ? String(row.raw.homeTeam.id) : null;
-  const awayId = row.raw?.awayTeam?.id != null ? String(row.raw.awayTeam.id) : null;
-  const home = homeId ? map[homeId] ?? null : null;
-  const away = awayId ? map[awayId] ?? null : null;
+  const {home,away}=teamStatisticsFromRow(row);
   if (!home && !away) return null;
 
   // if the feed ever reports goals per team, surface them as a usable score
@@ -426,6 +442,8 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
 
   return {
     id: row.match_id,
+    events:row.raw?.eventTimeline,
+    provider: row.raw?.provider === 'YBETS' ? 'YBETS' : undefined,
     service: row.service,
     displayOrder: row.first_seen_at ? new Date((row.service === 'LIVE' ? row.live_first_seen_at : row.prematch_first_seen_at) ?? row.first_seen_at).getTime() : undefined,
     competitionOrder: row.competition_first_seen_at ? new Date(row.competition_first_seen_at).getTime() : undefined,
@@ -456,6 +474,8 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
     stats: statsFromRow(row),
     oddsCount: row.odds_count ?? null,
     isHot: row.is_hot === true,
+    listingPriority:row.listing_priority,
+    protectedPrematch:row.protected_prematch,
     suspended: row.listing_stale === true || oddsClosed || (markets.length > 0 && markets.every((m) => m.suspended)),
     hasSuspended: markets.some((m) => m.suspended),
     marketCount: knownMarkets.length,
@@ -466,17 +486,23 @@ export function serializeMatch(row, oddsRows = [], now = Date.now()) {
 }
 
 /** loads current odds for the given match rows and serialises everything */
-export async function withOdds(rows, now = Date.now()) {
+export async function withOdds(rows, now = Date.now(),{board=false,displayStats=false}={}) {
+  if(!board&&rows.length===1)for(const row of rows)statsProviders.warm(row);
+  if(displayStats)for(const row of rows)void statsProviders.warmStatistics(row).catch(()=>{});
   const ids = rows.map((r) => r.match_id);
   // prices are served from memory by default (no DB read on the board path);
   // ODDS_STORE=db restores the previous behaviour
   const odds = config.oddsStore === 'db' ? await getOddsFromDb(ids) : getOddsFromMemory(ids);
-  const byMatch = new Map();
+  const byMatch = new Map(),counts=new Map(),decisions=new Map(),rowsById=new Map(rows.map((r)=>[r.match_id,r]));
   for (const o of odds) {
+    const key=o.match_id+'|'+o.market_key+'|'+o.market_name,decision=decisions.get(key)??{allowed:!isExcludedOfferMarket(o)&&marketIsEnabled(o,rowsById.get(o.match_id)),board:isBoardOddsRow(o)};decisions.set(key,decision);
+    if(!decision.allowed||o.price==null&&o.suspended===true)continue;
+    if(!counts.has(o.match_id))counts.set(o.match_id,new Set());counts.get(o.match_id).add(o.market_key+'|'+o.line);
+    if(board&&!decision.board)continue;
     if (!byMatch.has(o.match_id)) byMatch.set(o.match_id, []);
     byMatch.get(o.match_id).push(o);
   }
-  return rows.map((r) => serializeMatch(r, byMatch.get(r.match_id) ?? [], now));
+  return rows.map((r) => ({...serializeMatch({...r,stats:statsProviders.displayStatistics(r)}, byMatch.get(r.match_id) ?? [], now),marketCount:counts.get(r.match_id)?.size??0}));
 }
 
 export function startCollector({ io } = {}) {
@@ -531,7 +557,7 @@ export function startCollector({ io } = {}) {
       );
 
       if (io) {
-        const liveRows = await getMatches({ service: 'LIVE', limit: 500 });
+        const liveRows = await getMatches({ service: 'LIVE', catalog:true });
         const matches = await withOdds(liveRows, now);
         const counts = await getCounts();
         io.emit('matches:live', { at: state.syncedAt, counts, matches: liveBoardFacts(matches) });

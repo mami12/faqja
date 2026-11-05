@@ -3,6 +3,9 @@ name: Verify sportsbook build
 on:
   pull_request:
     paths:
+      - 'PROTECTED_REQUIREMENTS.md'
+      - 'AGENTS.md'
+      - 'scripts/**'
       - 'web/**'
       - 'scripts/test-casino-art.mjs'
       - 'scripts/test-sizzling-wallet-browser.mjs'
@@ -22,6 +25,12 @@ on:
   push:
     branches: [main]
     paths:
+      - 'PROTECTED_REQUIREMENTS.md'
+      - 'AGENTS.md'
+      - 'server/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - 'web/**'
       - 'scripts/test-sportsbook-labels.mjs'
       - 'scripts/test-mixed-combos.mjs'
@@ -32,6 +41,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # The private transfer includes a deployment configuration. CI must use
+      # isolated fixtures and must never load deployment credentials or data.
+      DOTENV_CONFIG_PATH: /dev/null
+      DB_DRIVER: postgres
+      DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/isolated_ci
+      JWT_SECRET: isolated-ci-test-secret-only
+      STATS_PROVIDERS_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +59,8 @@ jobs:
         run: |
           npm ci
           npm --prefix web ci
+      - name: Validate protected requirements with isolated databases and feeds
+        run: npm run test:protected
       - name: Validate sportsbook label regressions
         run: npm run test:sportsbook-labels
       - name: Validate market identities and unknown-market exclusions

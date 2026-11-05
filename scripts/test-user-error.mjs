@@ -10,8 +10,9 @@ const {userError}=module.exports;
 
 assert.equal(userError('RTP must be a number from 0 to 100 with at most two decimal places'),'RTP duhet të jetë nga 0 deri në 100, me deri në dy shifra pas presjes.');
 assert.equal(userError('Hit frequency must be a number from 0 to 100 with at most two decimal places'),'Shpeshtësia e fitimit duhet të jetë nga 0 deri në 100, me deri në dy shifra pas presjes.');
+assert.equal(userError('RTP must be a number from 0 to 1000 with at most two decimal places'),'RTP duhet të jetë nga 0 deri në 1000, me deri në dy shifra pas presjes.');
 assert.equal(userError('Incompatible RTP and hit frequency. RTP / hit frequency must be between 0.4 and 2000 for every supported stake and line count'),'RTP dhe shpeshtësia e fitimit nuk përputhen. Raporti mes tyre duhet të jetë nga 0.4 deri në 2000 për çdo bast dhe numër linjash të mbështetur.');
-for(const message of ['Casino stake must be between 0.20 and 5000.00','Casino stake must be between 0.20 and 5000 ALL'])assert.equal(userError(message),'Basti i kazinosë duhet të jetë nga 0.20 deri në 5000 lekë.');
+for(const message of ['Casino stake must be between 20 and 5000.00','Casino stake must be between 20 and 5000 ALL'])assert.equal(userError(message),'Basti i kazinosë duhet të jetë nga 20 deri në 5000 lekë.');
 const original=new Error('Casino settings changed. Reopen the game and review RTP and hit frequency before a new paid spin.');
 const snapshot=original.message;
 assert.match(userError(original),/^Cilësimet e kazinosë ndryshuan/);
@@ -37,3 +38,4 @@ assert.equal(auditActionLabel('POST /manager/tickets/UUID/revert'),'Anulim bilet
 assert.equal(auditActionLabel('UPDATE LIVE_RISK'),'Ndryshim i rregullave të rrezikut');
 assert.equal(auditTargetLabel('outcome'),'Zgjedhje');
 console.log('PASS Albanian display errors: accurate validation ranges, configuration changes, unavailable services, original diagnostics and unknown-message fallback');
+

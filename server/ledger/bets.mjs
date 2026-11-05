@@ -1,3 +1,4 @@
+import {statsProviders} from '../stats-providers/index.mjs';
 /**
  * Bets: place, book (share a code), list, settle at final result.
  *
@@ -22,7 +23,9 @@ import { outcomeIdOf, marketIdOf, parseOutcomeId, toClientMatch } from './view.m
 import { parseBuilderId, findLeg, listAvailableTemplates } from './bet-builders.mjs';
 import { multipliedComboPrice, isSameGameComboLine } from './automatic-combos.mjs';
 import { liveRiskSettings } from '../live-risk-settings.mjs';
-import { isDecidedLiveOutcome } from './decided-markets.mjs';
+import { isDecidedLiveOutcome, isYbetsNativeOffer } from './decided-markets.mjs';
+import {isExcludedOfferMarket} from '../market-policy.mjs';
+import {assertMarketEnabled} from './market-catalog-store.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { assertPlayerCanBet } from './player-controls.mjs';
 import { ticketTypeForSelectionCount, totalOddsForSelections, potentialPayout as calculatePotentialPayout } from './ticket-pricing.mjs';
@@ -35,13 +38,15 @@ import { buildSystemColumns, splitSystemStake, moneyCents, frozenSelectionPrice,
 import { aggregateSystemTicket, parseSystemTicketId, systemTicketId, SYSTEM_STATUS_SQL } from './system-ticket-view.mjs';
 import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
 import { assertDistinctSelectionMarkets } from './selection-market.mjs';
+import { eventMarketRequirement } from './event-market-policy.mjs';
+import { statisticMarketContract } from './statistic-markets.mjs';
+import {quoteValidUntil,quoteExpired} from './quote-validity.mjs';
+import {isSyntheticFootballMatch} from '../football-competitions.mjs';
 
 const MIN_STAKE = 100; // LEK
-const STALE_LIVE_ODDS_MS = 120 * 1000; // live prices older than this are not bettable
 // Prematch prices are refreshed hourly (SUBSCRIBE/PREMATCH_REFRESH_MS) unless the fixture is
 // about to start, so they are allowed to be older - but not unbounded: a price the feed has
 // stopped refreshing must not be sold, so the window is the hourly tier plus a margin.
-const STALE_PREMATCH_ODDS_MS = Number(config.prematchStaleMs) || 90 * 60 * 1000;
 const PRICE_TOLERANCE = 0.0000001; // Any quoted-price change requires explicit acceptance.
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
@@ -66,7 +71,7 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   // idle mode: while the feed is paused (or starting again) the prices on the board have not
   // been refreshed since before the pause - selling one of them would be selling a stale price
   if (feedIsRefreshing()) {
-    throw badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.');
+    throw Object.assign(badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.'),{code:'FEED_REFRESHING',outcomeId:selection?.outcomeId});
   }
 
   const parsed = parseOutcomeId(selection?.outcomeId);
@@ -75,6 +80,7 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   const matchId = Number(parsed.matchId);
   const match = await loadMatch(matchId,executor);
   if (!match) throw badRequest('Ndeshja nuk është më e disponueshme.');
+  if(isSyntheticFootballMatch(match))throw Object.assign(badRequest('Kjo ndeshje virtuale nuk ofrohet.'),{code:'MATCH_NOT_OFFERED',outcomeId:selection.outcomeId});
   if (match.listing_stale === true || match.has_open_odds === false) throw Object.assign(
     badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.'), { code: 'SELECTION_UNAVAILABLE', outcomeId: selection.outcomeId });
   if (match.active === false || phaseFromStatus(match.feed_status) === 'FT' || ['ended','finished','cancelled'].includes(String(match.status ?? '').toLowerCase())) {
@@ -85,6 +91,15 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
     (o) => o.market_key === parsed.marketKey && String(o.line ?? '') === String(parsed.line ?? '') && o.outcome_key === parsed.outcomeKey,
   );
   if (!row) throw badRequest('Kuota për këtë zgjedhje nuk është më e disponueshme.');
+  if(isExcludedOfferMarket(row))throw Object.assign(badRequest('Ky treg nuk ofrohet.'),{code:'MARKET_NOT_OFFERED',outcomeId:selection.outcomeId});
+  await assertMarketEnabled(row,executor,match);
+  const nativeOffer=isYbetsNativeOffer(row,match);
+  const statsContract=statisticMarketContract(row);
+  const eventRequired=eventMarketRequirement(row,match)||/header|headed|own goal|scoring method|method of.*goal/i.test(row.market_name??'');
+  if((statsProviders.enabled()&&eventRequired&&!statsProviders.allows(matchId,row))||(!nativeOffer&&((eventRequired&&!statsProviders.allows(matchId,row))||(statsContract&&!statsContract.supported)))){
+    throw Object.assign(badRequest('Ky treg nuk ofrohet pa të dhënat e nevojshme për verifikim.'),
+      {code:'MARKET_EVIDENCE_UNSUPPORTED',outcomeId:selection.outcomeId});
+  }
   if (liveRiskSettings().combosEnabled === false && isSameGameComboLine({marketName:row.market_name})) {
     throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
   }
@@ -101,14 +116,14 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
 
   const comboParser = isResultTotalMarket(row.market_name) ? parseResultTotal
     : isTotalBttsMarket(row.market_name) ? parseTotalBtts : null;
-  if (comboParser && !comboParser(row.outcome_key, match.home, match.away) &&
+  if (!nativeOffer && comboParser && !comboParser(row.outcome_key, match.home, match.away) &&
       !comboParser(row.outcome_name, match.home, match.away)) {
     throw badRequest('Kombinimi nuk u identifikua saktë nga furnizuesi.');
   }
 
   // Only sell result + BTTS selections when both parts of the contract are identifiable.
   // An unknown provider code cannot safely be graded at the end of the match.
-  if (isResultBttsMarket(row.market_name) &&
+  if (!nativeOffer && isResultBttsMarket(row.market_name) &&
       !parseResultBttsOutcome(row.outcome_key, match.home, match.away) &&
       !parseResultBttsOutcome(row.outcome_name, match.home, match.away)) {
     throw badRequest('Ky kombinim Rezultati + Të dy ekipet shënojnë nuk është identifikuar plotësisht.');
@@ -144,10 +159,8 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
 
   // prices must be fresh, otherwise a bet could take a price that has already moved: live
   // prices have 120s, prematch the hourly refresh window plus a margin (see the constants)
-  const at = row.updated_at instanceof Date ? row.updated_at.getTime() : new Date(row.updated_at ?? 0).getTime();
-  const maxAge = String(match.service).toUpperCase() === 'LIVE' ? STALE_LIVE_ODDS_MS : STALE_PREMATCH_ODDS_MS;
-  if (!at || Date.now() - at > maxAge) {
-    throw badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.');
+  if (quoteExpired(quoteValidUntil(row.updated_at,match,config.prematchStaleMs))) {
+    throw Object.assign(badRequest('Kuotat po rifreskohen. Provo përsëri pas pak sekondash.'),{code:'QUOTE_STALE',outcomeId:selection?.outcomeId});
   }
 
   const shown = Number(selection?.oddsAtPlacement ?? selection?.odds ?? price);
@@ -203,11 +216,13 @@ async function resolveBuilderSelection(selection, { matchId, templateId }, {exec
   if (liveRiskSettings().combosEnabled === false) {
     throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
   }
-  if (feedIsRefreshing()) throw badRequest('Kuotat po rifreskohen.');
+  if (feedIsRefreshing()) throw Object.assign(badRequest('Kuotat po rifreskohen.'),{code:'FEED_REFRESHING',outcomeId:selection?.outcomeId});
   const template = (await listAvailableTemplates({executor})).find(t => t.id === templateId);
   if (!template) throw badRequest('Bet Builder nuk është më aktiv.');
+  await assertMarketEnabled({name:`Bet Builder: ${template.name}`},executor);
   const match = await loadMatch(Number(matchId),executor);
   if (!match) throw badRequest('Ndeshja nuk është e disponueshme.');
+  if(isSyntheticFootballMatch(match))throw Object.assign(badRequest('Kjo ndeshje virtuale nuk ofrohet.'),{code:'MATCH_NOT_OFFERED',outcomeId:selection.outcomeId});
   const raw = serializeMatch(match,await loadOdds(Number(matchId),executor));
   const projected = toClientMatch(raw);
   if (isImpossibleLiveCombination(projected,{name:`Bet Builder: ${template.name}`,comboLegs:template.legs})) {
@@ -274,7 +289,7 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
 
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
 
-const TICKET_COLUMNS = `t.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout,
+const TICKET_COLUMNS = `t.id, t.booking_code, t.user_id, t.stake, t.total_odds, t.potential_payout, t.original_potential_payout, t.potential_quote_reconstructed,
                         t.ticket_type, t.system_type, t.status, t.placed_at, t.settled_at`;
 
 const toClientLine = (l) => ({
@@ -301,7 +316,9 @@ export const toClientTicket = (row, lines = [], username = null) => ({
   bookingCode: row.booking_code,
   stake: Number(row.stake),
   totalOdds: Number(row.total_odds),
-  potentialPayout: Number(row.potential_payout),
+  potentialPayout: Number(row.original_potential_payout ?? row.potential_payout),
+  potentialPayoutIsEstimated: row.potential_quote_reconstructed === true,
+  actualPayout: row.status === 'PENDING' ? null : row.status === 'REVERTED' ? Number(row.stake) : ['WON','VOID'].includes(row.status) ? Number(row.potential_payout) : 0,
   ticketType: row.ticket_type,
   systemType: row.system_type,
   status: row.status,

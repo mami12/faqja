@@ -1,16 +1,18 @@
 import { useLanguage } from '../context/LanguageContext';
 import {useEffect,useRef,useState} from 'react';
-import {AlertTriangle,RefreshCw} from 'lucide-react';
+import {AlertTriangle,Info,RefreshCw,X} from 'lucide-react';
 import {apiClient} from '../api/client';
 import {casinoPercent,casinoStakeLimits,casinoTermsKey,type CasinoGameSettings,type CasinoSettingsData,type CasinoGameId} from '../types/casino';
 import {userError} from '../utils/userError';
 import {useAuth} from '../context/AuthContext';
+import {isUserActive,noteGameView} from '../utils/userActivity';
 
 
 export type CasinoGame = CasinoGameId;
 
 const original=(id:CasinoGame,title:string)=>({title,session:`/casino/original/${id}/session`,prefix:`/app/api/casino/original/${id}/launch`});
-const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; prefix: string}> = {
+const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; prefix: string; ct?: boolean}> = {
+  'fortune-teller':original('fortune-teller','Fortune Teller'),
   'lucky-clover-x3':original('lucky-clover-x3','Lucky Clover X3'),
   'vikings-fun':original('vikings-fun',"Viking's Fun"),
   'fruit-queen':original('fruit-queen','Fruit Queen'),
@@ -26,6 +28,12 @@ const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; 
     session: '/casino/bookofra/session',
     play: '/app/api/casino/bookofra/real/play',
     prefix: '/app/casino-original/bookofra/',
+  },
+  firejoker: {
+    title: 'Fire Joker',
+    session: '/casino/original/firejoker/session',
+    prefix: '/app/api/casino/original/firejoker/',
+    ct: true,
   },
 };
 
@@ -57,35 +65,50 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
   const [awaitingTerms,setAwaitingTerms]=useState(false);
   const [termsChanged,setTermsChanged]=useState(false);
   const [pendingWin,setPendingWin]=useState(0);
+  const [showInfo,setShowInfo]=useState(false);
+  const infoDialog=useRef<HTMLElement>(null);
   const acceptedTerms=useRef('');
+  useEffect(()=>{
+    if(!showInfo)return;
+    const previous=document.activeElement as HTMLElement;
+    const before=document.body.style.overflow;document.body.style.overflow='hidden';
+    const frame=requestAnimationFrame(()=>infoDialog.current?.querySelector<HTMLElement>('button')?.focus());
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==='Escape')setShowInfo(false);
+      if(event.key==='Tab'){
+        const elements=Array.from(infoDialog.current?.querySelectorAll<HTMLElement>('button,summary')||[]).filter(element=>element.getClientRects().length>0);
+        if(event.shiftKey&&document.activeElement===elements[0]){event.preventDefault();elements[elements.length-1]?.focus();}
+        else if(!event.shiftKey&&document.activeElement===elements[elements.length-1]){event.preventDefault();elements[0]?.focus();}
+      }
+    };
+    document.addEventListener('keydown',key);
+    return()=>{cancelAnimationFrame(frame);document.body.style.overflow=before;document.removeEventListener('keydown',key);previous?.focus();};
+  },[showInfo]);
   const connect=async()=>{
     setLoading(true);setError('');setReady(false);setStalled(false);setProgress('');
-    setUrl('');setPendingWin(0);setAwaitingTerms(false);setTermsChanged(false);
+    setUrl('');setPendingWin(0);setAwaitingTerms(false);setTermsChanged(false);setShowInfo(false);
     try{
       const settings=await apiClient.get<CasinoSettingsData>('/casino/status');
       const current=settings.data.games.find(item=>item.gameId===game);
       if(!current||!settings.data.stakeLimits)throw new Error('Kushtet e lojës nuk u verifikuan. Provo përsëri.');
       const currentTerms={game:current,limits:settings.data.stakeLimits};
       setTerms(currentTerms);
-      if(current.controls.mode==='custom'&&acceptedTerms.current!==casinoTermsKey(current,settings.data.stakeLimits)){
-        setAwaitingTerms(true);return;
-      }
       const response=await apiClient.post<{ready:boolean;gameUrl:string;mathVersion?:string}>(cfg.session,{mathVersion:current.mathVersion});
       if(!response.data.ready||!response.data.gameUrl.startsWith(cfg.prefix))
         throw new Error('Sesioni i lojës nuk u krijua');
-      if(cfg.play){
-      const payload=new FormData();
-      payload.append('data',JSON.stringify({action:'init',request_id:'0',time_offset:0}));
-      const test=await fetch(cfg.play,{
-        method:'POST',credentials:'same-origin',body:payload,cache:'no-store',
-      });
-      if(!test.ok){
-        const details=(await test.text()).slice(0,220);
-        throw new Error(walletError(test.status,details));
-      }
-      const init=await test.json();
-      if(!init?.init?.start_symbols||typeof init?.balance?.after!=='number')
-        throw new Error('Serveri ktheu një përgjigje jo të plotë për nisjen e lojës.');
+      if(cfg.play&&!cfg.ct){
+        const payload=new FormData();
+        payload.append('data',JSON.stringify({action:'init',request_id:'0',time_offset:0}));
+        const test=await fetch(cfg.play,{
+          method:'POST',credentials:'same-origin',body:payload,cache:'no-store',
+        });
+        if(!test.ok){
+          const details=(await test.text()).slice(0,220);
+          throw new Error(walletError(test.status,details));
+        }
+        const init=await test.json();
+        if(!init?.init?.start_symbols||typeof init?.balance?.after!=='number')
+          throw new Error('Serveri ktheu një përgjigje jo të plotë për nisjen e lojës.');
       }
       const gameUrl=new URL(response.data.gameUrl,window.location.origin);
       gameUrl.searchParams.set('wallet',String(Date.now()));
@@ -96,7 +119,7 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       setUrl('');
     }finally{setLoading(false);}
   };
-  useEffect(()=>{void connect();},[game]);
+  useEffect(()=>{noteGameView(game);void connect();},[game]);
   useEffect(()=>{
     if(!url||!terms)return;
     let disposed=false;
@@ -107,7 +130,9 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
         if(!disposed&&current)setTermsChanged(casinoTermsKey(current,response.data.stakeLimits)!==casinoTermsKey(terms.game,terms.limits));
       }catch{/* A network failure does not interrupt an accepted round or bonus. */}
     };
-    const timer=window.setInterval(()=>void check(),30000);
+    // Only refresh the disclosed terms while the player is actually here; a
+    // hidden or idle tab makes no request at all.
+    const timer=window.setInterval(()=>{if(isUserActive())void check();},30000);
     return()=>{disposed=true;window.clearInterval(timer);};
   },[url,game,terms]);
   useEffect(()=>{
@@ -116,10 +141,12 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       try{
         const doc=frame.current?.contentDocument;
         if(!doc)return;
-        const loader=doc.getElementById('preloaderContainer');
-        const canvas=doc.getElementById('slotCanvas') as HTMLCanvasElement|null;
-        if((!cfg.play&&doc.getElementById('gameContainer'))||(!loader&&canvas&&canvas.width>0)){setReady(true);setStalled(false);return;}
-        const message=doc.getElementById('preloaderText')?.textContent;
+        const nestedFrame=doc.querySelector<HTMLIFrameElement>('#game-frame');
+        const gameDoc=nestedFrame?.contentDocument??doc;
+        const loader=gameDoc.getElementById('preloaderContainer');
+        const canvas=gameDoc.getElementById('slotCanvas') as HTMLCanvasElement|null;
+        if(gameDoc.getElementById('gameContainer')||(!loader&&canvas&&canvas.width>0)){setReady(true);setStalled(false);return;}
+        const message=gameDoc.getElementById('preloaderText')?.textContent;
         if(message)setProgress(message.trim());
       }catch{/* cross-origin frames cannot be inspected */}
     };
@@ -148,20 +175,8 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
     void refresh();
     return()=>{disposed=true;window.removeEventListener('message',changed);window.removeEventListener('focus',visible);document.removeEventListener('visibilitychange',visible);};
   },[url,game,refreshUser]);
+  const gameInfo=null;
   if(loading)return <div role="status" className="flex min-h-56 items-center justify-center bg-black p-8 text-center text-amber-200">{t("Po verifikohet lidhja me bilancin e llogarisë...")}</div>;
-  if(awaitingTerms&&terms)return <div className="max-h-full w-full overflow-y-auto bg-black p-4 text-white sm:p-6">
-    <section aria-label={t("Kushtet e lojës")} className="mx-auto max-w-xl space-y-4 rounded-xl border border-amber-400/50 bg-slate-950 p-4 sm:p-6">
-      <h2 className="text-lg font-bold">{cfg.title} {" " + t("· Modalitet i personalizuar")}</h2>
-      <p className="text-sm text-slate-200">{t("Kjo lojë përdor një shpërndarje të personalizuar të rezultateve. RTP origjinale e ofruesit nuk zbatohet për rrotullimet e reja me pagesë në këtë modalitet.")}</p>
-      <dl className="grid grid-cols-2 gap-3"><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">{t("RTP e caktuar")}</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveRtp)}</dd></div><div className="rounded-lg bg-white/5 p-3"><dt className="text-sm text-slate-300">{t("Shpeshtësia e fitimit")}</dt><dd className="text-2xl font-black text-amber-200">{casinoPercent(terms.game.effectiveHitFrequency)}</dd></div></dl>
-      <p className="text-sm text-slate-300">{t("RTP është kthimi mesatar afatgjatë. Shpeshtësia e fitimit përfshin rrotullimet me pagesë që kthejnë një shumë mbi zero, përfshirë bonusin e tyre, përpara dyfishimit opsional të fitimit. Edhe një kthim më i vogël se basti llogaritet si rrotullim që paguan.")}</p>
-      {terms.game.effectiveRtp===0&&<p role="alert" className="rounded-lg border border-rose-400/50 bg-rose-500/10 p-3 font-bold text-rose-200">{t("RTP 0%: rrotullimet e reja me pagesë nuk mund të fitojnë. Çdo bast i ri do të humbet.")}</p>}
-      <p className="text-sm text-white">{t("Kufijtë e bastit:") + " "}{casinoStakeLimits(terms.limits)}.</p>
-      {terms.game.effectiveRtp>0&&terms.game.maxPayoutMultiplier!=null&&<p className="text-sm text-slate-300">{t("Kufiri i pagesës: deri në") + " "}{terms.game.maxPayoutMultiplier}{t("× basti. Maksimumi i mundshëm me bastin dhe numrin e linjave që ke zgjedhur mund të jetë më i ulët.")}</p>}
-      <p className="text-xs text-slate-400">{t("Bonusët e pranuar më parë ruajnë kushtet e tyre.")}</p>
-      <button type="button" onClick={()=>{acceptedTerms.current=casinoTermsKey(terms.game,terms.limits);void connect();}} className="min-h-11 w-full rounded-lg bg-amber-400 px-4 font-bold text-black">{t("E kuptova · Hap lojën")}</button>
-    </section>
-  </div>;
   if(error||!url)return <div className="flex min-h-56 flex-col items-center justify-center gap-4 bg-black p-8 text-center">
     <AlertTriangle className="text-amber-300" size={30}/>
     <p role="alert" className="max-w-xl text-sm text-rose-200">{error||'Loja nuk është e disponueshme'}</p>
@@ -172,15 +187,13 @@ export default function CasinoOriginalWallet({game='sizzling'}:{game?:CasinoGame
       <span>{t("Basti:") + " "}{casinoStakeLimits(terms.limits)}</span>
       {user&&<span className="font-semibold text-white" aria-label={t("Bilanci i llogarisë")}>{t("Bilanci:") + " "}{Number(user.balance).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} {" " + t("lekë")}</span>}
       {pendingWin>0&&<span className="text-amber-200">{t("Fitim në pritje:") + " "}{pendingWin.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})} {" " + t("lekë · Arkëtoje në lojë për ta kaluar në bilanc")}</span>}
-      {terms.game.controls.mode==='custom'&&<span className="font-semibold text-amber-200">{t("I personalizuar · RTP") + " "}{casinoPercent(terms.game.effectiveRtp)} {" " + t("· Shpeshtësia") + " "}{casinoPercent(terms.game.effectiveHitFrequency)}{terms.game.effectiveRtp===0?' · Pa fitime':''}</span>}
-      {termsChanged&&<button type="button" onClick={()=>void connect()} className="min-h-8 rounded border border-amber-400/60 px-2 font-bold text-amber-200">{t("Cilësimet ndryshuan · Kontrolloji para rrotullimit tjetër me pagesë")}</button>}
     </div>}
     <div className="casino-session-stage">
     <div className="casino-wallet-surface relative">
       <iframe ref={frame} title={cfg.title+' · bilanci i llogarisë'}
         src={url} className="casino-wallet-frame block h-full min-h-0 w-full border-0"
         allow="autoplay; fullscreen; screen-wake-lock" allowFullScreen
-        onLoad={()=>{if(!cfg.play)setReady(true);}}/>
+        onLoad={()=>{if(!cfg.play&&!cfg.ct)setReady(true);}}/>
       {stalled&&!ready&&<div role="alert"
         className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black/95 p-5 text-center text-white">
         <AlertTriangle className="text-amber-300" size={32}/>

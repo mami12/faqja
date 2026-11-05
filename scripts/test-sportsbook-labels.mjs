@@ -361,8 +361,8 @@ for (const [raw, expected] of [
   ['First Goalscorer', 'Shënuesi i golit të parë'],
   ['Last Goalscorer', 'Shënuesi i golit të fundit'],
   ['Anytime Goalscorer', 'Shënues goli gjatë ndeshjes'],
-  ['First Team to Score', 'Ekipi Që Shënon I Pari'],
-  ['Last Team to Score', 'Ekipi Që Shënon I Fundit'],
+  ['First Team to Score', 'Skuadra që shënon e para'],
+  ['Last Team to Score', 'Skuadra që shënon e fundit'],
   ['Last Goal Time', 'Koha e golit të fundit'],
   ['Next Goal Time', 'Koha e golit të radhës'],
   ['1st half. Total Goals', 'Pjesa e parë: Totali i golave'],
@@ -387,10 +387,19 @@ for (const section of Object.keys(al)) assert.deepEqual(Object.keys(en[section])
 assert.deepEqual(Object.keys(en.languages).sort(), ['al', 'choose', 'en']);
 assert.equal(module.exports.translateMarketName('Both Teams to Score', alText), 'Shënojnë të dyja skuadrat');
 assert.equal(module.exports.translateMarketName('Both Teams to Score', enText), 'Both Teams to Score');
+for(const [raw,expected] of [
+ ['Outcome And Both To Score','Rezultati & Shënojnë të dyja skuadrat'],
+ ['Double Chance And Both To Score','Dopio shans & Shënojnë të dyja skuadrat'],
+ ['Outcome And Total Goals 2.5','Rezultati & Totali i golave 2.5'],
+ ['Double Chance And Total Goals 3.5','Dopio shans & Totali i golave 3.5'],
+]){
+ assert.equal(module.exports.translateMarketName(raw,alText),expected,'native combined market preserves every condition: '+raw);
+ assert.equal(module.exports.translateMarketName(raw,enText),raw,'English retains the exact native market title');
+}
 assert.equal(module.exports.formatTicketSelection('BTTS No + Over 2.5', 'Bet Builder: Both Teams to Score + Total Goals', fixture, enText), 'No + Over 2.5');
 assert.equal(module.exports.translateOutcomeName('1/Yes', enText, mixedMarket, fixture), '1 & Yes');
 assert.equal(module.exports.translateOutcomeName('Nil', enText, 'Both Teams to Score'), 'No');
-assert.equal(module.exports.translateMarketName('1st Half - Draw No Bet', alText), 'Pjesa e parë: Barazim S\'ka Bast');
+assert.equal(module.exports.translateMarketName('1st Half - Draw No Bet', alText), 'Pjesa e parë: Në barazim, basti kthehet');
 const minute = module.exports.translateMarketName('Both Teams to Score - till the 15th minute of the match', alText);
 assert.match(minute, /15/); assert.doesNotMatch(minute, /10/, 'an erroneous archived Fito24 numeric qualifier must never change the betting contract');
 console.log('PASS English/Albanian dictionaries and Fito24 aliases: exact language choices, Yes/No, market qualifiers and unchanged contract numbers');

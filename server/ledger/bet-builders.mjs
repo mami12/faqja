@@ -1,3 +1,4 @@
+import {marketIsEnabled} from '../market-catalog.mjs';
 import {normalizeBuilder} from './bet-builder-contracts.mjs';
 export {builderCatalog} from './bet-builder-contracts.mjs';
 /**
@@ -6,6 +7,7 @@ export {builderCatalog} from './bet-builder-contracts.mjs';
  * Never use the synthetic price as authority when a ticket is placed.
  */
 import { query } from '../db.mjs';
+import {nativeComboSignatures,comboLegSignature} from './combo-duplicates.mjs';
 import { isDecidedLiveOutcome, isDecidedLiveMarket } from './decided-markets.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, parseResultTotal, parseTotalBtts } from './mixed-combos.mjs';
@@ -23,7 +25,7 @@ export async function listTemplates({ activeOnly = false, executor = query } = {
        where ($1::boolean = false or active = true)
        order by updated_at desc`, [activeOnly],
   );
-  return rows;
+  return rows.map(row=>{try{const canonical=normalizeBuilder({legs:row.legs,active:row.active});return {...row,name:canonical.name,legs:canonical.legs};}catch{return row;}});
 }
 
 export async function listAvailableTemplates({executor = query, includeAutomatic = true} = {}) {
@@ -36,7 +38,12 @@ export function mergeComboTemplates(saved = [], {includeAutomatic = true} = {}) 
   for (const template of [...saved, ...(includeAutomatic ? automaticComboTemplates() : [])]) {
     if (!template.active || !isCompatibleComboPair(template.legs)) continue;
     const key = comboSignature(template.legs);
-    if (!byContract.has(key)) byContract.set(key,template);
+    if (!byContract.has(key)) {
+      // Legacy free-text titles are not authoritative. Describe the actual
+      // saved legs, retaining the template ID and original betting contract.
+      const canonical=normalizeBuilder({legs:template.legs,active:template.active});
+      byContract.set(key,{...template,name:canonical.name,legs:canonical.legs});
+    }
   }
   return [...byContract.values()];
 }
@@ -209,7 +216,10 @@ export async function decorateMatches(matches, options = {}) {
     .filter(template => options.includeAutomatic !== false || template.automatic !== true);
   for (const match of matches) {
     if (match.isSuspended || match.status === 'ENDED' || match.status === 'CANCELLED') continue;
+    const offered=nativeComboSignatures(match);
     for (const template of templates) {
+      const contract=comboLegSignature(template.legs);
+      if(contract&&offered.has(contract))continue;
       if (isImpossibleLiveCombination(match,{name:'Bet Builder: '+template.name,comboLegs:template.legs})) continue;
       // Every constituent must still be open; an already-completed goal line
       // cannot stay sellable through the synthetic Bet Builder market.
@@ -218,8 +228,10 @@ export async function decorateMatches(matches, options = {}) {
       if (!isCompatibleComboPair(template.legs)) continue;
       const price = multipliedComboPrice(resolved);
       if (price === null) continue;
+      if(contract)offered.add(contract);
       const id = builderId(match.id,template.id);
       match.markets ??= [];
+      if(!marketIsEnabled({name:`Bet Builder: ${template.name}`}))continue;
       match.markets.push({
         id: `BB|${match.id}|${template.id}|market`,
         matchId: match.id, marketType: 'OTHER', name: `Bet Builder: ${template.name}`,
@@ -229,6 +241,7 @@ export async function decorateMatches(matches, options = {}) {
         // suspensions, even before the next REST refresh.
         builderLegs: resolved.map(part => ({
           marketId: part.market.id, outcomeId: part.outcome.id, odds: Number(part.outcome.odds),
+          ...(part.outcome.priceValidUntil!==undefined?{priceValidUntil:part.outcome.priceValidUntil}:{}),
         })),
         outcomes: [{
           id, marketId: `BB|${match.id}|${template.id}|market`,

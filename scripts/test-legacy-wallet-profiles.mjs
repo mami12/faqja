@@ -19,8 +19,7 @@ await sql.query('insert into app_user(id,username,password_hash,role,balance) va
 for(const user of users)await sql.query('insert into app_user(id,username,password_hash,role,balance,manager_id) values($1,$2,$3,$4,$5,$6)',[user,user,'test-only','PLAYER',1000000,manager]);
 const balance=async id=>Number((await sql.query('select balance from app_user where id=$1',[id])).rows[0].balance);
 const pending=async id=>Number((await sql.query('select pending from app_casino_gamble_state where user_id=$1',[id])).rows[0]?.pending||0);
-const funds=async()=>Math.round((await Promise.all([manager,...users].map(balance))).reduce((sum,n)=>sum+n,0)*100);
-const fundsBefore=await funds();let settings={},checked=0;
+const managerBefore=await balance(manager);let settings={},checked=0;
 const apply=async(id,value)=>{settings={...settings,[id]:value};await sql.query('update app_casino_settings set game_profiles=$1::jsonb where id=1',[JSON.stringify(settings)]);};
 const collect=async user=>settlePendingWin(user,{database});
 const expectedGrid=(reels,stops)=>reels.map((reel,x)=>Array.from({length:3},(_,row)=>reel[(stops[x]+row)%reel.length]));
@@ -36,9 +35,9 @@ for(const id of ['sizzling','bookofra']){
   await apply(id,profile.id);
   for(const userId of users){
    const requestId=randomUUID(),stops=chooseSymbol(profile,1),grid=expectedGrid(profile.reels,stops),before=await balance(userId);
-   const args={userId,requestId,bet:2,denomination:.5,lines};
+   const args={userId,requestId,bet:2,denomination:id==='sizzling'?2:1,lines};
    const result=await place(args,{database,random:randomFrom(stops)}),saved=await round(result.roundId);
-   const grade=id==='sizzling'?gradeSizzling(grid,2,.5):gradeBook(grid,1,lines);
+   const grade=id==='sizzling'?gradeSizzling(grid,2,2):gradeBook(grid,2,lines);
    const payout=id==='sizzling'?Number(grade.total):grade.total;
    assert(payout>0,'winning stops must exercise payout arithmetic');
    assert.equal(result.payout,payout,'the displayed original paytable must determine the whole payout');
@@ -64,7 +63,7 @@ for(const id of ['sizzling','bookofra']){
  assert(new Set(grids).size>1,`${id} profile selection must change the actual strips`);
  const userId=users[0],before=await balance(userId),count=Number((await sql.query('select count(*) as n from app_casino_round')).rows[0].n);
  await apply(id,'unsupported-profile');
- await assert.rejects(place({userId,requestId:randomUUID(),bet:2,denomination:.5,lines},{database,random:()=>0}),/Unsupported reel profile/);
+ await assert.rejects(place({userId,requestId:randomUUID(),bet:2,denomination:id==='sizzling'?2:1,lines},{database,random:()=>0}),/Unsupported reel profile/);
  assert.equal(await balance(userId),before);assert.equal(Number((await sql.query('select count(*) as n from app_casino_round')).rows[0].n),count);
  await apply(id,getGameProfile(id).id);
 }
@@ -74,10 +73,10 @@ for(const id of ['sizzling','bookofra']){
 process.env.BOOKOFRA_FREE_SPINS='1';
 const userId=users[0],profiles=getGameProfiles('bookofra'),low=profiles[0],high=profiles.at(-1);
 await apply('bookofra',low.id);
-const triggerStops=chooseSymbol(low,0),paidArgs={userId,requestId:randomUUID(),bet:2,denomination:.5,lines:10};
+const triggerStops=chooseSymbol(low,0),paidArgs={userId,requestId:randomUUID(),bet:2,denomination:1,lines:10};
 const paid=await placeBookOfRaSpin(paidArgs,{database,random:randomFrom(triggerStops)});
 assert.equal(paid.free.left,FREE_SPINS);let fs=await freeState(userId);
-assert.equal(fs.math_profile,low.id);assert.equal(Number(fs.bet),1);assert.equal(Number(fs.lines),10);
+assert.equal(fs.math_profile,low.id);assert.equal(Number(fs.bet),2);assert.equal(Number(fs.lines),10);
 const originalBalance=await balance(userId),originalPending=await pending(userId);
 await apply('bookofra',high.id);
 await assert.rejects(placeBookOfRaSpin({...paidArgs,requestId:randomUUID()},{database,random:()=>{throw Error('paid spin started inside bonus');}}),/FREE_SPINS_PENDING/);
@@ -86,7 +85,7 @@ await apply('bookofra','unsupported-profile');await sql.query('update app_casino
 let expectedPending=originalPending;
 for(let index=0;index<FREE_SPINS;index++){
  const stops=chooseSymbol(low,1),grid=expectedGrid(low.reels,stops),args={userId,requestId:randomUUID(),mode:'freespin'};
- const expected=gradeBook(grid,1,10,Number(fs.mud));expectedPending=Number((expectedPending+expected.total).toFixed(2));
+ const expected=gradeBook(grid,2,10,Number(fs.mud));expectedPending=Number((expectedPending+expected.total).toFixed(2));
  const response=await placeBookOfRaSpin(args,{database,random:randomFrom(stops)});
  assert.deepEqual(response.grid,grid);assert.equal(response.mathProfile.id,low.id);assert.equal(response.graded.total,expected.total);
  assert.equal(response.pending,expectedPending);assert.equal(response.free.left,FREE_SPINS-index-1);
@@ -109,5 +108,10 @@ const legacyStops=chooseSymbol(legacyProfile,1),legacyGrid=expectedGrid(legacyPr
 const legacy=await placeBookOfRaSpin({userId,requestId:randomUUID(),mode:'freespin'},{database,random:randomFrom(legacyStops)});
 assert.equal(legacy.mathProfile.id,legacyProfile.id);assert.deepEqual(legacy.grid,legacyGrid);assert.equal(legacy.pending,legacyGrade.total);
 await collect(userId);
-assert.equal(await funds(),fundsBefore,'all stakes and collections must conserve player plus manager funds');
+for(const userId of users){
+ const posted=await sql.query('select coalesce(sum(amount),0) as amount from app_transaction where user_id=$1',[userId]);
+ assert.equal(Math.round((await balance(userId))*100),100000000+Math.round(Number(posted.rows[0].amount)*100),'player balance reconciles to its own ledger');
+}
+assert.equal(await balance(manager),managerBefore,'legacy casino activity never changes manager funds');
+assert.equal(Number((await sql.query('select count(*) as n from app_transaction where user_id=$1',[manager])).rows[0].n),0,'no automatic manager transaction');
 await sql.close();console.log(`PASS ${checked} real SQL legacy profile/player cases, original paytable and denomination payouts, global next-paid selection, replay, invalid-profile collect, Book frozen free games and duplicate-credit prevention`);

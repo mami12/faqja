@@ -1,0 +1,86 @@
+{
+  "tables": {
+    "app_admin_audit": {
+      "count": 47,
+      "sha256": "4fda656197ce47e04c0c9e5ed154e014e7994125a01d969f835e56f3ba1d3a49"
+    },
+    "app_bet_builder_template": {
+      "count": 12,
+      "sha256": "633913b894548c86f7a2bbd255ad4a3ef8de91f5e71ef3cc5a0c1ca950f7e7e8"
+    },
+    "app_bet_rejection": {
+      "count": 30,
+      "sha256": "cc9219a47782dfe0056fdd4d17fa18afa454bdd9dd46c3be951396cebf71f371"
+    },
+    "app_casino_freespin_state": {
+      "count": 1,
+      "sha256": "cd82b555425fe3957f4bf81e64310cee76cfb7c40f887fe42fa0513a68908e82"
+    },
+    "app_casino_gamble_event": {
+      "count": 62,
+      "sha256": "2555b25772cc4eb4b938c50bd74e5d3e72673e548d708edf779a43698b9fa697"
+    },
+    "app_casino_gamble_state": {
+      "count": 1,
+      "sha256": "4c972c67d09c9e91fb7ee3c8f93544af66e04aa8f3ca15efdc4fc871334d64a5"
+    },
+    "app_casino_original_event": {
+      "count": 407,
+      "sha256": "74c1ecd7e9fba2c9baf463953d43b7fbfdc3e13bc8e49bf25bf8ed513c67ed65"
+    },
+    "app_casino_original_state": {
+      "count": 4,
+      "sha256": "d81ab477be24dee2e36a0625005cb6e9d9555e801951797f2a64235123bc42ed"
+    },
+    "app_casino_round": {
+      "count": 285,
+      "sha256": "c44e36f4bd772a5e37fb969bab476f277a02ccc2c62652c748ff448d092b48ec"
+    },
+    "app_casino_settings": {
+      "count": 1,
+      "sha256": "3a7a31d1f67179e68a6734e0242ea84b6621fbf85a852b25879aa31560aab4d6"
+    },
+    "app_commission_config": {
+      "count": 1,
+      "sha256": "a2f635563e2e674db8019f00bb2fc604a1cdaa77e64044e3eee0854c3370c80f"
+    },
+    "app_feed_override": {
+      "count": 11,
+      "sha256": "55021665c17ed0c57373bbea3609917ed051bb17ea4112dac2afdaae22472814"
+    },
+    "app_live_risk_settings": {
+      "count": 1,
+      "sha256": "b300fdac11d88e9c5642d5974d208715592238cc09144718dbda21eb6e1d7b97"
+    },
+    "app_match_result": {
+      "count": 3372,
+      "sha256": "d8eab577bf23344c81bb24ac6d2df3fdd47093d55de39f756eec6dae847ccb3b"
+    },
+    "app_player_controls": {
+      "count": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "app_ticket": {
+      "count": 175,
+      "sha256": "ef595690b6d8135e08dee2850bdaf5e05b9f8c51c79e19a68b3e1dab1a616a05"
+    },
+    "app_ticket_batch": {
+      "count": 4,
+      "sha256": "418ed48e5c89ae1d4a11f2574b5225c94b6c38605391c6599ada2c2dfa738d1a"
+    },
+    "app_ticket_line": {
+      "count": 208,
+      "sha256": "6a6fb0c092a2161a546ac4cd61221805b1ed0ee813aff5b28ccd75db4a5263ce"
+    },
+    "app_transaction": {
+      "count": 1067,
+      "sha256": "49826d6c027fe2fc379a8793f6127be8d7e77743d6a9fe5a77a21f1a2bcb0f94"
+    },
+    "app_user": {
+      "count": 15,
+      "sha256": "6f6451e555c90ef5e29ad57cb73c7317651a5b20b5ff3c1dd25a5fabedf8f25d"
+    }
+  },
+  "backup": "D:\\cassino\\lojra\\lojrafaqja\\faqja-perfunduar 1 e nates\\faqja-main\\backups\\database-transfer-2026-10-26T10-04-14-105Z.tgz",
+  "completedAt": "2026-10-26T10:04:19.366Z"
+}

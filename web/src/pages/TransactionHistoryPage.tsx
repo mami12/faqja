@@ -247,10 +247,12 @@ export default function TransactionHistoryPage({ embedded = false }: { embedded?
                             <div className="flex flex-wrap justify-between gap-2 border-t border-tertiary/60 pt-2 text-[11px]">
                               <span className="text-slate-300">{entry.system ? `${t('Sistem')} · ${entry.system.columnCount} ${t('kolona')}` : <>{t("Koeficienti total:") + " "}<strong>{formatOdds(entry.totalOdds)}</strong></>}</span>
                               <span className="text-slate-300">
-                                {t(entry.system ? (entry.status === 'PENDING' ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : entry.status === 'WON' ? 'Pagesa' : 'Pagesa e mundshme')}:
-                                <strong className="ml-1 text-amber-200">{(entry.system && entry.status !== 'PENDING' ? entry.actualPayout ?? 0 : entry.potentialPayout).toFixed(2)} {" " + t("Lëk")}</strong>
+                                {t('Fitimi i mundshëm')}{entry.potentialPayoutIsEstimated ? ' · '+t('i rindërtuar') : ''}:
+                                <strong className="ml-1 text-amber-200">{entry.potentialPayout.toFixed(2)} {" " + t("Lëk")}</strong>
                               </span>
                             </div>
+                            {entry.potentialPayoutIsEstimated && <div className="text-[11px] text-text-secondary" title={t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur; shuma origjinale nuk ishte ruajtur.')}>{t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur.')}</div>}
+                            {entry.actualPayout != null && (entry.status !== 'PENDING' || entry.actualPayout > 0) && <div className="text-[11px] text-text-secondary">{t('Fitimi real')}: {entry.actualPayout.toFixed(2)} {t('Lëk')}</div>}
                             <SystemTicketSummary ticket={entry} />
                           </div>
                         )}

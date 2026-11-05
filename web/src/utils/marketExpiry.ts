@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Live market visibility policy. A market disappears only when its contract is
  * irreversible from the *available* live facts. In particular a current 1X2
  * leader, correct-score hit, or an unknown provider market is NOT final.
@@ -6,10 +6,16 @@
  * Presentation-only: placement/settlement continue to rely on server rules.
  */
 
+import {marketIsEnabled} from '../../../server/market-catalog.mjs';
 import { isImpossibleLiveCombination } from '../../../server/ledger/combo-feasibility.mjs';
-import { isDecidedLiveMarket, isDecidedLiveOutcome } from '../../../server/ledger/decided-markets.mjs';
+import { isDecidedLiveMarket, isDecidedLiveOutcome, isYbetsNativeOffer } from '../../../server/ledger/decided-markets.mjs';
+import { isExcludedOfferMarket } from '../../../server/market-policy.mjs';
+import { eventMarketRequirement } from '../../../server/ledger/event-market-policy.mjs';
+import { statisticMarketContract } from '../../../server/ledger/statistic-markets.mjs';
+import { repairDisplayText } from './repairDisplayText';
 type Score = { home: number; away: number };
 type MarketLike = {
+  id?: string; extId?: string; key?: string;
   name?: string; line?: string; specifier?: string; marketType?: string;
   period?: number; status?: string; suspended?: boolean;
   outcomes?: OutcomeLike[];
@@ -27,7 +33,18 @@ type MatchLike = {
   corners?: Score | null; cards?: Score | null;
 };
 
-const norm = (s: unknown) => String(s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
+/** A displayed price must have an implemented, verifiable event contract. */
+export const marketDiagnosticAll = (): boolean => ['1','true','yes','on','all'].includes(String((import.meta as any)?.env?.VITE_MARKET_DIAGNOSTIC_ALL ?? '0').trim().toLowerCase());
+
+export const isMarketOfferSupported = (market: MarketLike,match?:MatchLike): boolean => {
+  if(isExcludedOfferMarket(market)||!marketIsEnabled(market,match))return false;
+  if(marketDiagnosticAll())return true;
+  if(isYbetsNativeOffer(market,match))return true;
+  const statsContract=statisticMarketContract(market);
+  return !eventMarketRequirement(market,match)&&(!statsContract||statsContract.supported);
+};
+
+const norm = (s: unknown) => repairDisplayText(s).toLowerCase().trim().replace(/\s+/g, ' ');
 const number = (v: unknown): number | null => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(String(v).replace(',', '.'));
@@ -40,7 +57,7 @@ const scoreOf = (home: unknown, away: unknown): Score | null => {
 const isLive = (m: MatchLike) => norm(m.status) === 'live';
 
 export const isFirstHalfMarket = (name: string): boolean =>
-  /\b(?:1st|first)\s*half\b|half\s*1\b|\b1h\b|pjes(?:a|ë)\s*e\s*par[eë]/i.test(name);
+  /\b(?:1st|first)\s*half\b|half\s*1\b|\b1h\b|pjes(?:a|ë)\s*e\s*par(?:e|ë)/i.test(name);
 
 export const isSecondHalfMarket = (name: string): boolean =>
   /\b(?:2nd|second)\s*half\b|half\s*2\b|\b2h\b|pjes(?:a|ë)\s*e\s*dyte/i.test(name);
@@ -65,6 +82,7 @@ const isSecondHalfOrLater = (m: MatchLike): boolean => {
 
 const isFirstHalf = (market: MarketLike): boolean => {
   const name = norm(market.name);
+  if (isHTFTMarket(name)) return false;
   return Number(market.period ?? 0) === 1 ||
     isFirstHalfMarket(name) || isFirstHalfResultMarket(name) ||
     /\b(?:half time|halftime|ht)\b(?!\s*\/?\s*(?:fulltime|ft))/.test(name);
@@ -120,6 +138,8 @@ const totalLine = (market: MarketLike): number | null => {
 
 const isSimpleTotal = (market: MarketLike): boolean => {
   const name = norm(market.name);
+  // Interval totals refer only to that window, never all goals in the match.
+  if (/\b(?:minutes?|interval|rest of)\b/.test(name)) return false;
   if (/bet builder|both teams|btts|correct|exact|result|winner|1x2|odd.?even|handicap|asian|next|last|race|score in|goal in|time of|&|\+|\b(?:first|1st)\s+(?:goal|corner|card|scorer)\b/.test(name)) return false;
   const o = market.outcomes ?? [];
   const hasOverUnder = o.some(item => [item.code, item.name].some(label =>
@@ -150,6 +170,9 @@ const observedTotal = (m: MatchLike, market: MarketLike): number | null => {
  */
 const completedEvent = (m: MatchLike, market: MarketLike): boolean => {
   const name = norm(market.name);
+  // One team goal does not prove the first eligible player scored; it may be
+  // an own goal, and participation/scorer evidence is separate from the score.
+  if (/\b(?:player|goalscorer|scorer)\b/.test(name)) return false;
   if (isSecondHalf(market)) return false;
   const first = /\b(?:first|1st)\s+(?:team\s+to\s+score|goal|corner|card|booking|goalscorer|scorer)\b/.test(name) ||
     /\b(?:time of|minute of)\s+(?:the\s+)?first\s+goal\b/.test(name) ||
@@ -264,7 +287,7 @@ export function isMarketExpired(m: MatchLike, market: MarketLike): boolean {
   if (!isLive(m)) return false;
   if (isDecidedLiveMarket(m, market)) return true;
   if (builderCompleted(m, market)) return true;
-  if ((isFirstHalf(market) || isHTFTMarket(String(market.name ?? ''))) && isSecondHalfOrLater(m)) return true;
+  if ((isFirstHalf(market) || (!isYbetsNativeOffer(market, m) && isHTFTMarket(String(market.name ?? '')))) && isSecondHalfOrLater(m)) return true;
 
   if (completedEvent(m, market) || elapsedWindow(m, market)) return true;
 
@@ -313,14 +336,17 @@ export const isMarketSuspended = (
   lockedMarkets?: Record<string, boolean>,
   lockedOutcomes?: Record<string, boolean>,
   riskLockedOutcomes?: Record<string, boolean>,
-): boolean =>
-  !!market && (market.suspended === true ||
-    String(market.status ?? '').toUpperCase() === 'SUSPENDED' ||
-    lockedMarkets?.[String((market as MarketLike & { id?: string }).id ?? '')] === true ||
+): boolean => {
+  if (!market) return false;
+  const liveLock = lockedMarkets?.[String(market.id ?? '')];
+  const marketLocked = typeof liveLock === 'boolean' ? liveLock : market.suspended === true ||
+    String(market.status ?? '').toUpperCase() === 'SUSPENDED';
+  return marketLocked ||
     (market.builderLegs ?? []).some(part =>
       lockedMarkets?.[part.marketId] === true ||
       lockedOutcomes?.[part.outcomeId] === true ||
-      riskLockedOutcomes?.[part.outcomeId] === true));
+      riskLockedOutcomes?.[part.outcomeId] === true);
+};
 
 const exactScore = (label: string): Score | null => {
   const match = label.trim().match(/^(\d{1,2})\s*[-:]\s*(\d{1,2})$/);
@@ -334,6 +360,7 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
   outcomes: T[] = [], market: MarketLike = {}, match: MatchLike = {},
 ): T[] {
   if (!outcomes.length) return outcomes;
+  if(!isMarketOfferSupported(market,match))return [];
   if (isMarketExpired(match, market)) return [];
   if (!isLive(match)) return outcomes;
   outcomes = outcomes.filter(outcome => outcome.decided !== true && !isDecidedLiveOutcome(match, {
@@ -365,9 +392,12 @@ export function filterDecidedOutcomes<T extends OutcomeLike>(
   }
 
   if (/\bcorrect score\b|\bexact score\b|\bscore exact\b/.test(name)) {
+    const baseline=name.match(/\brest of match \(from (\d+):(\d+)\)/);
+    const scope=baseline?{home:counts.home-Number(baseline[1]),away:counts.away-Number(baseline[2])}:counts;
+    if(scope.home<0||scope.away<0)return outcomes; // score correction needs fresh provider evidence
     return outcomes.filter(o => {
       const target = exactScore(String(o.name ?? o.code ?? ''));
-      return !target || (counts.home <= target.home && counts.away <= target.away);
+      return !target || (scope.home <= target.home && scope.away <= target.away);
     });
   }
   if (/\b(?:exact(?:ly)?\s+(?:total\s+)?(?:number of )?(?:goals|corners|cards)|number of (?:goals|corners|cards))\b/.test(name)) {

@@ -20,7 +20,9 @@ interface Stats {
     wonPayouts: number;
     lostStake: number;
     commission: number;
-    commissionRates: { single: number; double: number; multi: number };
+    sportCommission: number;
+    casinoCommission: number;
+    commissionRates: { single: number; double: number; multi: number; casino: number };
     netDifference: number;
   }>;
 }
@@ -64,10 +66,12 @@ export default function AdminDashboard() {
     wonPayouts: totals.wonPayouts + manager.wonPayouts,
     lostStake: totals.lostStake + manager.lostStake,
     commission: totals.commission + manager.commission,
+    sportCommission: totals.sportCommission + (manager.sportCommission || 0),
+    casinoCommission: totals.casinoCommission + (manager.casinoCommission || 0),
     playerBalance: totals.playerBalance + manager.playerBalance,
     balance: totals.balance + manager.balance,
     netDifference: totals.netDifference + manager.netDifference,
-  }), { totalStake: 0, wonPayouts: 0, lostStake: 0, commission: 0, playerBalance: 0, balance: 0, netDifference: 0 });
+  }), { totalStake: 0, wonPayouts: 0, lostStake: 0, commission: 0, sportCommission: 0, casinoCommission: 0, playerBalance: 0, balance: 0, netDifference: 0 });
 
   if (loading) {
     return (
@@ -122,7 +126,8 @@ export default function AdminDashboard() {
           { label: 'Fonde të luajtura', value: financialTotals.totalStake, color: 'bg-sky-400' },
           { label: 'Pagesa fituese', value: financialTotals.wonPayouts, color: 'bg-emerald-400' },
           { label: 'Humbje të lojtarëve', value: financialTotals.lostStake, color: 'bg-rose-400' },
-          { label: 'Komision i zbritur', value: financialTotals.commission, color: 'bg-amber-400' },
+          { label: 'Komisioni i sporteve', value: financialTotals.sportCommission, color: 'bg-amber-400' },
+          { label: 'Komisioni i slot machine', value: financialTotals.casinoCommission, color: 'bg-cyan-400' },
           { label: 'Bilanci i lojtarëve', value: financialTotals.playerBalance, color: 'bg-violet-400' },
           { label: 'Bilanci i menaxherëve', value: financialTotals.balance, color: 'bg-cyan-400' },
           { label: 'Diferenca neto', value: financialTotals.netDifference, color: 'bg-fuchsia-400' },
@@ -208,9 +213,10 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1 border-b border-tertiary/40">
-                      <span className="text-text-secondary">{t("Komision i zbritur")}</span>
-                      <span className="font-bold text-white">{manager.commission.toFixed(2)} {" " + t("Lëk")}</span>
+                      <span className="text-text-secondary">{t("Komisioni i sporteve")}</span>
+                      <span className="font-bold text-white">{(manager.sportCommission ?? 0).toFixed(2)} {" " + t("Lëk")}</span>
                     </div>
+                    <div className="flex justify-between items-center py-1 border-b border-tertiary/40"><span className="text-text-secondary">{t("Komisioni i slot machine")}</span><span className="font-bold text-cyan-300">{(manager.casinoCommission ?? 0).toFixed(2)} {t("Lëk")} · {manager.commissionRates.casino}%</span></div>
                     <div className="flex justify-between items-center py-1">
                       <span className="text-text-secondary">{t("Bilanci total i lojtarëve")}</span>
                       <span className="font-bold text-accent-green">{manager.playerBalance.toFixed(2)} {" " + t("Lëk")}</span>
@@ -237,7 +243,7 @@ export default function AdminDashboard() {
                 <th className="p-3.5 text-right">{t("Pagesa fituese")}</th>
                 <th className="p-3.5 text-right">{t("Humbje")}</th>
                 <th className="p-3.5 text-right">{t("Komisioni (%)")}</th>
-                <th className="p-3.5 text-right">{t("Komision")}</th>
+                <th className="p-3.5 text-right">{t("Komisioni i sporteve")}</th><th className="p-3.5 text-right">{t("Komisioni i slot machine")}</th>
                 <th className="p-3.5 text-right">{t("Bilanci i lojtarëve")}</th>
                 <th className="p-3.5 text-right">{t("Bilanci")}</th>
                 <th className="p-3.5 text-right">{t("Diferenca")}</th>
@@ -266,7 +272,7 @@ export default function AdminDashboard() {
               ))}
               {!managers.length && (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-text-secondary">
+                  <td colSpan={11} className="p-8 text-center text-text-secondary">
                     {t("Nuk ka menaxherë për t’u shfaqur.")}</td>
                 </tr>
               )}
@@ -276,7 +282,7 @@ export default function AdminDashboard() {
       </section>
 
       <div className="text-xs text-text-secondary px-1 leading-relaxed bg-tertiary/20 p-3 rounded-xl border border-tertiary/40">
-        <span className="text-accent-yellow font-bold">{t("Informacion:")}</span> {" " + t("Komisioni zbritet nga bilanci i menaxherit sapo lojtari vendos bastin. Normat aktuale shfaqen në tabelë dhe mund të ndryshohen më sipër; për skedinat e anuluara ose të pavlefshme, komisioni kthehet automatikisht.")}</div>
+        <span className="text-accent-yellow font-bold">{t("Informacion:")}</span> {" " + t("Komisionet e reja janë vetëm raport, veçmas për sport dhe slot machine. Nuk shtohen ose zbriten nga bilancet. Llogaritjet bëhen manualisht.")}</div>
     </div>
   );
 }

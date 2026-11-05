@@ -119,14 +119,18 @@ assert(component.includes('requestCasinoLandscape({retry:true})'),'Visible Fulls
 assert(component.includes('casino-game-rotated')&&component.includes('Kthehu te kazinoja'),'CSS landscape and Back remain present');
 
 // Execute the actual toolbar handlers and fullscreen listener with persistent
-// hook state. Native exit is deliberately delayed until after a second click.
+// hook state. The toolbar label follows the real native event, including when
+// an exit promise is still pending and another click must not resend the exit.
 const exitGate=deferred(),listeners=new Map(),hooks=[],effects=[];
 let hookIndex=0,effectIndex=0,enterCalls=0,exitCalls=0;
 const browserWindow={innerWidth:1200,innerHeight:800,location:{origin:'http://local'},addEventListener(){},removeEventListener(){}};
 const browserScreen={orientation:{type:'landscape-primary',addEventListener(){},removeEventListener(){},unlock(){}}};
+const frameMessages=[];
+const browserFrame={contentWindow:{postMessage:(message,origin)=>frameMessages.push({message,origin})}};
 const fireNative=()=>listeners.get('fullscreenchange')?.();
 const browserDocument={
  fullscreenElement:{},body:{style:{overflow:''}},
+ querySelector:selector=>selector==='.casino-game-content iframe'?browserFrame:null,
  addEventListener:(type,listener)=>listeners.set(type,listener),
  removeEventListener:(type,listener)=>{if(listeners.get(type)===listener)listeners.delete(type);},
  documentElement:{requestFullscreen:async()=>{enterCalls++;browserDocument.fullscreenElement={};fireNative();}},
@@ -145,7 +149,7 @@ const componentCode=ts.transpileModule(component,{compilerOptions:{module:ts.Mod
 const componentExports={};
 vm.runInNewContext(componentCode,{
  exports:componentExports,Promise,window:browserWindow,screen:browserScreen,document:browserDocument,
- require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='./casinoDisplay'?{createCasinoDisplayController}:{ArrowLeft:'ArrowLeft',Maximize2:'Maximize2',Minimize2:'Minimize2'},
+ require:name=>name==='react'?react:name==='react/jsx-runtime'?{jsx,jsxs:jsx}:name==='./casinoDisplay'?{createCasinoDisplayController}:name==='../../context/LanguageContext'?{useLanguage:()=>({t:text=>text})}:{ArrowLeft:'ArrowLeft',Maximize2:'Maximize2',Minimize2:'Minimize2',RotateCw:'RotateCw'},
 });
 const render=()=>{
  hookIndex=0;effectIndex=0;
@@ -161,15 +165,21 @@ const findButton=(tree,label)=>{
 };
 let tree=render();await Promise.resolve();
 findButton(tree,'Dil nga ekrani i plotë').props.onClick();
-tree=render();assert(findButton(tree,'Ekran i plotë horizontal'),'The first click offers windowed mode immediately');
-findButton(tree,'Ekran i plotë horizontal').props.onClick();
+tree=render();assert(findButton(tree,'Dil nga ekrani i plotë'),'A pending exit keeps the actual browser fullscreen label');
+findButton(tree,'Dil nga ekrani i plotë').props.onClick();
+assert.equal(exitCalls,1,'A second click while native exit is pending must not resend the exit');
 exitGate.resolve();await new Promise(resolve=>setImmediate(resolve));
 tree=render();
+assert(findButton(tree,'Ekran i plotë horizontal'),'The native exit event updates the toolbar to offer fullscreen entry');
+findButton(tree,'Ekran i plotë horizontal').props.onClick();
+await new Promise(resolve=>setImmediate(resolve));tree=render();
 assert.equal(exitCalls,1,'The delayed native exit event must not issue a second release');
-assert.equal(enterCalls,1,'The second click must reenter after the pending exit');
-assert(findButton(tree,'Dil nga ekrani i plotë'),'The queued reentry must keep the stage fullscreen');
+assert.equal(enterCalls,1,'An explicit click after the native exit must enter fullscreen once');
+assert(findButton(tree,'Dil nga ekrani i plotë'),'Native entry updates the toolbar to offer fullscreen exit');
 browserDocument.fullscreenElement=null;fireNative();
 tree=render();
 assert(findButton(tree,'Ekran i plotë horizontal'),'A later browser Escape still returns to windowed mode');
+assert.equal(frameMessages.length,3,'Native exit, entry and Escape each notify the active iframe');
+assert(frameMessages.every(({message,origin})=>message.type==='casino:viewport-changed'&&origin===browserWindow.location.origin),'Viewport notifications only target the same-origin provider frame');
 for(const entry of effects)entry.cleanup?.();
 console.log('PASS casino display coalescing, explicit retry, nonblocking exit, suspended provider taps and late native races');

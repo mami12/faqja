@@ -11,7 +11,7 @@ import {createHash} from 'node:crypto';
  * expanding symbol. Server-authoritative grading; the client only animates.
  */
 import { Router, raw } from 'express';
-import {walletPixiRanges} from './bet-limits.mjs';
+import {CASINO_MIN_STAKE,walletPixiRanges} from './bet-limits.mjs';
 import { randomInt, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -169,7 +169,7 @@ export function initResponse({ credits, requestId = 1, walletLimits = false }) {
   const grid = randomGrid();
   return {
     balance: { before: money(credits), after: money(credits) },
-    denomination: walletLimits ? .02 : 1,
+    denomination: walletLimits ? CASINO_MIN_STAKE/LINES.length : 1,
     available_actions: ['spin'],
     init: {
       bet: '1', lines: LINES.length, multiplier: 1, currency: 'EUR',
@@ -413,6 +413,7 @@ export function createBookOfRaRealRouter(dependencies={}){
       if(claim.kind!=='casino-bookofra-wallet'||typeof claim.jti!=='string')throw fault(401,'CASINO_SESSION_INVALID');
       const user=await getUserById(claim.sub);
       if(!user||user.role!=='PLAYER'||user.status!=='ACTIVE')throw fault(403,'PLAYER_BLOCKED');
+      if(Number(claim.epoch??0)!==Number(user.financialEpoch??user.financial_epoch??0))throw fault(401,'CASINO_SESSION_EXPIRED');
       const request=decodeRequest(req);
       action=String(request.action||'init');
       const rawId=request.request_id;
@@ -499,7 +500,7 @@ router.post('/casino/bookofra/session',dependencies.auth??requireAuth,async(req,
     if(Number(owed?.left_spins)>0){
       if(req.body?.mathVersion)try{mathVersion=assertCasinoMathAcknowledged('bookofra',rows[0],req.body.mathVersion);}catch{}
     }else mathVersion=assertCasinoMathAcknowledged('bookofra',rows[0],req.body?.mathVersion);
-    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-bookofra-wallet',mathVersion};
+    const claim={sub:req.user.id,jti:randomUUID(),kind:'casino-bookofra-wallet',mathVersion,epoch:Number(req.user.financialEpoch??0)};
     const token=jwt.sign(claim,config.jwtSecret,{expiresIn:WALLET_TTL});
     res.cookie(WALLET_COOKIE,token,{
       httpOnly:true,sameSite:'strict',secure:req.secure||req.headers['x-forwarded-proto']==='https',

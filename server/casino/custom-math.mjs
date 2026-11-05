@@ -16,7 +16,10 @@ const revisionHash=createHash('sha256');
 for(const name of ['lucky-clover-engine.mjs','vikings-engine.mjs','agt-engine.mjs','sizzling-demo.mjs','bookofra.mjs','custom-native.mjs','custom-math.mjs'])revisionHash.update(name+'\0').update(readFileSync(new URL(name,import.meta.url),'utf8').replace(/\r\n/g,'\n'));
 const nativeRevision=revisionHash.digest('hex');
 const fail=message=>Object.assign(new Error(message),{status:400,code:'INVALID_CUSTOM_MATH'});
-const MIN_STAKE=20,MAX_STAKE=500000,DENOMINATOR=10000n;
+const MIN_STAKE=2000,MAX_STAKE=500000,DENOMINATOR=10000n;
+// RTP is an expected return, so it may exceed 100%. Hit frequency is a
+// probability and must never exceed 100%. Native paytable bounds still apply.
+export const CUSTOM_CONTROL_LIMITS=freeze({rtp:{min:0,max:1000},hitFrequency:{min:0,max:100}});
 function entryFor(gameId,variant=customVariant(gameId)){
  const entry=catalog.variants[variant];
  if(!CUSTOM_GAMES[gameId]||!entry||entry.gameId!==gameId)throw fail('Unsupported casino game');
@@ -27,28 +30,27 @@ function limitsOf(entry){return {
  minWinMultiplier:Math.max(...entry.bounds.map(bound=>bound.minWinMultiplier)),
  maxWinMultiplier:Math.min(...entry.bounds.map(bound=>bound.maxWinMultiplier)),
 };}
-function percentage(value,name,fallback){
+function percentage(value,name,fallback,maximum=100){
  if(value===undefined)return fallback;
- if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>100||Math.abs(value*100-Math.round(value*100))>1e-7)throw fail(`${name} must be a number from 0 to 100 with at most two decimal places`);
+ if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>maximum||Math.abs(value*100-Math.round(value*100))>1e-7)throw fail(`${name} must be a number from 0 to ${maximum} with at most two decimal places`);
  return Math.round(value*100)/100;
 }
 export function validateControls(gameId,controls){
  const entry=entryFor(gameId);
  if(!controls||typeof controls!=='object'||Array.isArray(controls)||Object.keys(controls).some(key=>!['mode','rtp','hitFrequency'].includes(key))||!['original','custom'].includes(controls.mode))throw fail('Select original or custom casino math');
- const normalized={mode:controls.mode,rtp:percentage(controls.rtp,'RTP',controls.mode==='original'?95:undefined),hitFrequency:percentage(controls.hitFrequency,'Hit frequency',controls.mode==='original'?20:undefined)};
+ const normalized={mode:controls.mode,rtp:percentage(controls.rtp,'RTP',controls.mode==='original'?95:undefined,CUSTOM_CONTROL_LIMITS.rtp.max),hitFrequency:percentage(controls.hitFrequency,'Hit frequency',controls.mode==='original'?20:undefined,CUSTOM_CONTROL_LIMITS.hitFrequency.max)};
  if(normalized.rtp===undefined||normalized.hitFrequency===undefined)throw fail('RTP and hit frequency are required');
  if(normalized.mode==='custom'){
   const {rtp,hitFrequency}=normalized;
   if((rtp===0)!==(hitFrequency===0))throw fail('RTP and hit frequency must both be zero, or both be greater than zero');
-  if(rtp>0){
-   const limits=limitsOf(entry),conditional=rtp/hitFrequency;
-   if(conditional<limits.minWinMultiplier||conditional>limits.maxWinMultiplier)throw fail(`Incompatible RTP and hit frequency. RTP / hit frequency must be between ${limits.minWinMultiplier} and ${limits.maxWinMultiplier} for every supported stake and line count`);
-  }
+  const bounds=limitsOf(entry),mean=rtp/hitFrequency;
+  if(rtp>0&&(mean<bounds.minWinMultiplier-1e-10||mean>bounds.maxWinMultiplier+1e-10))
+   throw fail('Incompatible RTP / hit frequency: the requested average winning payout is outside this game\'s paytable bounds');
  }
  return freeze(normalized);
 }
 function validateWager(gameId,stakeCents,lines){
- if(!Number.isSafeInteger(stakeCents)||stakeCents<MIN_STAKE||stakeCents>MAX_STAKE)throw fail('Casino stake must be between 0.20 and 5000.00');
+ if(!Number.isSafeInteger(stakeCents)||stakeCents<MIN_STAKE||stakeCents>MAX_STAKE)throw fail('Casino stake must be between 20 and 5000.00');
  if(!Number.isInteger(lines)||!CUSTOM_GAMES[gameId]?.lines.includes(lines))throw fail('Unsupported casino line count');
 }
 
@@ -96,14 +98,32 @@ function distribution(gameId,{stakeCents,lines,controls}){
   low=winning.filter(index=>payouts[index]===maximum);
   return {entry,controls:normalized,payouts,denominator:DENOMINATOR,groups:[{weight:DENOMINATOR-h,ids:zero},{weight:h,ids:low}].filter(group=>group.weight>0n),maxPayoutCents:maximum};
  }
- const lowCount=BigInt(low.length),highCount=BigInt(high.length);
- const lowSum=low.reduce((sum,index)=>sum+BigInt(payouts[index]),0n),highSum=high.reduce((sum,index)=>sum+BigInt(payouts[index]),0n);
- const difference=highSum*lowCount-lowSum*highCount,denominator=DENOMINATOR*difference;
- const groups=[
-  {weight:(DENOMINATOR-h)*difference,ids:zero},
-  {weight:(h*highSum-stake*r*highCount)*lowCount,ids:low},
-  {weight:(stake*r*lowCount-h*lowSum)*highCount,ids:high},
- ];
+ const bracket=upper=>{
+  const lowCount=BigInt(low.length),highCount=BigInt(upper.length);
+  const lowSum=low.reduce((sum,index)=>sum+BigInt(payouts[index]),0n),highSum=upper.reduce((sum,index)=>sum+BigInt(payouts[index]),0n);
+  const difference=highSum*lowCount-lowSum*highCount;
+  return {denominator:DENOMINATOR*difference,groups:[
+   {weight:(DENOMINATOR-h)*difference,ids:zero},
+   {weight:(h*highSum-stake*r*highCount)*lowCount,ids:low},
+   {weight:(stake*r*lowCount-h*lowSum)*highCount,ids:upper},
+  ]};
+ };
+ // A single upper pool dominated by rare very large catalog awards makes
+ // ordinary above-stake returns needlessly scarce. Most probability now uses
+ // a nearby upper band; a smaller broad component retains every large award.
+ // Both components independently have the exact same RTP and hit target.
+ let nearby=high.filter(index=>BigInt(payouts[index])*h<=stake*r*6n);
+ if(!nearby.length){const nearest=Math.min(...high.map(index=>payouts[index]));nearby=high.filter(index=>payouts[index]===nearest);}
+ const broad=bracket(high),core=bracket(nearby);
+ const gcd=(a,b)=>b?gcd(b,a%b):a;
+ const common=broad.denominator/gcd(broad.denominator,core.denominator)*core.denominator;
+ const denominator=common*8n,combined=new Map();
+ for(const [plan,share] of [[core,7n],[broad,1n]])for(const group of plan.groups){
+  const key=group.ids.join(','),weight=group.weight*(common/plan.denominator)*share;
+  const existing=combined.get(key);
+  if(existing)existing.weight+=weight;else combined.set(key,{ids:group.ids,weight});
+ }
+ const groups=[...combined.values()];
  if(groups.some(group=>group.weight<0n)||groups.reduce((sum,group)=>sum+group.weight,0n)!==denominator)throw new Error('Invalid custom probability distribution');
  const active=groups.filter(group=>group.weight>0n),maxPayoutCents=Math.max(...active.flatMap(group=>group.ids.map(index=>payouts[index])));
  return {entry,controls:normalized,payouts,denominator,groups:active,maxPayoutCents};
@@ -130,11 +150,12 @@ export function customGameSummary(gameId,{controls,stakeCents,lines}={}){
   maxPayoutMultiplier=maxPayoutCents/stakeCents;
  }
  return freeze({gameId,version:versionOf(gameId,variant),mode:normalized?.mode??'original',controls:normalized,
-  customLimits:limitsOf(entry),maxPayoutMultiplier,...(maxPayoutCents!==undefined?{maxPayoutCents}:{}),
+  customLimits:limitsOf(entry),controlLimits:CUSTOM_CONTROL_LIMITS,maxPayoutMultiplier,...(maxPayoutCents!==undefined?{maxPayoutCents}:{}),
   mathProfile:{...entry.mathProfile},freeSpinsEnabled:entry.freeSpinsEnabled,catalogTrajectories:entry.trajectories.length,
   hitDefinition:'Paid rounds with total payout greater than zero, including all awarded free games',
   scope:'All players; future paid rounds only',customModel:'Finite original-paytable trajectory catalog; custom outcome probabilities'});
 }
+export {supportsCustomCasinoMath} from './custom-native.mjs';
 export function selectCustomRound(gameId,{stakeCents,lines,controls},random=randomInt){
  const plan=distribution(gameId,{stakeCents,lines,controls}),variant=customVariant(gameId);
  let draw=randomBelow(plan.denominator,random),selected;

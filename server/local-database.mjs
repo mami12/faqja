@@ -5,6 +5,7 @@ import { hostname } from 'node:os';
 import { resolve } from 'node:path';
 import { mkdir, open, readFile, realpath, rename, rmdir, unlink, readdir, access } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import {assertDatabaseRequestCurrent} from './database-request-context.mjs';
 
 const locked = () => Object.assign(new Error('Local database is already open, or its ownership cannot be verified. Stop the other server before trying again.'), { code: 'LOCAL_DATABASE_LOCKED' });
 const closed = () => Object.assign(new Error('Local database pool is closed.'), { code: 'LOCAL_DATABASE_CLOSED' });
@@ -79,6 +80,7 @@ export class LocalDatabasePool extends EventEmitter {
     this._tail = Promise.resolve();
     this._closing = false;
     this._fatal = null;
+    this.generation = 0;
   }
 
   async _ready() {
@@ -124,6 +126,7 @@ export class LocalDatabasePool extends EventEmitter {
   }
 
   async _execute(input) {
+    assertDatabaseRequestCurrent(this,this.generation);
     if (this._fatal) throw this._fatal;
     const database = await this._ready();
     if (input.params.length) return pgResult(await database.query(input.text, input.params));
@@ -197,6 +200,18 @@ export class LocalDatabasePool extends EventEmitter {
   }
 
   dumpDataDir(compression = 'gzip') { return this.backup(compression); }
+
+  /** Lease the complete database across backup + reset with no intervening writes. */
+  async exclusive(operation){
+    this._assertOpen();const unlock=await this._acquire();
+    try{
+      assertDatabaseRequestCurrent(this,this.generation);const database=await this._ready();
+      const client={query:(text,params)=>this._execute(sqlInput(text,params)),backup:(compression='gzip')=>database.dumpDataDir(compression),invalidateGeneration:()=>{this.generation++;}};
+      return await operation(client);
+    }finally{
+      try{if(this._database?.isInTransaction())await this._database.exec('rollback');}catch(error){this._fatal=error;}finally{unlock();}
+    }
+  }
 
   end() {
     if (this._ending) return this._ending;

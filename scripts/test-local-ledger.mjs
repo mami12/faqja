@@ -41,12 +41,12 @@ try {
     assert.ok(await recalcTicket(column.id));assert.equal(await recalcTicket(column.id),null);
   }
   assert.equal(await balance(player.id),1012.40);
-  const casinoPlayer=await ledger.createUser({username:'casino-player-test',passwordHash:password,managerId:manager.id,balance:10});
-  const spinRequest={userId:casinoPlayer.id,requestId:randomUUID(),bet:1,denomination:0.04,lines:5};
+  const casinoPlayer=await ledger.createUser({username:'casino-player-test',passwordHash:password,managerId:manager.id,balance:100});
+  const spinRequest={userId:casinoPlayer.id,requestId:randomUUID(),bet:1,denomination:4,lines:5};
   const spin=await placeCasinoSpin(spinRequest,{random:()=>0});
   const spinAgain=await placeCasinoSpin(spinRequest,{random:()=>0});
   assert.equal(spinAgain.roundId,spin.roundId);assert.equal(spinAgain.replayed,true);
-  assert.equal(await balance(casinoPlayer.id),9.80);
+  assert.equal(await balance(casinoPlayer.id),80);
   await settlePendingWin(casinoPlayer.id);
   const beforeRemoval=await balance(manager.id),remaining=await balance(player.id);
   const removed=await ledger.deleteUser(player.id,manager);

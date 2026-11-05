@@ -1,7 +1,7 @@
 import {randomInt} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {DATA,spin} from './agt-engine.mjs';
-import {casinoStakeCents,walletAgtBets} from './bet-limits.mjs';
+import {CASINO_MIN_CENTS,casinoStakeCents,walletAgtBets} from './bet-limits.mjs';
 const META=Object.fromEntries(Object.keys(DATA.games).map(id=>[id,JSON.parse(readFileSync(new URL('./agt-metadata/'+id+'.json',import.meta.url),'utf8'))]));
 const money=cents=>cents/100;
 export function formatAgtSpin(id,result,options={}){
@@ -15,7 +15,7 @@ export function formatAgtSpin(id,result,options={}){
 }
 export function createAgtProtocol({spinFn=spin,cardRandom=randomInt}={}){
  return {
- initialState(id,options={}){const d=DATA.games[id];return ({cash:200000,pending:0,lines:d.lines.length,denom:1,bet:50,remaining:0,totalFree:0,bonusWin:0,history:Array.from({length:5},()=>cardRandom(4)),round:0,last:formatAgtSpin(id,spinFn(id,50,d.lines.length,options),options),...(options.walletLimits?{walletLimits:true}:{}),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})});},
+ initialState(id,options={}){const d=DATA.games[id];return ({cash:200000,pending:0,lines:d.lines.length,denom:1,bet:options.walletLimits?CASINO_MIN_CENTS:50,remaining:0,totalFree:0,bonusWin:0,history:Array.from({length:5},()=>cardRandom(4)),round:0,last:formatAgtSpin(id,spinFn(id,50,d.lines.length,options),options),...(options.walletLimits?{walletLimits:true}:{}),...(options.mathProfile?{mathProfile:{...options.mathProfile}}:{})});},
  run(s,params,options={}){const id=String(params.gamename||''),d=DATA.games[id],originalMeta=META[id];if(!d)throw Error('Invalid game');
   const meta=s.walletLimits?{...originalMeta,start:{...originalMeta.start,full_bets:walletAgtBets(originalMeta.start.full_bets)}}:originalMeta;
   const settle=()=>{s.cash+=s.pending;s.pending=0;};
@@ -27,7 +27,7 @@ export function createAgtProtocol({spinFn=spin,cardRandom=randomInt}={}){
     case 'save':settle();return (snapshot());
     case 'spin':case 'freespin':{
      const free=s.remaining>0,lines=Number(params.li),bet=Number(params.amount),cents=Math.round(bet*100),denom=Number(params.di);
-     if((free?params.action!=='freespin':params.action!=='spin')||!Number.isSafeInteger(lines)||lines<1||lines>d.lines.length||!Number.isSafeInteger(denom)||denom<0||denom>=meta.start.k_list.length||!Number.isFinite(bet)||!Number.isSafeInteger(cents)||Math.abs(cents/100-bet)>1e-8||!meta.start.full_bets?.[lines]?.includes(bet)||(free&&(lines!==s.lines||cents!==s.bet||denom!==s.denom)))throw Error('Invalid bet');
+     if((free?params.action!=='freespin':params.action!=='spin')||!Number.isSafeInteger(lines)||lines<1||lines>d.lines.length||!Number.isSafeInteger(denom)||denom<0||denom>=meta.start.k_list.length||!Number.isFinite(bet)||!Number.isSafeInteger(cents)||Math.abs(cents/100-bet)>1e-8||(!free&&!meta.start.full_bets?.[lines]?.includes(bet))||(free&&(lines!==s.lines||cents!==s.bet||denom!==s.denom)))throw Error('Invalid bet');
      if(s.walletLimits&&!free)casinoStakeCents(bet);
      if(!free&&s.cash+s.pending<cents)throw Error('Insufficient credits');
      // Keep the paid round's immutable reel profile throughout its free games.

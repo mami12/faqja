@@ -25,7 +25,7 @@ const manager=randomUUID(),player=randomUUID();
 await sql.query('insert into app_user(id,username,password_hash,role,balance) values($1,$2,$3,$4,$5)',[manager,manager,'isolated-test-only','MANAGER',100000000]);
 await sql.query('insert into app_user(id,username,password_hash,role,balance,manager_id) values($1,$2,$3,$4,$5,$6)',[player,player,'isolated-test-only','PLAYER',1000000,manager]);
 const cents=value=>Math.round(Number(value)*100),balance=async id=>cents((await sql.query('select balance from app_user where id=$1',[id])).rows[0].balance);
-const total=async()=>await balance(player)+await balance(manager),initialTotal=await total();
+const initialPlayer=await balance(player),initialManager=await balance(manager);
 const row=async id=>(await sql.query('select * from app_casino_round where id=$1',[id])).rows[0];
 const nativeState=async id=>(await sql.query('select state from app_casino_original_state where user_id=$1 and game_id=$2',[player,id])).rows[0]?.state;
 const freeState=async()=>(await sql.query('select * from app_casino_freespin_state where user_id=$1',[player])).rows[0];
@@ -66,10 +66,15 @@ const nativePaid=(entry,stake)=>ORIGINAL_GAMES[entry.gameId].kind==='ct'
 const nativeFinish=(entry,response)=>ORIGINAL_GAMES[entry.gameId].kind==='ct'?nativeAct(entry,'game_finished',{gameplay_id:response.gameplay_id}):nativeAct(entry,'save');
 const nativeReplay=async(entry,params)=>{const result=await store.act(player,entry.gameId,entry.session,ORIGINAL_GAMES[entry.gameId].kind==='ct'?[params]:params);return ORIGINAL_GAMES[entry.gameId].kind==='ct'?result[0]:result;};
 const pixiArgs=(gameId,stake)=>({userId:player,requestId:randomUUID(),mathVersion:version(gameId),lines:gameId==='sizzling'?5:10,
- ...(stake===.20?{bet:1,denomination:gameId==='sizzling'?.04:.02}:stake===5000?{bet:100,denomination:gameId==='sizzling'?10:5}:{bet:gameId==='sizzling'?2:1,denomination:1})});
+ ...(stake===20?{bet:1,denomination:gameId==='sizzling'?4:2}:stake===5000?{bet:100,denomination:gameId==='sizzling'?10:5}:{bet:gameId==='sizzling'?2:1,denomination:1})});
 const pixiPlace=(id,args,options=legacyOptions)=>(id==='sizzling'?placeCasinoSpin:placeBookOfRaSpin)(args,options);
 const collect=()=>settlePendingWin(player,{database});
-const assertConserved=async()=>assert.equal(await total(),initialTotal,'player and manager funds must remain conserved');
+const assertPlayerLedger=async()=>{
+ const posted=await sql.query('select coalesce(sum(amount),0) as amount from app_transaction where user_id=$1',[player]);
+ assert.equal(await balance(player),initialPlayer+cents(posted.rows[0].amount),'player balance equals its posted debits and payouts');
+ assert.equal(await balance(manager),initialManager,'casino activity never changes the manager wallet');
+ assert.equal(Number((await sql.query('select count(*) as n from app_transaction where user_id=$1',[manager])).rows[0].n),0,'no automatic manager transaction');
+};
 const isVersionError=error=>error.status===409&&error.code==='CASINO_MATH_CHANGED';
 const zeroMasks=(id,response)=>{
  if(ORIGINAL_GAMES[id]?.kind==='ct'){
@@ -99,7 +104,7 @@ try{
    await assert.rejects(store.launch(player,id),isVersionError);
    await assert.rejects(store.launch(player,id,{mathVersion:'stale-version'}),isVersionError);
   }else{
-   const args=pixiArgs(id,.20);delete args.mathVersion;
+   const args=pixiArgs(id,20);delete args.mathVersion;
    await assert.rejects(pixiPlace(id,args),isVersionError);
    await assert.rejects(pixiPlace(id,{...args,mathVersion:'stale-version'}),isVersionError);
   }
@@ -108,16 +113,16 @@ try{
   // A launch acknowledgement never authorizes a subsequently changed profile.
   await apply(id,'custom',95,10);
   const beforeStale=await financialSnapshot(),calls=chooseCalls;
-  await assert.rejects(native?nativePaid(entry,.20):pixiPlace(id,{...pixiArgs(id,.20),mathVersion:acknowledged}),isVersionError);
+  await assert.rejects(native?nativePaid(entry,20):pixiPlace(id,{...pixiArgs(id,20),mathVersion:acknowledged}),isVersionError);
   assert.deepEqual(await financialSnapshot(),beforeStale);assert.equal(chooseCalls,calls);
   await apply(id);
-  for(const stake of [.20,5000]){
+  for(const stake of [20,5000]){
    const before=await balance(player),beforeHouse=await balance(manager);
    const args=native?null:pixiArgs(id,stake);
    const result=native?await nativePaid(entry,stake):await pixiPlace(id,args);
    const originalRequest=native?structuredClone(entry.last):args;
    const state=native?await nativeState(id):null,saved=await row(native?state.roundId:result.roundId);
-   assert.equal(await balance(player),before-cents(stake));assert.equal(await balance(manager),beforeHouse+cents(stake));
+   assert.equal(await balance(player),before-cents(stake));assert.equal(await balance(manager),beforeHouse);
    assert.equal(cents(saved.stake),cents(stake));assert.equal(cents(saved.payout),0);zeroMasks(id,result);
    const metadata=native?saved.result.mathProfile.customMath:saved.result.customMath;
    assert.equal(metadata.rtp,0);assert.equal(metadata.hitFrequency,0);assert.equal(metadata.version,lastPlan.version);assert.equal(saved.game_version,lastPlan.version);
@@ -129,21 +134,22 @@ try{
    if(native)assert.deepEqual(replay,result);else{assert.equal(replay.roundId,result.roundId);assert.equal(replay.payout,0);assert.equal(replay.replayed,true);}
    assert.deepEqual(await financialSnapshot(),beforeReplay);assert.equal(chooseCalls,oldCalls);
    if(native)await nativeFinish(entry,result);else await collect();
-   assert.equal(await balance(player),before-cents(stake));await assertConserved();await apply(id);boundaryRounds++;
+   assert.equal(await balance(player),before-cents(stake));await assertPlayerLedger();await apply(id);boundaryRounds++;
   }
   if(native)await store.close(player,id,entry.session);
 
   // Positive custom rounds still use the unscaled native paytable and retain
   // the exact accepted targets, catalog version, result and pending payout.
-  await apply(id,'custom',95,10);
+  for(const [rtp,hitFrequency] of [[95,10],[600,100]]){
+  await apply(id,'custom',rtp,hitFrequency);
   const lines=id==='vikings-fun'?25:id==='fruit-queen'?18:id==='seven-hot'?20:id==='bookofra'?10:5;
-  forcedPlan=positivePlan(id,1000,lines);const expected=forcedPlan;
+  forcedPlan=positivePlan(id,2000,lines);const expected=forcedPlan;
   const before=await balance(player),positiveEntry=native?await nativeEntry(id,version(id)):null;
-  const result=native?await nativePaid(positiveEntry,10):await pixiPlace(id,pixiArgs(id,10));
+  const result=native?await nativePaid(positiveEntry,20):await pixiPlace(id,pixiArgs(id,20));
   const saved=await row(native?(await nativeState(id)).roundId:result.roundId);
-  assert.equal(cents(saved.payout),expected.payoutCents);assert.equal(await balance(player),before-1000);
+  assert.equal(cents(saved.payout),expected.payoutCents);assert.equal(await balance(player),before-2000);
   const metadata=native?saved.result.mathProfile.customMath:saved.result.customMath;
-  assert.equal(metadata.rtp,95);assert.equal(metadata.hitFrequency,10);assert.equal(metadata.version,expected.version);assert.equal(saved.game_version,expected.version);
+  assert.equal(metadata.rtp,rtp);assert.equal(metadata.hitFrequency,hitFrequency);assert.equal(metadata.version,expected.version);assert.equal(saved.game_version,expected.version);
   if(native){
    const state=await nativeState(id);assert.equal(state.pending,expected.payoutCents);
    if(ORIGINAL_GAMES[id].kind==='agt'){
@@ -158,27 +164,28 @@ try{
    assert.deepEqual(id==='bookofra'?result.grid:Object.values(result.result.symbols).map(column=>Object.values(column).map(symbol=>symbol.code)),expected.spins[0].grid);
    await collect();
   }
-  assert.equal(await balance(player),before-1000+expected.payoutCents);const once=await balance(player);await collect();assert.equal(await balance(player),once);await assertConserved();positiveRounds++;
+  assert.equal(await balance(player),before-2000+expected.payoutCents);const once=await balance(player);await collect();assert.equal(await balance(player),once);await assertPlayerLedger();positiveRounds++;
+  }
 
   // Switching back restores the real chosen original engine profile, without
   // consulting the custom selector or retaining custom probability metadata.
   profiles={...profiles,[id]:getPaidGameProfile(id).id};await apply(id,'original',95,10);
   const beforeOriginalCalls=chooseCalls;
   if(native){
-   const original=await nativeEntry(id,version(id));await nativePaid(original,.20);
+   const original=await nativeEntry(id,version(id));await nativePaid(original,20);
    const saved=await row((await nativeState(id)).roundId);assert.equal(saved.game_version,profiles[id]);assert.equal(saved.result.mathProfile.customMath,undefined);
    await store.close(player,id,original.session);
   }else{
-   const result=await pixiPlace(id,pixiArgs(id,.20));const saved=await row(result.roundId);
+   const result=await pixiPlace(id,pixiArgs(id,20));const saved=await row(result.roundId);
    assert.equal(saved.game_version,profiles[id]);assert.equal(saved.result.customMath,undefined);await collect();
   }
-  assert.equal(chooseCalls,beforeOriginalCalls);await assertConserved();
+  assert.equal(chooseCalls,beforeOriginalCalls);await assertPlayerLedger();
  }
 
  // A fully accepted custom Book bonus is immutable through collect/reload,
  // server-store recreation, new settings, free-spin OFF, global OFF and retries.
  process.env.BOOKOFRA_FREE_SPINS='1';await apply('bookofra','custom',95,10);
- const catalog=getCustomCatalog('bookofra'),stakeCents=1000,lines=10;
+ const catalog=getCustomCatalog('bookofra'),stakeCents=2000,lines=10;
  const trajectory=catalog.trajectories.find(trajectory=>{
   if(trajectory.stops.length<=1)return false;
   const plan=gradeCustomTrajectory('bookofra',trajectory,{stakeCents,lines});
@@ -189,7 +196,7 @@ try{
  const template=selectCustomRound('bookofra',{stakeCents,lines,controls:controls.bookofra},()=>0);
  const bonus=JSON.parse(JSON.stringify({...template,spins:graded.spins.map(spin=>({...spin,mathProfile:template.mathProfile})),payoutCents:graded.payoutCents,trajectory:{...trajectory,catalogVariant:'bookofra-on'}}));
  forcedPlan=bonus;
- const beforeBonus=await balance(player),paidArgs=pixiArgs('bookofra',10),paid=await placeBookOfRaSpin(paidArgs,legacyOptions);
+ const beforeBonus=await balance(player),paidArgs=pixiArgs('bookofra',20),paid=await placeBookOfRaSpin(paidArgs,legacyOptions);
  assert.equal(paid.free.left,FREE_SPINS);assert.equal(cents(paid.payout),graded.spins[0].winCents);
  let fs=await freeState();assert.equal(fs.custom_round.version,bonus.version);assert.equal(fs.custom_round.spins.length,FREE_SPINS);
  assert.deepEqual(fs.custom_round.spins.map(spin=>spin.grid),graded.spins.slice(1).map(spin=>spin.grid));
@@ -215,6 +222,9 @@ try{
  await collect();assert.equal(await balance(player),beforeBonus-stakeCents+graded.payoutCents);
  const collected=await balance(player);await collect();assert.equal(await balance(player),collected);
  const credited=await sql.query("select coalesce(sum(amount),0) as amount from app_transaction where user_id=$1 and reference_id=$2 and type='CASINO_WIN'",[player,paid.roundId]);
- assert.equal(cents(credited.rows[0].amount),graded.payoutCents);assert.equal(cents((await row(paid.roundId)).payout),graded.payoutCents);await assertConserved();
- console.log(`custom casino wallet: ${boundaryRounds} zero-RTP boundary rounds, ${positiveRounds} positive native contracts, all-six acknowledgement/replay/original restoration, frozen Book bonus/reload/OFF/retries/once-only collection and house conservation PASS`);
+ assert.equal(cents(credited.rows[0].amount),graded.payoutCents);assert.equal(cents((await row(paid.roundId)).payout),graded.payoutCents);await assertPlayerLedger();
+ console.log(`custom casino wallet: ${boundaryRounds} zero-RTP boundary rounds, ${positiveRounds} positive native contracts, all-six acknowledgement/replay/original restoration, frozen Book bonus/reload/OFF/retries/once-only collection and player-ledger reconciliation/no manager balance mutation PASS`);
 }finally{await sql.close();}
+
+
+

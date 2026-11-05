@@ -11,7 +11,7 @@ import { Router, raw } from 'express';
 import { randomBytes, randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import {walletPixiRanges} from './bet-limits.mjs';
+import {CASINO_MIN_STAKE,walletPixiRanges} from './bet-limits.mjs';
 
 const SESSION_COOKIE = 'sizzling_demo_session';
 const SESSION_TTL = 4 * 3600 * 1000;
@@ -178,7 +178,7 @@ function decodeRequest(req) {
 
 const basicResponse = (state, before) => ({
   balance: { before: money(before), after: balance(state) },
-  denomination: state.walletLimits ? .04 : 1,
+  denomination: state.walletLimits ? CASINO_MIN_STAKE/5 : 1,
 });
 
 function initResponse(state) {

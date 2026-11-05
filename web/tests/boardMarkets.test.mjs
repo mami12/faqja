@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import ts from 'typescript';
-
-// The test remains runnable on Node 20; it does not rely on Node's TS stripping.
-const source = await readFile(new URL('../src/utils/boardMarkets.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ES2020 } }).outputText;
-const { selectBoardMarkets, getBoardTotalLine, findBoardOutcome } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+// Exercise the shared selector directly. The browser wrapper in
+// src/utils/boardMarkets.ts is a typed pass-through, and a data: URL module
+// cannot resolve a relative import of the server implementation.
+const { selectBoardMarkets, getBoardTotalLine, findBoardOutcome } = await import(new URL('../../server/board-markets.mjs', import.meta.url).href);
 
 const goal = (line, extra = {}) => ({ id: `total-${line}`, name: 'Total Goals', marketType: 'OVER_UNDER', line, status: 'ACTIVE', outcomes: [{ name: 'Over' }, { name: 'Under' }], ...extra });
 const result = (extra = {}) => ({ id: 'result', name: 'Full Time Result', marketType: '1X2', status: 'ACTIVE', outcomes: [{ name: '1' }, { name: 'X' }, { name: '2' }], ...extra });
@@ -104,5 +101,27 @@ test('DC and BTTS labels remain distinct native selections', () => {
 test('choosing a total does not reorder or mutate the API snapshot', () => {
   const markets = [goal(4.5), goal(2.5)], before = JSON.stringify(markets);
   select(markets); assert.equal(JSON.stringify(markets), before);
+});
+const nextGoalMarket = (name, extra = {}) => ({ id: 'next', name, marketType: 'NEXT_GOAL', status: 'ACTIVE', outcomes: [{ name: 'Home' }, { name: 'Away' }], ...extra });
+test('the 0-0 title "First team to score" is the next-goal column', () => {
+  assert.equal(select([nextGoalMarket('First Team to Score')]).nextGoal?.name, 'First Team to Score');
+});
+test('the post-goal title "Next Goal" is the same next-goal column', () => {
+  assert.equal(select([nextGoalMarket('Next Goal')]).nextGoal?.name, 'Next Goal');
+});
+test('a team-to-score title without a market type is still recognised', () => {
+  assert.equal(select([{ ...nextGoalMarket('First Team to Score'), marketType: undefined }]).nextGoal?.name, 'First Team to Score');
+});
+test('goal-timing markets never become the team-to-score column', () => {
+  assert.equal(select([nextGoalMarket('When will goal 1 be scored')]).nextGoal, null);
+});
+test('player goalscorer markets never become the team-to-score column', () => {
+  assert.equal(select([nextGoalMarket('First Goalscorer')]).nextGoal, null);
+});
+test('the next-goal column coexists with the main board contracts', () => {
+  const selected = select([result(), goal(2.5), nextGoalMarket('Next Goal')]);
+  assert.equal(selected.primaryType, '1X2');
+  assert.equal(selected.totalLine, 2.5);
+  assert.equal(selected.nextGoal?.name, 'Next Goal');
 });
 console.log(`PASS ${checks} board selection cases`);

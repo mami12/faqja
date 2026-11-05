@@ -161,3 +161,24 @@
  width: min(100%, calc((72dvh - 46px) * 16 / 9));
  height: auto; aspect-ratio: 16 / 9; max-height: 100%;
 }
+
+/* Rotate hint shown in portrait before the stage is rotated. */
+.casino-rotate-hint {
+ position: fixed; inset: 0; z-index: 10000;
+ display: flex; flex-direction: column; align-items: center; justify-content: center;
+ gap: 12px;
+ padding: 24px max(16px, env(safe-area-inset-left)) 24px max(16px, env(safe-area-inset-right));
+ background: #0b1220; color: #e2e8f0; text-align: center;
+}
+.casino-rotate-hint p { max-width: 22rem; font-size: 14px; font-weight: 700; line-height: 1.4; }
+.casino-rotate-hint-btn {
+ min-height: 44px; padding: 0 18px; border-radius: 10px;
+ border: 1px solid #f59e0b66; background: #f59e0b; color: #000;
+ font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.casino-rotate-hint-btn:hover { background: #fbbf24; }
+.casino-game-content iframe { display: block; }
+@media (max-width: 420px) {
+ .casino-game-toolbar { gap: 6px; }
+ .casino-game-fullscreen-label { display: none; }
+}

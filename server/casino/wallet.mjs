@@ -3,7 +3,7 @@ import { pool, query } from '../db.mjs';
 import { requireAuth } from '../ledger/auth.mjs';
 import { isLedgerReady } from '../ledger/store.mjs';
 import {publicGameProfiles,validateGameProfile} from './game-rtp-profiles.mjs';
-import {validateControls,customGameSummary} from './custom-math.mjs';
+import {validateControls,customGameSummary,supportsCustomCasinoMath,CUSTOM_CONTROL_LIMITS} from './custom-math.mjs';
 import {casinoControls,casinoMathVersion} from './casino-controls.mjs';
 
 // Sizzling uses the same authenticated PostgreSQL balance as sports betting.
@@ -20,17 +20,18 @@ export async function getCasinoSettings(executor = query) {
   const setting = rows[0] || { enabled: false, profile: 'SIZZLING_STANDARD_V1' };
   const games=publicGameProfiles(setting.game_profiles).map(game=>{
     const controls=casinoControls(setting.game_controls,game.gameId);
-    let summary,configurationError;
-    try{summary=customGameSummary(game.gameId,{controls});}catch(error){summary=customGameSummary(game.gameId);configurationError=error.message;}
+    const supportsCustomMath=supportsCustomCasinoMath(game.gameId);
+    let summary={version:null,customLimits:null,controlLimits:CUSTOM_CONTROL_LIMITS,maxPayoutMultiplier:null},configurationError;
+    if(supportsCustomMath){try{summary=customGameSummary(game.gameId,{controls});}catch(error){try{summary=customGameSummary(game.gameId);configurationError=error.message;}catch{configurationError=error.message;}}}
     let mathVersion=null;try{mathVersion=casinoMathVersion(game.gameId,setting);}catch{}
-    return {...game,configurationError:configurationError??(controls.mode==='custom'?null:game.configurationError),controls,customLimits:summary.customLimits,
+    return {...game,supportsCustomMath,configurationError:configurationError??(controls.mode==='custom'?null:game.configurationError),controls,customLimits:summary.customLimits,controlLimits:summary.controlLimits,
       effectiveRtp:controls.mode==='custom'?controls.rtp:game.theoreticalRtp,
       effectiveHitFrequency:controls.mode==='custom'?controls.hitFrequency:null,
       mathVersion,customVersion:summary.version,maxPayoutMultiplier:summary.maxPayoutMultiplier};
   }),sizzling=games.find(game=>game.gameId==='sizzling');
   return {
     enabled: Boolean(setting.enabled),
-    stakeLimits:{min:0.20,max:5000,currency:'ALL'},
+    stakeLimits:{min:20,max:5000,currency:'ALL'},
     deploymentEnabled: true,
     realMoneyAvailable: true,
     profile:sizzling.profile,profiles:sizzling.profiles,games,

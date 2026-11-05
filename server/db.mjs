@@ -104,7 +104,7 @@ export async function expireStaleMatches(graceSeconds = 150) {
   return res.rows.map((r) => r.match_id);
 }
 
-export async function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false }) {
+export async function getMatches({ service = null, league = null, tournamentId = null, sportId = null, q = null, limit = 500, offset = 0, includeEnded = false,catalog=false }) {
   const res = await query(
     `select matches.*, (select min(case when matches.service='LIVE' then all_matches.live_first_seen_at else all_matches.prematch_first_seen_at end)
       from matches all_matches where all_matches.sport_id is not distinct from matches.sport_id
@@ -122,7 +122,7 @@ export async function getMatches({ service = null, league = null, tournamentId =
         coalesce(tournament_id,category_id,0) asc,
         case when service='LIVE' then coalesce(live_first_seen_at,first_seen_at) else coalesce(prematch_first_seen_at,first_seen_at) end asc, match_id asc
       limit $4 offset $5`,
-    [service, league, q, Math.min(limit, 2000), offset, includeEnded === true,
+    [service, league, q, catalog?null:Math.min(limit, 2000), offset, includeEnded === true,
       tournamentId == null ? null : String(tournamentId), sportId == null ? null : String(sportId)],
   );
   return res.rows;
@@ -399,21 +399,21 @@ export async function getOddsHistory(matchId, limit = 200) {
  * driver answers - the pusher must not care which store is in use.
  */
 export async function getSubscriptionIds({
-  liveLimit = 250,
-  prematchLimit = 150,
+  liveLimit = 0,
+  prematchLimit = 0,
   soonMs = DEFAULT_SOON_MS,
 } = {}) {
   const live = await query(
     `select match_id from matches
       where active and service = 'LIVE' and status <> 'ended'
       order by start_at limit $1`,
-    [liveLimit],
+    [Number(liveLimit)>0?Math.floor(Number(liveLimit)):null],
   );
   const prematch = await query(
     `select match_id, start_at from matches
       where active and service = 'PREMATCH' and status <> 'ended'
       order by start_at limit $1`,
-    [prematchLimit],
+    [Number(prematchLimit)>0?Math.floor(Number(prematchLimit)):null],
   );
   const ids = prematch.rows.map((r) => r.match_id);
   const kickoff = {};

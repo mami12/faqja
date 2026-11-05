@@ -1,3 +1,4 @@
+import {useFeedScope} from '../../api/feedScope';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock, Filter, Layers, Loader2, Lock, Percent, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trophy, Unlock, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
@@ -29,6 +30,7 @@ export default function MatchControl() {
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useFeedScope('admin-detail',{detail:selectedId?{id:selectedId,category:'all'}:null});
   const [detail, setDetail] = useState<Match | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailStale, setDetailStale] = useState(true);
@@ -49,6 +51,11 @@ export default function MatchControl() {
   const [detailError, setDetailError] = useState('');
   const [notice, setNotice] = useState('');
   const [automatic, setAutomatic] = useState(true);
+  const [bulkCountry, setBulkCountry] = useState('');
+  const [bulkCompetition, setBulkCompetition] = useState('');
+  const [bulkCategory, setBulkCategory] = useState('totals');
+  const [bulkAction, setBulkAction] = useState<'suspend' | 'open'>('suspend');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const mounted = useRef(true);
   const selection = useRef<string | null>(null);
   const epoch = useRef(0);
@@ -114,10 +121,10 @@ export default function MatchControl() {
   }, [loadList]);
   useEffect(() => { if (selectedId) void loadDetail(selectedId); }, [selectedId, loadDetail]);
   useEffect(() => {
-    if (!automatic || dialog || busy) return;
+    if (!automatic || dialog || busy || bulkBusy) return;
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible' && !actionRunning.current) void refresh(); }, 30_000);
     return () => window.clearInterval(timer);
-  }, [automatic, dialog, busy, refresh]);
+  }, [automatic, dialog, busy, bulkBusy, refresh]);
   useEffect(() => { setPage(1); }, [query, status, competition, suspension]);
   useEffect(() => { setMarketLimit(20); }, [selectedId, marketQuery, category, marketState]);
 
@@ -171,6 +178,40 @@ export default function MatchControl() {
     await perform(() => apiClient.post(`/admin/matches/${encodeURIComponent(dialog.match.id)}/settle`, { homeScore, awayScore }), tr('Rezultati u ruajt dhe skedinat u përditësuan.'), true);
   };
 
+  const bulkCountries = useMemo(() => [...new Set(matches.map(match => match.tournament?.category?.name?.trim()).filter((name): name is string => Boolean(name)))].sort((a, b) => a.localeCompare(b)), [matches]);
+  const bulkCompetitions = useMemo(() => [...new Map(matches
+    .filter(match => match.tournament?.category?.name === bulkCountry && competitionKey(match))
+    .map(match => [competitionKey(match), match.tournament?.name ?? tr('Pa kampionat')]))]
+    .sort((a, b) => a[1].localeCompare(b[1])), [matches, bulkCountry]);
+  const bulkMarketCategories = [
+    ['all', 'Të gjitha tregjet'], ['totals', 'Totale'], ['results', 'Rezultati / 1X2'],
+    ['goals', 'Gola'], ['intervals', 'Intervale'], ['corners', 'Këndore'], ['cards', 'Kartona'],
+    ['fouls', 'Faulle'], ['shots', 'Goditje'], ['players', 'Lojtarë'], ['combos', 'Kombinime'], ['other', 'Të tjera'],
+  ] as const;
+  const runBulkMarketAction = async () => {
+    if (!bulkCountry || !bulkCompetition || bulkBusy) return;
+    const competitionName = bulkCompetitions.find(([key]) => key === bulkCompetition)?.[1] ?? '';
+    const actionLabel = bulkAction === 'suspend' ? tr('pezullohen') : tr('rihapen');
+    const categoryLabel = tr(bulkMarketCategories.find(([key]) => key === bulkCategory)?.[1] ?? 'Të gjitha tregjet');
+    if (!window.confirm(`${tr('Konfirmo veprimin masiv')}: ${categoryLabel}, ${competitionName}, ${bulkCountry}. ${tr('Tregjet do të')} ${actionLabel}.`)) return;
+    setBulkBusy(true); setError(''); setNotice('');
+    try {
+      const response = await apiClient.post('/admin/markets/bulk-suspend', {
+        country: bulkCountry,
+        competitionId: bulkCompetition,
+        category: bulkCategory,
+        suspended: bulkAction === 'suspend',
+      });
+      const count = Number(response.data.count) || 0;
+      setNotice(`${bulkAction === 'suspend' ? 'U pezulluan' : 'U rihapën'} ${count} tregje.`);
+      await refresh();
+    } catch (failure) {
+      setError(errorMessage(failure, tr('Veprimi masiv dështoi.')));
+    } finally {
+      if (mounted.current) setBulkBusy(false);
+    }
+  };
+
   const competitions = useMemo(() => [...new Map(matches.filter(match => competitionKey(match)).map(match => [competitionKey(match), match.tournament?.name ?? tr('Pa kampionat')])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [matches]);
   const filtered = useMemo(() => matches.filter(match => {
     const text = searchText(`${match.homeTeam} ${match.awayTeam} ${match.tournament?.name ?? ''} ${match.id}`);
@@ -181,7 +222,7 @@ export default function MatchControl() {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const selected = detail && detail.id === selectedId ? detail : null;
-  const controlsBlocked = busy || detailLoading || detailStale;
+  const controlsBlocked = busy || bulkBusy || detailLoading || detailStale;
   const shownError = adminUiError(error || detailError || listError, lang);
   const markets = selected?.markets ?? [];
   const categoryCounts = new Map(categories.map(key => [key, markets.filter(market => marketCategoryOf(market) === key).length]));
@@ -202,7 +243,7 @@ export default function MatchControl() {
     if (selected) openDialog({ kind: 'adjust', match: selected, scope, id, title, outcomes });
   };
 
-  return <section className="match-control" data-mobile-detail={mobileDetail} aria-busy={busy || undefined}>
+  return <section className="match-control" data-mobile-detail={mobileDetail} aria-busy={busy || bulkBusy || undefined}>
     <header className="mc-heading">
       <div><div className="mc-eyebrow"><SlidersHorizontal size={14} />{' '}{tr("ADMINISTRIMI I TREGJEVE")}</div><h2>{tr("Ndeshjet dhe koeficientët")}</h2><p>{tr("Gjej ndeshjen, kontrollo tregjet dhe menaxho kuotat në një vend.")}</p></div>
       <button className="mc-button mc-secondary" disabled={busy || refreshing || detailLoading} onClick={() => { setError(''); void refresh(); }}><RefreshCw size={16} className={refreshing ? 'mc-spin' : ''} />{' '}{tr("Rifresko")}</button>
@@ -222,6 +263,16 @@ export default function MatchControl() {
       <label>{tr("Kampionati")}<select aria-label={tr("Kampionati")} value={competition} onChange={event => setCompetition(event.target.value)}><option value="ALL">{tr("Të gjitha kampionatet")}</option>{competitions.map(([key, label]) => <option key={key} value={key}>{tr(label)}</option>)}</select></label>
       <label>{tr("Pezullimi")}<select aria-label={tr("Pezullimi i ndeshjeve")} value={suspension} onChange={event => setSuspension(event.target.value)}><option value="ALL">{tr("Çdo gjendje")}</option><option value="ACTIVE">{tr("Pa pezullim ndeshjeje")}</option><option value="SUSPENDED">{tr("Të pezulluara")}</option></select></label>
     </div>
+    <section className="mc-bulk-controls" aria-label={tr('Pezullim masiv i tregjeve')}>
+      <div><strong>{tr('Pezullim masiv i tregjeve')}</strong><small>{tr('Zgjidh vendin, kampionatin dhe kategorinë që do të ndryshosh.')}</small></div>
+      <div className="mc-bulk-fields">
+        <label>{tr('Shteti')}<select value={bulkCountry} onChange={event => { setBulkCountry(event.target.value); setBulkCompetition(''); }}><option value="">{tr('Zgjidh shtetin')}</option>{bulkCountries.map(country => <option key={country} value={country}>{country}</option>)}</select></label>
+        <label>{tr('Kampionati')}<select value={bulkCompetition} onChange={event => setBulkCompetition(event.target.value)} disabled={!bulkCountry}><option value="">{tr('Zgjidh kampionatin')}</option>{bulkCompetitions.map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
+        <label>{tr('Kategoria e tregut')}<select value={bulkCategory} onChange={event => setBulkCategory(event.target.value)}>{bulkMarketCategories.map(([key, label]) => <option key={key} value={key}>{tr(label)}</option>)}</select></label>
+        <label>{tr('Veprimi')}<select value={bulkAction} onChange={event => setBulkAction(event.target.value as 'suspend' | 'open')}><option value="suspend">{tr('Pezullo')}</option><option value="open">{tr('Rihap')}</option></select></label>
+        <button type="button" className={`mc-button ${bulkAction === 'suspend' ? 'mc-warning' : 'mc-secondary'}`} disabled={!bulkCountry || !bulkCompetition || bulkBusy || busy} onClick={() => void runBulkMarketAction()}>{bulkBusy ? <Loader2 size={16} className="mc-spin" /> : bulkAction === 'suspend' ? <Lock size={15} /> : <Unlock size={15} />}{bulkBusy ? tr('Po përditësohen tregjet…') : tr('Zbato në bulk')}</button>
+      </div>
+    </section>
     {shownError && !dialog && <div className="mc-message mc-error" role="alert"><Lock size={17} /><span>{shownError}</span>{!detailError && !listError && <button aria-label={tr("Mbyll njoftimin")} onClick={() => setError('')}><X size={16} /></button>}</div>}
     {notice && <div className="mc-message mc-success" role="status"><CheckCircle2 size={17} /><span>{tr(notice)}</span><button aria-label={tr("Mbyll njoftimin")} onClick={() => setNotice('')}><X size={16} /></button></div>}
     <div className="mc-workspace">

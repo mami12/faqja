@@ -29,8 +29,8 @@ export async function syncCasinoRoundPayout(db,userId,roundId,pending=0){
 }
 
 /**
- * Credits a pending win and moves the house/manager ledger the other way.
- * Runs inside the caller's transaction; mutates player/manager in memory.
+ * Credits the player's pending win only; manager settlement stays manual.
+ * Runs inside the caller's transaction and updates the player in memory.
  */
 export async function creditPendingWin(db,{userId,player,manager,pending,roundId,label=GAME_LABEL}){
   if(!(pending>0))return Number(player.balance);
@@ -40,14 +40,7 @@ export async function creditPendingWin(db,{userId,player,manager,pending,roundId
     "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_WIN',$3,$4,$5)",
     [userId,pending,roundId,after,label+' · payout']);
   player.balance=after;
-  if(manager){
-    const managerAfter=money(Number(manager.balance)-pending);
-    await db.query('update app_user set balance=$2,updated_at=now() where id=$1',[manager.id,managerAfter]);
-    await db.query(
-      "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",
-      [manager.id,-pending,roundId,managerAfter,label+' · payout '+player.username]);
-    manager.balance=managerAfter;
-  }
+  // Manager settlement is informational and handled manually.
   return after;
 }
 
@@ -84,6 +77,90 @@ export async function settlePendingWin(userId,{roundId=null,database=pool}={}){
     return Number(player.balance);
   }catch(error){await db.query('rollback').catch(()=>{});throw error;}
   finally{db.release();}
+}
+
+/* --------------------------------------------------------------------------
+ * Play'n GO — Book of Dead (real wallet)
+ * Same money flow as Sizzling: spin debits only the stake; the win stays
+ * PENDING; collect/gamble settles. Free-spin chain is not persisted through
+ * this helper (each freespin is a fresh `placePlayNGoSpin` call that adds to
+ * pending); the client's own `freespin` loop is what drives it.
+ * ------------------------------------------------------------------------ */
+export async function placePlayNGoSpin({userId,requestId,bet,denomination=1,lines=PNGO_LINES.length,mathVersion},{database=pool,random,checkBet=assertPlayerCanBet}={}){
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(requestId)))
+    throw fault(400,'Unique UUID required');
+  bet=Number(bet);denomination=Number(denomination);lines=Number(lines);
+  if(lines!==PNGO_LINES.length)throw fault(400,'Invalid Play n GO lines');
+  const stake=money(bet*denomination*lines),client=await database.connect();
+  try{
+    await client.query('begin');
+    const lookup=await client.query('select manager_id from app_user where id=$1',[userId]);
+    if(!lookup.rows.length)throw fault(404,'Player not found');
+    const ids=[userId,lookup.rows[0].manager_id].filter(Boolean).sort();
+    const locked=await client.query(
+      'select id,username,role,status,balance,manager_id from app_user where id=any($1::uuid[]) order by id for update',[ids]);
+    const accounts=new Map(locked.rows.map(x=>[x.id,x]));
+    const player=accounts.get(userId);
+    if(!player||player.role!=='PLAYER'||player.status!=='ACTIVE')throw fault(403,'Player account disabled');
+    if(player.manager_id!==lookup.rows[0].manager_id)throw fault(409,'Manager changed: retry');
+    const manager=player.manager_id?accounts.get(player.manager_id):null;
+    if(player.manager_id&&(!manager||manager.role!=='MANAGER'))throw fault(409,'Manager unavailable');
+    const settings=await client.query('select enabled,game_profiles,game_controls from app_casino_settings where id=1 for share');
+    const previous=await client.query('select * from app_casino_round where user_id=$1 and client_request_id=$2',
+      [userId,requestId]);
+    if(previous.rows.length){
+      const old=previous.rows[0];
+      if(old.game_id!=='playngo-bookofdead'||Number(old.bet)!==bet||Number(old.denomination)!==denomination||Number(old.lines)!==lines)
+        throw fault(409,'Request key was used for a different wager');
+      await client.query('commit');
+      return {roundId:old.id,stake:Number(old.stake),payout:Number(old.result?.total??old.payout),
+        balance:Number(old.balance_after),result:old.result,profile:old.game_version,replayed:true};
+    }
+    if(!settings.rows[0]?.enabled)throw fault(403,'Casino disabled by administrator');
+    assertCasinoMathAcknowledged('playngo-bookofdead',settings.rows[0],mathVersion);
+    const pendingState=await client.query(
+      'select round_id,pending from app_casino_gamble_state where user_id=$1 for update',[userId]);
+    const carried=Number(pendingState.rows[0]?.pending||0);
+    if(carried>0){
+      await creditPendingWin(client,{userId,player,manager,pending:carried,
+        roundId:pendingState.rows[0].round_id,label:'Book of Dead · auto-collect'});
+      await syncCasinoRoundPayout(client,userId,pendingState.rows[0]?.round_id);
+    }
+    if(Number(player.balance)<stake)throw fault(400,'Insufficient balance');
+    await checkBet(client,userId,stake);
+    const profile={id:'pngo-bookofdead-v1',theoreticalRtp:96.82};
+    const grid=pngoRandomGrid();
+    const graded=pngoGradeGrid(grid,bet,lines);
+    const payout=money(graded.total);
+    const books=grid.flat().filter(s=>s===0).length;
+    const freeTrigger=books>=3;
+    const free={trigger:freeTrigger,left:freeTrigger?PNGO_FREE_SPINS:0,done:0,mud:freeTrigger?pngoPickMud():null};
+    const result={
+      symbols:pngoSymbolMatrix(grid),
+      line_wins:graded.line_wins,
+      total:payout.toFixed(2),
+      free,
+      mathProfile:{id:profile.id,theoreticalRtp:profile.theoreticalRtp},
+    };
+    const balance=money(Number(player.balance)-stake);
+    const round=await client.query(
+      "insert into app_casino_round(user_id,client_request_id,game_id,game_version,bet,denomination,lines,stake,payout,balance_after,result) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) returning id",
+      [userId,requestId,'playngo-bookofdead',profile.id,bet,denomination,lines,stake,payout,balance,JSON.stringify(result)]);
+    const roundId=round.rows[0].id;
+    await client.query(
+      `insert into app_casino_gamble_state(user_id,round_id,pending,step,player_card)
+       values($1,$2,$3,0,null)
+       on conflict(user_id) do update set round_id=excluded.round_id,
+         pending=excluded.pending,step=0,player_card=null,updated_at=now()`,
+      [userId,roundId,payout]);
+    await client.query(
+      "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",
+      [userId,-stake,roundId,balance,'Book of Dead · spin']);
+    await client.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,balance]);
+    await client.query('commit');
+    return {roundId,stake,payout,balance,result,profile:profile.id,replayed:false};
+  }catch(error){await client.query('rollback').catch(()=>{});throw error;}
+  finally{client.release();}
 }
 
 export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines=5,mathVersion},{database=pool,random,checkBet=assertPlayerCanBet,chooseRound=selectCustomRound}={}){
@@ -162,14 +239,7 @@ export async function placeCasinoSpin({userId,requestId,bet,denomination=1,lines
       "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_SPIN',$3,$4,$5)",
       [userId,-stake,roundId,balance,GAME_LABEL+' · spin']);
     await client.query('update app_user set balance=$2,updated_at=now() where id=$1',[userId,balance]);
-    if(manager){
-      // The house keeps the stake now; it pays the win when the player collects.
-      const managerAfter=money(Number(manager.balance)+stake);
-      await client.query('update app_user set balance=$2,updated_at=now() where id=$1',[manager.id,managerAfter]);
-      await client.query(
-        "insert into app_transaction(user_id,amount,type,reference_id,balance_after,description) values($1,$2,'CASINO_MANAGER_NET',$3,$4,$5)",
-        [manager.id,stake,roundId,managerAfter,'Casino stake · '+player.username]);
-    }
+    // Stake commission is recorded by the database without changing manager funds.
     await client.query('commit');
     return {roundId,stake,payout,balance,result,profile:version,replayed:false};
   }catch(error){await client.query('rollback').catch(()=>{});throw error;}

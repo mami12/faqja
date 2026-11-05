@@ -1,4 +1,5 @@
 import axios from 'axios';
+import {localizeApiError} from '../utils/userError';
 
 /**
  * The app is served by our backend under /app, so its API lives at /app/api
@@ -40,6 +41,6 @@ apiClient.interceptors.response.use(
         window.location.href = '/app/login';
       }
     }
-    return Promise.reject(error);
+    return Promise.reject(localizeApiError(error,localStorage.getItem('lang')==='en'?'en':'al'));
   }
 );

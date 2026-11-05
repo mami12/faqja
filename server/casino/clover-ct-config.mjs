@@ -14,7 +14,7 @@ export function ctConfig(grid,options={}){
   reels_sets:{main:{reels:DATA.reels[key].map(r=>r.map(symbol)),symbols:Array.from({length:11},(_,i)=>i+1)}},
   paytables:{main:{paytable,paytable_wilds:{11:{}},paytable_scatters:{1:{3:scatter(3),4:scatter(20),5:scatter(100)},10:{3:scatter(20)}}}},
   lines:DATA.lines.slice(0,5),lines_mode:1,lines_per_credit:1,lines_min_number:5,lines_max_number:5,lines_step_numbers:[5],
-  line_min_bet:1,line_max_bet:options.walletLimits?25000:100,line_default_bet:1,line_step_bet_numbers:options.walletLimits?[...CT_LINE_BETS]:[1,2,3,4,5,6,8,10,12,15,20,24,30,40,50,60,80,100],line_step_bet_numbers_quick:options.walletLimits?[1,5,50,500,25000]:[1,6,12,24],
+  line_min_bet:options.walletLimits?CT_LINE_BETS[0]:1,line_max_bet:options.walletLimits?25000:100,line_default_bet:options.walletLimits?CT_LINE_BETS[0]:1,line_step_bet_numbers:options.walletLimits?[...CT_LINE_BETS]:[1,2,3,4,5,6,8,10,12,15,20,24,30,40,50,60,80,100],line_step_bet_numbers_quick:options.walletLimits?[100,500,2500,12500,25000]:[1,6,12,24],
   game_denoms:Object.fromEntries(denoms.map(d=>[d.label,true])),init_screen:rows(grid),
   double:{double_enable:1,double_enter_limit:10000000,double_limit:10000000},
   autoplay:1,autoplay_steps:[10,20,50,75,100],show_autoplay_settings:'show_game_and_main_screen',

@@ -96,9 +96,11 @@ export default function MyBetsPage() {
           </div>
           <div className="text-right">
             <div>
-              <span className="text-text-secondary">{ticket.system ? (isPending ? 'Nëse fitojnë të gjitha kolonat' : 'Pagesa e kthyer') : t('tickets.payout')}: </span>
-              <span className="font-mono font-black text-accent-yellow text-sm">{(ticket.system && !isPending ? ticket.actualPayout ?? 0 : ticket.potentialPayout).toFixed(2)} {" " + t("Lëk")}</span>
+              <span className="text-text-secondary">{t('Fitimi i mundshëm')}{ticket.potentialPayoutIsEstimated ? ' · '+t('i rindërtuar') : ''}: </span>
+              <span className="font-mono font-black text-accent-yellow text-sm">{ticket.potentialPayout.toFixed(2)} {" " + t("Lëk")}</span>
             </div>
+            {ticket.potentialPayoutIsEstimated && <div className="text-[11px] text-text-muted" title={t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur; shuma origjinale nuk ishte ruajtur.')}>{t('Vlerë e rindërtuar nga shuma dhe koeficienti i ruajtur.')}</div>}
+            {ticket.actualPayout != null && (!isPending || ticket.actualPayout > 0) && <div className="text-[11px] text-text-muted font-mono">{t('Fitimi real')}: {ticket.actualPayout.toFixed(2)} {t('Lëk')}</div>}
             {!ticket.system && <div className="text-[11px] text-text-muted font-mono">{t('tickets.total_odds')}: @{formatOdds(totalOdds)}</div>}
           </div>
         </div>

@@ -4,19 +4,24 @@
  * Grades the lines of a finished match and closes the tickets: any LOST line makes the
  * ticket LOST, otherwise the ticket is WON with the odds of the surviving lines (VOID
  * lines are removed from the price, as a real bookmaker does), and an all-VOID ticket is
- * refunded. A manager who owns the player carries the payout (WON) or collects the stake
- * (LOST).
+ * refunded. Manager commissions and results remain reports for manual settlement;
+ * player payouts are the only automatic wallet movement here.
  *
  * The rules come from the original app, with one addition: because our feed also delivers
  * corners and cards, those markets can be graded instead of always being voided.
  */
 import { pool, query } from '../db.mjs';
+import {gradeEventLine,needsEvents} from './event-evidence.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
 import { isResultBttsMarket, parseResultBttsOutcome, gradeResultBtts } from './result-btts.mjs';
 import { isResultTotalMarket, isTotalBttsMarket, isFirstHalfResultBtts, parseResultTotal, parseTotalBtts, gradeMixedTotal } from './mixed-combos.mjs';
 import { systemColumnPayout } from './system-columns.mjs';
+import { eventMarketRequirement } from './event-market-policy.mjs';
+import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './statistic-markets.mjs';
+import {goalTotalContract} from './goal-total-contract.mjs';
+import {statisticsNeedReview} from './settlement-review.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -59,10 +64,13 @@ const isSecondHalfLine = (marketName = '') =>
  */
 export function hasRequiredSettlementEvidence(line, result) {
   if (!result) return false;
+  if(statisticsNeedReview(line,result))return false;
   if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
+  if (needsEvents(line)) return ['WON','LOST','VOID'].includes(gradeEventLine(line,result));
+  if (isStatisticMarket(line)) return hasStatisticEvidence(line,result);
   const marketName = String(line.market_name ?? '');
   if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
-  const family = classify(marketName);
+  const family = goalTotalContract(line,result)?'TOTAL':classify(marketName);
   if (family === 'CORNERS' && (result.corners_home == null || result.corners_away == null)) return false;
   if (family === 'CARDS' && (result.cards_home == null || result.cards_away == null)) return false;
   // Early-payout promotions depend on event history, not only the final score.
@@ -75,6 +83,7 @@ export function hasRequiredSettlementEvidence(line, result) {
  * VOID means "we cannot prove it" - the stake for that line is returned.
  */
 export function gradeLine(line, result) {
+  if(needsEvents(line)&&!Array.isArray(line.builder_legs))return gradeEventLine(line,result)??'VOID';
   if (line.builder_legs !== null && line.builder_legs !== undefined) {
     const legs = line.builder_legs;
     if (!Array.isArray(legs) || legs.length < 2 || legs.length > 5 || legs.some(l => l.builder_legs)) return 'VOID';
@@ -85,6 +94,7 @@ export function gradeLine(line, result) {
   // 1H totals and BTTS cannot be graded from the full-time score. Their
   // original ticket contract is snapshotted in market_name.
   if (!hasRequiredSettlementEvidence(line, result)) return 'VOID';
+  if (isStatisticMarket(line)) return gradeStatisticLine(line,result);
   if (isSecondHalfLine(line.market_name)) return 'VOID'; // no 2H score snapshot
   const half = isFirstHalfLine(line.market_name);
   const home = Number(half ? result.half_home_score : result.home_score);
@@ -98,7 +108,8 @@ export function gradeLine(line, result) {
   const key = String(line.outcome_key ?? '').toLowerCase().trim();
   const name = String(line.outcome_name ?? '').toLowerCase();
   const lineValue = num(line.line);
-  const type = classify(line.market_name);
+  const goalTotal=goalTotalContract(line,result);
+  const type = goalTotal?'TOTAL':classify(line.market_name);
 
   const homeName = norm(result.home_team);
   const awayName = norm(result.away_team);
@@ -156,6 +167,8 @@ export function gradeLine(line, result) {
     case 'CORNERS':
     case 'CARDS': {
       let target = totalGoals;
+      if(type==='TOTAL'&&goalTotal?.scope==='home')target=home;
+      if(type==='TOTAL'&&goalTotal?.scope==='away')target=away;
       if (type === 'CORNERS') {
         if (result.corners_home === null || result.corners_away === null) return 'VOID';
         target = Number(result.corners_home) + Number(result.corners_away);
@@ -255,43 +268,16 @@ export async function recalcTicket(ticketId, { database = pool } = {}) {
       );
     }
 
-    // the manager who owns the player carries a win, and collects a loss
+    // Manager earnings are reports for manual settlement, never wallet money.
     if (ticket.user_id) {
       const user = await client.query('select manager_id, username from app_user where id = $1', [ticket.user_id]);
       const managerId = user.rows[0]?.manager_id;
       if (managerId && (status === 'WON' || status === 'LOST')) {
-        const amount = status === 'WON' ? -payout : Number(ticket.stake);
-        await chargeManagerCommission(client, {
-          managerId,
-          ticketId,
-          username: user.rows[0].username,
-          stake: ticket.stake,
-          selectionCount: lines.length,
-        });
-        const manager = await client.query('select balance from app_user where id = $1 for update', [managerId]);
-        if (!manager.rows.length) throw new Error(`Manager account ${managerId} not found during ticket settlement`);
-        const managerAfter = round(Number(manager.rows[0].balance) + amount);
-        await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [managerId, managerAfter]);
-        await client.query(
-          `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
-           values ($1, $2, $3, $4, $5, $6)`,
-          [
-            managerId,
-            amount,
-            status === 'WON' ? 'MANAGER_PAYOUT_DEDUCTION' : 'MANAGER_LOST_COLLECTED',
-            ticketId,
-            managerAfter,
-            status === 'WON'
-              ? `Pagesë për biletën fituese të lojtarit ${user.rows[0].username}`
-              : `Fonde nga bileta humbëse e lojtarit ${user.rows[0].username}`,
-          ],
-        );
-      } else if (managerId && status === 'VOID') {
-        await refundManagerCommission(client, {
-          managerId,
-          ticketId,
-          username: user.rows[0].username,
-        });
+        await chargeManagerCommission(client, {managerId,ticketId,username:user.rows[0].username,stake:ticket.stake,selectionCount:lines.length});
+      } else if (status === 'VOID') {
+        // Refund actual historical debits to their original actor exactly once.
+        const actors=await client.query(`select distinct user_id from app_transaction where reference_id=$1 and type='MANAGER_COMMISSION_DEBIT' order by user_id`,[ticketId]);
+        for(const actor of actors.rows)await refundManagerCommission(client,{managerId:actor.user_id,ticketId,username:user.rows[0]?.username});
       }
     }
 
@@ -312,12 +298,21 @@ export async function recalcTicket(ticketId, { database = pool } = {}) {
 }
 
 /** grades every pending line of one match, then closes the affected tickets */
+export async function updatePendingLine(lineId,status,ticketId,{database=pool}={}){
+  const client=await database.connect();
+  try{
+    await client.query('begin');
+    const ticket=(await client.query('select status from app_ticket where id=$1 for update',[ticketId])).rows[0];
+    const changed=ticket?.status==='PENDING'?await client.query(`update app_ticket_line set status=$2 where id=$1 and status='PENDING' and not exists(select 1 from app_settlement_override o where o.line_id=app_ticket_line.id)`,[lineId,status]):{rowCount:0};
+    await client.query('commit');return changed.rowCount;
+  }catch(error){await client.query('rollback').catch(()=>{});throw error;}finally{client.release();}
+}
 export async function settleMatch(matchId) {
   const result = await getResult(matchId);
   if (!result) return { matchId: String(matchId), settled: 0, reason: 'no result stored yet' };
 
   const lines = (
-    await query(`select * from app_ticket_line where match_id = $1 and status = 'PENDING'`, [Number(matchId)])
+    await query(`select l.* from app_ticket_line l where match_id = $1 and l.status = 'PENDING' and not exists(select 1 from app_settlement_override o where o.line_id=l.id)`, [Number(matchId)])
   ).rows;
   if (!lines.length) return { matchId: String(matchId), settled: 0 };
 
@@ -326,8 +321,8 @@ export async function settleMatch(matchId) {
   for (const line of lines) {
     if (!hasRequiredSettlementEvidence(line, result)) continue;
     const status = gradeLine(line, result);
-    const updated = await query(`update app_ticket_line set status = $2 where id = $1 and status = 'PENDING'`, [line.id, status]);
-    if (updated.rowCount > 0) graded++;
+    const updated = await updatePendingLine(line.id,status,line.ticket_id);
+    if (updated > 0) graded++;
     tickets.add(line.ticket_id);
   }
 
@@ -435,13 +430,18 @@ export async function voidUnresolved(hours = 72) {
   const touchedMatches = new Set();
   let voided = 0;
   for (const row of rows) {
+    // Native Ybets props are enabled for the requested testing. A missing
+    // event/result feed needs an administrator's decision, not a timed refund.
+    if(/^yb\d+@/.test(String(row.market_key??'')))continue;
     const result = await getResult(row.match_id);
+    if(statisticsNeedReview(row,result))continue;
     // With a final result but missing HT/corner/card evidence, hold the
     // line until this existing 72h window, then return it as VOID. Otherwise
     // the old unconditional "if (result) continue" trapped it indefinitely.
     if (result && hasRequiredSettlementEvidence(row, result)) continue;
     if (!result && isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
-    await query(`update app_ticket_line set status = 'VOID' where id = $1 and status = 'PENDING'`, [row.id]);
+    const voidedRow=await updatePendingLine(row.id,'VOID',row.ticket_id);
+    if(!voidedRow)continue;
     touched.add(row.ticket_id);
     touchedMatches.add(row.match_id);
     voided++;

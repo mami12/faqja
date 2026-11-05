@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useMemo, useRef } from 'react';
+import {SelectionFeedContext,createSelectionStore} from './selectionFeed';
+import {useFeedScope} from '../api/feedScope';
+import { createContext, useContext, useState, useMemo, useRef,useCallback,useLayoutEffect } from 'react';
 import { BetSelection } from '../types';
 import { apiClient } from '../api/client';
 import { buildBetslipColumns, MIN_TOTAL_STAKE_CENTS, previewColumnPayouts, splitStakeCents, stakeToCents } from '../utils/betslipColumns';
@@ -28,7 +30,10 @@ const BetslipContext = createContext<BetslipContextType>({} as BetslipContextTyp
 
 export const BetslipProvider = ({ children }: { children: React.ReactNode }) => {
   const [selections, setSelections] = useState<BetSelection[]>([]);
+  const selectionStore=useRef(createSelectionStore());
+  useLayoutEffect(()=>selectionStore.current.publish(selections),[selections]);
   // This is always the total debit, including when alternatives create columns.
+  useFeedScope('betslip',{selectionIds:selections.flatMap(s=>[s.outcomeId,...(s.builderLegs??[]).map(l=>l.outcomeId)])});
   const [stake, setStake] = useState('100');
   const [isPlacingBet, setIsPlacingBet] = useState(false);
   const inFlightBet = useRef<Promise<any> | null>(null);
@@ -39,13 +44,13 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
   const columnStakes = useMemo(() => splitStakeCents(stakeCents ?? 0, columns.length), [stakeCents, columns.length]);
   const columnPreviews = useMemo(() => previewColumnPayouts(columns, columnStakes), [columns, columnStakes]);
 
-  const addSelection = (s: BetSelection) => {
+  const addSelection = useCallback((s: BetSelection) => {
     setSelections(previous => toggleMarketSelection(previous, s));
-  };
+  },[]);
 
-  const removeSelection = (outcomeId: string) => {
+  const removeSelection = useCallback((outcomeId: string) => {
     setSelections(previous => previous.filter(p => p.outcomeId !== outcomeId));
-  };
+  },[]);
 
   const clearAll = () => {
     setSelections([]);
@@ -140,14 +145,15 @@ export const BetslipProvider = ({ children }: { children: React.ReactNode }) => 
     return res.data;
   };
 
+  const selectionFeed=useMemo(()=>({store:selectionStore.current,addSelection,removeSelection}),[addSelection,removeSelection]);
   return (
-    <BetslipContext.Provider value={{
+    <SelectionFeedContext.Provider value={selectionFeed}><BetslipContext.Provider value={{
       selections, columns, columnsOverflow, columnStakes, columnPreviews, stake, setStake, ticketType: effectiveTicketType,
       addSelection, removeSelection, clearAll, updateOdds,
       totalOdds, potentialPayout, placeBet, bookTicket, isPlacingBet
     }}>
       {children}
-    </BetslipContext.Provider>
+    </BetslipContext.Provider></SelectionFeedContext.Provider>
   );
 };
 

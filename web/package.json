@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && vite",
-    "build": "node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && vite build && node ../scripts/verify-original-sizzling.mjs",
+    "dev": "node ../scripts/sync-fortune-teller-assets.mjs && node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && (node ../scripts/sync-original-firejoker.mjs || echo [firejoker-sync] skipped) && vite",
+    "build": "node ../scripts/sync-fortune-teller-assets.mjs && node ../scripts/sync-original-sizzling.mjs && node ../scripts/sync-original-bookofra.mjs && (node ../scripts/sync-original-firejoker.mjs || echo [firejoker-sync] skipped) && vite build && node ../scripts/verify-original-sizzling.mjs && (node ../scripts/verify-original-firejoker.mjs || echo [firejoker-verify] skipped)",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

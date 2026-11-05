@@ -56,16 +56,16 @@ assert.deepEqual(verifiedFirstHalf(fulltime.periods_score),{home:1,away:0});
 const params = finishedResultParameters(fulltime);
 const matches = [...FINISHED_RESULT_INSERT.matchAll(/\$(\d+)/g)].map(m=>Number(m[1]));
 const maxPlaceholder = Math.max(...matches);
-assert.equal(maxPlaceholder,11,'all stored match+half statistics must have placeholders');
-assert.equal(new Set(matches).size,11,'no skipped parameter indexes');
+assert.equal(maxPlaceholder,12,'all stored match+half statistics must have placeholders');
+assert.equal(new Set(matches).size,12,'no skipped parameter indexes');
 assert.equal(params.length,maxPlaceholder,'PostgreSQL bind count must match SQL');
-assert.deepEqual(params,[123,'Home','Away',2,1,6,4,2,1,1,0]);
+assert.deepEqual(params,[123,'Home','Away',2,1,6,4,2,1,1,0,'{}']);
 assert.match(FINISHED_RESULT_INSERT,/half_home_score\s*=\s*coalesce\(/i);
 assert.match(FINISHED_RESULT_INSERT,/half_away_score\s*=\s*coalesce\(/i);
 
 const withoutStats = finishedResultParameters({...fulltime,stats:null,periods_score:null});
-assert.equal(withoutStats.length,11);
-assert.deepEqual(withoutStats.slice(5),[null,null,null,null,null,null]);
+assert.equal(withoutStats.length,12);
+assert.deepEqual(withoutStats.slice(5),[null,null,null,null,null,null,'{}']);
 
 // Provider actual push stats are keyed by competitor ID, not home/away.
 const idStats = finishedResultParameters({
