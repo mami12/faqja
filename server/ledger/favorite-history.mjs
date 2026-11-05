@@ -26,10 +26,18 @@ export function archivedFavorite(row,now=Date.now()){
  const score=pair(row.home_score,row.away_score);
  if(!score)return null;
  const fromFeed=teamStatisticsFromRow(snapshot);
- const finalStats=parse(row.statistics)??{};
- const stats=name=>pair(finalStats?.[name]?.home??fromFeed.home?.[name],finalStats?.[name]?.away??fromFeed.away?.[name]);
- const corners=pair(row.corners_home??fromFeed.home?.corners,row.corners_away??fromFeed.away?.corners);
- const cards=pair(row.cards_home,row.cards_away);
+ const finalStats=parse(row.statistics)??{},review=parse(row.statistics_review);
+ const stats=name=>{
+   if(review?.conflicts?.[name])return null;
+   const consensus=review?.complete?review.consensus?.[name]:null;
+   return pair(consensus?.home??finalStats?.[name]?.home??fromFeed.home?.[name],
+     consensus?.away??finalStats?.[name]?.away??fromFeed.away?.[name]);
+ };
+ const cornerConsensus=review?.complete&&!review.conflicts?.corners?review.consensus?.corners:null;
+ const corners=review?.conflicts?.corners?null:pair(
+   cornerConsensus?.home??row.corners_home??fromFeed.home?.corners,
+   cornerConsensus?.away??row.corners_away??fromFeed.away?.corners);
+ const cards=review?.conflicts?.cards?null:pair(row.cards_home,row.cards_away);
  const events=Array.isArray(raw.eventTimeline)?raw.eventTimeline.filter(event=>
    event&&['home','away'].includes(event.team)&&Number.isInteger(Number(event.minute))&&
    Number(event.minute)>=0&&Number(event.minute)<=130&&
@@ -55,9 +63,10 @@ export async function recentFinishedFavorites(ids,{runQuery=query,now=Date.now()
  if(!unique.length)return [];
  const result=await runQuery(`select r.match_id,r.home_team,r.away_team,r.home_score,r.away_score,
    r.corners_home,r.corners_away,r.cards_home,r.cards_away,r.statistics,r.finished_at,
-   s.snapshot
+   s.snapshot,sr.payload as statistics_review
    from app_match_result r
    left join app_match_snapshot s on s.match_id=r.match_id
+   left join app_stat_review sr on sr.match_id=r.match_id
    where r.match_id=any($1::bigint[])
      and r.finished_at >= now()-interval '48 hours'
    order by r.finished_at desc`,[unique.map(Number)]);
