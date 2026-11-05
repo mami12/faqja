@@ -24,6 +24,7 @@ import {detailProjection,CATEGORIES} from '../market-delivery.mjs';
 import { projectClientBoardMatches,projectBoardMatches } from './board-projection.mjs';
 import { freshFeed } from '../feed-sync.mjs';
 import {trackerTeamStatistics} from '../match-statistics.mjs';
+import {recentFinishedFavorites} from './favorite-history.mjs';
 import {publishedBoard,filterPublishedRows,refreshBoardSettings,saveBoardSettings} from './board-settings-store.mjs';
 import {DEFAULT_BOARD_SETTINGS} from '../board-settings.mjs';
 
@@ -348,11 +349,26 @@ ledgerRouter.get(
   }),
 );
 
+/** Only explicitly favorited IDs: bounded recent results, never betting prices.
+ * The general board still excludes ended fixtures.
+ */
+ledgerRouter.get('/matches/favorites',guard(async(req,res)=>{
+ if(!ledger.isLedgerReady())return res.json([]);
+ return res.json(await recentFinishedFavorites(req.query.ids));
+}));
+
 ledgerRouter.get(
   '/matches/:id',
   guard(async (req, res) => {
-    let row = await getMatchRow(Number(req.params.id));
-    if (!row || matchOverride(row.match_id)?.hidden || isSyntheticFootballMatch(row)) return res.status(404).json({ message: 'match not found' });
+    const matchId=Number(req.params.id);
+    if(!Number.isSafeInteger(matchId)||matchId<=0)return res.status(404).json({message:'match not found'});
+    let row=await getMatchRow(matchId);
+    if(row&&(matchOverride(row.match_id)?.hidden||isSyntheticFootballMatch(row)))return res.status(404).json({message:'match not found'});
+    if(ledger.isLedgerReady()&&(!row||row.status==='ended')){
+      const archive=(await recentFinishedFavorites([matchId]))[0];
+      if(archive)return res.json(archive);
+    }
+    if(!row)return res.status(404).json({message:'match not found'});
     // somebody is looking at this match: make sure it gets its full market list (corners,
     // cards, every total) on the next subscribe cycle, instead of base markets only
     boostMatch(row.match_id);
