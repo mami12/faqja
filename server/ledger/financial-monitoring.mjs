@@ -3,6 +3,7 @@ import {pool,query} from '../db.mjs';
 import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
+import {manualReviewQueue} from './manual-review-queue.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
 const splitCents=(amount,keys)=>{
@@ -56,16 +57,19 @@ export async function matchExposure(execute=query){
 /** An audited manual correction posts only the difference from an existing payment. */
 export async function manualSettlement(input,actor,{database=pool}={}){
  const status=String(input.status??''),reason=String(input.reason??'').trim(),source=String(input.source??'').trim();
- if(!['WON','LOST','PENDING'].includes(status)||!reason||reason.length>1000||!source||source.length>500)throw fail(400,'Zgjidh gjendjen, arsyen dhe burimin e verifikimit.');
- const ticketId=input.ticketId?String(input.ticketId):null,matchId=Number(input.matchId),marketKey=String(input.marketKey??''),outcomeKey=String(input.outcomeKey??'');
- if(ticketId&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ticketId))throw fail(400,'Vendos identifikuesin e plotë të biletës.');
- if(!ticketId&&(!Number.isSafeInteger(matchId)||matchId<=0||!marketKey||!outcomeKey))throw fail(400,'Zgjidh biletën ose ndeshjen, tregun dhe përzgjedhjen e saktë.');
+ if(!['WON','LOST','PENDING','VOID'].includes(status)||!reason||reason.length>1000||!source||source.length>500)throw fail(400,'Zgjidh gjendjen, arsyen dhe burimin e verifikimit.');
+ const ticketId=input.ticketId?String(input.ticketId):null,lineId=input.lineId?String(input.lineId):null,matchId=Number(input.matchId),marketKey=String(input.marketKey??''),outcomeKey=String(input.outcomeKey??'');
+ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if((ticketId&&!uuid.test(ticketId))||(lineId&&!uuid.test(lineId))||(ticketId&&lineId))throw fail(400,'Zgjidh një biletë ose përzgjedhje të vlefshme.');
+ if(!ticketId&&!lineId&&(!Number.isSafeInteger(matchId)||matchId<=0||!marketKey||!outcomeKey))throw fail(400,'Zgjidh biletën ose ndeshjen, tregun dhe përzgjedhjen e saktë.');
  const client=await database.connect();
  try{
   await client.query('begin');
   const owner=(await client.query('select role,status,deleted_at from app_user where id=$1 for share',[actor.id])).rows[0];
   if(owner?.role!=='ADMIN'||owner.status!=='ACTIVE'||owner.deleted_at)throw fail(403,'Vetëm administratori aktiv mund të verifikojë shlyerjen.');
-  const selected=(await client.query(ticketId?'select * from app_ticket_line where ticket_id=$1':'select * from app_ticket_line where match_id=$1 and market_key=$2 and line=$3 and outcome_key=$4',ticketId?[ticketId]:[matchId,marketKey,String(input.line??''),outcomeKey])).rows;
+  const selectedSql=lineId?'select * from app_ticket_line where id=$1':ticketId?'select * from app_ticket_line where ticket_id=$1':'select * from app_ticket_line where match_id=$1 and market_key=$2 and line=$3 and outcome_key=$4';
+   const selectedParams=lineId?[lineId]:ticketId?[ticketId]:[matchId,marketKey,String(input.line??''),outcomeKey];
+   const selected=(await client.query(selectedSql,selectedParams)).rows;
   if(!selected.length)throw fail(404,'Nuk u gjetën përzgjedhje për këtë vendim.');
   const ids=[...new Set(selected.map(l=>l.ticket_id))].sort(),selectedIds=new Set(selected.map(l=>l.id)),changed=[];
   for(const id of ids){
@@ -90,7 +94,7 @@ export async function manualSettlement(input,actor,{database=pool}={}){
     await client.query("insert into app_transaction(user_id,amount,type,reference_id,balance_after,description)values($1,$2,'MANUAL_SETTLEMENT_CORRECTION',$3,$4,$5)",[ticket.user_id,money(delta),id,after,reason]);
    }
    await client.query("update app_ticket set status=$2,potential_payout=$3,settled_at=case when $2='PENDING' then null else now() end where id=$1",[id,next,next==='PENDING'?quote:paid]);
-   const details={from:ticket.status,to:next,paymentDifference:money(delta),reason,source,decisions,matchId:ticketId?null:matchId,marketKey:ticketId?null:marketKey};
+   const details={from:ticket.status,to:next,paymentDifference:money(delta),reason,source,decisions,matchId:ticketId||lineId?null:matchId,marketKey:ticketId||lineId?null:marketKey};
    await client.query("insert into app_admin_audit(actor_id,actor_name,actor_role,action,target_type,target_id,details)values($1,$2,'ADMIN','MANUAL_SETTLEMENT','ticket',$3,$4::jsonb)",[actor.id,actor.username,id,JSON.stringify(details)]);
    changed.push({ticketId:id,status:next,actualPayout:paid,paymentDifference:money(delta)});
   }
@@ -98,8 +102,9 @@ export async function manualSettlement(input,actor,{database=pool}={}){
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}finally{client.release();}
 }
 export const financialMonitoringRouter=express.Router();
-financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
+financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res)).catch(error=>error.status?res.status(error.status).json({message:error.message}):next(error));
 financialMonitoringRouter.get('/admin/match-exposure',safe(async(_req,res)=>res.set('Cache-Control','no-store').json(await matchExposure())));
 financialMonitoringRouter.get('/admin/statistics-review',safe(async(_req,res)=>res.set('Cache-Control','no-store').json({reviews:(await query('select match_id,payload,updated_at from app_stat_review order by updated_at desc')).rows})));
 financialMonitoringRouter.post('/admin/manual-settlement',safe(async(req,res)=>res.json(await manualSettlement(req.body??{},req.user))));
+financialMonitoringRouter.get('/admin/settlement-review-queue',safe(async(req,res)=>res.set('Cache-Control','no-store').json(await manualReviewQueue({limit:req.query.limit}))));
