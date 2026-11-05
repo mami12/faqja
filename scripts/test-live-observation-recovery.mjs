@@ -20,6 +20,7 @@ const match={service:'LIVE',home_score:1,away_score:0,score_at:new Date(now),clo
  match_time_ms:35*60000,stats:{home:{corners:2},away:{corners:0}},
  raw:{homeTeam:{id:'home'},awayTeam:{id:'away'}}};
 assert.equal(frozenLiveContract({market_name:'Next Goal',outcome_name:'2'},match,now).target,2);
+assert.equal(frozenLiveContract({market_name:'Next Goal',outcome_name:'Chelsea'},{...match,home:'Arsenal',away:'Chelsea'},now).side,'away');
 assert.equal(frozenLiveContract({market_name:'Corner in minutes 20-45',outcome_name:'Yes'},match,now).to,45);
 assert.equal(frozenLiveContract({market_name:'Total Goals',outcome_name:'Over',line:'2.5'},match,now).threshold,2.5);
 assert.throws(()=>frozenLiveContract({market_name:'Next Goal',outcome_name:'2'},
