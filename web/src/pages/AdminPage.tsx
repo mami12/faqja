@@ -169,6 +169,7 @@ export default function AdminPage() {
                    <div><dt className="font-semibold">Faulle dhe goditje në portë</dt><dd>Për totalet duhet numri i verifikuar për periudhën e tregut. Për intervalet duhet minuta e çdo ngjarjeje dhe, sipas tregut, skuadra.</dd></div>
                    <div><dt className="font-semibold">Ngjarje të anuluara ose burime kontradiktore</dt><dd>Duhet statusi i korrigjimit ose një vendim i dokumentuar i adminit për përzgjedhjen e prekur.</dd></div>
                  </dl>
+                 <MarketCatalog evidenceOnly />
                </section>
              )}
             {tab === 'match-exposure' && <MatchExposure />}
