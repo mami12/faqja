@@ -453,56 +453,17 @@ export const isStillOnBoard = (match, at = Date.now()) => {
  * Safety valve: a ticket older than `hours` whose match has no stored result and is no
  * longer on the board can never be judged, so its lines are voided and the stake returned.
  */
+/** Unconfirmed evidence is NOT cancellation authority. A timed refund
+ * would turn an unverified winner into VOID and silently move player funds.
+ * The administrator's review queue owns these cases until a documented
+ * decision is recorded via manualSettlement. Genuine provider cancellation
+ * requires its own explicit, audited contract rule, never elapsed time alone.
+ */
 export async function voidUnresolved(hours = 72) {
-  const rows = (
-    await query(
-      `select l.*
-         from app_ticket_line l
-         join app_ticket t on t.id = l.ticket_id
-        where l.status = 'PENDING'
-          and t.status = 'PENDING'
-          and t.placed_at < now() - make_interval(hours => $1::int)`,
-      [Math.max(24, Number(hours) || 72)],
-    )
-  ).rows;
-
-  const touched = new Set();
-  const touchedMatches = new Set();
-  let voided = 0;
-  for (const row of rows) {
-    // Native Ybets props are enabled for the requested testing. A missing
-    // event/result feed needs an administrator's decision, not a timed refund.
-    if(/^yb\d+@/.test(String(row.market_key??'')))continue;
-    // Missing corner/event verification is not a cancelled bet. Only an
-    // administrator can resolve it; never auto-VOID after a timeout.
-    if (needsEvents(row) || /\bcorners?\b/i.test(String(row.market_name??''))) continue;
-    const result = await getResult(row.match_id);
-    if(statisticsNeedReview(row,result))continue;
-    // With a final result but missing HT/corner/card evidence, hold the
-    // line until this existing 72h window, then return it as VOID. Otherwise
-    // the old unconditional "if (result) continue" trapped it indefinitely.
-    if (result && hasRequiredSettlementEvidence(row, result)) continue;
-    if (!result && isStillOnBoard(await getMatchById(row.match_id))) continue; // genuinely active: give it time
-    const voidedRow=await updatePendingLine(row.id,'VOID',row.ticket_id);
-    if(!voidedRow)continue;
-    touched.add(row.ticket_id);
-    touchedMatches.add(row.match_id);
-    voided++;
-  }
-
-  const closed = [];
-  for (const ticketId of touched) {
-    const done = await recalcTicket(ticketId);
-    if (done) closed.push(done);
-  }
-  for (const matchId of touchedMatches) {
-    await query(
-      `update app_match_result set settled_at = coalesce(settled_at,now())
-        where match_id = $1 and not exists
-          (select 1 from app_ticket_line
-            where match_id = $1 and status = 'PENDING')`,
-      [Number(matchId)],
-    );
-  }
-  return { voided, closed };
+  const cutoff=Math.max(24,Math.trunc(Number(hours)||72));
+  const pending=await query(`select count(*)::int as count
+    from app_ticket_line l join app_ticket t on t.id=l.ticket_id
+    where l.status='PENDING' and t.status='PENDING'
+      and t.placed_at<now()-make_interval(hours=>$1::int)`,[cutoff]);
+  return {voided:0,closed:[],heldForManualReview:Number(pending.rows[0]?.count??0)};
 }
