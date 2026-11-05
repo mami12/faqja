@@ -9,7 +9,7 @@ export function createEventEvidenceStore({runQuery=query,now=Date.now,cacheMs=10
  const init=()=>ready??=runQuery(`create table if not exists app_match_event_evidence(match_id bigint primary key,payload jsonb not null,observed_at timestamptz not null default now())`).catch(e=>{ready=null;throw e;});
  const eventWatchIds=async()=>{
   if(now()-pendingAt<cacheMs)return pending;
-  if(!watchFlight)watchFlight=(async()=>{const r=await runQuery("select distinct match_id,market_name from app_ticket_line where status='PENDING'");pending=new Set(r.rows.filter(needsEvents).map(r=>String(r.match_id)));pendingAt=now();return pending;})().finally(()=>{watchFlight=null;});
+  if(!watchFlight)watchFlight=(async()=>{const r=await runQuery("select l.match_id,l.market_name,l.live_contract from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING'");pending=new Set(r.rows.filter(r=>r.live_contract!=null||needsEvents(r)).map(r=>String(r.match_id)));pendingAt=now();return pending;})().finally(()=>{watchFlight=null;});
   return watchFlight;
  };
  return {eventWatchIds,async saveEventEvidence(id,payload){
