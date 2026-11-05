@@ -1,3 +1,4 @@
+import {createFortunePyramidProtocol} from './fortune-pyramid-protocol.mjs';
 import {managerCasinoSettings} from './manager-settings.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {pool} from '../db.mjs';
@@ -16,6 +17,8 @@ import {createFireJokerProtocol} from './firejoker-protocol.mjs';
 import {createFortuneTellerProtocol} from './fortune-teller-protocol.mjs';
 
 export const ORIGINAL_GAMES={
+ 'ice-fruits-6x3':{title:'Ice Fruits 6 Reels',kind:'agt',folder:'ice-fruits-6x3',app:'6megaice'},
+ 'fortune-pyramid':{title:'Fortune Pyramid',kind:'ct',folder:'fortune-pyramid',app:'FortunePyramid',lines:20},
  'fortune-teller':{title:'Fortune Teller',kind:'ct',folder:'fortune-teller',app:'FortuneTeller',lines:20},
  'firejoker':{title:'Fire Joker',kind:'ct',folder:'firejoker',app:'FireJoker'},
  'lucky-clover-x3':{title:'Lucky Clover X3',kind:'ct',folder:'lucky-clover-x3',app:'LuckyCloverX3'},
@@ -32,8 +35,8 @@ const uuid=x=>/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
 
 // All account, round, pending-win and protocol changes commit together. The same
 // account locks serialize sportsbook wagers, cashier transfers and casino tabs.
-export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),firejoker=createFireJokerProtocol(),fortuneTeller=createFortuneTellerProtocol(),agt=createAgtProtocol(),chooseRound=selectCustomRound}={}){
- const protocol=id=>id==='vikings-fun'?vikings:id==='firejoker'?firejoker:id==='fortune-teller'?fortuneTeller:ORIGINAL_GAMES[id]?.kind==='ct'?ct:agt;
+export function createOriginalWalletStore({database=pool,checkBet=assertPlayerCanBet,ct=createCtProtocol(),vikings=createCtProtocol({spinFn:spinRound,configFn:vikingsConfig,initialGrid:options=>vikingSpin(25,25,false,options).grid,selectedLines:25,mapRound:mapVikingsRound}),firejoker=createFireJokerProtocol(),fortuneTeller=createFortuneTellerProtocol(),fortunePyramid=createFortunePyramidProtocol(),agt=createAgtProtocol(),chooseRound=selectCustomRound}={}){
+ const protocol=id=>id==='fortune-pyramid'?fortunePyramid:id==='vikings-fun'?vikings:id==='firejoker'?firejoker:id==='fortune-teller'?fortuneTeller:ORIGINAL_GAMES[id]?.kind==='ct'?ct:agt;
  const hydrate=s=>({...s,results:new Map()});
  const encode=s=>JSON.stringify({...s,results:undefined});
  async function transaction(userId,gameId,fn,expectedEpoch){

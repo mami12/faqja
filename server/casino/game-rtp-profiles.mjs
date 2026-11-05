@@ -6,7 +6,11 @@ const load=name=>JSON.parse(readFileSync(new URL(name,import.meta.url),'utf8'));
 const clover=load('./lucky-clover-data.json'),vikings=load('./vikings-data.json'),agt=load('./agt-data.json');
 const firejoker=load('./firejoker-data.json');
 const fortune=load('./fortune-teller-data.json');
+const pyramid=load('./fortune-pyramid-data.json');
+const ice=load('./ice-fruits-data.json');
 const definitions=[
+ ['ice-fruits-6x3','Ice Fruits 6 Reels',ice.reels,ice.rtp,ice.commit],
+ ['fortune-pyramid','Fortune Pyramid',pyramid.reels,pyramid.defaultRtp,pyramid.commit],
  ['lucky-clover-x3','Lucky Clover X3',clover.reels,clover.defaultRtp,clover.commit],
  ['vikings-fun',"Viking’s Fun",vikings.reels,vikings.defaultRtp,clover.commit],
  ['fruit-queen','Fruit Queen',agt.games.fruitqueen.reels,agt.games.fruitqueen.rtp,agt.commit],

@@ -147,3 +147,10 @@ See `.xgrok/BEST_PRACTICES.md` and `.xgrok/SECURITY.md`.
 - Casino commission uses the same hierarchy and freezes once per paid round; never move staff balances automatically. Preserve awarded bonuses and exact replay results.
 - Six custom-math games accept only native-paytable-realizable RTP/HF. RTP maxima derive from each game, HF never exceeds100%. Fire Joker/Fortune Teller remain original-profile only.
 - Isolated checks: test-manager-casino-settings, test-manager-casino-browser, test-zizo-board-demand, test-board-speed, test-stats-rotation and the protected suite. Never test on production accounts.
+
+## Shtimi i lojërave origjinale — 2026-11-05
+
+- Burimet e papërpunuara që jep përdoruesi qëndrojnë te game-sources. Mos publiko regjistrime sesioni, tokenë, faqe të jashtme apo telemetri.
+- Përputh renderer-in, tabelën e pagesave, simbolet dhe linjat para lidhjes me portofolin. Ice Fruits përdor linjat e klientit origjinal dhe bobinat/pagesat Slotopol; Fortune Pyramid përputhet me Slotopol edhe te linjat.
+- Ruaj klientin origjinal dhe verifiko manifestet offline. Skedarët placeholder ose formatter-i i kapjes mund të dëmtojnë lojën; rikupero burimin origjinal, pa shpikur asete.
+- Përdor test-new-original-games, test-new-original-games-browser dhe verify-new-original-assets. Të dyja lojërat e reja janë vetëm me profile origjinale; gjashtë motorët custom ekzistues nuk ndryshojnë.

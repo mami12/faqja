@@ -12,6 +12,8 @@ export type CasinoGame = CasinoGameId;
 
 const original=(id:CasinoGame,title:string)=>({title,session:`/casino/original/${id}/session`,prefix:`/app/api/casino/original/${id}/launch`});
 const GAMES: Record<CasinoGame, {title: string; session: string; play?: string; prefix: string; ct?: boolean}> = {
+  'ice-fruits-6x3':original('ice-fruits-6x3','Ice Fruits 6 Reels'),
+  'fortune-pyramid':original('fortune-pyramid','Fortune Pyramid'),
   'fortune-teller':original('fortune-teller','Fortune Teller'),
   'lucky-clover-x3':original('lucky-clover-x3','Lucky Clover X3'),
   'vikings-fun':original('vikings-fun',"Viking's Fun"),

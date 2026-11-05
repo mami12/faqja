@@ -545,3 +545,8 @@ Autorizimi i fundit: lista kryesore merr vetëm koeficientët kryesorë; hapja e
 Admini cakton komision kazino/Apex dhe profile ose RTP/shpeshtësi për agjentë e menaxherë. Cilësimi i shprehur i agjentit për lojën ka përparësi për TË GJITHË menaxherët dhe lojtarët e tij. Shembull: agjenti 40%, menaxherët 96%/100% → lojtarët e të dyve përdorin 40%. Pa cilësim të agjentit trashëgohet ai i menaxherit, pastaj globali. Nuk zgjidhen rezultate sipas identitetit individual të lojtarit.
 
 Ndryshimet vlejnë për raundet e reja me pagesë. Bonusët, raundet ekzistuese, riluajtja e kërkesës dhe komisionet historike ruajnë kushtet e regjistruara. Komisioni është raport financiar mbi bastin, 0–100%, pa transferim automatik të bilancit të menaxherit. RTP lejohet mbi 1000% deri te kufiri i realizueshëm i tabelës reale të lojës. Shpeshtësia si probabilitet mbetet 0–100%; çiftet e parealizueshme refuzohen. Fire Joker dhe Fortune Teller ruajnë vetëm profilet origjinale të mbështetura; një përqindje arbitrare nuk shpallet e realizuar për këto lojëra.
+
+
+## Lojëra të shtuara me klientin origjinal — 2026-11-05
+
+Ice Fruits 6 Reels dhe Fortune Pyramid përdorin klientët e tyre origjinalë të dhënë nga përdoruesi. Për Ice Fruits përdoren linjat që shfaq klienti origjinal; bobinat, përputhja Wild/Scatter dhe tabela e pagesave vijnë nga burimi i fiksuar Slotopol. Për Fortune Pyramid të 20 linjat përputhen me Slotopol. Mos paraqit dy versionet e linjave të Ice Fruits si identike. Të dyja lojërat ofrojnë profile origjinale të verifikuara; nuk shfaqin RTP ose shpeshtësi arbitrare si të mbështetur. Portofoli, kufijtë e bastit, përparësia e agjentit, komisionet dhe historiku mbeten të mbrojtura.

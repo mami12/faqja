@@ -20,6 +20,8 @@ type GameMeta = {
 };
 
 const GAMES: (GameMeta & { id: CasinoGame })[] = [
+  {id:'ice-fruits-6x3',title:'Ice Fruits 6 Reels',subtitle:'6 bobina · 20 linja · Dyfishim',logo:'ice-fruits-6x3/top.webp',background:'ice-fruits-6x3/emptyback.jpg'},
+  {id:'fortune-pyramid',title:'Fortune Pyramid',subtitle:'20 linja · Dyfishim',logo:'fortune-pyramid/top_name.webp',background:'fortune-pyramid/background.webp'},
   {id:'fortune-teller',title:'Fortune Teller',subtitle:'20 linja · 15/20/25 rrotullime falas · Tarot',logo:'fortune-teller/logo.png',background:'fortune-teller/background.jpg'},
   {id:'vikings-fun',title:"Viking's Fun",subtitle:'25 linja · 15 rrotullime falas · Dyfishim',logo:'vikings-fun/top_name.webp',background:'vikings-fun/background.webp'},
   {id:'fruit-queen',title:'Fruit Queen',subtitle:'18 linja · Dyfishim',logo:'fruit-queen/top.webp',background:'fruit-queen/emptyback.jpg'},
@@ -80,7 +82,7 @@ export default function CasinoPage() {
   const navigate=useNavigate(),{refreshUser}=useAuth();
   const exitGame=useMemo(()=>createCasinoExitController({
     releaseDisplay:()=>releaseCasinoLandscape({keepSession:true}),
-    closeWallet:()=>apiClient.post(['lucky-clover-x3','vikings-fun','fruit-queen','seven-hot','firejoker','fortune-teller'].includes(gameId||'')?'/casino/original/'+gameId+'/close':'/casino/original/pixi/close',{},{timeout:5000,validateStatus:status=>status===401||(status>=200&&status<300)}),
+    closeWallet:()=>apiClient.post(['lucky-clover-x3','vikings-fun','fruit-queen','seven-hot','firejoker','fortune-teller','fortune-pyramid','ice-fruits-6x3'].includes(gameId||'')?'/casino/original/'+gameId+'/close':'/casino/original/pixi/close',{},{timeout:5000,validateStatus:status=>status===401||(status>=200&&status<300)}),
     refreshWallet:refreshUser,
     navigate:()=>navigate('/casino'),
   }),[gameId,navigate,refreshUser]);

@@ -64,8 +64,15 @@ export function createOriginalWalletRouter({store=createOriginalWalletStore(),au
    const entry = 'casino-original/'+c.game+'/index.html';
    return res.type('html').send(shell(entry,base,{game:c.game,serverUrl:prefix(c.game)+'/rgsm',...(c.game==='fortune-teller'?{nativeSessionId:c.jti}:{})}));
   }
-    const base=g.kind==='ct'?`/app/casino-original/${g.folder}/vendor/html-20200413-stable/${g.app}/`:'/app/casino-original/agt/';
-    res.type('html').send(shell(g.kind==='ct'?`casino-original/${g.folder}/vendor/html-20200413-stable/${g.app}/app.html`:`casino-original/agt/${g.app}.html`,base,{game:c.game,agtApi:prefix(c.game)+'/dinit.php'}));
+    const agtFolder=g.folder??'agt';
+    const base=g.kind==='ct'?`/app/casino-original/${g.folder}/vendor/html-20200413-stable/${g.app}/`:`/app/casino-original/${agtFolder}/`;
+    res.type('html').send(shell(g.kind==='ct'?`casino-original/${g.folder}/vendor/html-20200413-stable/${g.app}/app.html`:`casino-original/${agtFolder}/${g.app}.html`,base,{game:c.game,agtApi:prefix(c.game)+'/dinit.php'}));
+ }));
+ router.get('/ice-fruits-6x3/launch/info',safe(async(req,res)=>{
+  sameOrigin(req);const c=claim(req,'ice-fruits-6x3');
+  await store.inspect(c.sub,c.game,c.jti,{epoch:Number(c.epoch??0)});
+  const base='/app/casino-original/ice-fruits-6x3/images/games/6megaice/ui/';
+  res.type('html').send([0,1,2].map(page=>`<img src="${base}page${page}.webp" alt="Ice Fruits · ${page+1}" style="display:block;width:100%;height:auto">`).join(''));
  }));
  router.get('/:id/rgsm',safe(async(req,res)=>{
   sameOrigin(req);const c=claim(req,req.params.id);
@@ -145,10 +152,20 @@ export function createOriginalWalletRouter({store=createOriginalWalletStore(),au
     }
   }
   if(!parsed||typeof parsed!=='object')throw walletFault(400,'Invalid payload');
+  // The original CT client sends diagnostic packets as form-encoded arrays.
+  // Acknowledge authenticated diagnostics without logging captured session data
+  // or treating an unsequenced diagnostic as a financial command.
+  if(typeof parsed.request==='string'){
+    if(parsed.request.length>16384)throw walletFault(400,'Diagnostic packet too large');
+    let diagnostics;try{diagnostics=JSON.parse(parsed.request);}catch{throw walletFault(400,'Invalid diagnostic packet');}
+    if(!Array.isArray(diagnostics)||!diagnostics.length||diagnostics.length>20||diagnostics.some(item=>item?.command!=='trace'))throw walletFault(400,'Send wagering commands through the sequenced endpoint');
+    await store.inspect(c.sub,c.game,c.jti,{epoch:Number(c.epoch??0)});
+    return res.json(diagnostics.map(()=>({_req_command:'trace',status:{status:'ok'}})));
+  }
   if(parsed.native)throw walletFault(400,'Use the native game endpoint');
   const cmd=parsed.command||parsed.action;
   if(typeof cmd!=='string'){
-    console.error('[rgsm] unrecognized payload keys:',Object.keys(parsed).join(','),'body:',String(payload).slice(0,200));
+    console.error('[rgsm] unrecognized payload keys:',Object.keys(parsed).join(','));
     throw walletFault(400,'Invalid command: '+Object.keys(parsed).join(','));
   }
   const seq=Number.isSafeInteger(parsed.sequence_number)?parsed.sequence_number:0;

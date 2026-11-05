@@ -1,7 +1,8 @@
 // Ports of the supplied Slotopol AGT scanners, with original client symbol maps.
 import {randomInt} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-export const DATA=JSON.parse(readFileSync(new URL('./agt-data.json',import.meta.url),'utf8'));
+const baseData=JSON.parse(readFileSync(new URL('./agt-data.json',import.meta.url),'utf8'));
+export const DATA={...baseData,games:{...baseData.games,'6megaice':JSON.parse(readFileSync(new URL('./ice-fruits-data.json',import.meta.url),'utf8'))}};
 export function evaluate(id,grid,betCents,selected){
  const d=DATA.games[id];
  if(!d||!Number.isSafeInteger(betCents)||betCents<=0||!Number.isInteger(selected)||selected<1||selected>d.lines.length||grid.length!==d.sx||grid.some(col=>col.length!==d.sy||col.some(s=>!Number.isInteger(s)||s<1||s>d.symbols.length)))throw Error('Invalid AGT game, grid or bet');

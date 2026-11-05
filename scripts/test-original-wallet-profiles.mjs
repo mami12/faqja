@@ -12,6 +12,7 @@ import {spin as vikingsSpin,spinRound,evaluate as vikingsGrade} from '../server/
 import {spin as agtSpin,evaluate as agtGrade,DATA as AGT} from '../server/casino/agt-engine.mjs';
 import {vikingsConfig,mapVikingsRound} from '../server/casino/vikings-ct-router.mjs';
 import {createFireJokerProtocol} from '../server/casino/firejoker-protocol.mjs';
+import {createFortunePyramidProtocol} from '../server/casino/fortune-pyramid-protocol.mjs';
 import {createFortuneTellerProtocol} from '../server/casino/fortune-teller-protocol.mjs';
 
 // Tests run actual SQL and engine calls in memory; no external database or
@@ -29,7 +30,8 @@ let bonusNext=false;
 const agt=createAgtProtocol({spinFn:(id,bet,lines,options)=>{record(id,options);const result=agtSpin(id,bet,lines,()=>0,options),freeSpins=bonusNext?2:0;bonusNext=false;return {...result,freeSpins};},cardRandom:()=>0});
 const tracked=(id,protocol)=>({...protocol,run(state,commands,options){if(commands.some(c=>c.command==='play'))record(id,options);return protocol.run(state,commands,options);}});
 const firejoker=tracked('firejoker',createFireJokerProtocol({random:()=>0})),fortuneTeller=tracked('fortune-teller',createFortuneTellerProtocol({random:()=>0}));
-const protocols={database,ct,vikings,agt,firejoker,fortuneTeller};
+const fortunePyramid=tracked('fortune-pyramid',createFortunePyramidProtocol());
+const protocols={database,ct,vikings,agt,firejoker,fortuneTeller,fortunePyramid};
 let store=createOriginalWalletStore(protocols),settings={};
 const apply=async(id,profile)=>{settings={...settings,[id]:profile.id};await sql.query('update app_casino_settings set game_profiles=$1::jsonb where id=1',[JSON.stringify(settings)]);};
 const saved=async(user,id)=>(await sql.query('select state from app_casino_original_state where user_id=$1 and game_id=$2',[user,id])).rows[0].state;

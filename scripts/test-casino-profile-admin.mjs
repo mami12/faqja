@@ -15,7 +15,7 @@ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('l
 const get=async()=>{const r=await fetch(origin+'/admin/casino/settings');assert.equal(r.status,200);return r.json();};
 const patch=async(body,role='ADMIN')=>fetch(origin+'/admin/casino/profile',{method:'PATCH',headers:{'content-type':'application/json','x-test-role':role},body:JSON.stringify(body)});
 try{
- const settings=await get();assert.deepEqual(settings.games.map(game=>game.gameId).sort(),['bookofra','firejoker','fortune-teller','fruit-queen','lucky-clover-x3','seven-hot','sizzling','vikings-fun']);assert.equal(settings.legacyProfileIgnored,true);
+ const settings=await get();assert.deepEqual(settings.games.map(game=>game.gameId).sort(),['bookofra','firejoker','fortune-pyramid','fortune-teller','fruit-queen','ice-fruits-6x3','lucky-clover-x3','seven-hot','sizzling','vikings-fun']);assert.equal(settings.legacyProfileIgnored,true);
  assert.ok(settings.games.every(game=>!String(game.profile).includes('SCHOOL_RTP_')));
  assert.ok(settings.games.every(game=>game.profiles.every(profile=>profile.theoreticalRtp>=1&&profile.theoreticalRtp<=1000)));
  for(const game of settings.games){
@@ -57,10 +57,10 @@ try{
   assert.equal((await controls('sizzling',values)).status,400);
  }
  assert.equal((await controls('sizzling',{mode:'custom',rtp:0,hitFrequency:0},'PLAYER')).status,403);
- await Promise.all(settings.games.slice(0,2).map(async game=>assert.equal((await controls(game.gameId,{mode:'original',rtp:95,hitFrequency:10})).status,200)));
+ await Promise.all(settings.games.filter(game=>game.supportsCustomMath).slice(0,2).map(async game=>assert.equal((await controls(game.gameId,{mode:'original',rtp:95,hitFrequency:10})).status,200)));
  const controlsAudit=(await sql.query("select * from app_admin_audit where action='PATCH /admin/casino/controls'")).rows;
  assert.equal(controlsAudit.length,settings.games.filter(game=>game.supportsCustomMath).length*2+2);assert.ok(controlsAudit.every(row=>row.details.scope==='all players; future paid rounds only'));
  assert.deepEqual((await get()).stakeLimits,{min:20,max:5000,currency:'ALL'});
- console.log('PASS casino profile/admin controls: all eight games, original-only restrictions, zero/custom RTP+hit, exact SQL persistence, math versions, impossible pairs, concurrent saves, audit and authorization');
+ console.log('PASS casino profile/admin controls: all ten games, original-only restrictions, zero/custom RTP+hit, exact SQL persistence, math versions, impossible pairs, concurrent saves, audit and authorization');
 }finally{await new Promise(resolve=>server.close(resolve));await sql.close();}
 

@@ -1,4 +1,4 @@
-export type CasinoGameId = 'sizzling' | 'bookofra' | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot' | 'firejoker' | 'fortune-teller';
+export type CasinoGameId = 'ice-fruits-6x3' | 'fortune-pyramid' | 'sizzling' | 'bookofra' | 'lucky-clover-x3' | 'vikings-fun' | 'fruit-queen' | 'seven-hot' | 'firejoker' | 'fortune-teller';
 
 export type CasinoControls = {
   mode: 'original' | 'custom';
