@@ -50,7 +50,8 @@ export const WATCHED_LIVE_LINES_SQL=
  "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING' "+
  'and l.live_contract is not null order by t.placed_at';
 export const LIVE_OBSERVATION_SQL=[
- 'create table if not exists app_live_event_frame (id bigserial primary key,match_id bigint not null,fingerprint text not null,payload jsonb not null,observed_at timestamptz not null default now(),unique(match_id,fingerprint));',
+ 'create table if not exists app_live_event_frame (id bigserial primary key,match_id bigint not null,fingerprint text not null,payload jsonb not null,observed_at timestamptz not null default now());',
+ 'alter table app_live_event_frame drop constraint if exists app_live_event_frame_match_id_fingerprint_key;',
  'create index if not exists app_live_event_frame_latest_idx on app_live_event_frame(match_id,observed_at desc);',
  'create table if not exists app_live_event_cursor (match_id bigint primary key,last_seen_at timestamptz not null);',
  "create table if not exists app_live_event_recovery (id bigserial primary key,match_id bigint not null,gap_from timestamptz not null,gap_to timestamptz not null,line_ids uuid[] not null,event_types text[] not null,status text not null default 'AWAITING_BACKUP_API',created_at timestamptz not null default now(),resolved_at timestamptz,unique(match_id,gap_from,gap_to));",
@@ -70,8 +71,11 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
   await client.query('begin');
   const watching=(await client.query(WATCHED_LIVE_LINES_SQL,[matchId])).rows;
   if(!watching.length){await client.query('commit');return {stored:false,reason:'NO_RELEVANT_TICKETS'};}
-  const previous=(await client.query('select last_seen_at from app_live_event_cursor where match_id=$1 for update',[matchId])).rows[0];
   const earliestOpenBet=Math.min(...watching.map(item=>new Date(item.placed_at).getTime()).filter(Number.isFinite));
+  // Ensure every writer locks the same cursor, including the first observation.
+  await client.query('insert into app_live_event_cursor(match_id,last_seen_at) values($1,$2) on conflict(match_id) do nothing',
+    [matchId,new Date(Number.isFinite(earliestOpenBet)?earliestOpenBet:seenAt)]);
+  const previous=(await client.query('select last_seen_at from app_live_event_cursor where match_id=$1 for update',[matchId])).rows[0];
   const start=previous?Math.max(new Date(previous.last_seen_at).getTime(),earliestOpenBet):earliestOpenBet;
   let recovery=false;
   if(Number.isFinite(start)&&seenAt-start>Math.max(60000,thresholdMs)){
@@ -89,7 +93,8 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify(frame)).digest('hex');
   const saved=await client.query(
     'insert into app_live_event_frame(match_id,fingerprint,payload,observed_at) '+
-    'values($1,$2,$3::jsonb,$4) on conflict(match_id,fingerprint) do nothing',
+    'select $1::bigint,$2::text,$3::jsonb,$4::timestamptz where $2 is distinct from ('+
+    'select fingerprint from app_live_event_frame where match_id=$1 order by observed_at desc,id desc limit 1)',
     [matchId,fingerprint,JSON.stringify(frame),at]);
   await client.query(
     'insert into app_live_event_cursor(match_id,last_seen_at) values($1,$2) '+
