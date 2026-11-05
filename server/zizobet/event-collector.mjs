@@ -1,8 +1,9 @@
 import {eventWatchIds,saveEventEvidence,normalizeEvents} from '../ledger/event-evidence.mjs';
+import {recordWatchedLiveFrame} from '../ledger/live-observation-store.mjs';
 const json=async url=>{const r=await fetch(url,{headers:{origin:'https://googstreams.com',referer:'https://googstreams.com/'},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error('Tracker HTTP '+r.status);return r.json();};
 const available=r=>r?.data?.status?.status==='AVAILABLE';
 /** No browser or Sportradar requests; bounded to fixtures with pending tickets. */
-export function createEventCollector({getWatchIds=eventWatchIds,save=saveEventEvidence,request=json,now=Date.now,refreshMs=15000,maxActive=3}={}){
+export function createEventCollector({getWatchIds=eventWatchIds,save=saveEventEvidence,recordFrame=recordWatchedLiveFrame,request=json,now=Date.now,refreshMs=15000,maxActive=3}={}){
  let active=0;const last=new Map(),inflight=new Set();
  return async function collectEventEvidence(row,data){
   const id=String(row.match_id);
@@ -28,7 +29,9 @@ export function createEventCollector({getWatchIds=eventWatchIds,save=saveEventEv
      if(payload.complete||evidence.coverage?.cornersThrough==null)evidence=payload;
     }
    }catch{/* An unavailable secondary source is not evidence of zero events. */}}
-   await save(row.match_id,evidence);
+   // A separate, ticket-scoped append-only timeline survives process restarts.
+   // A failed optional capture never replaces or deletes existing evidence.
+   await Promise.allSettled([save(row.match_id,evidence),recordFrame(row.match_id,data)]);
   }finally{inflight.delete(id);active--;}
  };
 }
