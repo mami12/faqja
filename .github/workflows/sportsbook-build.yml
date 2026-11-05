@@ -63,6 +63,13 @@ jobs:
         run: node scripts/test-finished-favorites.mjs
       - name: Validate admin manual-review notifications and decisions
         run: node scripts/test-manual-review-queue.mjs
+      - name: Typecheck admin notifications before unrelated baseline tests
+        run: npm --prefix web run typecheck
+      - name: Syntax check admin review modules
+        run: |
+          node --check server/ledger/manual-review-queue.mjs
+          node --check server/ledger/settler.mjs
+          node --check server/ledger/financial-monitoring.mjs
       - name: Validate protected requirements with isolated databases and feeds
         run: npm run test:protected
       - name: Validate sportsbook label regressions
