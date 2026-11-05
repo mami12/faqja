@@ -152,3 +152,32 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
  if(contract.kind==='range')return count>contract.max?'LOST':(scopeEnded||ended)?count>=contract.min?'WON':'LOST':null;
  return null;
 }
+
+/** Score/corner delta fallback for *the specific ticket's accepted baseline*.
+ * An increment of exactly one proves which side supplied the next event,
+ * even when the provider sends only an aggregate scoreboard. More than one
+ * unknown event or a backwards correction is never guessed. These are
+ * shadow decisions until the provider's live results have been validated.
+ */
+export function gradeFromAcceptedCounters(contract,frame={}){
+ if(!contract||!['sequence','race'].includes(contract.kind))return null;
+ const base=contract.baseline,latest=frame.teams?.[contract.event];
+ const bh=nonNeg(base?.home),ba=nonNeg(base?.away),
+  h=nonNeg(latest?.home),a=nonNeg(latest?.away);
+ if([bh,ba,h,a].some(v=>v===null)||h<bh||a<ba)return null;
+ const deltaHome=h-bh,deltaAway=a-ba,delta=deltaHome+deltaAway;
+ const end=frame.ended===true;
+ if(contract.kind==='sequence'){
+  if(contract.target!==bh+ba+1)return null;
+  if(delta===1){
+   const winner=deltaHome===1?'home':'away';
+   return contract.side===winner?'WON':'LOST';
+  }
+  if(delta===0&&end)return contract.side==='none'?'WON':'LOST';
+  return null;
+ }
+ if(bh>=contract.target||ba>=contract.target)return null;
+ const homeReached=h>=contract.target,awayReached=a>=contract.target;
+ if(homeReached===awayReached)return null;
+ return (homeReached?'home':'away')===contract.side?'WON':'LOST';
+}
