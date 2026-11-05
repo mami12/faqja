@@ -81,4 +81,11 @@ const deltaRace={...race,baseline:{home:2,away:1}};
 assert.equal(gradeFromAcceptedCounters(deltaRace,{teams:{corner:{home:3,away:2}}}),'WON');
 assert.equal(gradeFromAcceptedCounters(deltaRace,{teams:{corner:{home:3,away:3}}}),null,
  'If both sides crossed the threshold, order is unknown');
+const integerOver=parseCountMarket({...windowLine('Total Goals','Over'),line:'2'});
+assert.equal(gradeLiveContract(integerOver,{counts:{goal:2}}),null);
+assert.equal(gradeLiveContract(integerOver,{counts:{goal:2}},{ended:true}),'VOID');
+assert.equal(gradeLiveContract(integerOver,{counts:{goal:1}},{ended:true}),'LOST');
+const missingMinute=obs('goal',[null],11,11);
+const firstTen=parseEventWindow(windowLine('Goal in first 10 minutes','Yes'));
+assert.equal(gradeLiveContract(firstTen,missingMinute),null,'Missing event minute is not minute zero');
 console.log('PASS live event window yes/no, next goal, race, irreversible totals, exact and range');
