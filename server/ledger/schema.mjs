@@ -1,6 +1,7 @@
 import {MANAGER_CASINO_SQL} from '../casino/manager-settings.mjs';
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
+import {LIVE_OBSERVATION_SQL} from './live-observation-store.mjs';
 /**
  * Ledger schema - users, money, tickets.
  *
@@ -367,6 +368,7 @@ alter table app_casino_freespin_state add column if not exists custom_round json
 
 ${ORIGINAL_WALLET_SQL}
 ${SETTLEMENT_REVIEW_SQL}
+${LIVE_OBSERVATION_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.
