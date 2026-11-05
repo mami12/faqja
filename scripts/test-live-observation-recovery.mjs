@@ -59,16 +59,18 @@ const emptyDatabase={connect:async()=>({async query(sql){
 },release(){}})};
 assert.equal((await recordWatchedLiveFrame(555,game,{database:emptyDatabase,now:()=>now})).reason,
  'NO_RELEVANT_TICKETS','No ticket must generate zero history and backup jobs');
-let shadowWrites=0;const next={version:1,kind:'sequence',event:'goal',target:2,side:'away'};
+let shadowWrites=0,previewClears=0;const next={version:1,kind:'sequence',event:'goal',target:2,side:'away'};
 const got=await createLiveSettlementPreviews({now:()=>now,runQuery:async(sql,params)=>{
  if(sql.includes('select l.id as line_id'))return {rows:[
   {line_id:uuidA,ticket_id:'t1',match_id:123,live_contract:next,provider_frame:frame,frame_at:new Date(now),open_recovery_gaps:0},
   {line_id:uuidB,ticket_id:'t2',match_id:123,live_contract:next,provider_frame:frame,frame_at:new Date(now),open_recovery_gaps:1}
  ]};
+ if(sql.startsWith('delete from app_live_settlement_preview')){previewClears++;return {rowCount:1};}
  assert.match(sql,/app_live_settlement_preview/);shadowWrites++;
  assert.equal(params[2],'WON');
  return {rowCount:1};
 }});
 assert.deepEqual({proposed:got.proposed,held:got.held,mode:got.mode},{proposed:1,held:1,mode:'SHADOW_ONLY'});
 assert.equal(shadowWrites,1,'An unresolved backup gap must never create a winning preview');
+assert.equal(previewClears,1,'An unresolved backup gap clears any old winning preview');
 console.log('PASS targeted per-ticket recovery, frozen next goal, verified frames and shadow-only settlement');
