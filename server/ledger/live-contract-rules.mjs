@@ -68,7 +68,7 @@ export function parseCountMarket(line) {
  const event=typeOf(name);
  if(!event||/\b(?:next|first|last|race|interval|minutes?|fouls? won|player|scorer|penalty|handicap|asian|odd|even|both|each)\b|[&+]/.test(name))return null;
  // Only explicit full-match aggregate count markets, never a team or half.
- if(!/^(?:(?:full time|match|total)\s+)?(?:total\s+)?(?:goals?|corners?|cards?|fouls?)(?:\s+(?:total|over\/under))?$/.test(name))return null;
+ if(!/^(?:(?:full time|match|total)\s+)?(?:total\s+)?(?:goals?|corners?|cards?|fouls?)(?:\s+(?:total|over\/under))?(?:\s*\((?:exact|bands)\))?$/.test(name))return null;
  const rawLabel=norm(line.outcome_name??line.outcomeName??line.outcome_key);
  const numeric=number(line.line??line.specifier);
  const over=rawLabel.match(/^over(?:\s+(\d+(?:[.,]\d+)?))?$/);
