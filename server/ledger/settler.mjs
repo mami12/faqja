@@ -21,6 +21,7 @@ import { systemColumnPayout } from './system-columns.mjs';
 import { eventMarketRequirement } from './event-market-policy.mjs';
 import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './statistic-markets.mjs';
 import {goalTotalContract} from './goal-total-contract.mjs';
+import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
@@ -71,7 +72,12 @@ export function hasRequiredSettlementEvidence(line, result) {
   const marketName = String(line.market_name ?? '');
   if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
   const family = goalTotalContract(line,result)?'TOTAL':classify(marketName);
-  if (family === 'CORNERS' && (result.corners_home == null || result.corners_away == null)) return false;
+  if (family === 'CORNERS') {
+    const contract = cornerTotalContract(line, result);
+    if (!contract) return false;
+    if ((contract.scope !== 'away' && result.corners_home == null) ||
+        (contract.scope !== 'home' && result.corners_away == null)) return false;
+  }
   if (family === 'CARDS' && (result.cards_home == null || result.cards_away == null)) return false;
   // Early-payout promotions depend on event history, not only the final score.
   if (/early\s*payout/i.test(marketName)) return false;
@@ -109,6 +115,7 @@ export function gradeLine(line, result) {
   const name = String(line.outcome_name ?? '').toLowerCase();
   const lineValue = num(line.line);
   const goalTotal=goalTotalContract(line,result);
+  const cornerTotal=cornerTotalContract(line,result);
   const type = goalTotal?'TOTAL':classify(line.market_name);
 
   const homeName = norm(result.home_team);
@@ -170,8 +177,11 @@ export function gradeLine(line, result) {
       if(type==='TOTAL'&&goalTotal?.scope==='home')target=home;
       if(type==='TOTAL'&&goalTotal?.scope==='away')target=away;
       if (type === 'CORNERS') {
-        if (result.corners_home === null || result.corners_away === null) return 'VOID';
-        target = Number(result.corners_home) + Number(result.corners_away);
+        if (!cornerTotal) return 'VOID';
+        const h=num(result.corners_home),a=num(result.corners_away);
+        if (cornerTotal.scope==='home' && h===null || cornerTotal.scope==='away' && a===null ||
+            cornerTotal.scope==='total' && (h===null || a===null)) return 'VOID';
+        target = cornerTotal.scope==='home'?h:cornerTotal.scope==='away'?a:h+a;
       }
       if (type === 'CARDS') {
         if (result.cards_home === null || result.cards_away === null) return 'VOID';
@@ -432,7 +442,10 @@ export async function voidUnresolved(hours = 72) {
   for (const row of rows) {
     // Native Ybets props are enabled for the requested testing. A missing
     // event/result feed needs an administrator's decision, not a timed refund.
-    if(/^yb\d+@/.test(String(row.market_key??'')))continue;
+    if(/^(?:yb|zz)\d+@/.test(String(row.market_key??'')))continue;
+    // Missing corner/event verification is not a cancelled bet. Only an
+    // administrator can resolve it; never auto-VOID after a timeout.
+    if (needsEvents(row) || /\bcorners?\b/i.test(String(row.market_name??''))) continue;
     const result = await getResult(row.match_id);
     if(statisticsNeedReview(row,result))continue;
     // With a final result but missing HT/corner/card evidence, hold the
