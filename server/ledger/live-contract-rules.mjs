@@ -70,7 +70,7 @@ export function parseCountMarket(line) {
  // Only explicit full-match aggregate count markets, never a team or half.
  if(!/^(?:(?:full time|match|total)\s+)?(?:total\s+)?(?:goals?|corners?|cards?|fouls?)(?:\s+(?:total|over\/under))?$/.test(name))return null;
  const rawLabel=norm(line.outcome_name??line.outcomeName??line.outcome_key);
- const numeric=nonNeg(line.line??line.specifier);
+ const numeric=number(line.line??line.specifier);
  const over=rawLabel.match(/^over(?:\s+(\d+(?:[.,]\d+)?))?$/);
  const under=rawLabel.match(/^under(?:\s+(\d+(?:[.,]\d+)?))?$/);
  if(over||under){const n=number((over??under)[1]?.replace(',','.')??numeric);if(n===null||n<0||n>300)return null;return {version:1,kind:over?'over':'under',event,threshold:n};}
