@@ -87,6 +87,8 @@ jobs:
         run: node scripts/test-market-expiry.mjs
       - name: Validate mobile match-count badge
         run: node scripts/test-mobile-betslip-badge.mjs
+      - name: Validate 48-hour finished favorite history
+        run: node scripts/test-finished-favorites.mjs
       - name: Verify all original casino game artwork
         run: node scripts/test-casino-art.mjs
       - name: Typecheck frontend
