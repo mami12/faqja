@@ -21,7 +21,11 @@ export function createEventCollector({getWatchIds=eventWatchIds,save=saveEventEv
      for(const e of payload.events)e.team=String(e.team)===String(b.homeTeam.competitorId)?'home':String(e.team)===String(b.awayTeam.competitorId)?'away':null;
      payload.stats=available(stats)?stats.data?.details?.stats??[]:[];
      payload.final=/^(?:finished|ended|complete|completed|postmatch)$/i.test(String(b.matchSummaries?.matchStatus??''));
-     payload.complete=payload.final&&Array.isArray(periods.H1)&&Array.isArray(periods.H2);evidence=payload;
+     payload.complete=payload.final&&Array.isArray(periods.H1)&&Array.isArray(periods.H2);
+     // The live Zizobet timeline can prove a completed corner window against
+     // its own corner counters. Do not replace that proof with an incomplete
+     // secondary play-by-play response; completed final sources still win.
+     if(payload.complete||evidence.coverage?.cornersThrough==null)evidence=payload;
     }
    }catch{/* An unavailable secondary source is not evidence of zero events. */}}
    await save(row.match_id,evidence);

@@ -214,7 +214,7 @@ export function translateZizobetMarketLabel(raw:string):string|null {
  if(ordinalGoal)return 'Kush shënon golin nr. '+ordinalGoal[1]+'?';
  const cornerNumber=normalized.match(/^Who takes the (\d+)(?:st|nd|rd|th)? corner$/i);
  if(cornerNumber)return 'Cila skuadër fiton goditjen këndore nr. '+cornerNumber[1];
- const race=normalized.match(/^Race to (\d+) corners$/i);
+ const race=normalized.match(/^(?:Which team wins (?:the )?race to|Race to) (\d+) corners\??$/i);
  if(race)return 'Skuadra që arrin e para '+race[1]+' goditje këndore';
  const count=normalized.match(/^(?:(Home team|Away team) )?exact goals (\d+)(\+)?$/i);
  if(count)return count[3]?'Numri i golave'+(count[1]?teamSuffix(count[1]):'')+' ('+count[2]+' ose më shumë)':'Saktësisht '+count[2]+(count[2]==='1'?' gol':' gola')+(count[1]?teamSuffix(count[1]):'');

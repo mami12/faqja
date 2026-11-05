@@ -11,7 +11,7 @@
  * corners and cards, those markets can be graded instead of always being voided.
  */
 import { pool, query } from '../db.mjs';
-import {gradeEventLine,needsEvents} from './event-evidence.mjs';
+import {gradeEventLine,needsEvents,gradeClosedCornerWindow,loadEventEvidence} from './event-evidence.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
@@ -21,6 +21,7 @@ import { systemColumnPayout } from './system-columns.mjs';
 import { eventMarketRequirement } from './event-market-policy.mjs';
 import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './statistic-markets.mjs';
 import {goalTotalContract} from './goal-total-contract.mjs';
+import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
@@ -71,7 +72,12 @@ export function hasRequiredSettlementEvidence(line, result) {
   const marketName = String(line.market_name ?? '');
   if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
   const family = goalTotalContract(line,result)?'TOTAL':classify(marketName);
-  if (family === 'CORNERS' && (result.corners_home == null || result.corners_away == null)) return false;
+  if (family === 'CORNERS') {
+    const contract = cornerTotalContract(line, result);
+    if (!contract) return false;
+    if ((contract.scope !== 'away' && result.corners_home == null) ||
+        (contract.scope !== 'home' && result.corners_away == null)) return false;
+  }
   if (family === 'CARDS' && (result.cards_home == null || result.cards_away == null)) return false;
   // Early-payout promotions depend on event history, not only the final score.
   if (/early\s*payout/i.test(marketName)) return false;
@@ -109,6 +115,7 @@ export function gradeLine(line, result) {
   const name = String(line.outcome_name ?? '').toLowerCase();
   const lineValue = num(line.line);
   const goalTotal=goalTotalContract(line,result);
+  const cornerTotal=cornerTotalContract(line,result);
   const type = goalTotal?'TOTAL':classify(line.market_name);
 
   const homeName = norm(result.home_team);
@@ -170,8 +177,11 @@ export function gradeLine(line, result) {
       if(type==='TOTAL'&&goalTotal?.scope==='home')target=home;
       if(type==='TOTAL'&&goalTotal?.scope==='away')target=away;
       if (type === 'CORNERS') {
-        if (result.corners_home === null || result.corners_away === null) return 'VOID';
-        target = Number(result.corners_home) + Number(result.corners_away);
+        if (!cornerTotal) return 'VOID';
+        const h=num(result.corners_home),a=num(result.corners_away);
+        if (cornerTotal.scope==='home' && h===null || cornerTotal.scope==='away' && a===null ||
+            cornerTotal.scope==='total' && (h===null || a===null)) return 'VOID';
+        target = cornerTotal.scope==='home'?h:cornerTotal.scope==='away'?a:h+a;
       }
       if (type === 'CARDS') {
         if (result.cards_home === null || result.cards_away === null) return 'VOID';
@@ -346,6 +356,33 @@ export async function settleMatch(matchId) {
   return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
+/** Grade only verified, elapsed corner YES/NO windows, independently of a
+ * full-time result. Every other live market remains on the existing final
+ * result path; missing evidence means PENDING rather than a guessed answer.
+ */
+export async function settleClosedCornerWindows({runQuery=query,loadEvidence=loadEventEvidence,update=updatePendingLine,recalc=recalcTicket}={}){
+ const {rows}=await runQuery(`select l.* from app_ticket_line l
+   join app_ticket t on t.id=l.ticket_id
+   where l.status='PENDING' and t.status='PENDING'
+     and l.market_name ~* 'corner'
+     and l.market_name ~* '(minute|from)'
+     and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
+   order by l.match_id,l.id`);
+ const cache=new Map(),tickets=new Set();let graded=0;
+ for(const line of rows){
+  const id=String(line.match_id);
+  if(!cache.has(id))cache.set(id,await loadEvidence(id).catch(()=>null));
+  const status=gradeClosedCornerWindow(line,cache.get(id));
+  if(status!== 'WON'&&status!=='LOST')continue;
+  if(await update(line.id,status,line.ticket_id)){
+   graded++;tickets.add(line.ticket_id);
+  }
+ }
+ const closed=[];
+ for(const id of tickets){const ticket=await recalc(id);if(ticket)closed.push(ticket);}
+ return {graded,closed};
+}
+
 /** Line grading commits before ticket payment. A crash or transient database
  * error in between must not strand an otherwise resolved ticket forever.
  * Reuse the existing locked, idempotent payment transaction for every retry.
@@ -380,13 +417,16 @@ export async function settleAll() {
     try { results.push(await settleMatch(id)); }
     catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
   }
+  let windows={graded:0,closed:[]};
+  try {windows=await settleClosedCornerWindows();}
+  catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
   const recovered = await recoverResolvedTickets();
 
   return {
     captured,
     matches: ids.length,
-    lines: results.reduce((acc, r) => acc + r.settled, 0),
-    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + recovered.length,
+    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded,
+    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + recovered.length,
     recovered: recovered.length,
   };
 }
@@ -433,6 +473,9 @@ export async function voidUnresolved(hours = 72) {
     // Native Ybets props are enabled for the requested testing. A missing
     // event/result feed needs an administrator's decision, not a timed refund.
     if(/^yb\d+@/.test(String(row.market_key??'')))continue;
+    // Missing corner/event verification is not a cancelled bet. Only an
+    // administrator can resolve it; never auto-VOID after a timeout.
+    if (needsEvents(row) || /\bcorners?\b/i.test(String(row.market_name??''))) continue;
     const result = await getResult(row.match_id);
     if(statisticsNeedReview(row,result))continue;
     // With a final result but missing HT/corner/card evidence, hold the

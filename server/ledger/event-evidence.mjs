@@ -22,7 +22,8 @@ export function createEventEvidenceStore({runQuery=query,now=Date.now,cacheMs=10
    where app_match_event_evidence.payload is distinct from excluded.payload
     and not (coalesce(excluded.payload->>'source','') in ('zizobet','betgenius') and coalesce(app_match_event_evidence.payload->>'source','') in ('bsd','worldcup26','sportapi','goalapi','apifootball') and coalesce(app_match_event_evidence.payload->>'complete','false')='true')
     and not (coalesce(excluded.payload->>'source','')='zizobet' and coalesce(app_match_event_evidence.payload->>'source','') in ('betgenius','sportradar'))
-    and not (coalesce(app_match_event_evidence.payload->>'complete','false')='true' and coalesce(excluded.payload->>'complete','false')<>'true')`,[id,JSON.stringify(payload)]);
+    and not (coalesce(app_match_event_evidence.payload->>'complete','false')='true' and coalesce(excluded.payload->>'complete','false')<>'true')
+    and not (coalesce(app_match_event_evidence.payload->'coverage'->>'cornersThrough','-1')::numeric > coalesce(excluded.payload->'coverage'->>'cornersThrough','-1')::numeric and coalesce(excluded.payload->>'complete','false')<>'true')`,[id,JSON.stringify(payload)]);
   return saved.rowCount>0;
  },async loadEventEvidence(id){await init();return (await runQuery('select payload from app_match_event_evidence where match_id=$1',[id])).rows[0]?.payload??null;}};
 }
@@ -35,10 +36,28 @@ export function normalizeEvents(data,source){
  const active=e=>!e.disabled&&!e.cancelled&&!e.canceled&&e.isConfirmed!==false&&!/cancelled|canceled|voided/i.test(String(e.status??''));
  if(source==='sportradar')events=(data.doc?.[0]?.data?.events??[]).map(e=>({disabled:!active(e),id:e._id,type:e.type==='goal'?'goal':e.type==='corner'?'corner':e.type==='card'?'card':e.type,team:e.team,minute:e.time,seconds:e.seconds,injury:e.injurytime,player:e.scorer?.name??e.player?.name,playerId:e.scorer?._id??e.player?._id,own:e.owngoal,header:e.header,penalty:e.penalty,card:e.card,shootout:e.time===-1,phase:e.period??null,updatedAt:e.updated_uts??e.uts}));
  if(source==='betgenius')events=Object.values(data.data?.details?.playByPlayInfo??{}).flat().map(e=>({disabled:!active(e),id:e.id??`${e.type}|${e.teamId}|${e.timestamp}`,type:e.type==='Goal'?'goal':e.type==='Corner'?'corner':e.type==='Card'?'card':e.type,team:e.teamId,minute:parseInt(e.clock),player:e.actionDetails?.playerName,own:e.actionDetails?.isOwn,header:e.actionDetails?.isHeader,penalty:e.actionDetails?.penalty,phase:e.phase,qualifier:e.phaseQualifier,shootout:/shoot/i.test(e.phase??''),updatedAt:Date.parse(e.updatedTimestamp??e.timestamp??'')}));
- if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({id:String(i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(e.type)?'card':e.type,team:e.team,minute:Number(e.gt),player:e.pl}));
+ if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:e.gt==null?NaN:Number(e.gt),player:e.pl,phase:e.phase??null}));
+ // For closed corner windows, prove the timeline covers every corner observed
+ // by this same provider at its own clock. Missing counters, invalid teams
+ // or inconsistent totals mean NO coverage and must leave the bet pending.
+ let coverage;
+ if(source==='zizobet'&&Array.isArray(data.TimeLines)){
+  const game=data.Match??{},rawClock=String(game.MatchTimeExtended??'').trim();
+  const full=rawClock.match(/^(\d{1,3}):(\d{2})$/);
+  const minute=full?Number(full[1])+Number(full[2])/60:
+   game.MatchTime!=null&&String(game.MatchTime).trim()!==''?Number(game.MatchTime):NaN;
+  const h=game.CornersTeam1,a=game.CornersTeam2;
+  const count=[h,a].map(v=>v!=null&&String(v).trim()!==''&&/^\d+$/.test(String(v))?Number(v):null);
+  const corners=events.filter(e=>e.type==='corner'&&!e.disabled);
+  const actual=[corners.filter(e=>e.team==='home').length,corners.filter(e=>e.team==='away').length];
+  const verified=Number.isFinite(minute)&&minute>=0&&minute<=130&&
+   count.every(v=>v!==null)&&count.every((v,i)=>v===actual[i])&&
+   corners.every(e=>Number.isFinite(e.minute)&&e.minute>=0&&e.minute<=minute&&e.team!=null);
+  if(verified)coverage={cornersThrough:Math.floor(minute)};
+ }
  const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
  const retained=[...unique.values()].filter(e=>!e.disabled);
- return {source,complete:source==='sportradar'&&retained.some(e=>e.type==='match_started')&&retained.some(e=>e.type==='match_ended'),methodsVerified:source==='sportradar'&&data.doc?.[0]?.data?.match?.coverage?.deepercoverage===true,events:retained};
+ return {source,complete:source==='sportradar'&&retained.some(e=>e.type==='match_started')&&retained.some(e=>e.type==='match_ended'),methodsVerified:source==='sportradar'&&data.doc?.[0]?.data?.match?.coverage?.deepercoverage===true,events:retained,...(coverage?{coverage}:{})};
 }
 const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 const person=s=>norm(String(s??'').includes(',')?String(s).split(',').reverse().join(' '):s);
@@ -139,4 +158,26 @@ function gradeSingleEventLine(line,result){
  if((over||under)&&line.line!==''&&line.line!=null&&Number.isFinite(threshold))return count===threshold?'VOID':(over?count>threshold:count<threshold)?'WON':'LOST';
  if(player&&!/next|exact/i.test(name)&&person(label)===person(target??''))return count>0?'WON':'LOST';
  return null;
+}
+
+/** A proved provider corner timeline can close a frozen 5-minute YES/NO
+ * contract once the provider clock has advanced beyond the window.
+ * Missing or contradictory evidence returns null, never a presumed loss.
+ */
+export function gradeClosedCornerWindow(line,evidence){
+ const contract=eventContract(line);
+ if(!contract.valid||!contract.window||contract.half||!/^(?:total corners)$/.test(contract.name))return null;
+ const through=Number(evidence?.coverage?.cornersThrough);
+ if(!evidence||evidence.source!=='zizobet'||evidence.coverage?.cornersThrough==null||
+    !Number.isFinite(through)||through<=contract.window.to||!Array.isArray(evidence.events))return null;
+ const label=String(line.outcome_name??line.outcomeName??'').trim().toLowerCase();
+ const key=String(line.outcome_key??line.outcomeKey??'').trim().toLowerCase();
+ // Provider outcome keys may be opaque IDs. The stored display label proves
+ // which selection was sold. Unknown choices must never be auto-graded.
+ const yes=label==='yes'||label==='po',no=label==='no'||label==='jo';
+ if(yes===no)return null;
+ const corners=evidence.events.filter(e=>e.type==='corner');
+ if(corners.some(e=>!Number.isFinite(e.minute)||!['home','away'].includes(e.team)))return null;
+ const happened=corners.some(e=>eventInWindow(e,contract));
+ return (yes?happened:!happened)?'WON':'LOST';
 }
