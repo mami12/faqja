@@ -217,6 +217,8 @@ create table if not exists app_ticket_line (
   status           text not null default 'PENDING' -- PENDING | WON | LOST | VOID
 );
 alter table app_ticket_line add column if not exists builder_legs jsonb;
+-- Frozen goal/corner/window/count contract accepted with the exact ticket quote.
+alter table app_ticket_line add column if not exists live_contract jsonb;
 create index if not exists app_ticket_line_ticket_idx on app_ticket_line (ticket_id);
 create index if not exists app_ticket_line_match_idx  on app_ticket_line (match_id);
 
