@@ -20,15 +20,18 @@ export async function createLiveSettlementPreviews({
  const cap=Math.max(1,Math.min(1000,Math.trunc(Number(limit)||400)));
  const rows=(await runQuery(LIVE_PREVIEW_ROWS_SQL,[cap])).rows;
  let proposed=0,held=0;
+ const clear=async id=>runQuery('delete from app_live_settlement_preview where line_id=$1',[id]);
  for(const row of rows){
   const contract=typeof row.live_contract==='string'?JSON.parse(row.live_contract):row.live_contract;
   const frame=typeof row.provider_frame==='string'?JSON.parse(row.provider_frame):row.provider_frame;
-  if(!frame){held++;continue;}
+  if(!frame){await clear(row.line_id);held++;continue;}
   const frameAt=new Date(row.frame_at).getTime();
   if((!frame.ended&&(!Number.isFinite(frameAt)||now()-frameAt>120000))||
-     Number(row.open_recovery_gaps)>0){held++;continue;}
-  const status=gradeLiveContract(contract,frame,{ended:frame.ended===true})??gradeFromAcceptedCounters(contract,frame);
-  if(!['WON','LOST','VOID'].includes(status)){held++;continue;}
+     Number(row.open_recovery_gaps)>0){await clear(row.line_id);held++;continue;}
+  const timeline=gradeLiveContract(contract,frame,{ended:frame.ended===true});
+  const delta=gradeFromAcceptedCounters(contract,frame);
+  const status=timeline&&delta&&timeline!==delta?null:timeline??delta;
+  if(!['WON','LOST','VOID'].includes(status)){await clear(row.line_id);held++;continue;}
   const evidence={contract,frame:{source:frame.source,clock:frame.clock,counts:frame.counts,
     coverage:frame.coverage,ended:frame.ended,events:frame.events},frameAt:row.frame_at,
     recoveriesOpen:0,decision:'TEST_ONLY_NO_WALLET_WRITE'};
