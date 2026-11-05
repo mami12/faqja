@@ -44,7 +44,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   useEffect(()=>setDateFilter('all'),[viewMode]);
   const { t, lang } = useLanguage();
   const navigate = useNavigate();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
   const { livePatches, lockedMatches, lockedMarkets, lockedOutcomes, riskLockedOutcomes, feedMode, combosEnabled, refreshVersion, acceptMatches } = useLiveFeed();
   const refreshing = feedMode !== 'live';
   const refreshRef = useRef<(() => void) | null>(null);
@@ -65,11 +65,20 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
         if(isLiveOnly) params.status='LIVE';
         if(viewMode==='prematch')params.status='PREMATCH';
         if((viewMode==='all'||viewMode==='prematch')&&dateFilter!=='all')params.day=dateFilter;
-        const res=await apiClient.get('/matches',{params,signal:controller.signal});
+        // Finished favorites are fetched by ID from durable final results.
+        // The ordinary board endpoint remains unchanged and excludes ended games.
+        const historyRequest=viewMode==='favorites'&&favorites.length
+          ?apiClient.get('/matches/favorites',{params:{ids:favorites.slice(0,100).join(',')},signal:controller.signal})
+            .then(res=>Array.isArray(res.data)?res.data:[]).catch(()=>[])
+          :Promise.resolve([]);
+        const [res,finished]=await Promise.all([
+          apiClient.get('/matches',{params,signal:controller.signal}),historyRequest,
+        ]);
         if(active) {
           const snapshot=Array.isArray(res.data)?res.data:[];
           acceptMatches(snapshot);
-          setMatches(snapshot);
+          const archivedIds=new Set(finished.map((m:any)=>String(m.id)));
+          setMatches([...snapshot.filter((m:any)=>!archivedIds.has(String(m.id))),...finished]);
         }
       } catch(error) {if(active) console.error('Failed to fetch matches:',error);}
       finally {
@@ -85,7 +94,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     void refresh();
     const interval=window.setInterval(()=>void refresh(),30000);
     return ()=>{active=false;refreshRef.current=null;controller.abort();window.clearInterval(interval);};
-  }, [tournamentId, categoryId, sportId, isLiveOnly,viewMode,dateFilter, acceptMatches]);
+  }, [tournamentId, categoryId, sportId, isLiveOnly,viewMode,dateFilter, acceptMatches,favorites]);
 
   // A collector cycle must not cancel a slow request. Coalesce changes behind
   // its response; only an actual filter change or unmount aborts that request.
@@ -95,8 +104,8 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
     refreshRef.current?.();
   }, [refreshVersion]);
 
-  const currentMatches = matches.map(match => liveMatch(match, livePatches[String(match.id)]))
-    .filter(match => match.status !== 'ENDED' && match.status !== 'CANCELLED')
+  const currentMatches = matches.map(match => match.status==='ENDED'?match:liveMatch(match, livePatches[String(match.id)]))
+    .filter(match => match.status !== 'CANCELLED' && (viewMode==='favorites'||match.status !== 'ENDED'))
     .sort(compareMatchDisplay);
   // The server catalog already excludes synthetic fixtures; do not hide real leagues.
   const searchFiltered = searchTerm.trim()
@@ -172,6 +181,35 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   // Render a single compact odds board per competition. All odds still use the
   // existing OddsButton and its live-feed, suspension and betslip behavior.
   const renderMatchCard = (raw: any) => {
+    // A completed favorite is a result summary, never a betting market.
+    if(raw.status==='ENDED'){
+      const m=raw;
+      const goals=(Array.isArray(m.events)?m.events:[]).filter((event:any)=>
+        event?.type==='goal'&&['home','away'].includes(event.team)&&
+        Number.isInteger(Number(event.minute)));
+      const minuteLabels=goals.map((event:any)=>
+        (event.team==='home'?'1':'2')+': '+(event.minuteLabel??event.minute)+'′').join(' · ');
+      const shots=m.shotsOnTarget;
+      return <div className="zshop-match zshop-match-no-next" key={m.id} data-zshop-match={m.id}>
+        <div className="zshop-match-info">
+          <button type="button" aria-label={t('Hiq nga të preferuarat')} aria-pressed={true} onClick={()=>toggleFavorite(String(m.id))}><Star size={14} fill="#d29500"/></button>
+          <button type="button" className="zshop-match-teams" onClick={()=>navigate('/match/'+m.id)}>
+            <span className="zshop-match-meta">{lang==='en'?'FULL TIME':'PËRFUNDUAR'}</span>
+            <span className="zshop-team"><span title={repairDisplayText(m.homeTeam)}>{repairDisplayText(m.homeTeam)}</span><strong>{m.homeScore??'—'}</strong></span>
+            <span className="zshop-team"><span title={repairDisplayText(m.awayTeam)}>{repairDisplayText(m.awayTeam)}</span><strong>{m.awayScore??'—'}</strong></span>
+          </button>
+        </div>
+        <div data-board-market="primary" className="zshop-board-odds zshop-main-odds">
+          <small>{lang==='en'?'Shots on target':'Goditje në portë'}</small>
+          <span className="text-xs font-semibold">{shots?.home!=null&&shots?.away!=null?shots.home+' - '+shots.away:'—'}</span>
+        </div>
+        <div data-board-market="total" className="zshop-board-odds zshop-totals">
+          <small>{lang==='en'?'Goal minutes':'Minutat e golave'}</small>
+          <span className="text-xs font-semibold" title={minuteLabels||undefined}>{minuteLabels||'—'}</span>
+        </div>
+        <button type="button" className="zshop-extra" aria-label={lang==='en'?'Match summary':'Përmbledhja e ndeshjes'} onClick={()=>navigate('/match/'+m.id)}><ChevronRight size={12}/></button>
+      </div>;
+    }
     const { m, markets, chosen } = boardSelection(raw);
     const main = chosen.primary, goals = chosen.total;
     const find = (mk: any, names: string[]): any => boardOutcome(m, mk, names);
@@ -207,7 +245,7 @@ export default function MatchList({ tournamentId, categoryId, sportId, isLiveOnl
   const appendCompetition=(items:any[],sectionTitle:string,prefix:string)=>{
     entries.push({key:prefix+':section',estimate:34,node:()=><div className={'zshop-section-title '+(items.some(m=>m.status==='LIVE')?'is-live':'')}><span>{sectionTitle}</span><span>{items.length}</span></div>});
     const groups=new Map<string,any[]>();for(const m of items){const league=[m.tournament?.category?.name,m.tournament?.name].filter(Boolean).map(repairDisplayText).join(' · ')||t('sections.league');if(!groups.has(league))groups.set(league,[]);groups.get(league)!.push(m);}
-    for(const[league,fixtures]of groups){entries.push({key:prefix+league,estimate:60,node:()=><><div className="zshop-league-heading"><CountryFlag country={fixtures[0]?.tournament?.category?.name} countryCode={fixtures[0]?.tournament?.category?.countryCode}/><span>{league.replace(' · ',' / ')}</span><small>{fixtures.length}</small></div><div className="zshop-market-heading zshop-market-heading-no-next"><span>{t('Ndeshja')}</span><span>{lang==='en'?'Main market':'Tregu kryesor'}</span><span className="zshop-totals">{t('Poshtë')} · {t('Totali')} · {t('Lart')}</span><span>+</span></div></>});for(const m of fixtures)entries.push({key:prefix+':'+m.id,matchId:String(m.id),estimate:90,node:()=>renderMatchCard(m)});}
+    for(const[league,fixtures]of groups){entries.push({key:prefix+league,estimate:60,node:()=><><div className="zshop-league-heading"><CountryFlag country={fixtures[0]?.tournament?.category?.name} countryCode={fixtures[0]?.tournament?.category?.countryCode}/><span>{league.replace(' · ',' / ')}</span><small>{fixtures.length}</small></div><div className="zshop-market-heading zshop-market-heading-no-next"><span>{t('Ndeshja')}</span><span>{lang==='en'?'Main market':'Tregu kryesor'}</span><span className="zshop-totals">{t('Poshtë')} · {t('Totali')} · {t('Lart')}</span><span>+</span></div></>});for(const m of fixtures)entries.push({key:prefix+':'+m.id,...(m.status==='ENDED'?{}:{matchId:String(m.id)}),estimate:90,node:()=>renderMatchCard(m)});}
   };
   if((viewMode==='all'||viewMode==='live')&&liveMatches.length)appendCompetition(liveMatches,t('Futboll në lojë'),'live');
   if((viewMode==='all'||viewMode==='prematch')&&prematchMatches.length)appendCompetition(prematchMatches,lang==='en'?'Prematch':'Para ndeshjes','pre');

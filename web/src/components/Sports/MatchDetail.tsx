@@ -141,7 +141,7 @@ export default function MatchDetail() {
   // The live clock pushes seconds every tick. Only facts relevant to market
   // expiry should rebuild all market groups, not an unrelated second counter.
   const liveMarketMatch = useMemo(
-    () => match && String(match.id)===id ? liveMatch(match, patch) : null,
+    () => match && String(match.id)===id ? (match.status==='ENDED'?match:liveMatch(match, patch)) : null,
     [match,id,patch?.homeScore,patch?.awayScore,patch?.scoreAt,patch?.currentMinute,patch?.period,patch?.status,patch?.isSuspended,patch?.corners,patch?.cards,patch?.shots,patch?.shotsOnTarget,patch?.fouls],
   );
 
@@ -300,6 +300,28 @@ export default function MatchDetail() {
   const matchIdStr = String(live.id);
   const isFav = isFavorite(matchIdStr);
   const isAlert = isAlertEnabled(matchIdStr);
+
+  // Finished favorites are read-only match reports. No betting widgets or
+  // old prices should be rendered after the provider-confirmed final result.
+  if(live.status==='ENDED'){
+    const goals=(live.events??[]).filter(e=>e.type==='goal'&&['home','away'].includes(e.team))
+      .sort((a,b)=>a.minute-b.minute);
+    return <div className="zshop-detail space-y-2">
+      <ZshopScoreboard match={live}/>
+      <section className="rounded-lg border border-tertiary bg-secondary p-3 text-sm text-text-secondary">
+        <div className="font-bold text-white">{lang==='en'?'Match finished':'Ndeshja ka përfunduar'}</div>
+        {goals.length>0&&<div className="mt-2 space-y-1">
+          <div className="text-xs font-bold">{lang==='en'?'Goal minutes':'Minutat e golave'}</div>
+          {goals.map((goal,index)=><div key={goal.id??index}>
+            ⚽ {goal.team==='home'?live.homeTeam:live.awayTeam} · {goal.minuteLabel??goal.minute}′
+          </div>)}
+        </div>}
+        {goals.length===0&&<div className="mt-2 text-xs">
+          {lang==='en'?'Goal times are not available from the provider.':'Minutat e golave nuk janë të disponueshme nga API-ja.'}
+        </div>}
+      </section>
+    </div>;
+  }
 
   const categories = [
     { id: 'all', label: lang==='en'?'All markets':'Të gjitha tregjet' },
