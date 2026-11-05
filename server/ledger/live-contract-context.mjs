@@ -13,7 +13,14 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  const clock=Number.isFinite(Number(clockMs))&&clockMs!=null?Number(clockMs)/60000:null;
  const goals={home:safe(match.home_score),away:safe(match.away_score)};
  const corners={home:safe(teams.home?.corners),away:safe(teams.away?.corners)};
- const contract=liveContract(line,{clock,counts:{goal:goals,corner:corners}});
+ // Resolve team-name outcomes against this exact fixture, never by fuzzy
+ // prefixes or a team's position in another match.
+ const norm=v=>String(v??'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/\\s+/g,' ').trim();
+ const label=norm(line.outcome_name??line.outcomeName);
+ const home=norm(match.home??match.home_team),away=norm(match.away??match.away_team);
+ const selected=label&&home&&label===home?'1':label&&away&&label===away?'2':null;
+ const prepared=selected?{...line,outcome_name:selected,outcomeName:selected}:line;
+ const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners}});
  const name=String(line.market_name??line.marketName??'');
  if(!contract){
   if(eventish(name))throw fail('Ky treg nuk ka kusht të verifikueshëm në këtë moment.');
@@ -24,7 +31,7 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  if(live&&(contract.kind==='sequence'||contract.kind==='race'||contract.kind==='window')){
   const observedAt=time(match.score_at);
   const clockAt=time(match.clock_at);
-  if((contract.event==='goal'&&(goals.home==null||goals.away==null))||
+  if((contract.event==='goal'&&(goals.home==null||goals.away==null||observedAt===null))||
       clock===null||clockAt===null||at-clockAt>45000||clockAt-at>5000||
       (observedAt!==null&&(at-observedAt>90000||observedAt-at>5000)))throw fail('Të dhënat live nuk janë mjaftueshëm të freskëta.');
  }
