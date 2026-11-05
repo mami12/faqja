@@ -1,7 +1,9 @@
 /** Final-source comparison and manual holds, independent of provider presentation. */
 export const SETTLEMENT_REVIEW_SQL=`
 create table if not exists app_stat_review(match_id bigint primary key,payload jsonb not null,updated_at timestamptz not null default now());
-create table if not exists app_settlement_override(line_id uuid primary key references app_ticket_line(id) on delete restrict,status text not null check(status in ('PENDING','WON','LOST')),actor_id uuid references app_user(id),reason text not null,source text not null,updated_at timestamptz not null default now());
+create table if not exists app_settlement_override(line_id uuid primary key references app_ticket_line(id) on delete restrict,status text not null check(status in ('PENDING','WON','LOST','VOID')),actor_id uuid references app_user(id),reason text not null,source text not null,updated_at timestamptz not null default now());
+alter table app_settlement_override drop constraint if exists app_settlement_override_status_check;
+alter table app_settlement_override add constraint app_settlement_override_status_check check(status in ('PENDING','WON','LOST','VOID'));
 `;
 export const REVIEW_FIELDS=['corners','shots','shotsOnTarget','fouls','yellow','red','cards'];
 const valid=v=>v!==null&&v!==undefined&&v!==''&&Number.isInteger(Number(v))&&Number(v)>=0;
