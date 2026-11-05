@@ -20,7 +20,7 @@ import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
 import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -36,6 +36,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
       { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
     ],
@@ -158,6 +159,18 @@ export default function AdminPage() {
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
              {tab === 'manual-review' && <ManualReviewQueue />}
+             {tab === 'sports-evidence' && (
+               <section aria-labelledby="sports-evidence-heading" className="space-y-3">
+                 <h2 id="sports-evidence-heading" className="text-lg font-bold">Tregje pa prova të plota</h2>
+                 <p className="text-sm">Këto përzgjedhje kërkojnë prova shtesë kur burimi aktual nuk mbulon kushtin e bastit. Biletat konkrete për kontroll gjenden te Njoftimet.</p>
+                 <dl className="space-y-3">
+                   <div><dt className="font-semibold">Goli ose korneri i radhës, gara deri në X kornera</dt><dd>Kur mungon rendi pas ndërprerjes, duhet kronologjia me skuadrën dhe rendin ose sekondat e ngjarjeve.</dd></div>
+                   <div><dt className="font-semibold">Gol, korner ose karton në interval</dt><dd>Duhet minuta reale dhe skuadra kur tregu është sipas skuadrës. Për përgjigjen Jo duhet kronologjia e plotë deri në mbylljen e intervalit.</dd></div>
+                   <div><dt className="font-semibold">Faulle dhe goditje në portë</dt><dd>Për totalet duhet numri i verifikuar për periudhën e tregut. Për intervalet duhet minuta e çdo ngjarjeje dhe, sipas tregut, skuadra.</dd></div>
+                   <div><dt className="font-semibold">Ngjarje të anuluara ose burime kontradiktore</dt><dd>Duhet statusi i korrigjimit ose një vendim i dokumentuar i adminit për përzgjedhjen e prekur.</dd></div>
+                 </dl>
+               </section>
+             )}
             {tab === 'match-exposure' && <MatchExposure />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
