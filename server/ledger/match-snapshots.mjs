@@ -1,7 +1,7 @@
 import {query} from '../db.mjs';
-const fields=['match_id','home','away','home_score','away_score','score_at','feed_status','feed_status_at','periods_score','stats','raw','service','start_at'];
+const fields=['match_id','home','away','home_score','away_score','score_at','feed_status','feed_status_at','periods_score','stats','raw','service','start_at','tournament_id','tournament_name','category_id','category_name','category_slug'];
 /** A compact latest provider snapshot; never manufacture zeroes for absent facts. */
-export function snapshotRow(row){if(!row||!Number.isSafeInteger(Number(row.match_id))||Number(row.match_id)<=0)return null;return Object.fromEntries(fields.filter(key=>row[key]!=null).map(key=>[key,key==='raw'?{homeTeam:row.raw?.homeTeam,awayTeam:row.raw?.awayTeam,competitors:row.raw?.competitors,...(row.raw?.provider==='YBETS'?{provider:'YBETS',nativeMatchId:row.raw.nativeMatchId,ybetsFinalScoreVerified:row.raw.ybetsFinalScoreVerified===true}:{})}:row[key]]));}
+export function snapshotRow(row){if(!row||!Number.isSafeInteger(Number(row.match_id))||Number(row.match_id)<=0)return null;return Object.fromEntries(fields.filter(key=>row[key]!=null).map(key=>[key,key==='raw'?{homeTeam:row.raw?.homeTeam,awayTeam:row.raw?.awayTeam,competitors:row.raw?.competitors,...(Array.isArray(row.raw?.eventTimeline)?{eventTimeline:row.raw.eventTimeline.slice(0,300)}:{}),...(row.raw?.provider==='YBETS'?{provider:'YBETS',nativeMatchId:row.raw.nativeMatchId,ybetsFinalScoreVerified:row.raw.ybetsFinalScoreVerified===true}:{})}:row[key]]));}
 export function createMatchSnapshotStore(runQuery=query){
   const fingerprints=new Map();
   return {async save(row){const snapshot=snapshotRow(row);if(!snapshot)return false;
