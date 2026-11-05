@@ -1,5 +1,5 @@
 import {query} from '../db.mjs';
-import {gradeLiveContract} from './live-contract-rules.mjs';
+import {gradeLiveContract,gradeFromAcceptedCounters} from './live-contract-rules.mjs';
 export const LIVE_PREVIEW_ROWS_SQL=
  'select l.id as line_id,l.ticket_id,l.match_id,l.live_contract, '+
  'f.payload as provider_frame,f.observed_at as frame_at, '+
@@ -27,7 +27,7 @@ export async function createLiveSettlementPreviews({
   const frameAt=new Date(row.frame_at).getTime();
   if((!frame.ended&&(!Number.isFinite(frameAt)||now()-frameAt>120000))||
      Number(row.open_recovery_gaps)>0){held++;continue;}
-  const status=gradeLiveContract(contract,frame,{ended:frame.ended===true});
+  const status=gradeLiveContract(contract,frame,{ended:frame.ended===true})??gradeFromAcceptedCounters(contract,frame);
   if(!['WON','LOST','VOID'].includes(status)){held++;continue;}
   const evidence={contract,frame:{source:frame.source,clock:frame.clock,counts:frame.counts,
     coverage:frame.coverage,ended:frame.ended,events:frame.events},frameAt:row.frame_at,
