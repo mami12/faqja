@@ -19,3 +19,5 @@ Kjo paketë dhe repository përmbajnë të dhëna private. Mos e bëj repository
 dhe mos e shpërnda ZIP-in. Pas nisjes në server, ruaj databazën aktive të serverit
 gjatë përditësimeve të ardhshme; snapshot-i i laptopit nuk përmban aktivitet të ri
 që mund të kryhet më pas në server.
+
+Administratori mund të zgjedhë numrin e parandeshjeve te Lista e ndeshjeve: 0 = të gjitha; p.sh. 100 = deri në 100. Shtyp Ruaj. Ky kufi nuk fshin ndeshjet ose historikun dhe nuk kufizon live.

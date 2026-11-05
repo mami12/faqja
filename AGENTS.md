@@ -20,7 +20,9 @@ override older generated notes below.
   regression tests. Never reset accounts, balances or history as a code fix.
 - Prematch/live publication includes ALL real football supplied by the API,
   without country, tier, default date or missing-price filters. Only explicit
-  administrator visibility decisions may hide an otherwise real match.
+  administrator visibility decisions may hide an otherwise real match. The
+  administrator may explicitly set prematchLimit: 0 means all, positive X means
+  at most X prematches; live is unlimited and ingestion retains all real rows.
 - Mobile homepage shows one market. Desktop remains unchanged.
 - Admin market visibility applies to API, WebSocket and cache; hidden prices
   must not return through old snapshots or deltas.

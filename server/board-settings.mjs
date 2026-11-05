@@ -6,7 +6,7 @@ let settings={...DEFAULT_BOARD_SETTINGS};const listeners=new Set();
 export const boardSettings=()=>({...settings});
 export function validateBoardSettings(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>k!=='prematchLimit')||typeof value.prematchLimit!=='number'||!Number.isInteger(value.prematchLimit)||value.prematchLimit<0||value.prematchLimit>10000)throw Object.assign(new Error('Kufiri prematch duhet të jetë numër i plotë nga 0 deri në 10000. 0 do të thotë pa kufi.'),{status:400});
- return {prematchLimit:0};
+ return {prematchLimit:value.prematchLimit};
 }
 export function setBoardSettings(value){const next=validateBoardSettings(value);if(next.prematchLimit!==settings.prematchLimit){settings=next;for(const fn of listeners)try{fn(boardSettings());}catch{}}return boardSettings();}
 export function subscribeBoardSettings(fn){listeners.add(fn);return()=>listeners.delete(fn);}
@@ -28,9 +28,12 @@ function compare(a,b){return Number(live(b))-Number(live(a))||(!live(a)?a.listin
 export function selectPublishedMatches(catalog,config=boardSettings()){
  const rows=catalog.filter(r=>r.active!==false&&!isSyntheticFootballMatch(r)&&!/^(?:ended|finished|cancelled|closed|uncovered)$/i.test(String(r.status??''))&&!/^(?:ft|finished|ended|full.?time)$/i.test(String(r.feed_status??''))).map(row=>{const rank=competitionPriority(row);return {...row,listing_priority:rank.priority,protected_prematch:!live(row)&&rank.protected};}).sort(compare);
  const prematch=rows.filter(r=>!live(r)),protectedRows=prematch.filter(r=>r.protected_prematch),others=prematch.filter(r=>!r.protected_prematch);
- const selected=rows;
+ const limit=validateBoardSettings({prematchLimit:config.prematchLimit??0}).prematchLimit;
+ const activePrematch=limit>0?prematch.slice(0,limit):prematch;
+ const activeIds=new Set(activePrematch.map(row=>String(row.match_id)));
+ const selected=rows.filter(row=>live(row)||activeIds.has(String(row.match_id)));
  const competitions=new Map();for(const r of protectedRows){const key=`${r.category_slug}|${r.tournament_id??r.tournament_name}`;const old=competitions.get(key);if(old)old.matches++;else competitions.set(key,{country:r.category_name??r.category_slug,name:r.tournament_name,matches:1});}
- return {rows:selected,summary:{availablePrematch:prematch.length,protectedPrematch:protectedRows.length,visiblePrematch:prematch.length,hiddenPrematch:0,live:rows.filter(live).length,protectedExceedsLimit:false},protectedCompetitions:[...competitions.values()]};
+ return {rows:selected,summary:{availablePrematch:prematch.length,protectedPrematch:protectedRows.length,visiblePrematch:activePrematch.length,hiddenPrematch:prematch.length-activePrematch.length,live:rows.filter(live).length,protectedExceedsLimit:false},protectedCompetitions:[...competitions.values()]};
 }
 /** Stop ordinary prematch refresh work for hidden fixtures. LIVE, boosted
  * details and pending-result subscriptions retain their independent paths. */

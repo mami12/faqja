@@ -531,3 +531,8 @@ Asnjë ndryshim funksional ose vizual i paautorizuar nuk lejohet.
 ## Ndryshim i shprehur nga përdoruesi — 2026-11-05
 
 Kërkesa e fundit zëvendëson filtrin rajonal të pikës 3: shfaq çdo ndeshje futbolli real që sjell API, live dhe prematch, pa kufizim vendi, kategorie, moshe/gjinie, date të parazgjedhur ose pranie koeficientësh. Përjashtohen vetëm virtualet/simulimet dhe ofertat që nuk janë ndeshje. Filtrat e datës të zgjedhur shprehimisht nga përdoruesi mbeten opsionalë.
+
+
+## Zgjedhje e adminit për numrin e parandeshjeve — 2026-11-05
+
+Përdoruesi autorizon kufi publikimi të zgjedhur shprehimisht nga administratori: 0 = të gjitha; X pozitiv = maksimumi X parandeshje, pa përjashtim që e tejkalon kufirin për ligat prioritare. Burimi ruan gjithë futbollin real dhe historikun. Live mbetet pa kufi. Fshehja individuale dhe të gjitha mbrojtjet e tjera ruhen.

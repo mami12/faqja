@@ -1010,7 +1010,7 @@ async function boot() {
         io.emit('matches:live',{at:new Date().toISOString(),counts,matches:liveBoardFacts(matches)});
       },
       selectRows:rows=>{
-        const visible=selectPublishedMatches(rows.filter(r=>!['closed','uncovered','ended'].includes(r.status))).rows;
+        const visible=selectPublishedMatches(rows.filter(r=>!['closed','uncovered','ended'].includes(r.status)),{prematchLimit:0}).rows;
         return visible;
       },
       getWatchedIds:()=>pendingResults.ids(),

@@ -86,3 +86,8 @@ Prova me API reale: 1424 ndeshje prematch në atë snapshot, 1407 reale dhe 1407
 `test-all-real-football`: 3500 prematch reale, të ardhshme dhe pa çmime, me metadata të saktë. `test-board-markets-browser`: ndeshja pas shtatë ditësh pa tregje shfaqet në 1366/390/320px. `test-match-visibility`: fshehje/rikthim administrativ i pavarur nga pezullimi, SQL/reload/njoftim, si live edhe prematch. Admin → Ndeshjet dhe kuotat → Fshih ndeshjen / Shfaq ndeshjen. Fshehja bllokon edhe bastin në përzgjedhjet e ruajtura dhe nuk ndryshon historikun.
 
 Prova shtesë `test-admin-match-control-browser` kaloi butonat realë Fshih/Shfaq, ruajtjen e pezullimeve dhe kuotave, si dhe pamjet admin 320/390/1024/1366px. Kaluan i gjithë runner-i `test:protected`, typecheck dhe build-i i këtij versioni.
+
+
+## Kufiri i zgjedhur nga administratori
+
+Kërkesa e fundit autorizon fushën prematchLimit: 0 publikon të gjitha, X pozitiv publikon maksimumi X parandeshje, pa tejkalim nga kampionatet me përparësi. Live mbetet i pakufizuar. Furnizimi Zizobet ruan të gjitha ndeshjet pavarësisht këtij kufiri. Përditësimi i kufirit njofton klientët ekzistues. Kaluan testet e API-së reale të izoluar me ruajtje/rinisje, refuzim rolesh dhe rikthim 0; browser1366/390/320px me Ruaj dhe rikuperim nga gabimi; prova1420→100parandeshje+10live. U hoq edhe shpjegimi i vjetër Europa/ndarjet në panel.
