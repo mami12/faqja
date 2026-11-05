@@ -19,7 +19,14 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  const label=norm(line.outcome_name??line.outcomeName);
  const home=norm(match.home??match.home_team),away=norm(match.away??match.away_team);
  const selected=label&&home&&label===home?'1':label&&away&&label===away?'2':null;
- const prepared=selected?{...line,outcome_name:selected,outcomeName:selected}:line;
+ const market=norm(line.market_name??line.marketName);
+ const hasTeam=name=>name&&(' '+market.replace(/[^\p{L}\p{N}]+/gu,' ')+' ').includes(' '+name.replace(/[^\p{L}\p{N}]+/gu,' ')+' ');
+ const homeNamed=hasTeam(home),awayNamed=hasTeam(away);
+ const windowMarket=/\b(?:minutes?|mins?|within|before|until)\b/.test(market)&&['yes','no','po','jo'].includes(label);
+ if(windowMarket&&homeNamed&&awayNamed)throw fail('Nuk identifikohet një skuadër e vetme për intervalin.');
+ const windowSide=windowMarket&&(homeNamed||awayNamed)?(homeNamed?'home team':'away team'):null;
+ const namedLine=windowSide?{...line,market_name:windowSide+' '+market}:line;
+ const prepared=selected?{...line,outcome_name:selected,outcomeName:selected}:namedLine;
  const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners}});
  const name=String(line.market_name??line.marketName??'');
  if(!contract){
