@@ -11,7 +11,7 @@
  * corners and cards, those markets can be graded instead of always being voided.
  */
 import { pool, query } from '../db.mjs';
-import {gradeEventLine,needsEvents} from './event-evidence.mjs';
+import {gradeEventLine,needsEvents,gradeClosedCornerWindow,loadEventEvidence} from './event-evidence.mjs';
 import { getMatchById } from '../matches.mjs';
 import { getResult, captureFinishedMatches, unsettledMatchIds } from './results.mjs';
 import { chargeManagerCommission, refundManagerCommission } from './manager-finance.mjs';
@@ -356,6 +356,33 @@ export async function settleMatch(matchId) {
   return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
+/** Grade only verified, elapsed corner YES/NO windows, independently of a
+ * full-time result. Every other live market remains on the existing final
+ * result path; missing evidence means PENDING rather than a guessed answer.
+ */
+export async function settleClosedCornerWindows({runQuery=query,loadEvidence=loadEventEvidence,update=updatePendingLine,recalc=recalcTicket}={}){
+ const {rows}=await runQuery(`select l.* from app_ticket_line l
+   join app_ticket t on t.id=l.ticket_id
+   where l.status='PENDING' and t.status='PENDING'
+     and l.market_name ~* 'corner'
+     and l.market_name ~* '(minute|from)'
+     and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
+   order by l.match_id,l.id`);
+ const cache=new Map(),tickets=new Set();let graded=0;
+ for(const line of rows){
+  const id=String(line.match_id);
+  if(!cache.has(id))cache.set(id,await loadEvidence(id).catch(()=>null));
+  const status=gradeClosedCornerWindow(line,cache.get(id));
+  if(status!== 'WON'&&status!=='LOST')continue;
+  if(await update(line.id,status,line.ticket_id)){
+   graded++;tickets.add(line.ticket_id);
+  }
+ }
+ const closed=[];
+ for(const id of tickets){const ticket=await recalc(id);if(ticket)closed.push(ticket);}
+ return {graded,closed};
+}
+
 /** Line grading commits before ticket payment. A crash or transient database
  * error in between must not strand an otherwise resolved ticket forever.
  * Reuse the existing locked, idempotent payment transaction for every retry.
@@ -390,13 +417,16 @@ export async function settleAll() {
     try { results.push(await settleMatch(id)); }
     catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
   }
+  let windows={graded:0,closed:[]};
+  try {windows=await settleClosedCornerWindows();}
+  catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
   const recovered = await recoverResolvedTickets();
 
   return {
     captured,
     matches: ids.length,
-    lines: results.reduce((acc, r) => acc + r.settled, 0),
-    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + recovered.length,
+    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded,
+    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + recovered.length,
     recovered: recovered.length,
   };
 }
