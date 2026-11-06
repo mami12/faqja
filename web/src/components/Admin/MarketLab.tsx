@@ -160,3 +160,4 @@ export default function MarketLab(){
    </>}
   <p className="text-xs text-text-secondary">PASS kërkon përputhje të dy kontrolleve; INCONCLUSIVE tregon mungesë prove, jo bast të pavlefshëm. Rezultatet janë virtuale. Përdoruesit dhe kuletat reale nuk preken.</p>
  </section>;
+}
