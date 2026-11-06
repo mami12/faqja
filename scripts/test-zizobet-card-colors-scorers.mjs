@@ -40,7 +40,10 @@ const db=new PGlite();try{
  await capture(frame('red_card'),24000);assert.equal(await judge(r),null);
  await capture(frame('red_card'),30000);assert.equal(await judge(r),'WON');
  await capture(frame('red_card',true),36000);assert.equal(await judge(p),null);
- await capture(frame('red_card',true),42000);assert.equal(await judge(p),null);
+ await capture(frame('red_card',true),42000);
+ const rawGoal=(await q("select own_goal,player_name from app_match_event_fact where match_id=$1 and kind='goal' and active",[matchId])).rows[0];
+ assert.equal(rawGoal?.own_goal,true,'Own goal correction must be saved before settlement');
+ assert.equal(await judge(p),null,'An own goal must not pay a goalscorer bet');
  const facts=(await q('select kind,card_color,own_goal from app_match_event_fact where match_id=$1 and active',[matchId])).rows;
  assert.equal(facts.find(f=>f.kind==='card').card_color,'red');
  assert.equal(facts.find(f=>f.kind==='goal').own_goal,true);
