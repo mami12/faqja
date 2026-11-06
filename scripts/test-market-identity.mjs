@@ -130,6 +130,14 @@ for (const [name, translated] of [['Total', 'Total'], ['Correct score', 'Correct
 }
 assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
 assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Total (4.5)');
+
+const providerFirst=mk('Next Goal 1st','',0,'OTHER','zz75001@eyJzZXEiOjF9');
+const providerSecond=mk('Next Goal 2nd','',0,'OTHER','zz75002@eyJzZXEiOjJ9');
+assert.notEqual(ui.marketGroupKey(providerFirst),ui.marketGroupKey(providerSecond),
+ 'Match detail must never group goal #1 and goal #2 as one Next Goal offer');
+assert.equal(ui.marketDisplayTitle(providerFirst,'al'),'Next Goal 1st');
+assert.equal(ui.marketDisplayTitle(providerSecond,'al'),'Next Goal 2nd');
+
 assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Corners. Result');
 assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Yellow cards. Total');
 assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Total Corners (9.5)');
