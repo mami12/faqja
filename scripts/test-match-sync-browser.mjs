@@ -96,7 +96,7 @@ try {
   for(const key of ['cache-control','cdn-cache-control','cloudflare-cdn-cache-control'])assert.match(response.headers.get(key),/no-store/);
   const polling=await fetch(origin+'/socket.io/?EIO=4&transport=polling');
   for(const key of ['cache-control','cdn-cache-control','cloudflare-cdn-cache-control'])assert.match(polling.headers.get(key),/no-store/);
-  browser=await puppeteer.launch({headless:true});
+  browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox']});
   const open=async(name,mobile=false)=>{
     const page=await browser.newPage();
     page.setDefaultTimeout(15000);
