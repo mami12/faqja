@@ -70,6 +70,7 @@ jobs:
           node scripts/test-prematch-market-verification.mjs
           node scripts/test-zizobet-partial-interval-evidence.mjs
           node scripts/test-zizobet-window-settlement.mjs
+          node scripts/test-live-financial-safety.mjs
           node scripts/test-zizobet-info-history.mjs
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
