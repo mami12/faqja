@@ -3,8 +3,6 @@ import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
 import {MATCH_EVENT_FACT_SQL} from './match-event-facts.mjs';
 import {LIVE_OBSERVATION_SQL} from './live-observation-store.mjs';
-import {LIVE_MARKET_LAB_SQL} from './live-market-lab.mjs';
-import {REAL_MARKET_LAB_SQL} from './real-market-lab-schema.mjs';
 import {FOOTBALL_INFORMATION_SQL} from '../stats-providers/football-information.mjs';
 /**
  * Ledger schema - users, money, tickets.
@@ -224,6 +222,8 @@ create table if not exists app_ticket_line (
 alter table app_ticket_line add column if not exists builder_legs jsonb;
 -- Frozen goal/corner/window/count contract accepted with the exact ticket quote.
 alter table app_ticket_line add column if not exists live_contract jsonb;
+-- Always retain the original provider offer and the exact accepted structured terms.
+alter table app_ticket_line add column if not exists accepted_contract jsonb;
 create index if not exists app_ticket_line_ticket_idx on app_ticket_line (ticket_id);
 create index if not exists app_ticket_line_match_idx  on app_ticket_line (match_id);
 
@@ -377,8 +377,6 @@ create table if not exists app_manual_review_notice (
   first_seen_at timestamptz not null
 );
 ${LIVE_OBSERVATION_SQL}
-${LIVE_MARKET_LAB_SQL}
-${REAL_MARKET_LAB_SQL}
 ${FOOTBALL_INFORMATION_SQL}
 ${MATCH_EVENT_FACT_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
