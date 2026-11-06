@@ -49,6 +49,16 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
   if(relevant.some(event=>!validSide.has(event.team)||!Number.isInteger(event.minute)||
       event.minute<0||event.minute>130||event.id==null||String(event.id)===''||
       (event.seconds!=null&&(!Number.isFinite(event.seconds)||event.seconds<0))))continue;
+  // Only compare complete provider event lists with its own live counters.
+  if(relevant.filter(e=>e.team==='home').length!==counts.home||
+     relevant.filter(e=>e.team==='away').length!==counts.away)continue;
+  // Drop out-of-order or stale samples; they cannot rewrite accepted facts.
+  const earlier=await execute(`select through_minute,complete
+     from app_match_event_coverage where match_id=$1 and provider='zizobet' and kind=$2 for update`,
+     [matchId,kind]);
+  const previous=earlier.rows[0];
+  if(previous&&(Number(previous.through_minute)>through||
+    (previous.complete===true&&frame.ended!==true)))continue;
   const identifiers=relevant.map(e=>String(e.id));
   if(new Set(identifiers).size!==identifiers.length)continue;
   const facts=relevant.map(e=>({id:String(e.id),team:e.team,minute:e.minute,seconds:e.seconds??null,
@@ -119,6 +129,8 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
    from ordered
  )
  select a.*,c.through_minute,c.count_home,c.count_away,c.complete,
+  exists(select 1 from app_live_event_recovery g
+    where g.match_id=$1 and g.status='AWAITING_BACKUP_API' and $9::uuid=any(g.line_ids)) as open_recovery_gap,
    (select team from ordered where ordinal=$8) as nth_team,
    (select minute from ordered where ordinal=$8) as nth_minute,
    (select same_time from ordered where ordinal=$8) as nth_same_time,
@@ -134,9 +146,12 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  [line.match_id,c.event,
   c.kind==='interval-result'?c.fromSeconds/60:c.from??null,
   c.kind==='interval-result'?(c.toExclusiveSeconds-1)/60:c.to??null,
-  c.side??null,c.playerId??null,c.playerName??null,c.target??1]);
+  c.side??null,c.playerId??null,c.playerName??null,c.target??1,line.id]);
  const data=rows[0];
- if(!data||data.through_minute==null)return null;
+ if(!data||data.through_minute==null||data.open_recovery_gap===true)return null;
+ // A partial/corrected frame must not silently reclassify a missing event.
+ if(Number(data.home)!==Number(data.count_home)||
+    Number(data.away)!==Number(data.count_away))return null;
  const full=!!(result&&data.complete===true&&
     (c.event!=='goal'||(data.home===Number(result.home_score)&&data.away===Number(result.away_score))));
  const through=Number(data.through_minute);
