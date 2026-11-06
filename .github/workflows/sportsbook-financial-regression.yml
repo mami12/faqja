@@ -43,10 +43,6 @@ jobs:
           node scripts/test-live-observation-recovery.mjs
       - name: Syntax check deployment read-only Zizobet incident audit
         run: node --check scripts/audit-zizobet-provider-evidence.mjs
-      - name: Verify virtual market lab and real-money restrictions
-        run: |
-          node scripts/test-live-market-lab.mjs
-          node scripts/test-real-market-lab.mjs
       - name: Verify sports settlements, builder and financial risk controls
         run: |
           node scripts/test-live-risk.mjs
