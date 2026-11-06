@@ -47,7 +47,10 @@ assert.deepEqual(missingSupplementalNeeds(['fouls','statistics'],{
 }),[],'Other APIs supplied verified fouls; AiScore is unnecessary');
 assert.deepEqual(missingSupplementalNeeds(['player','timeline'],{
  primaryEvents:{events:[{type:'goal',player:'Test scorer'}]}
-}),[],'PRIMARY already supplies scorer');
+}),['player','timeline'],'A scorer string without own-goal evidence is still ambiguous');
+assert.deepEqual(missingSupplementalNeeds(['player','timeline'],{
+ primaryEvents:{events:[{type:'goal',player:'Test scorer',ownGoal:false}]}
+}),[],'PRIMARY explicitly confirms a non-own goalscorer; supplemental lookup is unnecessary');
 assert.equal(canonicalHttpError(403),'AUTH_REQUIRED');
 assert.equal(canonicalHttpError(429),'RATE_LIMITED');
 
