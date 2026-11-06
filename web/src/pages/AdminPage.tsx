@@ -1,8 +1,9 @@
 import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
 import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
+import MarketLab from '../components/Admin/MarketLab';
 import MissingMarkets from '../components/Admin/MissingMarkets';
 import MarketCatalog from '../components/Admin/MarketCatalog';
-import { useEffect,useState } from 'react';
+import { useEffect,useMemo,useRef,useState } from 'react';
 import {apiClient} from '../api/client';
 import ManualReviewQueue from '../components/Admin/ManualReviewQueue';
 import Header from '../components/Layout/Header';
@@ -21,9 +22,9 @@ import CasinoSettings from '../components/Admin/CasinoSettings';
 import FinancialReset from '../components/Admin/FinancialReset';
 import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing, FlaskConical, Search, X, Command } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch' | 'market-lab';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Puna e përditshme',
@@ -31,6 +32,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
       { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
+      { id:'market-lab',label:'Testo tregjet LIVE',description:'Bileta virtuale dhe audit i pavarur',icon:FlaskConical },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
       { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
     ],
@@ -71,6 +73,22 @@ export default function AdminPage() {
   const { t, lang } = useLanguage();
   const tr = (value: string) => adminUiText(value, lang);
   const [tab, setTab] = useState<AdminTab>('dashboard');
+  const [menuSearch,setMenuSearch]=useState('');
+  const searchRef=useRef<HTMLInputElement>(null);
+  const filteredSections=useMemo(()=>sections.map(section=>({...section,
+    items:section.items.filter(item=>(item.label+' '+item.description+' '+section.title)
+      .toLowerCase().includes(menuSearch.toLowerCase().trim()))}))
+    .filter(section=>section.items.length>0),[menuSearch]);
+  useEffect(()=>{
+    const handle=(event:KeyboardEvent)=>{
+      if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){
+        event.preventDefault();searchRef.current?.focus();
+      }
+      if(event.key==='Escape'&&document.activeElement===searchRef.current)setMenuSearch('');
+    };
+    window.addEventListener('keydown',handle);
+    return()=>window.removeEventListener('keydown',handle);
+  },[]);
   const [reviewCount,setReviewCount]=useState(0);
   const [notices,setNotices]=useState<ReviewNotice[]>([]);
   const [reviewLine,setReviewLine]=useState<string|null>(null);
@@ -104,7 +122,7 @@ export default function AdminPage() {
     <div className="min-h-[100dvh] bg-primary flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0 w-full">
-        <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col border-r border-tertiary bg-secondary/75 px-3 py-5">
+        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:max-h-screen lg:overflow-y-auto w-64 xl:w-72 shrink-0 flex-col self-start border-r border-tertiary bg-secondary/75 px-3 py-5">
           <div className="flex items-center gap-3 px-3 pb-6 border-b border-tertiary/70">
             <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-accent-green/15 text-accent-green">
               <ShieldCheck size={22} />
@@ -114,8 +132,14 @@ export default function AdminPage() {
               <div className="text-xs text-text-secondary">{tr("Qendra e kontrollit")}</div>
             </div>
           </div>
-          <nav aria-label={tr("Menuja e administratorit")} className="mt-5 space-y-5">
-            {sections.map(section => (
+          <label className="mt-4 flex min-h-11 items-center gap-2 rounded-xl border border-tertiary bg-primary px-3 text-text-secondary">
+            <Search size={17} className="shrink-0"/>
+            <input ref={searchRef} type="search" value={menuSearch} onChange={e=>setMenuSearch(e.target.value)}
+              aria-label="Kërko një funksion të administratorit" placeholder="Kërko funksionin..." className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white outline-none"/>
+            <kbd className="rounded border border-tertiary px-1.5 text-[10px]">Ctrl K</kbd>
+          </label>
+          <nav aria-label={tr("Menuja e administratorit")} className="mt-4 space-y-4">
+            {filteredSections.map(section => (
               <div key={section.title}>
                 <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">{tr(section.title)}</div>
                 <div className="space-y-1">
@@ -147,10 +171,16 @@ export default function AdminPage() {
         </aside>
         <div className="min-w-0 flex-1">
           <div className="lg:hidden sticky top-0 z-20 border-b border-tertiary bg-secondary/95 backdrop-blur-md">
+            <label className="mx-3 mt-3 flex min-h-10 items-center gap-2 rounded-lg border border-tertiary bg-primary px-3 text-text-secondary">
+              <Search size={16}/>
+              <input type="search" value={menuSearch} onChange={e=>setMenuSearch(e.target.value)}
+                aria-label="Kërko seksion në admin" placeholder="Kërko një funksion..." className="min-w-0 flex-1 bg-transparent py-2 text-sm text-white outline-none"/>
+              {menuSearch&&<button type="button" onClick={()=>setMenuSearch('')} aria-label="Pastro kërkimin"><X size={16}/></button>}
+            </label>
             <label className="block px-3 py-2 text-xs font-semibold">
               {tr("Menuja e administratorit")}
               <select className="mt-1 min-h-11 w-full rounded-lg border border-tertiary bg-primary px-3 text-sm text-white" value={tab} onChange={event=>go(event.target.value as AdminTab)}>
-                {sections.map(section=><optgroup key={section.title} label={tr(section.title)}>
+                {filteredSections.map(section=><optgroup key={section.title} label={tr(section.title)}>
                   {section.items.map(item=><option key={item.id} value={item.id}>{tr(item.label)}{item.id==='manual-review'&&reviewCount>0?` (${reviewCount})`:''}</option>)}
                 </optgroup>)}
               </select>
@@ -186,6 +216,7 @@ export default function AdminPage() {
               </div>
             </div>}
             {tab === 'dashboard' && <AdminDashboard />}
+            {tab === 'market-lab' && <MarketLab />}
             {tab === 'users' && <UserManagement />}
             {tab === 'market-catalog' && <MarketCatalog />}
             {tab === 'matches' && <MatchControl />}
@@ -198,7 +229,8 @@ export default function AdminPage() {
                <ManualReviewQueue key={reviewLine??'all'} onlyLineId={reviewLine??undefined} />
              </>}
              {tab === 'stitch' && <StitchSportsDesk sections={[
-               {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
+               {id:'market-lab',title:'Testo tregjet LIVE',panel:()=> <MarketLab />},
+                {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
                {id:'transactions',title:'Transaksionet',panel:()=> <TransactionHistoryPage embedded />},
                {id:'tickets',title:'Biletat dhe historiku',panel:()=> <TicketAudit />},
                {id:'review',title:'Verifikimet e hapura',panel:()=> <ManualReviewQueue />},
