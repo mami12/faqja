@@ -23,8 +23,8 @@ import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './s
 import {goalTotalContract} from './goal-total-contract.mjs';
 import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
-import {auditSettledLiveSelections} from './stitch-settlement-audit.mjs';
 import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
+import {gradeStoredEventContract,SUPPORTED_FACT_KINDS} from './match-event-facts.mjs';
 import {backfillPendingTeamGoalContracts} from './live-contract-backfill.mjs';
 import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
 
@@ -89,23 +89,23 @@ export function hasRequiredSettlementEvidence(line, result) {
 }
 
 /**
- * 'WON' | 'LOST' | 'VOID' for one stored line against a stored result.
- * VOID means "we cannot prove it" - the stake for that line is returned.
+ * 'WON' | 'LOST' | 'VOID' or null (insufficient evidence).
+ * VOID is allowed only for a proved settlement-rule push/cancellation.
  */
 export function gradeLine(line, result) {
-  if(needsEvents(line)&&!Array.isArray(line.builder_legs))return gradeEventLine(line,result)??'VOID';
+  if(needsEvents(line)&&!Array.isArray(line.builder_legs))return gradeEventLine(line,result)??null;
   if (line.builder_legs !== null && line.builder_legs !== undefined) {
     const legs = line.builder_legs;
-    if (!Array.isArray(legs) || legs.length < 2 || legs.length > 5 || legs.some(l => l.builder_legs)) return 'VOID';
+    if (!Array.isArray(legs) || legs.length < 2 || legs.length > 5 || legs.some(l => l.builder_legs)) return null;
     const statuses = legs.map(leg => gradeLine(leg,result));
     if (statuses.includes('LOST')) return 'LOST';
-    return statuses.every(s => s === 'WON') ? 'WON' : 'VOID';
+    return statuses.every(s => s === 'WON') ? 'WON' : statuses.every(s => ['WON','VOID'].includes(s)) ? 'VOID' : null;
   }
   // 1H totals and BTTS cannot be graded from the full-time score. Their
   // original ticket contract is snapshotted in market_name.
-  if (!hasRequiredSettlementEvidence(line, result)) return 'VOID';
+  if (!hasRequiredSettlementEvidence(line, result)) return null;
   if (isStatisticMarket(line)) return gradeStatisticLine(line,result);
-  if (isSecondHalfLine(line.market_name)) return 'VOID'; // no 2H score snapshot
+  if (isSecondHalfLine(line.market_name)) return null; // no 2H score snapshot
   const half = isFirstHalfLine(line.market_name);
   const home = Number(half ? result.half_home_score : result.home_score);
   const away = Number(half ? result.half_away_score : result.away_score);
@@ -131,7 +131,7 @@ export function gradeLine(line, result) {
 
   switch (type) {
     case 'HALF_RESULT_BTTS': {
-      if (result.half_home_score == null || result.half_away_score == null) return 'VOID';
+      if (result.half_home_score == null || result.half_away_score == null) return null;
       const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
         ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
       return gradeResultBtts(selection, result.half_home_score, result.half_away_score);
@@ -146,7 +146,7 @@ export function gradeLine(line, result) {
     case 'RESULT_BTTS': {
       const selection = parseResultBttsOutcome(line.outcome_key, result.home_team, result.away_team)
         ?? parseResultBttsOutcome(line.outcome_name, result.home_team, result.away_team);
-      if (!selection) return 'VOID'; // Never grade an unidentified combination as ordinary BTTS.
+      if (!selection) return null; // Never grade an unidentified combination as ordinary BTTS.
       return gradeResultBtts(selection, home, away);
     }
     case '1X2': {
@@ -155,7 +155,7 @@ export function gradeLine(line, result) {
       if (key === '2' || key === 'away' || /^away/.test(name)) return decide(awayWin);
       if (isHomeName(norm(name))) return decide(homeWin);
       if (isAwayName(norm(name))) return decide(awayWin);
-      return 'VOID';
+      return null;
     }
 
     case 'DC': {
@@ -166,13 +166,13 @@ export function gradeLine(line, result) {
       if (/^1x|homeordraw/.test(flat)) return decide(homeWin || draw);
       if (/^12|homeoraway/.test(flat)) return decide(homeWin || awayWin);
       if (/^x2|draworaway/.test(flat)) return decide(awayWin || draw);
-      return 'VOID';
+      return null;
     }
 
     case 'BTTS':
       if (key === 'yes' || /^yes/.test(name)) return decide(bothScored);
       if (key === 'no' || /^no/.test(name)) return decide(!bothScored);
-      return 'VOID';
+      return null;
 
     case 'TOTAL':
     case 'CORNERS':
@@ -181,35 +181,35 @@ export function gradeLine(line, result) {
       if(type==='TOTAL'&&goalTotal?.scope==='home')target=home;
       if(type==='TOTAL'&&goalTotal?.scope==='away')target=away;
       if (type === 'CORNERS') {
-        if (!cornerTotal) return 'VOID';
+        if (!cornerTotal) return null;
         const h=num(result.corners_home),a=num(result.corners_away);
         if (cornerTotal.scope==='home' && h===null || cornerTotal.scope==='away' && a===null ||
-            cornerTotal.scope==='total' && (h===null || a===null)) return 'VOID';
+            cornerTotal.scope==='total' && (h===null || a===null)) return null;
         target = cornerTotal.scope==='home'?h:cornerTotal.scope==='away'?a:h+a;
       }
       if (type === 'CARDS') {
-        if (result.cards_home === null || result.cards_away === null) return 'VOID';
+        if (result.cards_home === null || result.cards_away === null) return null;
         target = Number(result.cards_home) + Number(result.cards_away);
       }
-      if (lineValue === null) return 'VOID';
+      if (lineValue === null) return null;
       if (key === 'over' || /^over/.test(name)) return decide(target > lineValue);
       if (key === 'under' || /^under/.test(name)) return decide(target < lineValue);
-      return 'VOID';
+      return null;
     }
 
     case 'HANDICAP': {
-      if (lineValue === null) return 'VOID';
+      if (lineValue === null) return null;
       const side = key === '1' || /^home/.test(name) || isHomeName(norm(name)) ? 'home' : key === '2' || /^away/.test(name) || isAwayName(norm(name)) ? 'away' : null;
-      if (!side) return 'VOID';
+      if (!side) return null;
       const adjusted = (side === 'home' ? home : away) + lineValue;
       const opponent = side === 'home' ? away : home;
-      if (adjusted === opponent) return 'VOID'; // push: stake returned
+      if (adjusted === opponent) return 'VOID'; // verified handicap push
       return decide(adjusted > opponent);
     }
 
     default:
       // anything we cannot judge (player props, halves, unknown markets) is voided
-      return 'VOID';
+      return null;
   }
 }
 
@@ -338,11 +338,17 @@ export async function settleMatch(matchId) {
   const tickets = new Set();
   let graded = 0;
   for (const line of lines) {
-    if (!hasRequiredSettlementEvidence(line, result)) continue;
-    const status = gradeLine(line, result);
-    const updated = await updatePendingLine(line.id,status,line.ticket_id);
-    if (updated > 0) graded++;
-    tickets.add(line.ticket_id);
+    let status=null;
+    // A frozen event contract is graded against PostgreSQL provider facts,
+    // never parsed from a translated/displayed name at settlement time.
+    if(line.live_contract&&SUPPORTED_FACT_KINDS.has(line.live_contract.kind)){
+      status=await gradeStoredEventContract(line,result,{execute:query});
+    }else if(hasRequiredSettlementEvidence(line,result)){
+      status=gradeLine(line,result);
+    }
+    if(!['WON','LOST','VOID'].includes(status))continue; // incomplete feed => PENDING
+    const updated=await updatePendingLine(line.id,status,line.ticket_id);
+    if(updated>0){graded++;tickets.add(line.ticket_id);}
   }
 
   const closed = [];
@@ -447,8 +453,6 @@ export async function settleAll() {
   try{preview=await createLiveSettlementPreviews();}
   catch(error){console.warn('[settle] live shadow preview failed:',error.message);}
   const recovered = await recoverResolvedTickets();
-  try {await auditSettledLiveSelections();}
-  catch(error){console.warn('[settle] Stitch audit failed:',error.message);}
 
   return {
     captured,
