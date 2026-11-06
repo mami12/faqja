@@ -198,7 +198,9 @@ export function gradeLine(line, result) {
     }
 
     case 'HANDICAP': {
-      if (lineValue === null) return null;
+      if (lineValue === null || !Number.isInteger(lineValue*2)) return null;
+      // Asian quarter handicaps require split-stake settlement; never
+      // mispay them as a simple win/loss or silently void the wager.
       const side = key === '1' || /^home/.test(name) || isHomeName(norm(name)) ? 'home' : key === '2' || /^away/.test(name) || isAwayName(norm(name)) ? 'away' : null;
       if (!side) return null;
       const adjusted = (side === 'home' ? home : away) + lineValue;
@@ -345,6 +347,9 @@ export async function settleMatch(matchId) {
       status=await gradeStoredEventContract(line,result,{execute:query});
     }else if(hasRequiredSettlementEvidence(line,result)){
       status=gradeLine(line,result);
+      // In legacy/nonstructured markets VOID can mean unknown parsing,
+      // not a genuine provider cancellation. Keep such tickets PENDING.
+      if(status==='VOID')status=null;
     }
     if(!['WON','LOST','VOID'].includes(status))continue; // incomplete feed => PENDING
     const updated=await updatePendingLine(line.id,status,line.ticket_id);
