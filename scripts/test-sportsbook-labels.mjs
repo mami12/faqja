@@ -7,6 +7,11 @@ const module = { exports: loadUiModule(new URL('../web/src/utils/sportsbookLabel
 const zizoTranslations=loadUiModule(new URL('../web/src/i18n/zizobetMarketLabels.ts',import.meta.url));
 assert.equal(zizoTranslations.translateZizobetMarketLabel('Which team wins race to 6 goals'),'Skuadra që arrin e para 6 gola');
 assert.equal(zizoTranslations.translateZizobetMarketLabel('Which team wins race to 6 corners'),'Skuadra që arrin e para 6 goditje këndore');
+for(const title of ['Next Goal 1st','Next Goal 2nd','Next Goal 3rd','Next Goal 4th','Next Corner 2nd']){
+ assert.equal(zizoTranslations.translateZizobetMarketLabel(title),title,
+  'Original numbered market title must stay in English: '+title);
+}
+
 
 const translations = {
   'markets.match_result': 'Rezultati i ndeshjes (1X2)',
@@ -23,6 +28,13 @@ const translations = {
   'outcomes.no': 'Jo',
 };
 const translate = (key) => translations[key] ?? key;
+for(const title of ['Next Goal 1st','Next Goal 2nd','Next Goal 3rd','Next Corner 2nd']){
+ assert.equal(module.exports.translateMarketName(title,translate),title,
+  'Albanian display must not collapse a numbered source title: '+title);
+}
+assert.equal(module.exports.translateMarketName('Next Goal',translate),'Goli i radhës',
+ 'Only the truly unnumbered NEXT market retains the generic description');
+
 const expectedExactGoals = 'Numri i saktë i golave të shënuar nga Balestier Khalsa';
 
 assert.equal(
