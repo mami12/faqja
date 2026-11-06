@@ -28,7 +28,9 @@ createRoot(document.getElementById('root')).render(React.createElement(Desk,{sec
 let vite,server,browser;
 try{
  vite=await createServer({root:resolve('web'),configFile:false,plugins:[react()],server:{middlewareMode:true,hmr:false},appType:'custom'});
- const app=express();
+ const app=express(), decisions=[];
+ app.use(express.json());
+ app.post('/app/api/admin/manual-settlement',(req,res)=>{decisions.push(req.body);res.json({changed:[req.body.lineId]});});
  app.get('/app/api/admin/stitch-overview',(_req,res)=>res.json(overview));
  app.get('/app/api/admin/settlement-review-queue',(_req,res)=>res.json({items}));
  app.get('/',async(_req,res)=>res.type('html').send(await vite.transformIndexHtml('/',html)));
@@ -49,6 +51,18 @@ try{
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Kontrollo përzgjedhjen').click());
  await page.waitForFunction(()=>document.querySelector('select')&&document.body.textContent.includes('ticket-a'));
  assert.equal(await page.evaluate(()=>document.body.textContent.includes('Ndeshje tjetër')),false);
+ await page.select('select','WON');
+ await page.type('input[placeholder="Arsyeja e kontrolluar"]','Korneri u konfirmua');
+ await page.type('input[placeholder="API / raport zyrtar / verifikim"]','Feed testimi');
+ const clickText=text=>page.evaluate(label=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===label).click(),text);
+ await clickText('Ruaj vendimin');
+ await page.waitForSelector('[aria-label="Miratimi i vendimit"]');
+ await clickText('Jo, kthehu');
+ assert.deepEqual(decisions,[]);
+ await clickText('Ruaj vendimin');
+ await clickText('Po, mirato');
+ await page.waitForFunction(()=>document.body.textContent.includes('Vendimi u regjistrua'));
+ assert.deepEqual(decisions,[{lineId:'line-a',status:'WON',reason:'Korneri u konfirmua',source:'Feed testimi'}]);
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Përdoruesit').click());
  await page.waitForFunction(()=>document.body.textContent.includes('Paneli i përdoruesve')&&!document.querySelector('select'));
  assert.deepEqual(errors,[]);
