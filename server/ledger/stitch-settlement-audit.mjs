@@ -68,4 +68,5 @@ select a.id,a.line_id,a.actual_status,a.expected_status,a.verdict,a.evidence,a.c
        a.evidence->>'ticketId' as ticket_id,a.evidence->>'matchName' as match_name,
        a.evidence->>'marketName' as market_name,a.evidence->>'outcomeName' as outcome_name
 from (select distinct on(line_id) * from app_stitch_settlement_audit order by line_id,id desc) a
+where (not $2::boolean or a.verdict='MISSING_EVIDENCE')
 order by (a.verdict='MISMATCH') desc,a.checked_at desc,a.id desc limit $1`;
