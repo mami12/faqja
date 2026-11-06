@@ -60,7 +60,10 @@ jobs:
           npm ci
           npm --prefix web ci
       - name: Validate live goal, corner, card and count contract rules
-        run: node scripts/test-live-contract-rules.mjs
+        run: |
+          node scripts/test-live-contract-rules.mjs
+          node scripts/test-primary-market-verification.mjs
+          node scripts/test-verified-live-settlement.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
       - name: Validate virtual live-market lab and independent second check
