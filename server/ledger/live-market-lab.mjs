@@ -46,7 +46,7 @@ const MARKET_GROUPS=Object.freeze(['next-goal','numbered-goal','next-corner','ra
  'goal-window','corner-window','card-window','foul-window','over-under','exact','range']);
 export {MARKET_GROUPS};
 const asInt=(v,min,max,defaultValue)=>Number.isSafeInteger(Number(v))&&Number(v)>=min&&Number(v)<=max?Number(v):defaultValue;
-const testGroup=c=>c.kind==='sequence'?(c.event==='goal'?(c.target===1?'numbered-goal':'next-goal'):'next-corner'):
+const testGroup=(c,marketName='')=>c.kind==='sequence'?(c.event==='goal'?(/^next\s+goal\b/i.test(marketName)?'next-goal':'numbered-goal'):'next-corner'):
  c.kind==='race'?'race-corners':
  c.kind==='window'?c.event+'-window':
  c.kind==='exact'?'exact':c.kind==='range'?'range':
@@ -71,7 +71,7 @@ export function selectLiveMarketCases(matches,{limit=36,perGroup=4}={}){
     let contract;
     try{contract=frozenLiveContract(original,row);}catch{continue;}
     if(!contract)continue;
-    const group=testGroup(contract);
+    const group=testGroup(contract,market.name);
     if(!group||!Object.hasOwn(counts,group)||counts[group]>=perGroup||candidates.length>=limit)continue;
     // First/Next goals are only grouped as next when the server actually
     // offers them; no fabricated odds or selections.
