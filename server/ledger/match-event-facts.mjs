@@ -15,11 +15,17 @@ create table if not exists app_match_event_fact (
  seconds numeric(12,3),
  player_id text,
  player_name text,
+ aiscore_player_id text,
+ aiscore_player_name text,
+ aiscore_verified boolean not null default false,
  phase text,
  active boolean not null default true,
  observed_at timestamptz not null default now(),
  primary key(match_id,provider,provider_event_id,kind)
 );
+alter table app_match_event_fact add column if not exists aiscore_player_id text;
+alter table app_match_event_fact add column if not exists aiscore_player_name text;
+alter table app_match_event_fact add column if not exists aiscore_verified boolean not null default false;
 create index if not exists app_match_event_fact_lookup
  on app_match_event_fact(match_id,provider,kind,active,minute,seconds);
 create table if not exists app_match_event_coverage (
@@ -124,7 +130,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     count(*) filter(where ($3::numeric is null or minute >= $3)
       and ($4::numeric is null or minute <= $4) and team='away')::int as window_away,
     count(*) filter(where (player_id is not null and player_id=$6)
-      or ($6::text is null and player_name is not null and lower(player_name)=lower($7)))::int as player_goals,
+      or ($6::text is null and (
+       (player_name is not null and lower(player_name)=lower($7)) or
+       (aiscore_verified=true and aiscore_player_name is not null
+         and lower(aiscore_player_name)=lower($7)))))::int as player_goals,
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
