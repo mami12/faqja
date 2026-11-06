@@ -21,7 +21,7 @@ const corners=marketInformationNeeds([{market_name:'Race to 7 Corners'},
  {market_name:'Total Fouls'},{market_name:'Red Cards'}]);
 for(const key of ['corner','card','statistics','timeline'])assert.ok(corners.includes(key),key);
 assert.deepEqual(marketInformationNeeds([{market_name:'Full Time Result'}]),[]);
-const map={aiscore_id:'j374oi0xz04sgqo',thesports01_id:'4578950'};
+const map={aiscore_id:'j374oi0xz04sgqo',thesports01_id:'4578950',mapping_status:'ADMIN_SUPPLIED_UNVERIFIED'};
 assert.deepEqual(selectedInformationEndpoints(map,[]),[]);
 const endpoints=selectedInformationEndpoints(map,goal);
 assert.ok(endpoints.some(x=>x.url.includes('/match/s?match_id=j374oi0xz04sgqo')));
