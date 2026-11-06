@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 /**
  * Persistent PRIMARY-feed football incidents. Provider IDs and player names are
  * preserved verbatim. Only an incident list reconciled with the same provider's
@@ -39,11 +40,16 @@ create table if not exists app_match_event_coverage (
  observed_at timestamptz not null default now(),
  primary key(match_id,provider,kind)
 );
+alter table app_match_event_coverage add column if not exists sample_signature text;
+alter table app_match_event_coverage add column if not exists sample_first_seen_at timestamptz;
+alter table app_match_event_coverage add column if not exists confirmed_at timestamptz;
 `;
 const validKind = new Set(['goal','corner','card','foul']);
 const validSide = new Set(['home','away']);
 /** Called INSIDE the existing live-frame SQL transaction. */
-export async function persistVerifiedEventFacts(matchId, frame, execute) {
+export async function persistVerifiedEventFacts(matchId, frame, execute, observedAt=new Date()) {
+ const observed=new Date(observedAt);
+ if(!Number.isFinite(observed.getTime()))throw new Error('Invalid event observation timestamp');
  if(frame?.source!=='zizobet'||!Array.isArray(frame.events))return 0;
  let stored=0;
  for(const kind of validKind){
@@ -59,7 +65,7 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
   if(relevant.filter(e=>e.team==='home').length!==counts.home||
      relevant.filter(e=>e.team==='away').length!==counts.away)continue;
   // Drop out-of-order or stale samples; they cannot rewrite accepted facts.
-  const earlier=await execute(`select through_minute,complete
+  const earlier=await execute(`select through_minute,complete,sample_signature,sample_first_seen_at,confirmed_at
      from app_match_event_coverage where match_id=$1 and provider='zizobet' and kind=$2 for update`,
      [matchId,kind]);
   const previous=earlier.rows[0];
@@ -67,6 +73,12 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
     (previous.complete===true&&frame.ended!==true)))continue;
   const identifiers=relevant.map(e=>String(e.id));
   if(new Set(identifiers).size!==identifiers.length)continue;
+  // An advancing clock is harmless; corrected incident identity/time is not.
+  const signature=crypto.createHash('sha256').update(JSON.stringify({
+   kind,home:counts.home,away:counts.away,ended:frame.ended===true,
+   events:relevant.map(e=>[String(e.id),e.team,e.minute,e.seconds??null])
+     .sort((a,b)=>a[0].localeCompare(b[0]))
+  })).digest('hex');
   const facts=relevant.map(e=>({id:String(e.id),team:e.team,minute:e.minute,seconds:e.seconds??null,
    playerId:e.playerId==null?null:String(e.playerId),
    playerName:typeof e.player==='string'?e.player:null,phase:e.phase??null}));
@@ -89,14 +101,28 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
     id:f.id,team:f.team,minute:f.minute,seconds:f.seconds,player_id:f.playerId,
     player_name:f.playerName,phase:f.phase})))]);
   await execute(`insert into app_match_event_coverage
-    (match_id,provider,kind,through_minute,count_home,count_away,complete)
-    values ($1,'zizobet',$2,$3,$4,$5,$6)
+    (match_id,provider,kind,through_minute,count_home,count_away,complete,
+     sample_signature,sample_first_seen_at,confirmed_at,observed_at)
+    values ($1,'zizobet',$2,$3,$4,$5,$6,$7,$8::timestamptz,null,$8::timestamptz)
     on conflict(match_id,provider,kind) do update
     set through_minute=excluded.through_minute,count_home=excluded.count_home,
-        count_away=excluded.count_away,complete=excluded.complete,observed_at=now()
+        count_away=excluded.count_away,complete=excluded.complete,
+        sample_signature=excluded.sample_signature,
+        sample_first_seen_at=case
+          when app_match_event_coverage.sample_signature=excluded.sample_signature
+          then coalesce(app_match_event_coverage.sample_first_seen_at,excluded.sample_first_seen_at)
+          else excluded.sample_first_seen_at end,
+        confirmed_at=case
+          when app_match_event_coverage.sample_signature=excluded.sample_signature
+            and app_match_event_coverage.sample_first_seen_at is not null
+            and (app_match_event_coverage.confirmed_at is not null or
+              excluded.observed_at-app_match_event_coverage.sample_first_seen_at>=interval '5 seconds')
+          then coalesce(app_match_event_coverage.confirmed_at,excluded.observed_at)
+          else null end,
+        observed_at=excluded.observed_at
     where excluded.through_minute>=app_match_event_coverage.through_minute
        or excluded.complete=true`,
-   [matchId,kind,through,counts.home,counts.away,frame.ended===true]);
+   [matchId,kind,through,counts.home,counts.away,frame.ended===true,signature,observed]);
   stored+=facts.length;
  }
  return stored;
@@ -111,7 +137,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const c=line?.live_contract;
  if(!c||!SUPPORTED_FACT_KINDS.has(c.kind)||!validKind.has(c.event)||typeof execute!=='function')return null;
  const {rows}=await execute(`with covered as (
-   select through_minute,count_home,count_away,complete,observed_at from app_match_event_coverage
+   select through_minute,count_home,count_away,complete,observed_at,confirmed_at from app_match_event_coverage
    where match_id=$1 and provider='zizobet' and kind=$2
  ), ordered as (
    select f.*,row_number() over(order by coalesce(f.seconds,f.minute*60),f.minute,f.provider_event_id) as ordinal,
@@ -152,7 +178,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
- select a.*,c.through_minute,c.count_home,c.count_away,c.complete,c.observed_at,
+ select a.*,c.through_minute,c.count_home,c.count_away,c.complete,c.observed_at,c.confirmed_at,
   (select last_seen_at from app_live_event_cursor where match_id=$1) as second_poll_at,
   exists(select 1 from app_live_event_recovery g
     where g.match_id=$1 and g.status='AWAITING_BACKUP_API' and $9::uuid=any(g.line_ids)) as open_recovery_gap,
@@ -193,11 +219,14 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     Number(data.away)!==Number(data.count_away))return null;
  const full=!!(result&&data.complete===true&&
     (c.event!=='goal'||(data.home===Number(result.home_score)&&data.away===Number(result.away_score))));
- // A financial decision based on a LIVE event needs a later real provider poll.
- // The persisted cursor is updated even when identical frames are deduplicated.
- const first=new Date(data.observed_at).getTime(),second=new Date(data.second_poll_at).getTime();
- const verifiedAgain=full||(Number.isFinite(first)&&Number.isFinite(second)&&second-first>=5000);
- if(!verifiedAgain)return null;
+ // Only a later matching, fully reconciled PRIMARY incident sample can grade.
+ // A changed or incomplete frame advances the cursor but cannot confirm facts.
+ if(data.confirmed_at==null||data.observed_at==null||data.second_poll_at==null)return null;
+ const confirmed=new Date(data.confirmed_at).getTime();
+ const stored=new Date(data.observed_at).getTime();
+ const cursor=new Date(data.second_poll_at).getTime();
+ if(![confirmed,stored,cursor].every(Number.isFinite)||
+    confirmed>stored||stored!==cursor)return null;
  const through=Number(data.through_minute);
  const scopeEnded=full||(Number.isFinite(c.to)&&through>Number(c.to));
  const count=Number(c.side==='home'?data.home:c.side==='away'?data.away:data.total);
