@@ -154,7 +154,9 @@ export function missingSupplementalNeeds(needs,{statistics,review,primaryEvents,
  if(selected.has('player')){
   const events=json(primaryEvents)?.events;
   const goals=Array.isArray(events)?events.filter(e=>e.type==='goal'&&!e.disabled):[];
-  if(goals.length&&goals.every(e=>typeof e.player==='string'&&e.player.trim()))
+  // A player string alone does not establish that the goal was NOT an own goal.
+  // Request verified supplementary identity whenever own-goal status is unknown.
+  if(goals.length&&goals.every(e=>typeof e.player==='string'&&e.player.trim()&&e.ownGoal===false))
     {selected.delete('player');selected.delete('timeline');}
  }
  return [...selected];
