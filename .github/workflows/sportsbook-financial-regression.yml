@@ -35,6 +35,7 @@ jobs:
           node scripts/test-whole-line-sportsbook-push.mjs
           node scripts/test-provider-event-facts-sql.mjs
           node scripts/test-persisted-primary-confirmation.mjs
+          node scripts/test-zizobet-card-colors-scorers.mjs
       - name: Verify two PRIMARY polls, outages, recovery and one wallet credit
         run: |
           node scripts/test-verified-live-settlement.mjs
