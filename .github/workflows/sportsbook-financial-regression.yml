@@ -32,6 +32,8 @@ jobs:
           node scripts/test-zizobet-window-settlement.mjs
           node scripts/test-live-financial-safety.mjs
           node scripts/test-zizobet-info-history.mjs
+          node scripts/test-whole-line-sportsbook-push.mjs
+          node scripts/test-provider-event-facts-sql.mjs
       - name: Verify two PRIMARY polls, outages, recovery and one wallet credit
         run: |
           node scripts/test-verified-live-settlement.mjs
