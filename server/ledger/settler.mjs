@@ -25,6 +25,7 @@ import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
 import {auditSettledLiveSelections} from './stitch-settlement-audit.mjs';
 import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
+import {settlePrimaryLiveTicketLines} from './primary-live-settlement.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -422,6 +423,13 @@ export async function settleAll() {
   let windows={graded:0,closed:[]};
   try {windows=await settleClosedCornerWindows();}
   catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
+  // All accepted user wagers remain REAL. Stitch previews do not affect them;
+  // primary goal/corner evidence can now settle eligible real selection legs.
+  let primaryLive={examined:0,graded:0,held:0,closed:0,source:'ZIZOBET_PRIMARY',mode:'REAL_TICKETS'};
+  try{primaryLive=await settlePrimaryLiveTicketLines({
+    update:updatePendingLine,recalc:recalcTicket,
+  });}
+  catch(error){console.error('[settle] primary goal/corner settlement failed:',error.message);}
   let preview={examined:0,proposed:0,held:0,mode:'SHADOW_ONLY'};
   try{preview=await createLiveSettlementPreviews();}
   catch(error){console.warn('[settle] live shadow preview failed:',error.message);}
@@ -435,6 +443,7 @@ export async function settleAll() {
     lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded,
     closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + recovered.length,
     recovered: recovered.length,
+    primaryLive,
     livePreview:preview,
   };
 }
