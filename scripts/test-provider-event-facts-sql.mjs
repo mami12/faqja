@@ -37,9 +37,9 @@ try{
    [matchId,id,team,minute,seconds]);
  }
  await run(`insert into app_match_event_coverage
-  (match_id,provider,kind,through_minute,count_home,count_away,complete,observed_at)
-  values($1,'zizobet','corner',91,2,1,true,$2)`,
-  [matchId,new Date(now.getTime()-10000)]);
+  (match_id,provider,kind,through_minute,count_home,count_away,complete,observed_at,confirmed_at)
+  values($1,'zizobet','corner',91,2,1,true,$2,$2)`,
+  [matchId,now]);
  await run('insert into app_live_event_cursor(match_id,last_seen_at) values($1,$2)',
   [matchId,now]);
  const result={home_score:0,away_score:0};
