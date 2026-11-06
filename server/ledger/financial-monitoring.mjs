@@ -8,6 +8,7 @@ import {STITCH_SETTLEMENT_AUDIT_ADMIN_SQL} from './stitch-settlement-audit.mjs';
 import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
 import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 import {createMarketLabRun,listMarketLab,refreshMarketLab} from './live-market-lab.mjs';
+import {createRealMarketTestRun,processRealMarketTestQueue,auditRealMarketTests,listRealMarketTests} from './real-market-lab.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
 const splitCents=(amount,keys)=>{
@@ -144,4 +145,34 @@ financialMonitoringRouter.post('/admin/market-lab/runs',safe(async(req,res)=>{
 financialMonitoringRouter.post('/admin/market-lab/refresh',safe(async(req,res)=>{
  if(req.user.status!=='ACTIVE')return res.status(403).json({message:'Vetëm administratori aktiv.'});
  res.set('Cache-Control','no-store').json(await refreshMarketLab());
+}));
+
+/** Real stakes debit ONLY the authenticated admin wallet, via placeBet().
+ * Starting a run is a financial action and cannot be triggered by GET/polling.
+ * A request UUID makes retries safe even if the browser loses its response.
+ */
+financialMonitoringRouter.get('/admin/market-lab/real',safe(async(req,res)=>{
+ const [report,wallet]=await Promise.all([
+  listRealMarketTests({actorId:req.user.id,limit:req.query.limit}),
+  query('select balance,currency from app_user where id=$1',[req.user.id])
+ ]);
+ res.set('Cache-Control','no-store').json({...report,
+  adminBalance:Number(wallet.rows[0]?.balance??0),currency:wallet.rows[0]?.currency??'LEK'});
+}));
+financialMonitoringRouter.post('/admin/market-lab/real-runs',safe(async(req,res)=>{
+ const created=await createRealMarketTestRun({
+  actor:req.user,stakePerTicket:req.body?.stakePerTicket,ticketCount:req.body?.ticketCount,
+  requestId:req.body?.requestId
+ });
+ if(!created.existing&&created.queued>0){
+  // No manual ledger writes. Durable queued cases continue after an admin exits.
+  void processRealMarketTestQueue({limit:8}).catch(error=>
+   console.error('[real market lab] initial placement task failed:',error.message));
+ }
+ res.set('Cache-Control','no-store').status(201).json(created);
+}));
+financialMonitoringRouter.post('/admin/market-lab/real-check',safe(async(req,res)=>{
+ const placement=await processRealMarketTestQueue({limit:8});
+ const audited=await auditRealMarketTests();
+ res.set('Cache-Control','no-store').json({placement,audited});
 }));
