@@ -23,6 +23,7 @@ import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './s
 import {goalTotalContract} from './goal-total-contract.mjs';
 import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
+import {auditSettledLiveSelections} from './stitch-settlement-audit.mjs';
 import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
@@ -425,6 +426,8 @@ export async function settleAll() {
   try{preview=await createLiveSettlementPreviews();}
   catch(error){console.warn('[settle] live shadow preview failed:',error.message);}
   const recovered = await recoverResolvedTickets();
+  try {await auditSettledLiveSelections();}
+  catch(error){console.warn('[settle] Stitch audit failed:',error.message);}
 
   return {
     captured,
