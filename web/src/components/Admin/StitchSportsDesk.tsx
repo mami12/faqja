@@ -4,6 +4,13 @@ import ManualReviewQueue from './ManualReviewQueue';
 import './stitchSportsDesk.css';
 
 type Review = { lineId: string; matchId: string; marketKey: string; marketLine: string; matchName: string; marketName: string; outcomeName: string; notificationActive: boolean; reason: string };
+type LivePreview = {
+ line_id:string; match_name:string; market_name:string; outcome_name:string;
+ proposed_status:'WON'|'LOST'|'VOID'; timelineCheck:'AGREES'|'DIFFERS'|'INSUFFICIENT';
+ payload?:{contract?:{kind:string;event:string;from?:number;to?:number};frame?:{source?:string;clock?:number;events?:Array<{id:string;type:string;minute:number;team:string}>}};
+};
+const statusName = {WON:'Fituese',LOST:'Humbëse',VOID:'E pavlefshme'};
+const eventName:Record<string,string> = {goal:'Gol',corner:'Korner',card:'Karton',foul:'Faull'};
 type DeskSection = { id: string; title: string; panel: () => ReactNode };
 type Overview = {
  database: 'ready';
@@ -27,6 +34,8 @@ const explanations: Record<string,string> = {
 export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
  const [items,setItems]=useState<Review[]>([]);
  const [error,setError]=useState(false);
+ const [livePreviews,setLivePreviews]=useState<LivePreview[]>([]);
+ const [previewError,setPreviewError]=useState(false);
  const [overview,setOverview]=useState<Overview|null>(null);
  const [overviewError,setOverviewError]=useState(false);
  const [checking,setChecking]=useState(true);
@@ -45,9 +54,10 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
    inFlight=true;
    setChecking(true);
    try {
-    const [noticesResult,overviewResult]=await Promise.allSettled([
+    const [noticesResult,overviewResult,previewResult]=await Promise.allSettled([
      apiClient.get('/admin/settlement-review-queue',{params:{limit:100}}),
      apiClient.get<Overview>('/admin/stitch-overview'),
+     apiClient.get<{previews:LivePreview[]}>('/admin/live-event-test'),
     ]);
     if(!mounted)return;
     setError(noticesResult.status==='rejected');
@@ -55,6 +65,8 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
      const {data}=noticesResult.value;
      setItems(Array.isArray(data.items)?data.items:[]);
     }
+    setPreviewError(previewResult.status==='rejected');
+    if(previewResult.status==='fulfilled')setLivePreviews(Array.isArray(previewResult.value.data.previews)?previewResult.value.data.previews:[]);
     setOverviewError(overviewResult.status==='rejected');
     if(overviewResult.status==='fulfilled'){
      setOverview(overviewResult.value.data);
@@ -101,7 +113,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
  }
  const notices=items.filter(item=>item.notificationActive);
  const olderReviews=items.length-notices.length;
- const mascotState=checking?'checking':error||overviewError||items.length?'alert':'idle';
+ const mascotState=checking?'checking':error||overviewError||previewError||items.length||livePreviews.length?'alert':'idle';
  const section=sections.find(item=>item.id===active);
  return <section className="mx-auto max-w-7xl space-y-4 p-3 sm:p-6" aria-labelledby="stitch-heading">
   <header className="flex items-center gap-4 rounded-xl border border-tertiary bg-secondary p-4">
@@ -123,7 +135,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
    </svg>
    <div className="min-w-0 flex-1">
     <h2 id="stitch-heading" className="text-lg font-bold">Stitch · Sportbastet</h2>
-    <p className="text-sm">{checking?'Duke kontrolluar…':error||overviewError?'Disa të dhëna nuk u rifreskuan.':items.length?'Ka përzgjedhje për kontroll.':'Kontrolli i fundit përfundoi.'}</p>
+    <p className="text-sm">{checking?'Duke kontrolluar…':error||overviewError||previewError?'Disa të dhëna nuk u rifreskuan.':items.length||livePreviews.length?'Ka përzgjedhje për kontroll.':'Kontrolli i fundit përfundoi.'}</p>
     <button type="button" disabled={checking} onClick={()=>setRefreshKey(key=>key+1)} className="mt-2 min-h-11 rounded-lg border border-tertiary px-3 disabled:opacity-50">Rifresko</button>
    </div>
   </header>
@@ -174,6 +186,36 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
    </div>
   </section>}
   {error&&<p role="alert">Njoftimet nuk u rifreskuan. Prova tjetër bëhet automatikisht.</p>}
+  <section className="space-y-2" aria-label="Kontrollet live nga serveri">
+   <h3 className="font-bold">Çfarë gjeti serveri ({livePreviews.length})</h3>
+   <p className="text-sm">Serveri kontrollon bastet live edhe kur ti s’je në panel. Këtu sheh rezultatin e propozuar dhe provën që ka përdorur.</p>
+   {previewError&&<p role="alert">Kontrollet live nuk u rifreskuan. Të dhënat e fundit mund të jenë të vjetruara.</p>}
+   {!checking&&!previewError&&!livePreviews.length&&<p className="text-sm">Ende s’ka përzgjedhje live me rezultat të propozuar.</p>}
+   {livePreviews.map(item=>{
+    const contract=item.payload?.contract,frame=item.payload?.frame;
+    const interval=contract?.kind==='window'&&typeof contract.from==='number'&&typeof contract.to==='number'
+     ?[contract.from,contract.to] as const:null;
+    const events=(frame?.events??[]).filter(event=>event.type===contract?.event&&(!interval||(event.minute>=interval[0]&&event.minute<=interval[1])));
+    const reviewable=items.some(row=>row.lineId===item.line_id);
+    return <article key={item.line_id} className="space-y-2 rounded-xl border border-tertiary bg-secondary p-3">
+     <h4 className="font-semibold">{item.match_name}</h4>
+     <p className="text-sm">{item.market_name} · {item.outcome_name}</p>
+     {interval&&<p className="text-sm">Minutat që kontrollova · {formatNumber.format(interval[0])} deri në {formatNumber.format(interval[1])}</p>}
+     <p className="text-sm">Serveri propozon <strong>{statusName[item.proposed_status]}</strong>.</p>
+     <p className="text-sm">{item.timelineCheck==='AGREES'
+      ? 'E kontrollova përsëri me listën e ngjarjeve. Më doli i njëjti rezultat.'
+      : item.timelineCheck==='DIFFERS'
+       ? 'Lista e ngjarjeve jep rezultat tjetër. Duhet ta shikojmë me dorë.'
+       : 'Lista e ngjarjeve nuk mjafton për një kontroll të dytë.'}</p>
+     {events.length>0&&<ul className="list-disc pl-5 text-sm">{events.slice(0,12).map(event=><li key={event.id}>
+      {eventName[event.type]??event.type}, minuta {formatNumber.format(event.minute)} · {event.team==='home'?'Skuadra vendase':event.team==='away'?'Skuadra mike':'Skuadra e panjohur'}
+     </li>)}</ul>}
+     {events.length>12&&<p className="text-xs">Po shfaqen 12 nga {events.length} ngjarje.</p>}
+     {frame?.source&&<p className="text-xs">Burimi · {frame.source}</p>}
+     {reviewable&&<button type="button" className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>{setActive('');setReview(item.line_id);}}>Hap për verifikim</button>}
+    </article>;
+   })}
+  </section>
   <section className="space-y-2" aria-label="Njoftime për verifikim">
    <h3 className="font-bold">Për verifikim ({notices.length})</h3>
    {olderReviews>0&&<p className="text-sm">{olderReviews} përzgjedhje nga lista mbeten të hapura edhe pse njoftimi ka skaduar.</p>}
