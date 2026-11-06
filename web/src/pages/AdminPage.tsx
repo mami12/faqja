@@ -24,33 +24,40 @@ import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldC
 type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
-    title: 'Përmbledhja',
-    items: [{ id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard }],
-  },
-  {
-    title: 'Menaxhimi',
+    title: 'Puna e përditshme',
     items: [
-      { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
-      {id:'market-catalog',label:'Tregjet dhe renditja',description:'Aktivizimi global dhe radha e tregjeve',icon:Layers},
-      { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
-      { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
-      { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
-      { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
-      { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
-      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
-      { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
-      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
+      { id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
-      { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
+      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
+      { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
     ],
   },
   {
-    title: 'Raportet',
+    title: 'Sportbastet',
     items: [
+      { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
+      {id:'market-catalog',label:'Tregjet dhe renditja',description:'Aktivizimi global dhe radha e tregjeve',icon:Layers},
+      { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'match-exposure', label: 'Bastet dhe verifikimi', description: 'Ekspozimi për ndeshje dhe vendime manuale', icon: ShieldAlert },
+      { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
+      { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
+      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
+      { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
+    ],
+  },
+  {
+    title: 'Financat dhe historiku',
+    items: [
       { id: 'transactions', label: 'Transaksionet', description: 'Lëvizjet financiare', icon: Receipt },
-      { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
       { id: 'audit', label: 'Regjistri', description: 'Historiku i veprimeve', icon: ClipboardList },
+      { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
+    ],
+  },
+  {
+    title: 'Cilësime të avancuara',
+    items: [
+      { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
       { id: 'financial-reset', label: 'Zerimi financiar', description: 'Backup, bileta dhe bilance nga zero', icon: ShieldAlert },
     ],
   },
