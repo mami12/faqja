@@ -138,7 +138,7 @@ export function parseEventWindow(line,clock=null) {
   start=current;end=current+Number(rolling[1]);
  }else return null;
  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||
-    (exactMinute?start>end:start>=end)||end>130)return null;
+    ((exactMinute||first)?start>end:start>=end)||end>130)return null;
  // Freeze the window at selection acceptance. No later moving reference clocks.
  return {version:1,kind:'window',event:kind,...(side?{side}:{}),from:start,to:end,choice,
   startExclusive:!!rolling,exactMinute:!!exactMinute,clockAtAcceptance:number(clock)};
