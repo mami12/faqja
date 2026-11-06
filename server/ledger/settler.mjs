@@ -25,6 +25,7 @@ import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
 import {auditSettledLiveSelections} from './stitch-settlement-audit.mjs';
 import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
+import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -428,6 +429,13 @@ export async function settleAll() {
   let windows={graded:0,closed:[]};
   try {windows=await settleClosedCornerWindows();}
   catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
+  // Re-verify a proposal against a subsequent fresh PRIMARY-provider poll
+  // BEFORE refreshing it. Real writes require an explicit opt-in flag.
+  let verifiedLive={enabled:false,examined:0,graded:0,closed:[]};
+  try{verifiedLive=await settleVerifiedLiveProposals({
+    updateLine:updatePendingLine,closeTicket:recalcTicket
+  });}
+  catch(error){console.error('[settle] verified live settlement failed:',error.message);}
   let preview={examined:0,proposed:0,held:0,mode:'SHADOW_ONLY'};
   try{preview=await createLiveSettlementPreviews();}
   catch(error){console.warn('[settle] live shadow preview failed:',error.message);}
@@ -438,9 +446,10 @@ export async function settleAll() {
   return {
     captured,
     matches: ids.length,
-    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded,
-    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + recovered.length,
+    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded + verifiedLive.graded,
+    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + verifiedLive.closed.length + recovered.length,
     recovered: recovered.length,
+    verifiedLive:{enabled:verifiedLive.enabled,examined:verifiedLive.examined,graded:verifiedLive.graded,closed:verifiedLive.closed.length},
     livePreview:preview,
   };
 }
