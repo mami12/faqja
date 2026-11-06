@@ -17,6 +17,34 @@ const typeOf=name=>/\b(?:corners?|corner kicks?|kornera?)\b/.test(name)?'corner'
  /\b(?:cards?|bookings?|kartona?)\b/.test(name)?'card':
  /\b(?:fouls?|faulle?)\b/.test(name)?'foul':null;
 const nonNeg=v=>{const n=number(v);return n!==null&&Number.isInteger(n)&&n>=0?n:null;};
+/** Freeze the provider's exact goal ordinal/interval before any funds move.
+ * Provider labels are used only during initial quote interpretation.
+ * Settlement uses the immutable numbered contract, not this text.
+ */
+export function parseOrdinalGoalTime(line){
+ const title=String(line.market_name??line.marketName??line.name??'').trim();
+ if(!/^when will (?:next )?goal\b/i.test(title))return null;
+ let target=null;
+ const fixed=title.match(/^when will goal (\d{1,3}) be scored/i);
+ if(fixed)target=Number(fixed[1]);
+ if(target===null){
+  try{
+   const encoded=String(line.market_key??line.marketKey??'').split('@')[1];
+   const json=JSON.parse(Buffer.from(encoded,'base64url').toString());
+   if(Number.isSafeInteger(Number(json.p3))&&Number(json.p3)>0)target=Number(json.p3);
+  }catch{return null;}
+ }
+ if(!Number.isInteger(target)||target<1||target>100)return null;
+ const label=String(line.outcome_name??line.outcomeName??'').trim();
+ if(/^(no goal|no more goals?|none)$/i.test(label))
+  return {version:1,kind:'nth-time',event:'goal',target,choice:'none'};
+ const range=label.match(/^(?:min(?:ute)?s?\s*)?(\d{1,3})\s*[-–]\s*(\d{1,3})(?:\s*(?:mins?|minutes?))?$/i);
+ if(!range)return null;
+ const from=Number(range[1]),to=Number(range[2]);
+ if(from<0||to>130||from>to)return null;
+ return {version:1,kind:'nth-time',event:'goal',target,choice:'range',from,to};
+}
+
 /** Explicit Zizobet 00:00–09:59 minute RESULT, never today's match score.
  * A period/result is scored ONLY from goals in that interval, from the full
  * primary timeline, once its ending second has elapsed and goals reconcile.
@@ -128,7 +156,7 @@ export function parseCountMarket(line) {
  return null;
 }
 export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
- parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
+ parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
