@@ -11,8 +11,7 @@ export type StitchAudit = {
 const results:Record<string,string>={WON:'Fituese',LOST:'Humbëse',VOID:'E pavlefshme'};
 
 export default function StitchAuditList({audits,missingOnly=false}:{audits:StitchAudit[];missingOnly?:boolean}){
- const latest=[...new Map(audits.slice().reverse().map(audit=>[audit.line_id,audit])).values()].reverse();
- const visible=missingOnly?latest.filter(item=>item.verdict==='MISSING_EVIDENCE'):latest;
+ const visible=missingOnly?audits.filter(item=>item.verdict==='MISSING_EVIDENCE'):audits;
  return <section aria-label="Testet e biletave të shlyera" className="space-y-2">
   <h3 className="font-bold">{missingOnly?'Bileta ku mungon prova':'Testet e biletave të shlyera'}</h3>
   {!visible.length&&<p className="text-sm">S’ka raste për të shfaqur në listën e fundit.</p>}
@@ -39,7 +38,7 @@ export function StitchMissingEvidence(){
  const [error,setError]=useState(false);
  useEffect(()=>{
   const controller=new AbortController();
-  apiClient.get<{audits:StitchAudit[]}>('/admin/live-event-test',{signal:controller.signal})
+  apiClient.get<{audits:StitchAudit[]}>('/admin/live-event-test',{params:{audit:'missing'},signal:controller.signal})
    .then(({data})=>setAudits(Array.isArray(data.audits)?data.audits:[]))
    .catch(()=>{if(!controller.signal.aborted)setError(true);});
   return ()=>controller.abort();
