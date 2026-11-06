@@ -16,6 +16,8 @@ create table if not exists app_match_event_fact (
  seconds numeric(12,3),
  player_id text,
  player_name text,
+ card_color text check(card_color in ('yellow','red') or card_color is null),
+ own_goal boolean,
  aiscore_player_id text,
  aiscore_player_name text,
  aiscore_verified boolean not null default false,
@@ -24,6 +26,8 @@ create table if not exists app_match_event_fact (
  observed_at timestamptz not null default now(),
  primary key(match_id,provider,provider_event_id,kind)
 );
+alter table app_match_event_fact add column if not exists card_color text;
+alter table app_match_event_fact add column if not exists own_goal boolean;
 alter table app_match_event_fact add column if not exists aiscore_player_id text;
 alter table app_match_event_fact add column if not exists aiscore_player_name text;
 alter table app_match_event_fact add column if not exists aiscore_verified boolean not null default false;
@@ -40,6 +44,7 @@ create table if not exists app_match_event_coverage (
  observed_at timestamptz not null default now(),
  primary key(match_id,provider,kind)
 );
+alter table app_match_event_coverage add column if not exists card_colors_verified boolean not null default false;
 alter table app_match_event_coverage add column if not exists sample_signature text;
 alter table app_match_event_coverage add column if not exists sample_first_seen_at timestamptz;
 alter table app_match_event_coverage add column if not exists confirmed_at timestamptz;
@@ -76,37 +81,59 @@ export async function persistVerifiedEventFacts(matchId, frame, execute, observe
   // An advancing clock is harmless; corrected incident identity/time is not.
   const signature=crypto.createHash('sha256').update(JSON.stringify({
    kind,home:counts.home,away:counts.away,ended:frame.ended===true,
-   events:relevant.map(e=>[String(e.id),e.team,e.minute,e.seconds??null])
+   colorVerified:kind==='card'&&frame.cardColorsVerified===true,
+   events:relevant.map(e=>[String(e.id),e.team,e.minute,e.seconds??null,e.cardColor??null,e.ownGoal??null,e.playerId??null,e.player??null])
      .sort((a,b)=>a[0].localeCompare(b[0]))
   })).digest('hex');
   const facts=relevant.map(e=>({id:String(e.id),team:e.team,minute:e.minute,seconds:e.seconds??null,
    playerId:e.playerId==null?null:String(e.playerId),
-   playerName:typeof e.player==='string'?e.player:null,phase:e.phase??null}));
+   playerName:typeof e.player==='string'?e.player:null,
+   ownGoal:typeof e.ownGoal==='boolean'?e.ownGoal:null,
+   cardColor:kind==='card'?e.cardColor??null:null,phase:e.phase??null}));
   // A correction may remove/replace a provider event, but the raw live-frame
   // archive remains intact. Changes are atomic with coverage and the new frame.
   await execute(`update app_match_event_fact set active=false,observed_at=now()
      where match_id=$1 and provider='zizobet' and kind=$2 and active=true
      and not(provider_event_id=any($3::text[]))`,[matchId,kind,identifiers]);
   if(facts.length)await execute(`insert into app_match_event_fact
-    (match_id,provider,provider_event_id,kind,team,minute,seconds,player_id,player_name,phase,active)
-    select $1,'zizobet',f.id,$2,f.team,f.minute,f.seconds,f.player_id,f.player_name,f.phase,true
+    (match_id,provider,provider_event_id,kind,team,minute,seconds,player_id,
+     player_name,card_color,own_goal,phase,active)
+    select $1,'zizobet',f.id,$2,f.team,f.minute,f.seconds,f.player_id,
+     f.player_name,f.card_color,f.own_goal,f.phase,true
     from jsonb_to_recordset($3::jsonb)
-     as f(id text,team text,minute integer,seconds numeric,player_id text,player_name text,phase text)
+     as f(id text,team text,minute integer,seconds numeric,player_id text,
+       player_name text,card_color text,own_goal boolean,phase text)
     on conflict(match_id,provider,provider_event_id,kind) do update
     set team=excluded.team,minute=excluded.minute,seconds=excluded.seconds,
-        player_id=coalesce(excluded.player_id,app_match_event_fact.player_id),
-        player_name=coalesce(excluded.player_name,app_match_event_fact.player_name),
+        player_id=excluded.player_id,player_name=excluded.player_name,
+        card_color=excluded.card_color,own_goal=excluded.own_goal,
+        aiscore_verified=case when app_match_event_fact.team=excluded.team
+          and app_match_event_fact.minute=excluded.minute
+          and (excluded.player_name is null or app_match_event_fact.aiscore_player_name is null
+               or lower(excluded.player_name)=lower(app_match_event_fact.aiscore_player_name))
+          then app_match_event_fact.aiscore_verified else false end,
+        aiscore_player_name=case when app_match_event_fact.team=excluded.team
+          and app_match_event_fact.minute=excluded.minute
+          and (excluded.player_name is null or app_match_event_fact.aiscore_player_name is null
+               or lower(excluded.player_name)=lower(app_match_event_fact.aiscore_player_name))
+          then app_match_event_fact.aiscore_player_name else null end,
+        aiscore_player_id=case when app_match_event_fact.team=excluded.team
+          and app_match_event_fact.minute=excluded.minute
+          and (excluded.player_name is null or app_match_event_fact.aiscore_player_name is null
+               or lower(excluded.player_name)=lower(app_match_event_fact.aiscore_player_name))
+          then app_match_event_fact.aiscore_player_id else null end,
         phase=excluded.phase,active=true,observed_at=now()`,
    [matchId,kind,JSON.stringify(facts.map(f=>({
     id:f.id,team:f.team,minute:f.minute,seconds:f.seconds,player_id:f.playerId,
-    player_name:f.playerName,phase:f.phase})))]);
+    player_name:f.playerName,card_color:f.cardColor,own_goal:f.ownGoal,phase:f.phase})))]);
   await execute(`insert into app_match_event_coverage
     (match_id,provider,kind,through_minute,count_home,count_away,complete,
-     sample_signature,sample_first_seen_at,confirmed_at,observed_at)
-    values ($1,'zizobet',$2,$3,$4,$5,$6,$7,$8::timestamptz,null,$8::timestamptz)
+     sample_signature,sample_first_seen_at,confirmed_at,observed_at,card_colors_verified)
+    values ($1,'zizobet',$2,$3,$4,$5,$6,$7,$8::timestamptz,null,$8::timestamptz,$9::boolean)
     on conflict(match_id,provider,kind) do update
     set through_minute=excluded.through_minute,count_home=excluded.count_home,
         count_away=excluded.count_away,complete=excluded.complete,
+        card_colors_verified=excluded.card_colors_verified,
         sample_signature=excluded.sample_signature,
         sample_first_seen_at=case
           when app_match_event_coverage.sample_signature=excluded.sample_signature
@@ -122,7 +149,8 @@ export async function persistVerifiedEventFacts(matchId, frame, execute, observe
         observed_at=excluded.observed_at
     where excluded.through_minute>=app_match_event_coverage.through_minute
        or excluded.complete=true`,
-   [matchId,kind,through,counts.home,counts.away,frame.ended===true,signature,observed]);
+   [matchId,kind,through,counts.home,counts.away,frame.ended===true,signature,observed,
+    kind==='card'&&frame.cardColorsVerified===true]);
   stored+=facts.length;
  }
  return stored;
