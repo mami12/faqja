@@ -101,7 +101,7 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
  }
  return stored;
 }
-export const SUPPORTED_FACT_KINDS=new Set(['window','sequence','race','over','under','exact','atLeast','range','team-total-goals','interval-result','nth-time','player-goal']);
+export const SUPPORTED_FACT_KINDS=new Set(['window','sequence','race','over','under','exact','atLeast','range','team-total-goals','interval-result','interval-leader','window-total','nth-time','player-goal']);
 /**
  * PostgreSQL counts the accepted, verified incidents. Returns null when the
  * accepted structured contract, ordering or coverage cannot prove an answer.
@@ -130,13 +130,15 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
         or ($10::boolean=false and ($3::numeric is null or minute >= $3)
          and ($4::numeric is null or minute <= $4)))
       and ($5::text is null or team=$5))::int as window_count,
-    count(*) filter(where ($13::boolean=true
-      and coalesce(seconds,minute*60)>=$11::numeric
-      and coalesce(seconds,minute*60)<$12::numeric
+    count(*) filter(where (
+      ($13::boolean=true and coalesce(seconds,minute*60)>=$11::numeric
+       and coalesce(seconds,minute*60)<$12::numeric)
+      or ($14::boolean=true and minute>=$3::numeric and minute<=$4::numeric))
       and team='home')::int as window_home,
-    count(*) filter(where ($13::boolean=true
-      and coalesce(seconds,minute*60)>=$11::numeric
-      and coalesce(seconds,minute*60)<$12::numeric
+    count(*) filter(where (
+      ($13::boolean=true and coalesce(seconds,minute*60)>=$11::numeric
+       and coalesce(seconds,minute*60)<$12::numeric)
+      or ($14::boolean=true and minute>=$3::numeric and minute<=$4::numeric))
       and team='away')::int as window_away,
     bool_or($10::boolean=true and seconds is null
       and (minute=floor($11::numeric/60) or minute=floor($12::numeric/60))) as rolling_boundary_uncertain,
@@ -183,7 +185,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   c.kind==='window'&&c.startExclusive===true,
   c.kind==='interval-result'?c.fromSeconds:c.kind==='window'?c.from*60:null,
   c.kind==='interval-result'?c.toExclusiveSeconds:c.kind==='window'?c.to*60:null,
-  c.kind==='interval-result']);
+  c.kind==='interval-result',c.kind==='interval-leader']);
  const data=rows[0];
  if(!data||data.through_minute==null||data.open_recovery_gap===true)return null;
  // A partial/corrected frame must not silently reclassify a missing event.
@@ -216,6 +218,26 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   if(!Number.isSafeInteger(c.toExclusiveSeconds)||through*60<c.toExclusiveSeconds)return null;
   const h=Number(data.window_home),a=Number(data.window_away);
   return decision((h>a?'home':a>h?'away':'none')===c.side);
+ }
+ if(c.kind==='interval-leader'){
+  const closesAt=Math.floor(Number(c.to))+1;
+  if(!Number.isFinite(closesAt)||through<closesAt||
+     !['home','away','none'].includes(c.side))return null;
+  const h=Number(data.window_home),a=Number(data.window_away);
+  return decision((h>a?'home':a>h?'away':'none')===c.side);
+ }
+ if(c.kind==='window-total'){
+  const closesAt=Math.floor(Number(c.to))+1;
+  if(!Number.isFinite(closesAt)||through<closesAt)return null;
+  const found=Number(data.window_count);
+  if(c.choice==='over'||c.choice==='under'){
+   if(!Number.isFinite(c.threshold)||!Number.isInteger(c.threshold*2))return null;
+   if(found===c.threshold)return Number.isInteger(c.threshold)?'VOID':null;
+   return decision(c.choice==='over'?found>c.threshold:found<c.threshold);
+  }
+  if(c.choice==='exact'&&Number.isInteger(c.target))return decision(found===c.target);
+  if(c.choice==='atLeast'&&Number.isInteger(c.target))return decision(found>=c.target);
+  return null;
  }
  if(c.kind==='nth-time'){
   if(!Number.isInteger(c.target)||c.target<1)return null;
