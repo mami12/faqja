@@ -8,9 +8,16 @@ import ts from 'typescript';
 
 const sourceUrl = new URL('../web/src/utils/marketExpiry.ts', import.meta.url);
 const file = readFileSync(sourceUrl, 'utf8');
-const compiled = ts.transpileModule(file, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
-}).outputText.replace(/from\s+(['"])(\.[^'"]+)\1/g, (_match, quote, path) => `from ${quote}${new URL(path, sourceUrl).href}${quote}`);
+const compilerOptions={ module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 };
+const repairSource=new URL('../web/src/utils/repairDisplayText.ts',import.meta.url);
+const repairModule=ts.transpileModule(readFileSync(repairSource,'utf8'),{compilerOptions}).outputText;
+const repairDataUrl='data:text/javascript;base64,'+Buffer.from(repairModule).toString('base64');
+const compiled = ts.transpileModule(file, {compilerOptions}).outputText
+  .replace(/from\s+(['"])(\.[^'"]+)\1/g, (_match, quote, path) => {
+    // Node cannot import an extensionless TypeScript module from a data: URL.
+    const target=path==='./repairDisplayText'?repairDataUrl:new URL(path,sourceUrl).href;
+    return `from ${quote}${target}${quote}`;
+  });
 const { isMarketExpired, filterDecidedOutcomes, isMarketVisible, isOutcomeAvailable, isOutcomeDisplayable, isCompletedCombinationOutcome } =
   await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 
