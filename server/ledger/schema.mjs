@@ -2,7 +2,6 @@ import {MANAGER_CASINO_SQL} from '../casino/manager-settings.mjs';
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
 import {MATCH_EVENT_FACT_SQL} from './match-event-facts.mjs';
-import {STITCH_SETTLEMENT_AUDIT_SQL} from './stitch-settlement-audit.mjs';
 import {LIVE_OBSERVATION_SQL} from './live-observation-store.mjs';
 import {FOOTBALL_INFORMATION_SQL} from '../stats-providers/football-information.mjs';
 /**
@@ -373,7 +372,6 @@ alter table app_casino_freespin_state add column if not exists custom_round json
 
 ${ORIGINAL_WALLET_SQL}
 ${SETTLEMENT_REVIEW_SQL}
-${STITCH_SETTLEMENT_AUDIT_SQL}
 create table if not exists app_manual_review_notice (
   line_id uuid primary key references app_ticket_line(id) on delete cascade,
   first_seen_at timestamptz not null
