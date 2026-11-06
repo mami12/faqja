@@ -189,6 +189,27 @@ export function parseIntervalCount(line) {
  return null;
 }
 
+/** Explicit full-match yellow/red card totals. The two colors never share a
+ * counter when freezing the wager or grading it in PostgreSQL. */
+export function parseColorCardCount(line) {
+ const name=norm(line.market_name??line.marketName??line.name);
+ if(/\b(?:second yellow|yellow red|player|team|half|asian|handicap|minutes?|mins?|interval|penalty)\b/.test(name))return null;
+ const match=name.match(/^(?:(?:full time|match)\s+)?(?:total\s+)?(yellow|red)\s+cards?(?:\s+(?:total|over\s*\/\s*under))?$/);
+ if(!match)return null;
+ const label=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ const over=label.match(/^over(?:\s+(\d+(?:[.,]\d+)?))?$/);
+ const under=label.match(/^under(?:\s+(\d+(?:[.,]\d+)?))?$/);
+ const value=over??under;
+ if(value){
+  const threshold=number(String(value[1]??line.line??line.specifier??'').replace(',','.'));
+  if(threshold===null||threshold<0||threshold>300||!Number.isInteger(threshold*2))return null;
+  return {version:1,kind:over?'over':'under',event:'card',cardColor:match[1],threshold};
+ }
+ const exact=label.match(/^(?:exact(?:ly)?\s+)?(\d{1,3})$/);
+ if(exact)return {version:1,kind:'exact',event:'card',cardColor:match[1],target:Number(exact[1])};
+ return null;
+}
+
 export function parseSequenceBet(line,counts={}) {
  const name=norm(line.market_name??line.marketName??line.name);
  // An event numbered inside a time band is not the same as the Nth event of the match.
@@ -237,8 +258,24 @@ export function parseCountMarket(line) {
  if(plus)return {version:1,kind:'atLeast',event,target:Number(plus[1])};
  return null;
 }
-export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
- parsePlayerGoalContract(line)??parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseIntervalLeader(line)??parseEventWindow(line,clock)??parseIntervalCount(line)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
+export const liveContract=(line,{counts={},clock=null,teams={}}={})=>{
+ const name=norm(line.market_name??line.marketName??line.name);
+ const yellow=/\byellow\s+cards?\b/.test(name),red=/\bred\s+cards?\b/.test(name);
+ const ambiguous=/\b(?:second\s+yellow|yellow\s+red)\b/.test(name);
+ if((yellow&&red)||ambiguous)return null;
+ const contract=parsePlayerGoalContract(line)??parseOrdinalGoalTime(line)??
+  parseTimedResultMarket(line)??parseIntervalLeader(line)??
+  parseEventWindow(line,clock)??parseIntervalCount(line)??
+  parseColorCardCount(line)??parseSequenceBet(line,counts)??
+  parseTeamGoalMarket(line,teams)??parseCountMarket(line);
+ if(!contract)return null;
+ if(yellow||red){
+  // Reject a color qualifier attached to an unrelated contract.
+  if(contract.event!=='card')return null;
+  return {...contract,cardColor:yellow?'yellow':'red'};
+ }
+ return contract;
+};
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
