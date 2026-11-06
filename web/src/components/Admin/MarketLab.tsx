@@ -10,7 +10,7 @@ type TestCase={
  status:TestStatus;engine_status:string|null;stitch_status:string|null;
  evidence:{reason?:string;frameAt?:string};opened_at:string;last_checked_at:string|null;
 };
-type Run={id:string;started_at:string;finished_at:string|null;requested_matches:number;selected_matches:number;coverage:Record<string,{created:number;available:boolean}>;cases:number;passed:number;failed:number;inconclusive:number;pending:number;observed:number};
+type Run={id:string;started_at:string;finished_at:string|null;requested_matches:number;selected_matches:number;coverage:Record<string,{created:number;available:boolean;targets?:number[]}>;cases:number;passed:number;failed:number;inconclusive:number;pending:number;observed:number};
 type Report={mode:string;runs:Run[];cases:TestCase[]};
 const statusText:Record<TestStatus,string>={PENDING:'Në pritje',OBSERVED:'Ngjarja u konstatua',PASS:'Përputhet',FAIL:'Gabim / mospërputhje',INCONCLUSIVE:'Prova të pamjaftueshme'};
 const statusStyle:Record<TestStatus,string>={
@@ -31,7 +31,7 @@ const reasonText:Record<string,string>={
 };
 const marketNames:Record<string,string>={
  'next-goal':'Goli i radhës','numbered-goal':'Goli 1/2/3…','next-corner':'Korneri i radhës',
- 'race-corners':'Gara deri në X kornera','goal-window':'Intervale golash',
+ 'race-goals':'Gara deri në numrin e golave','race-corners':'Gara deri në numrin e kornerave','goal-window':'Intervale golash',
  'corner-window':'Intervale kornerash','card-window':'Intervale kartonësh',
  'foul-window':'Intervale faullesh','over-under':'Lart / Poshtë',
  exact:'Ekzakt',range:'Nga – Deri'
@@ -119,11 +119,12 @@ function VirtualMarketLab(){
      ]).map(item=><div key={item.label} className="rounded-xl border border-tertiary bg-secondary px-4 py-3"><div className="flex items-center justify-between text-xs text-text-secondary"><span>{item.label}</span><item.icon size={15}/></div><p className="mt-2 text-2xl font-black tabular-nums text-white">{item.num}</p></div>)}
     </div>
     <section className="rounded-xl border border-tertiary bg-secondary p-4">
-     <h3 className="mb-3 text-sm font-bold text-white">Mbulimi i tregjeve reale</h3>
+     <h3 className="mb-3 text-sm font-bold text-white">Mbulimi i tregjeve në ndeshjet e testuara</h3>
+     <p className="mb-3 text-xs text-text-secondary">Raporti përfshin vetëm ndeshjet LIVE dhe kuotat aktive që u përzgjodhën në këtë test. Një treg i patestuar nuk do të thotë se mungon nga API-ja.</p>
      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {Object.entries(run?.coverage??{}).map(([group,value])=><div key={group} className="flex items-center justify-between gap-2 rounded-lg border border-tertiary bg-primary/50 px-3 py-2 text-xs">
-       <span>{marketNames[group]??group}</span>
-       <span className={value.available?'text-emerald-300':'text-amber-300'}>{value.available?value.created+' teste':'Nuk u ofrua'}</span>
+       <span>{marketNames[group]??group}{value.targets?.length?' ('+value.targets.join(', ')+')':''}</span>
+       <span className={value.available?'text-emerald-300':'text-amber-300'}>{value.available?value.created+' teste':'Nuk u testua në këtë kampion'}</span>
       </div>)}
      </div>
     </section>
