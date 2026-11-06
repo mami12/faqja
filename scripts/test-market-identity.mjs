@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { decodePushMessage, describeMarket } from '../server/push-decode.mjs';
 import { isIdentifiedMarketName, buildMarkets } from '../server/collector.mjs';
@@ -110,7 +111,9 @@ function loadUiModule(url) {
   const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  const localRequire = id => id.startsWith('.') ? loadUiModule(new URL(id + '.ts', url)) : require(id);
+  const localRequire = id => id.startsWith('.')
+    ? (/\.mjs$/.test(id) ? require(fileURLToPath(new URL(id,url))) : loadUiModule(new URL(id + '.ts', url)))
+    : require(id);
   new Function('exports', 'require', 'module', compiled)(mod.exports, localRequire, mod);
   return mod.exports;
 }
