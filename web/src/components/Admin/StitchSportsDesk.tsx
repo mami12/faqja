@@ -144,7 +144,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
   <nav className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Kontrollet e sportbasteve">
    {sections.map(item=><button key={item.id} type="button" aria-pressed={active===item.id} className="min-h-11 rounded-lg border border-tertiary bg-secondary px-4 text-left" onClick={()=>{setReview(null);setActive(item.id);}}>{item.title}</button>)}
   </nav>
-  {review&&<ManualReviewQueue key={review} onlyLineId={review}/>}
+  {review&&<ManualReviewQueue key={review} onlyLineId={review} onSaved={()=>setRefreshKey(key=>key+1)}/>}
   {section&&<div key={section.id}>{section.panel()}</div>}
  </section>;
 }
