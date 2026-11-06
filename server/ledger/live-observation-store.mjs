@@ -25,7 +25,9 @@ export function normalizeLiveFrame(data){
    {home:yellows.home+reds.home,away:yellows.away+reds.away};
  const events=Array.isArray(data?.TimeLines)?
   normalizeEvents(data,'zizobet').events.filter(e=>['goal','corner','card','foul'].includes(e.type))
-    .map(e=>({id:String(e.id),type:e.type,team:e.team,minute:e.minute,seconds:e.seconds??null,player:e.player??null,phase:e.phase??null})):null;
+    .map(e=>({id:String(e.id),type:e.type,team:e.team,minute:e.minute,seconds:e.seconds??null,
+      player:e.player??null,playerId:e.playerId??null,ownGoal:e.ownGoal??null,
+      cardColor:e.cardColor??null,phase:e.phase??null})):null;
  const coverage={};
  const verify=(kind,counters)=>{
   if(!events||!counters||clock===null||counters.home==null||counters.away==null)return;
@@ -36,12 +38,22 @@ export function normalizeLiveFrame(data){
   coverage[kind+'Through']=clock;
  };
  verify('goal',goals);verify('corner',corners);verify('card',cards);
+ // A generic `card` marker is not proof of its colour. Reconcile the
+ // separately reported provider totals with every explicitly coloured event.
+ const cardEvents=events?.filter(e=>e.type==='card')??[];
+ const cardColorsVerified=!!events&&!!coverage.cardThrough&&
+   [yellows.home,yellows.away,reds.home,reds.away].every(Number.isSafeInteger)&&
+   cardEvents.every(e=>['yellow','red'].includes(e.cardColor))&&
+   ['home','away'].every(side=>
+     cardEvents.filter(e=>e.team===side&&e.cardColor==='yellow').length===yellows[side]&&
+     cardEvents.filter(e=>e.team===side&&e.cardColor==='red').length===reds[side]);
  return {source:'zizobet',clock,counts:{
    goal:goals?goals.home+goals.away:null,
    corner:count(corners.home,corners.away),
    card:cards?cards.home+cards.away:null,
    foul:null
-  },teams:{goal:goals,corner:corners,card:cards},events:events??[],
+  },teams:{goal:goals,corner:corners,card:cards,
+    yellowCard:yellows,redCard:reds},cardColorsVerified,events:events??[],
   coverage,ended:Number(game.EventStatus??game.MatchStatusID)===40,
   eventListAvailable:!!events};
 }
