@@ -100,7 +100,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
    </div>
    <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
     <div className="rounded-xl border border-tertiary bg-secondary p-3">
-     <dt className="font-semibold">Llogaritë aktive</dt>
+     <dt className="font-semibold">Llogaritë e regjistruara</dt>
      <dd>{formatNumber.format(overview.accounts.player)} lojtarë · {formatNumber.format(overview.accounts.manager)} menaxherë</dd>
      <dd>{formatNumber.format(overview.accounts.agent)} agjentë · {formatNumber.format(overview.accounts.admin)} administratorë</dd>
     </div>
@@ -112,11 +112,11 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     <div className="rounded-xl border border-tertiary bg-secondary p-3">
      <dt className="font-semibold">Shlyerjet sportive</dt>
      <dd>{formatMoney.format(overview.tickets.openStake)} në pritje</dd>
-     <dd>{formatMoney.format(overview.tickets.paidOut)} të paguara</dd>
+     <dd>{formatMoney.format(overview.tickets.settledStake)} të shlyera · {formatMoney.format(overview.tickets.paidOut)} të paguara</dd>
      <dd>{formatMoney.format(overview.tickets.netBeforeCommission)} neto para komisioneve</dd>
     </div>
     <div className="rounded-xl border border-tertiary bg-secondary p-3">
-     <dt className="font-semibold">Ndeshjet</dt>
+     <dt className="font-semibold">Ndeshjet në burim</dt>
      <dd>{formatNumber.format(overview.matches.live)} live · {formatNumber.format(overview.matches.prematch)} para fillimit</dd>
     </div>
     <div className="rounded-xl border border-tertiary bg-secondary p-3">
