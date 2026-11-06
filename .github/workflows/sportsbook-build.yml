@@ -69,6 +69,7 @@ jobs:
           node scripts/test-primary-market-verification.mjs
           node scripts/test-prematch-market-verification.mjs
           node scripts/test-verified-live-settlement.mjs
+          node scripts/test-live-settlement-money-flow.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
       - name: Validate virtual live-market lab and independent second check
