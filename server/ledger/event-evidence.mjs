@@ -68,7 +68,14 @@ export function normalizeEvents(data,source){
  const active=e=>!e.disabled&&!e.cancelled&&!e.canceled&&e.isConfirmed!==false&&!/cancelled|canceled|voided/i.test(String(e.status??''));
  if(source==='sportradar')events=(data.doc?.[0]?.data?.events??[]).map(e=>({disabled:!active(e),id:e._id,type:e.type==='goal'?'goal':e.type==='corner'?'corner':e.type==='card'?'card':e.type,team:e.team,minute:e.time,seconds:e.seconds,injury:e.injurytime,player:e.scorer?.name??e.player?.name,playerId:e.scorer?._id??e.player?._id,own:e.owngoal,header:e.header,penalty:e.penalty,card:e.card,shootout:e.time===-1,phase:e.period??null,updatedAt:e.updated_uts??e.uts}));
  if(source==='betgenius')events=Object.values(data.data?.details?.playByPlayInfo??{}).flat().map(e=>({disabled:!active(e),id:e.id??`${e.type}|${e.teamId}|${e.timestamp}`,type:e.type==='Goal'?'goal':e.type==='Corner'?'corner':e.type==='Card'?'card':e.type,team:e.teamId,minute:parseInt(e.clock),player:e.actionDetails?.playerName,own:e.actionDetails?.isOwn,header:e.actionDetails?.isHeader,penalty:e.actionDetails?.penalty,phase:e.phase,qualifier:e.phaseQualifier,shootout:/shoot/i.test(e.phase??''),updatedAt:Date.parse(e.updatedTimestamp??e.timestamp??'')}));
- if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:zizobetMinute(e.gt)??NaN,seconds:zizobetEventSeconds(e.clk,zizobetMinute(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
+ // A corner counts only after it is TAKEN, not merely awarded. Zizobet
+ // schemas are not assumed to expose this flag universally: when an explicit
+ // unexecuted/awarded marker exists, never turn it into a financial incident.
+ // A contradictory official corner counter then prevents timeline coverage.
+ const cornerNotTaken=e=>e.type==='corner_kick'&&
+  (e.isTaken===false||e.taken===false||
+   /^(?:awarded|not[_ -]?taken|unexecuted|not[_ -]?executed)$/i.test(String(e.status??'').trim()));
+ if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e)||cornerNotTaken(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:zizobetMinute(e.gt)??NaN,seconds:zizobetEventSeconds(e.clk,zizobetMinute(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
  const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
  const retained=[...unique.values()].filter(e=>!e.disabled);
  // For closed corner windows, prove the timeline covers every corner observed

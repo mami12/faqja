@@ -191,10 +191,21 @@ export function gradeLine(line, result) {
         if (result.cards_home === null || result.cards_away === null) return null;
         target = Number(result.cards_home) + Number(result.cards_away);
       }
-      if (lineValue === null) return null;
-      if (key === 'over' || /^over/.test(name)) return decide(target > lineValue);
-      if (key === 'under' || /^under/.test(name)) return decide(target < lineValue);
-      return null;
+      if (lineValue === null || !Number.isFinite(target)) return null;
+      // A TWO-WAY full-integer total (1.0, 2.0, 3.0...) pushes at
+      // exactly that count. A three-way total sells an explicit exact-count
+      // selection and MUST NOT be mistaken for the two-way push contract.
+      const threeWay = /\b(?:3[\s-]*way|three[\s-]*way|3[\s-]*outcomes?|three[\s-]*outcomes?)\b/i.test(String(line.market_name ?? ''));
+      const over = key === 'over' || /^over(?:\s|$)/.test(name);
+      const under = key === 'under' || /^under(?:\s|$)/.test(name);
+      if (over === under) {
+        const exact = threeWay && (key === 'exact' || key === 'exactly' || key === 'equal' ||
+          /^exact(?:ly)?(?:\s+\d+(?:[.,]\d+)?)?$/.test(name) ||
+          name.trim() === String(lineValue));
+        return exact ? decide(target === lineValue) : null;
+      }
+      if (!threeWay && Number.isInteger(lineValue) && target === lineValue) return 'VOID';
+      return decide(over ? target > lineValue : target < lineValue);
     }
 
     case 'HANDICAP': {
@@ -318,6 +329,25 @@ export async function recalcTicket(ticketId, { database = pool } = {}) {
   }
 }
 
+/**
+ * A legacy VOID can mean unsupported parsing. Refund only a confirmed
+ * two-way full-integer total push, never an unknown market or outcome.
+ */
+export function isProvenTwoWayTotalPush(line,result){
+ if(!line||!result||Array.isArray(line.builder_legs)||needsEvents(line))return false;
+ const market=String(line.market_name??'');
+ if(/\b(?:3[\s-]*way|three[\s-]*way|3[\s-]*outcomes?|three[\s-]*outcomes?)\b/i.test(market))return false;
+ const choice=[line.outcome_key,line.outcome_name].map(x=>String(x??'').trim().toLowerCase());
+ if(!choice.some(x=>/^(?:over|under)(?:\b|$)/.test(x)))return false;
+ const amount=num(line.line);
+ if(amount===null||!Number.isInteger(amount))return false;
+ if(isStatisticMarket(line))
+  return hasStatisticEvidence(line,result)&&gradeStatisticLine(line,result)==='VOID';
+ const family=goalTotalContract(line,result)?'TOTAL':classify(market);
+ if(!['TOTAL','CORNERS','CARDS'].includes(family))return false;
+ return hasRequiredSettlementEvidence(line,result)&&gradeLine(line,result)==='VOID';
+}
+
 /** grades every pending line of one match, then closes the affected tickets */
 export async function updatePendingLine(lineId,status,ticketId,{database=pool}={}){
   const client=await database.connect();
@@ -347,9 +377,9 @@ export async function settleMatch(matchId) {
       status=await gradeStoredEventContract(line,result,{execute:query});
     }else if(hasRequiredSettlementEvidence(line,result)){
       status=gradeLine(line,result);
-      // In legacy/nonstructured markets VOID can mean unknown parsing,
-      // not a genuine provider cancellation. Keep such tickets PENDING.
-      if(status==='VOID')status=null;
+      // Only a proved two-way integer push is refundable on the legacy path.
+      // Unsupported parsing remains PENDING.
+      if(status==='VOID'&&!isProvenTwoWayTotalPush(line,result))status=null;
     }
     if(!['WON','LOST','VOID'].includes(status))continue; // incomplete feed => PENDING
     const updated=await updatePendingLine(line.id,status,line.ticket_id);

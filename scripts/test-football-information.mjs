@@ -15,11 +15,11 @@ assert.equal(isFootballFixture({sport_id:2}),false);
 assert.equal(isFootballFixture({}),false);
 
 const goal=marketInformationNeeds([{market_name:'Next Goal (Goal 2)'},{market_name:'Player to Score a Goal'}]);
-assert.deepEqual(goal,['player','timeline'],'Only missing player identity qualifies; Next Goal belongs to PRIMARY');
+assert.deepEqual(goal,['player'],'Only missing player identity qualifies; Next Goal belongs to PRIMARY');
 const corners=marketInformationNeeds([{market_name:'Race to 7 Corners'},
  {market_name:'Race to 6 Goals'},{market_name:'Goal in minutes 10-20'},
  {market_name:'Total Fouls'},{market_name:'Red Cards'},{market_name:'Shots on Target'}]);
-assert.deepEqual(corners,['fouls','statistics','shotsOnTarget'],'No other markets trigger backup');
+assert.deepEqual(corners,[],'All goal, corner and statistic markets use PRIMARY or dedicated statistic providers; do not route them through the player-only secondary API');
 assert.deepEqual(marketInformationNeeds([{market_name:'Full Time Result'}]),[]);
 const map={aiscore_id:'j374oi0xz04sgqo',thesports01_id:'4578950',mapping_status:'ADMIN_SUPPLIED_UNVERIFIED'};
 assert.deepEqual(selectedInformationEndpoints(map,[]),[]);
@@ -31,7 +31,8 @@ assert.ok(endpoints.every(x=>!x.url.includes('/odds_list')));
 assert.ok(endpoints.every(x=>!x.url.includes('/user/info')));
 assert.ok(endpoints.every(x=>!x.url.includes('/chat/')));
 const statEndpoints=selectedInformationEndpoints(map,['shotsOnTarget','statistics']);
-assert.deepEqual(statEndpoints.map(x=>x.key),['thesports01:sd','aiscore:team_stats']);
+assert.deepEqual(statEndpoints.map(x=>x.key),[],
+ 'The player-identity-only information adapter must not fetch unverified team statistics');
 assert.deepEqual(missingSupplementalNeeds(['shotsOnTarget','fouls','statistics'],{
  statistics:{shotsOnTarget:{home:5,away:2},fouls:{home:10,away:12}},providersEnabled:true
 }),[],'PRIMARY has all facts, no backup call');

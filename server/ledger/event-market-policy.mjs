@@ -23,6 +23,11 @@ export function eventMarketRequirement(market = {},teams={}) {
   if (/^who (?:scores (?:goal \d+|most goals)|takes most corners|receives most cards)\b/.test(name))return 'EVENT_SEQUENCE_DATA_REQUIRED';
   if (/\b(?:first|last|next|1st|2nd|3rd|4th|5th|second|third|fourth|fifth)\s+(?:(?:team|player)\s+to\s+(?:score|receive)|goals?|corners?|cards?|bookings?|scorers?|fouls?)\b/.test(name) ||
       /\b(?:race to|early payout|own goals?)\b/.test(name)) return 'EVENT_SEQUENCE_DATA_REQUIRED';
+  // An explicit three-way GOALS total has an exact-count outcome, not an
+  // unnamed player/team total. Its final result is directly gradeable from
+  // the verified match score, without a separate player event timeline.
+  if(/\b(?:3[\s-]*way|three[\s-]*way)\b/.test(name)&&
+      /\b(?:total goals?|goals? total)\b/.test(name))return null;
   // A name such as "Salah Total Goals" must never mean both teams' goals.
   // Explicit team totals are allowed only against verified team identities.
   if(/\b(?:total goals?|goals? total)\b/.test(name)&&!/[&+]|\b(?:result|1x2|btts|both teams|double chance|exact|range|odd|even|handicap|asian)\b/.test(name)&&!goalTotalContract(market,teams))return 'GOAL_CONTRACT_DATA_REQUIRED';

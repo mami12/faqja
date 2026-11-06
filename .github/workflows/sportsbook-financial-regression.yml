@@ -32,11 +32,15 @@ jobs:
           node scripts/test-zizobet-window-settlement.mjs
           node scripts/test-live-financial-safety.mjs
           node scripts/test-zizobet-info-history.mjs
+          node scripts/test-whole-line-sportsbook-push.mjs
+          node scripts/test-provider-event-facts-sql.mjs
       - name: Verify two PRIMARY polls, outages, recovery and one wallet credit
         run: |
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
           node scripts/test-live-observation-recovery.mjs
+      - name: Syntax check deployment read-only Zizobet incident audit
+        run: node --check scripts/audit-zizobet-provider-evidence.mjs
       - name: Verify virtual market lab and real-money restrictions
         run: |
           node scripts/test-live-market-lab.mjs
