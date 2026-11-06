@@ -121,7 +121,7 @@ const ui = loadUiModule(new URL('../web/src/utils/marketCatalog.ts', import.meta
 const mk = (name, line = '', period = 0, marketType = 'OTHER', extId = '') =>
   ({ id: 'test-' + extId + name + line, name, line, period, marketType, extId });
 
-for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonët'], ['Result', 'Rezultati']]) {
+for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonët'], ['Result', 'Rezultati (1X2)']]) {
   assert.equal(ui.isIdentifiedMarket(mk(name)), true, name + ' is a real upstream name');
   assert.equal(ui.marketDisplayTitle(mk(name), 'al'), translated, name + ' is translated for display');
   assert.equal(ui.marketDisplayTitle(mk(name), 'en'), name, 'raw provider title remains available unchanged');
