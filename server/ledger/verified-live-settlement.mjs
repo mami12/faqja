@@ -4,7 +4,8 @@
  * an unresolved recovery gap, a browser label or a stale single observation.
  *
  * The existing atomic updatePendingLine/recalcTicket financial path is reused,
- * with an explicit deployment switch until primary event coverage is tested.
+ * default-on for independently confirmed provider milestones; deployments may
+ * explicitly pause real payouts with LIVE_VERIFIED_AUTO_SETTLEMENT_ENABLED=false.
  */
 import {query} from '../db.mjs';
 import {gradeLiveContract,gradeFromAcceptedCounters} from './live-contract-rules.mjs';
@@ -62,7 +63,7 @@ export function verifiedSecondLiveDecision(row,{now=Date.now()}={}){
  // must be later than the stored proposal, even if the returned JSON is equal.
  if(first<placed||stored<first||latest<first||latest>second||
     second<stored+5000||second>now+5000||now-second>60000||
-    now-stored>60000||now-latest>120000)return null;
+    now-stored>300000||now-latest>300000)return null;
  const firstDecision=primaryLiveDecision(contract,oldFrame);
  const secondDecision=primaryLiveDecision(contract,current);
  return firstDecision&&firstDecision===secondDecision&&
@@ -70,11 +71,11 @@ export function verifiedSecondLiveDecision(row,{now=Date.now()}={}){
 }
 
 /**
- * Opt-in real writes. A failed/retried wallet update remains exactly-once via
+ * Controlled real writes. A failed/retried wallet update remains exactly-once via
  * the existing row-locked settlement transaction.
  */
 export async function settleVerifiedLiveProposals({
- runQuery=query,updateLine,closeTicket,enabled=process.env.LIVE_VERIFIED_AUTO_SETTLEMENT_ENABLED==='true',
+ runQuery=query,updateLine,closeTicket,enabled=process.env.LIVE_VERIFIED_AUTO_SETTLEMENT_ENABLED!=='false',
  now=Date.now,limit=400
 }={}){
  if(!enabled)return {enabled:false,examined:0,graded:0,closed:[]};
