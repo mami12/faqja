@@ -1,4 +1,3 @@
-import {statsProviders} from '../stats-providers/index.mjs';
 /**
  * Bets: place, book (share a code), list, settle at final result.
  *
@@ -38,8 +37,6 @@ import { buildSystemColumns, splitSystemStake, moneyCents, frozenSelectionPrice,
 import { aggregateSystemTicket, parseSystemTicketId, systemTicketId, SYSTEM_STATUS_SQL } from './system-ticket-view.mjs';
 import { isImpossibleLiveCombination } from './combo-feasibility.mjs';
 import { assertDistinctSelectionMarkets } from './selection-market.mjs';
-import { eventMarketRequirement } from './event-market-policy.mjs';
-import { statisticMarketContract } from './statistic-markets.mjs';
 import {quoteValidUntil,quoteExpired} from './quote-validity.mjs';
 import {isSyntheticFootballMatch} from '../football-competitions.mjs';
 import {frozenLiveContract} from './live-contract-context.mjs';
@@ -95,12 +92,8 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
   if(isExcludedOfferMarket(row))throw Object.assign(badRequest('Ky treg nuk ofrohet.'),{code:'MARKET_NOT_OFFERED',outcomeId:selection.outcomeId});
   await assertMarketEnabled(row,executor,match);
   const nativeOffer=isYbetsNativeOffer(row,match);
-  const statsContract=statisticMarketContract(row);
-  const eventRequired=eventMarketRequirement(row,match)||/header|headed|own goal|scoring method|method of.*goal/i.test(row.market_name??'');
-  if((statsProviders.enabled()&&eventRequired&&!statsProviders.allows(matchId,row))||(!nativeOffer&&((eventRequired&&!statsProviders.allows(matchId,row))||(statsContract&&!statsContract.supported)))){
-    throw Object.assign(badRequest('Ky treg nuk ofrohet pa të dhënat e nevojshme për verifikim.'),
-      {code:'MARKET_EVIDENCE_UNSUPPORTED',outcomeId:selection.outcomeId});
-  }
+  // Offer decisions depend on provider state and explicit admin policy.
+  // Missing later evidence leaves the accepted wager PENDING for review.
   if (liveRiskSettings().combosEnabled === false && isSameGameComboLine({marketName:row.market_name})) {
     throw Object.assign(badRequest('Combot janë çaktivizuar nga administrata.'), {code:'COMBOS_DISABLED'});
   }
@@ -295,13 +288,19 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
  */
 async function persistLiveContracts(runQuery,ticketId,lines){
  for(const line of lines){
-  if(!line?.liveContract)continue;
+  const accepted={
+   version:1,providerMarketKey:line.marketKey,providerOutcomeKey:line.outcomeKey,
+   providerMarketName:line.marketName,providerOutcomeName:line.outcomeName,
+   line:String(line.line??''),acceptedOdds:line.price,
+   liveTerms:line.liveContract??null,builderLegs:line.builderLegs??null
+  };
   const updated=await runQuery(`update app_ticket_line
-    set live_contract=$1::jsonb
-    where ticket_id=$2 and match_id=$3 and market_key=$4
-      and line=$5 and outcome_key=$6 and live_contract is null`,
-    [JSON.stringify(line.liveContract),ticketId,line.matchId,line.marketKey,String(line.line??''),line.outcomeKey]);
-  if(updated.rowCount!==1)throw Object.assign(new Error('Kushti live i biletës nuk u ruajt.'),{status:409});
+   set live_contract=$1::jsonb,accepted_contract=$2::jsonb
+   where ticket_id=$3 and match_id=$4 and market_key=$5
+    and line=$6 and outcome_key=$7 and accepted_contract is null`,
+   [line.liveContract?JSON.stringify(line.liveContract):null,JSON.stringify(accepted),
+    ticketId,line.matchId,line.marketKey,String(line.line??''),line.outcomeKey]);
+  if(updated.rowCount!==1)throw Object.assign(new Error('Kontrata origjinale e biletës nuk u ruajt.'),{status:409});
  }
 }
 
