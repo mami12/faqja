@@ -7,7 +7,7 @@ export function reconcileFeedRevision(previous:FeedVersion|null,payload:{
  syncStream?:unknown;syncSequence?:unknown;
 }):FeedRevisionDecision {
  const stream=payload?.syncStream,sequence=payload?.syncSequence;
- if(typeof stream!=='string'||!stream||!Number.isSafeInteger(sequence)||
+ if(typeof stream!=='string'||!stream||typeof sequence!=='number'||!Number.isSafeInteger(sequence)||
     (sequence as number)<1)return {next:previous,stale:false,refetch:false};
  const current={stream,sequence:sequence as number};
  if(!previous)return {next:current,stale:false,refetch:false};
