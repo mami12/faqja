@@ -39,10 +39,10 @@ try{
   const text=await page.$eval('body',n=>n.innerText);assert.match(text,/Në pritje të verifikimit manual/);assert.match(text,/primary/);assert.match(text,/bsd/);assert.match(text,/3–2/);assert.match(text,/4–2/);assert.match(text,/500/);
   await page.click('details summary');assert.match(await page.$eval('body',n=>n.innerText),/Lojtari i provës/);
   await page.select('select[aria-label="Përzgjedhja për verifikim"]',JSON.stringify(['corners','4.5','over']));
-  await (await page.$$('form select')).at(-1).select('WON');await page.type('textarea','Raporti përfundimtar i verifikuar');await page.type('form input','Raporti zyrtar');
+  await (await page.$('form select')).at(-1).select('WON');
   let count=writes.length;await page.click('form button');await page.waitForFunction(()=>document.querySelector('[role="status"]')?.textContent.includes('Vendimi u regjistrua'));
-  assert.equal(writes.length,count+1);assert.deepEqual(writes.at(-1),{matchId:'101',marketKey:'corners',line:'4.5',outcomeKey:'over',status:'WON',reason:'Raporti përfundimtar i verifikuar',source:'Raporti zyrtar'});
-  await page.select('select[aria-label="Niveli i vendimit"]','ticket');await page.waitForFunction(()=>document.querySelectorAll('form input').length===2);await (await page.$$('form input'))[0].type(ticketId);
+  assert.equal(writes.length,count+1);assert.deepEqual(writes.at(-1),{matchId:'101',marketKey:'corners',line:'4.5',outcomeKey:'over',status:'WON'});
+  await page.select('select[aria-label="Niveli i vendimit"]','ticket');await page.waitForFunction(()=>document.querySelectorAll('form input').length===1);await (await page.$('form input'))[0].type(ticketId);
   await (await page.$$('form select')).at(-1).select('PENDING');count=writes.length;const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/admin/manual-settlement'));await page.click('form button');await response;
   await page.waitForFunction(()=>document.querySelector('form button')?.textContent==='Ruaj vendimin manual');
   assert.equal(writes.length,count+1);assert.equal(writes.at(-1).ticketId,ticketId);assert.equal(writes.at(-1).status,'PENDING');assert.equal(writes.at(-1).matchId,undefined);
