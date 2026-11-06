@@ -67,11 +67,11 @@ export function parseEventWindow(line,clock=null) {
  if(home&&away)return null;
  const side=home?'home':away?'away':null;
  let start,end;
- const fixed=name.match(/\b(?:minutes?|mins?)\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\b|\b(?:between|from)\s+(?:minutes?\s+)?(\d{1,3})\s*(?:and|to|[-–])\s*(\d{1,3})\b/);
+ const fixed=name.match(/\b(?:minutes?|mins?)\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\b|\b(?:between|from)\s+(?:minutes?\s+)?(\d{1,3})\s*(?:and|to|[-–])\s*(\d{1,3})\b|\bfrom\s+(\d{1,3}):00\s+to\s+(\d{1,3})\s*min\b/);
  const first=name.match(/\b(?:first|opening)\s+(\d{1,3})\s+minutes?\b/);
  const by=name.match(/\b(?:by|before|until)\s+(?:the\s+)?(?:minute\s+)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?\b/);
  const rolling=name.match(/\b(?:next|following)\s+(\d{1,2})\s+minutes?\b/);
- if(fixed){start=Number(fixed[1]??fixed[3]);end=Number(fixed[2]??fixed[4]);}
+ if(fixed){start=Number(fixed[1]??fixed[3]??fixed[5]);end=Number(fixed[2]??fixed[4]??fixed[6]);}
  else if(first){start=0;end=Number(first[1]);}
  else if(by){start=0;end=Number(by[1]);}
  else if(rolling){
