@@ -54,6 +54,11 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  if(contract.kind==='race'&&current?.home!=null&&current?.away!=null&&
     (current.home>=contract.target||current.away>=contract.target))throw fail('Gara e golave/kornerave ka përfunduar.');
  if(contract.kind==='window'&&clock!=null&&clock>contract.to)throw fail('Intervali i këtij tregu ka përfunduar.');
+ // A fixed interval already in progress may contain events before purchase.
+ // Without a verified acceptance-time incident baseline, accepting it would
+ // allow a customer to bet on a goal/corner/card that has already happened.
+ if(live&&contract.kind==='window'&&!contract.startExclusive&&clock!=null&&clock>=contract.from)
+  throw fail('Intervali ka nisur; nuk mund të pranohet bast për ngjarje të kaluara.');
  if(contract.kind==='interval-result'&&clock!=null&&clock*60>=contract.toExclusiveSeconds)
   throw fail('Intervali i rezultatit ka përfunduar.');
  // Live "Next Goal" needs *exactly* the current confirmed cumulative count.
