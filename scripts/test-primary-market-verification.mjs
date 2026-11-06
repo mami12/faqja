@@ -4,7 +4,7 @@ import {
  parseSequenceBet,parseEventWindow,parseCountMarket,
  gradeLiveContract,gradeFromAcceptedCounters
 } from '../server/ledger/live-contract-rules.mjs';
-import {gradeMixedTotal} from '../server/ledger/mixed-combos.mjs';
+import {gradeMixedTotal,parseResultTotal} from '../server/ledger/mixed-combos.mjs';
 
 const bet=(market,choice,line)=>({market_name:market,outcome_name:choice,line});
 const g1={id:'g1',type:'score_change',team:1,gt:12,clk:'12:04'};
@@ -72,6 +72,6 @@ assert.equal(gradeLiveContract(exact,afterSix),'LOST');
 assert.equal(gradeLiveContract(exact,{...beforeSix,ended:true}),'WON');
 
 // A mixed quote requires BOTH legs, not whichever leg becomes true first.
-assert.equal(gradeMixedTotal('Result and Total','1 / Over 2.5',2,1), 'WON');
-assert.equal(gradeMixedTotal('Result and Total','1 / Over 2.5',2,0), 'LOST');
+assert.equal(gradeMixedTotal('Result and Total',parseResultTotal('1 and Over 2.5'),2,1), 'WON');
+assert.equal(gradeMixedTotal('Result and Total',parseResultTotal('1 and Over 2.5'),2,0), 'LOST');
 console.log('PASS PRIMARY: goal minutes yes/no, missed intervals, Race to X Goals/Corners, next goal/corner, count thresholds, mixed two-leg loss and missing-evidence holds');
