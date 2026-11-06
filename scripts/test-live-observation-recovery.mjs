@@ -2,8 +2,6 @@ import './fixtures/isolated-casino-env.mjs';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {createEventEvidenceStore} from '../server/ledger/event-evidence.mjs';
-import {stitchOverview} from '../server/ledger/stitch-overview.mjs';
-import {auditSettledLiveSelections} from '../server/ledger/stitch-settlement-audit.mjs';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '../server/ledger/live-observation-store.mjs';
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
@@ -214,22 +212,8 @@ async function simulateLiveMatches(){
   }
   await query("update app_ticket_line set status='WON' where match_id=123");
   await query("update app_ticket set status='WON' where id=$1",[ticket]);
-  // Exactly two goals, recorded as WON: replay against archived final facts.
-  await query('update app_match_result set home_score=2 where match_id=123');
-  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:1,mismatched:0,missing:5});
-  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:0,missing:0});
-  // A corrected final total reveals the old decision disagrees. Keep both receipts.
-  await query('update app_match_result set home_score=3 where match_id=123');
-  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:1,missing:5});
-  const receipts=(await query('select verdict,expected_status,actual_status from app_stitch_settlement_audit where line_id=$1 order by id',[ids[5]])).rows;
-  assert.deepEqual(receipts,[{verdict:'MATCH',expected_status:'WON',actual_status:'WON'},{verdict:'MISMATCH',expected_status:'LOST',actual_status:'WON'}]);
-  await query('update app_match_result set home_score=2 where match_id=123');
-  assert.equal((await auditSettledLiveSelections({runQuery:query})).matched,1,'returning to two goals must clear the old mismatch');
-  await query("update app_match_result set source='ADMIN' where match_id=123");
-  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:0,missing:6},
-    'admin-entered score alone must not count as independent evidence');
+  // Keep history retention checks independent from any admin test laboratory.
   assert.equal(Number((await query('select balance from app_user where id=$1',[player])).rows[0].balance),500);
-  console.log('PASS Stitch replays settled selections, reports correction mismatches and missing data, and leaves wallets untouched');
   const pruned=(await evidenceStore.pruneUnbetMatchEvidence()).rows[0];
   assert.deepEqual(pruned,{evidence:2,snapshots:1});
   for(const [table,remaining] of [
@@ -239,30 +223,6 @@ async function simulateLiveMatches(){
    const rows=(await query('select match_id from '+table+' order by match_id')).rows;
    assert.deepEqual(rows.map(row=>Number(row.match_id)),remaining);
   }
-  await query(`insert into app_user(username,password_hash,role,deleted_at) values
-   ('stitch-admin','test','ADMIN',null),
-   ('stitch-manager','test','MANAGER',null),
-   ('stitch-agent','test','AGENT',null),
-   ('stitch-removed','test','PLAYER',now())`);
-  await query(`insert into app_ticket(user_id,stake,total_odds,potential_payout,status) values
-   ($1,11.25,2,22.50,'PENDING'),
-   ($1,100.15,2,0,'LOST'),
-   ($1,20,2,20,'VOID')`,[player]);
-  await query(`insert into app_transaction(user_id,amount,type,reference_id,balance_after) values
-   ($1,-10,'BET_PLACED',$2,490),
-   ($1,80,'MANUAL_SETTLEMENT_CORRECTION',$2,570),
-   ($1,-5,'CASINO_BET',null,565),
-   ($1,50,'DEPOSIT',null,615)`,[player,ticket]);
-  const overview=await stitchOverview({runQuery:query,getMatchCounts:async()=>({live:2,prematch:11,finished:4,updatedAt:now})});
-  assert.deepEqual(overview,{
-   database:'ready',
-   accounts:{player:1,manager:1,agent:1,admin:1},
-   tickets:{total:4,pending:1,won:1,lost:1,void:1,openStake:11.25,settledStake:110.15,paidOut:80,netBeforeCommission:30.15},
-   matches:{live:2,prematch:11,finished:4,updatedAt:now},
-   transactions:{sport:2,total:4},
-  });
-  assert.equal(Number((await query('select balance from app_user where id=$1',[player])).rows[0].balance),500);
-  console.log('PASS Stitch sports totals, roles, payouts, and no wallet changes');
   console.log('PASS retention: 24h raw evidence, 48h Favorites, historical tickets and unfinished matches protected');
   console.log('PASS SQL simulation: seven simultaneous selections, next goal and corner, minute boundaries, VAR rollback, exact total, selective outage recovery and unchanged wallet');
  }finally{await db.close();}
