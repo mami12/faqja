@@ -125,7 +125,11 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
    (select min(ordinal) from (
      select ordinal,team,count(*) over(partition by team order by ordinal) as team_number
      from ordered
-   ) race where team_number=$8 and team=$5) as race_ordinal
+   ) race where team_number=$8 and team='home') as race_home,
+   (select min(ordinal) from (
+     select ordinal,team,count(*) over(partition by team order by ordinal) as team_number
+     from ordered
+   ) race where team_number=$8 and team='away') as race_away
  from aggregate a left join covered c on true`,
  [line.match_id,c.event,
   c.kind==='interval-result'?c.fromSeconds/60:c.from??null,
@@ -159,9 +163,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   return c.side==='none'?'WON':decision(false);
  }
  if(c.kind==='race'){
-  if(data.race_ordinal==null)return null;
-  if(data.ambiguous_order===true)return null;
-  return decision(true);
+  if(data.ambiguous_order===true||!['home','away'].includes(c.side))return null;
+  const h=data.race_home==null?null:Number(data.race_home),a=data.race_away==null?null:Number(data.race_away);
+  if(h===null&&a===null)return null;
+  return decision(c.side===(h!==null&&(a===null||h<a)?'home':'away'));
  }
  if(c.kind==='player-goal'){
   if(!full||!c.playerName&&!c.playerId)return null;
