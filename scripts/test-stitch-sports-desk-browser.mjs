@@ -34,6 +34,11 @@ try{
  app.post('/app/api/admin/manual-settlement',(req,res)=>{decisions.push(req.body);res.json({changed:[req.body.lineId]});});
  app.get('/app/api/admin/matches/100',(_req,res)=>res.json({item:{id:'100',markets:[{id:'100|next-corner|',status:marketStatus}]}}));
  app.patch('/app/api/admin/markets/:id/suspend',(req,res)=>{pauses.push([req.params.id,req.body]);marketStatus='SUSPENDED';res.json({suspended:true});});
+ app.get('/app/api/admin/live-event-test',(_req,res)=>res.json({previews:[{
+  line_id:'line-a',match_name:'Arsenal – Chelsea',market_name:'Gol në interval',outcome_name:'Po',
+  proposed_status:'WON',timelineCheck:'AGREES',
+  payload:{contract:{kind:'window',event:'goal',from:35,to:40},frame:{source:'fixture',events:[{id:'goal',type:'goal',minute:36,team:'home'}]}},
+ }]}));
  app.get('/app/api/admin/stitch-overview',(_req,res)=>res.json(overview));
  app.get('/app/api/admin/settlement-review-queue',(_req,res)=>res.json({items}));
  app.get('/',async(_req,res)=>res.type('html').send(await vite.transformIndexHtml('/',html)));
@@ -51,6 +56,7 @@ try{
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.stitch-mascot')).animationName==='none');
+ await page.waitForFunction(()=>document.body.textContent.includes('35 deri në 40')&&document.body.textContent.includes('Gol, minuta 36')&&document.body.textContent.includes('Më doli i njëjti rezultat.'));
  const clickText=text=>page.evaluate(label=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===label).click(),text);
  await clickText('Pezullo këtë treg');
  await clickText('Jo, lëre tregun');
