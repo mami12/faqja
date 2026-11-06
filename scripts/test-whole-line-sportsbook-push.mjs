@@ -2,7 +2,8 @@ import './fixtures/isolated-casino-env.mjs';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
-import {gradeLine,recalcTicket} from '../server/ledger/settler.mjs';
+import {gradeLine,recalcTicket,settleMatch,isProvenTwoWayTotalPush} from '../server/ledger/settler.mjs';
+import {pool} from '../server/db.mjs';
 
 const result={
  home_team:'Home',away_team:'Away',home_score:1,away_score:1,
@@ -69,5 +70,28 @@ try{
  assert.equal((await run(
   "select count(*)::int as n from app_transaction where reference_id=$1 and type='BET_REFUND'",[push]
  )).rows[0].n,1);
- console.log('PASS whole-line two-way goals/corners/cards/shots/fouls push, three-way distinction, once-only wallet refund');
+ // Exercise the ACTUAL final-result settlement path. Historically gradeLine
+ // correctly returned VOID but settleMatch discarded it as unsupported.
+ const sourceResult={...result,home_score:1,away_score:1};
+ assert.equal(isProvenTwoWayTotalPush(bet('Total Goals','2.0','Over'),sourceResult),true);
+ assert.equal(isProvenTwoWayTotalPush(bet('Total Goals 3-Way','2.0','Over'),sourceResult),false);
+ assert.equal(isProvenTwoWayTotalPush(bet('Total Goals','2.5','Over'),sourceResult),false);
+ const originalQuery=pool.query,originalConnect=pool.connect;
+ try{
+  pool.query=(...args)=>run(...args);
+  pool.connect=async()=>({query:run,release(){}});
+  await run("insert into app_match_result(match_id,home_team,away_team,home_score,away_score) values(915,'Home','Away',1,1)");
+  const actual=(await run(
+   "insert into app_ticket(user_id,stake,total_odds,potential_payout,ticket_type,status) values($1,100,2,200,'SINGLE','PENDING') returning id",[player]
+  )).rows[0].id;
+  await run("insert into app_ticket_line(ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status) values($1,915,'total','2.0','over','Over','Total Goals','Home - Away',2,'PENDING')",[actual]);
+  const actualPaid=await settleMatch(915);
+  assert.equal(actualPaid.settled,1,'Final-match pass must commit a true push');
+  assert.deepEqual(actualPaid.tickets.map(t=>[t.status,t.payout]),[['VOID',100]]);
+  assert.equal((await run('select status from app_ticket_line where ticket_id=$1',[actual])).rows[0].status,'VOID');
+  assert.equal(Number((await run('select balance from app_user where id=$1',[player])).rows[0].balance),1200);
+  assert.equal((await settleMatch(915)).settled,0,'A repeated final pass never refunds again');
+  assert.equal((await run("select count(*)::int as n from app_transaction where reference_id=$1 and type='BET_REFUND'",[actual])).rows[0].n,1);
+ }finally{pool.query=originalQuery;pool.connect=originalConnect;}
+ console.log('PASS whole-line sports pushes and real final-settlement once-only refunds');
 }finally{await db.close();}
