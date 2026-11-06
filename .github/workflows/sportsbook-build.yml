@@ -63,6 +63,16 @@ jobs:
         run: node scripts/test-live-contract-rules.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
+      - name: Validate virtual live-market lab and independent second check
+        run: node scripts/test-live-market-lab.mjs
+      - name: Verify market lab and live-sync on mobile Chromium
+        run: node scripts/test-market-lab-browser.mjs
+      - name: Verify two-window live scores and reconnect synchronization
+        run: node scripts/test-match-sync-browser.mjs
+      - name: Syntax check virtual lab and live feed sync modules
+        run: |
+          node --check server/ledger/live-market-lab.mjs
+          node --check server/index.mjs
       - name: Validate 48-hour finished favorite history
         run: node scripts/test-finished-favorites.mjs
       - name: Validate admin manual-review notifications and decisions

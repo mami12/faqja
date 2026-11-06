@@ -7,6 +7,7 @@ import { io, type Socket } from 'socket.io-client';
 import type { Match, MatchEvent, OddsDelta } from '../types';
 import { frozenSelectionPrice } from '../../../server/ledger/system-columns.mjs';
 import { mergeMatchFacts, snapshotTime, timestamp } from './matchSync';
+import {reconcileFeedRevision,type FeedVersion} from './feedRevision';
 import {optionalFeedNumber} from './feedNumbers';
 
 /**
@@ -237,6 +238,14 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
     const unbindScope=bindFeedScope(socket);
 
     const refresh = () => setRefreshVersion(value => value + 1);
+    let boardRevision:FeedVersion|null=null,infoRevision:FeedVersion|null=null;
+    const acceptRevision=(kind:'board'|'info',payload:any)=>{
+      const previous=kind==='board'?boardRevision:infoRevision;
+      const result=reconcileFeedRevision(previous,payload);
+      if(kind==='board')boardRevision=result.next;else infoRevision=result.next;
+      if(result.refetch)refresh();
+      return !result.stale;
+    };
     let reopenTimer:ReturnType<typeof setTimeout>|undefined,lastReopenRefresh=-Infinity;
     const reopenedMatches=new Set<string>();
     reopenRefresh.current=id=>{
@@ -370,7 +379,8 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
     // the whole live board, once per collector cycle
     let liveMembership='';
-    socket.on('matches:live', (payload: { matches?: any[] }) => {
+    socket.on('matches:live', (payload: { matches?: any[];syncStream?:string;syncSequence?:number }) => {
+      if(!acceptRevision('board',payload))return;
       useMode(payload); // the first board after a wake also announces the mode
       // List membership also has a 30-second REST fallback. Only a changed
       // live ID set needs an immediate refetch, not every clock snapshot.
@@ -425,6 +435,7 @@ export function LiveFeedProvider({ children }: { children: ReactNode }) {
 
     // one match (score / clock / stats), between poll cycles
     socket.on('match:info', (info: any) => {
+      if(!acceptRevision('info',info))return;
       const id = info?.match_id ?? info?.matchId;
       if (id === undefined || id === null) return;
 

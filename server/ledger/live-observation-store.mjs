@@ -45,10 +45,12 @@ export function normalizeLiveFrame(data){
   eventListAvailable:!!events};
 }
 export const WATCHED_LIVE_LINES_SQL=
- 'select l.id,l.live_contract,t.placed_at from app_ticket_line l '+
+ 'select l.id,l.live_contract,t.placed_at,false as is_lab from app_ticket_line l '+
  'join app_ticket t on t.id=l.ticket_id '+
  "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING' "+
- 'and l.live_contract is not null order by t.placed_at';
+ 'and l.live_contract is not null '+
+ "union all select v.id,v.contract as live_contract,v.opened_at as placed_at,true as is_lab "+
+ "from app_live_market_test_case v where v.match_id=$1 and v.status in ('PENDING','OBSERVED')";
 export const LIVE_OBSERVATION_SQL=[
  'create table if not exists app_live_event_frame (id bigserial primary key,match_id bigint not null,fingerprint text not null,payload jsonb not null,observed_at timestamptz not null default now());',
  'alter table app_live_event_frame drop constraint if exists app_live_event_frame_match_id_fingerprint_key;',
@@ -79,8 +81,10 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
   const start=previous?Math.max(new Date(previous.last_seen_at).getTime(),earliestOpenBet):earliestOpenBet;
   let recovery=false;
   if(Number.isFinite(start)&&seenAt-start>Math.max(60000,thresholdMs)){
-   const eventTypes=[...new Set(watching.map(x=>x.live_contract?.event).filter(Boolean))];
-   const ids=watching.map(x=>x.id);
+   // Never add virtual ticket IDs to real-money recovery jobs.
+   const realWatching=watching.filter(x=>x.is_lab!==true);
+   const eventTypes=[...new Set(realWatching.map(x=>x.live_contract?.event).filter(Boolean))];
+   const ids=realWatching.map(x=>x.id);
    if(ids.length&&eventTypes.length){
     await client.query(
       "insert into app_live_event_recovery (match_id,gap_from,gap_to,line_ids,event_types,status) "+
