@@ -1,3 +1,4 @@
+import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useState } from 'react';
 import {apiClient} from '../api/client';
@@ -20,7 +21,7 @@ import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
 import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -36,6 +37,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
       { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
       { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
@@ -160,6 +162,17 @@ export default function AdminPage() {
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
              {tab === 'manual-review' && <ManualReviewQueue />}
+             {tab === 'stitch' && <StitchSportsDesk sections={[
+               {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
+               {id:'transactions',title:'Transaksionet',panel:()=> <TransactionHistoryPage embedded />},
+               {id:'tickets',title:'Biletat dhe historiku',panel:()=> <TicketAudit />},
+               {id:'review',title:'Verifikimet e hapura',panel:()=> <ManualReviewQueue />},
+               {id:'matches',title:'Ndeshjet',panel:()=> <MatchControl />},
+               {id:'markets',title:'Tregjet dhe koeficientët',panel:()=> <MarketCatalog />},
+               {id:'exposure',title:'Ekspozimi i basteve',panel:()=> <MatchExposure />},
+               {id:'risk',title:'Rreziku live',panel:()=> <LiveRiskManager />},
+               {id:'audit',title:'Historiku i veprimeve',panel:()=> <AdminAuditLog />},
+             ]}/>} 
              {tab === 'sports-roadmap' && (
                <section aria-labelledby="sports-roadmap-heading" className="mx-auto max-w-4xl space-y-4 p-3 sm:p-6">
                  <h2 id="sports-roadmap-heading" className="text-lg font-bold">Plani i sportbasteve</h2>
