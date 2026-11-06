@@ -68,6 +68,7 @@ export function marketInformationNeeds(markets=[]){
 }
 export const INFORMATION_ENDPOINTS=[
  {key:'aiscore:match',kind:'aiscore',needs:['timeline','goal','player','corner','card','goalMethod'],path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
+ {key:'aiscore:data',kind:'aiscore',needs:['timeline','goal','player','goalMethod'],path:id=>ai+'/match/data?lang=2&match_id='+encodeURIComponent(id)+'&tz=08%3A00'},
  {key:'aiscore:mlive',kind:'aiscore',needs:['timeline','goal','player','corner','card','goalMethod'],path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'},
  {key:'aiscore:team_stats',kind:'aiscore',needs:['statistics'],path:id=>ai+'/match/team_stats?match_id='+encodeURIComponent(id)},
  {key:'thesports01:sd',kind:'thesports01',needs:['statistics'],path:id=>ts+'/f/sd?id='+encodeURIComponent(id)+'&lang=en'},
