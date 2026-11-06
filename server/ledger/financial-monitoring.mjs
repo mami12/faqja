@@ -63,8 +63,12 @@ export async function matchExposure(execute=query){
 
 /** An audited manual correction posts only the difference from an existing payment. */
 export async function manualSettlement(input,actor,{database=pool}={}){
- const status=String(input.status??''),reason=String(input.reason??'').trim(),source=String(input.source??'').trim();
- if(!['WON','LOST','PENDING','VOID'].includes(status)||!reason||reason.length>1000||!source||source.length>500)throw fail(400,'Zgjidh gjendjen, arsyen dhe burimin e verifikimit.');
+ const status=String(input.status??'');
+ // The authenticated ADMIN's choice is sufficient in the UI. Keep a truthful
+ // server-side audit entry without presenting evidence that was never checked.
+ const reason=String(input.reason??'').trim()||'Ndryshim manual i statusit nga administratori.';
+ const source=String(input.source??'').trim()||'ADMIN_PANEL';
+ if(!['WON','LOST','PENDING','VOID'].includes(status)||reason.length>1000||source.length>500)throw fail(400,'Zgjidh një gjendje të vlefshme.');
  const ticketId=input.ticketId?String(input.ticketId):null,lineId=input.lineId?String(input.lineId):null,matchId=Number(input.matchId),marketKey=String(input.marketKey??''),outcomeKey=String(input.outcomeKey??'');
  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  if((ticketId&&!uuid.test(ticketId))||(lineId&&!uuid.test(lineId))||(ticketId&&lineId))throw fail(400,'Zgjidh një biletë ose përzgjedhje të vlefshme.');
@@ -89,7 +93,8 @@ export async function manualSettlement(input,actor,{database=pool}={}){
     await client.query(`insert into app_settlement_override(line_id,status,actor_id,reason,source)values($1,$2,$3,$4,$5)
      on conflict(line_id)do update set status=excluded.status,actor_id=excluded.actor_id,reason=excluded.reason,source=excluded.source,updated_at=now()`,[line.id,status,actor.id,reason,source]);
    }
-   const next=lines.some(l=>l.status==='PENDING')?'PENDING':lines.some(l=>l.status==='LOST')?'LOST':lines.every(l=>l.status==='VOID')?'VOID':'WON';
+   // A losing accumulator must close immediately even when other legs wait.
+   const next=lines.some(l=>l.status==='LOST')?'LOST':lines.some(l=>l.status==='PENDING')?'PENDING':lines.every(l=>l.status==='VOID')?'VOID':'WON';
    const quote=Number(ticket.original_potential_payout??ticket.potential_payout);
    const paid=next==='WON'?(lines.some(l=>l.status==='VOID')?systemColumnPayout(Number(ticket.stake),lines.filter(l=>l.status==='WON').map(l=>l.odds_at_placement)):quote):next==='VOID'?Number(ticket.stake):0;
    const previousPaid=['WON','VOID'].includes(ticket.status)?Number(ticket.potential_payout):0,delta=cents(paid)-cents(previousPaid);
