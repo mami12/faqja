@@ -142,7 +142,7 @@ export function toClientMatch(m) {
         return {
           id: outcomeIdOf(matchId, mk.key, line, o.key),
           marketId: marketIdOf(matchId, mk.key, line),
-          name: outcomeName(o.key, o.name, mType, mk.name),
+          name: o.name ?? String(o.key),
           code: String(o.key),
           odds: price,
           quotedAt: m.snapshotAt ?? m.updatedAt ?? null,
@@ -175,13 +175,6 @@ export function toClientMatch(m) {
       return 99;
     };
     outcomes.sort((a, b) => OUTCOME_RANK(a.code, a.name) - OUTCOME_RANK(b.code, b.name));
-
-    if (!diagnostic && isResultMarket && !isResultBttsMarket(mk.name) && !/half|score|rezultat|both|btts|corner|card|handicap|chance/i.test(mk.name ?? '')) {
-      const valid1X2 = outcomes.filter((o) => ['1', 'X', '2'].includes(o.name));
-      if (valid1X2.length >= 2) {
-        outcomes.splice(0, outcomes.length, ...valid1X2);
-      }
-    }
 
     if (!outcomes.length) continue;
     markets.push({
