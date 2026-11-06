@@ -1,4 +1,5 @@
 import {statsProviders} from './stats-providers/index.mjs';
+import {refreshMarketLab} from './ledger/live-market-lab.mjs';
 import {toClientMatches} from './ledger/view.mjs';
 import express from 'express';
 import cors from 'cors';
@@ -224,6 +225,8 @@ async function runSettlement(why = 'periodic') {
   try {
     trackBackground(statsProviders.tick().catch(()=>{}));
     const out = await settleAll();
+    // Evaluate virtual tickets independently of admin sessions. Never write to wallets.
+    try{await refreshMarketLab();}catch(error){console.warn('[market lab] evaluation failed:',error.message);}
     settlementHealth.lastSuccessAt = new Date().toISOString();
     settlementHealth.lastError = null;
     settlementHealth.lastResult = out;
