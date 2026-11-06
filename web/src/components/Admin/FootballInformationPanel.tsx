@@ -44,6 +44,7 @@ export default function FootballInformationPanel(){
   finally{setBusy(false);}
  };
  const available=fixture?.needs?.length??0;
+ const visibleSources:ProbeSource[]=probe?.sources??fixture?.snapshots?.map(x=>({source:x.source,ok:true,shape:x.shape}))??[];
  return <section className="mx-auto max-w-7xl space-y-4 px-3 py-4 sm:px-6">
   <header className="rounded-2xl border border-tertiary bg-secondary p-5">
    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300">
@@ -109,7 +110,7 @@ export default function FootballInformationPanel(){
    </div>
    {probe&&<p className="mt-2 text-xs text-text-secondary">Statusi: {probe.status}. Emrat e fushave janë kandidatë për analizë, jo prova të certifikuara për pagesë.</p>}
    <div className="mt-3 space-y-2">
-    {(probe?.sources??fixture?.snapshots?.map(x=>({source:x.source,ok:true,shape:x.shape}))??[]).map(item=><details key={item.source} className="rounded-lg border border-tertiary bg-primary p-3">
+    {visibleSources.map(item=><details key={item.source} className="rounded-lg border border-tertiary bg-primary p-3">
      <summary className="flex cursor-pointer items-center gap-2 text-sm"><Database size={15}/>
       <span className="flex-1 font-semibold">{item.source}</span>
       <span className={item.ok?'text-emerald-300':'text-amber-300'}>
