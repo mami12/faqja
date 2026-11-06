@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { apiClient } from '../../api/client';
+import StitchAuditList, {type StitchAudit} from './StitchAuditList';
 import ManualReviewQueue from './ManualReviewQueue';
 import './stitchSportsDesk.css';
 
@@ -34,6 +35,7 @@ const explanations: Record<string,string> = {
 export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
  const [items,setItems]=useState<Review[]>([]);
  const [error,setError]=useState(false);
+ const [audits,setAudits]=useState<StitchAudit[]>([]);
  const [livePreviews,setLivePreviews]=useState<LivePreview[]>([]);
  const [previewError,setPreviewError]=useState(false);
  const [overview,setOverview]=useState<Overview|null>(null);
@@ -57,7 +59,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     const [noticesResult,overviewResult,previewResult]=await Promise.allSettled([
      apiClient.get('/admin/settlement-review-queue',{params:{limit:100}}),
      apiClient.get<Overview>('/admin/stitch-overview'),
-     apiClient.get<{previews:LivePreview[]}>('/admin/live-event-test'),
+     apiClient.get<{previews:LivePreview[];audits:StitchAudit[]}>('/admin/live-event-test'),
     ]);
     if(!mounted)return;
     setError(noticesResult.status==='rejected');
@@ -66,7 +68,11 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
      setItems(Array.isArray(data.items)?data.items:[]);
     }
     setPreviewError(previewResult.status==='rejected');
-    if(previewResult.status==='fulfilled')setLivePreviews(Array.isArray(previewResult.value.data.previews)?previewResult.value.data.previews:[]);
+    if(previewResult.status==='fulfilled'){
+     const {data}=previewResult.value;
+     setLivePreviews(Array.isArray(data.previews)?data.previews:[]);
+     setAudits(Array.isArray(data.audits)?data.audits:[]);
+    }
     setOverviewError(overviewResult.status==='rejected');
     if(overviewResult.status==='fulfilled'){
      setOverview(overviewResult.value.data);
@@ -216,6 +222,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     </article>;
    })}
   </section>
+  <StitchAuditList audits={audits} />
   <section className="space-y-2" aria-label="Njoftime për verifikim">
    <h3 className="font-bold">Për verifikim ({notices.length})</h3>
    {olderReviews>0&&<p className="text-sm">{olderReviews} përzgjedhje nga lista mbeten të hapura edhe pse njoftimi ka skaduar.</p>}
