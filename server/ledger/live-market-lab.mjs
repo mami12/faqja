@@ -5,7 +5,7 @@ import {frozenLiveContract} from './live-contract-context.mjs';
 import {gradeLiveContract,gradeFromAcceptedCounters} from './live-contract-rules.mjs';
 
 /** Virtual wagers, completely separate from app_ticket, wallet and payouts. */
-export const LIVE_MARKET_LAB_SQL=String.raw\`
+export const LIVE_MARKET_LAB_SQL=String.raw`
 create table if not exists app_live_market_test_run (
  id uuid primary key default gen_random_uuid(),
  actor_id uuid references app_user(id) on delete set null,
@@ -40,7 +40,7 @@ create table if not exists app_live_market_test_case (
 create index if not exists app_live_market_test_pending_idx on app_live_market_test_case(match_id,status)
  where status in ('PENDING','OBSERVED');
 create index if not exists app_live_market_test_runs_idx on app_live_market_test_case(run_id);
-\`;
+`;
 
 const MARKET_GROUPS=Object.freeze(['next-goal','numbered-goal','next-corner','race-corners',
  'goal-window','corner-window','card-window','foul-window','over-under','exact','range']);
@@ -108,8 +108,8 @@ export async function createMarketLabRun({actorId,matchCount=8,random=Math.rando
   // tests by repeated taps, and adds no external-provider polling.
   await client.query('select pg_advisory_xact_lock($1)',[974411]);
   const existing=(await client.query(
-   \`select r.id from app_live_market_test_run r
-     where r.started_at>now()-interval '30 seconds' order by r.started_at desc limit 1\`
+   `select r.id from app_live_market_test_run r
+     where r.started_at>now()-interval '30 seconds' order by r.started_at desc limit 1`
   )).rows[0];
   if(existing){await client.query('commit');return {runId:existing.id,created:0,alreadyRunning:true,coverage};}
   const {rows}=await client.query(
@@ -206,7 +206,7 @@ export function evaluateLabCase(row,{now=Date.now()}={}){
  return {status:'INCONCLUSIVE',engine:engine??null,stitch:stitch??null,
   reason:!fresh?'FRAME_MISSING_OR_STALE':'INCOMPLETE_PROVIDER_EVIDENCE'};
 }
-export const LIVE_MARKET_LAB_PENDING_SQL=String.raw\`
+export const LIVE_MARKET_LAB_PENDING_SQL=String.raw`
 select t.id,t.run_id,t.match_id,t.contract,t.opened_at,t.status,
  f.payload as frame,f.observed_at as frame_at,
  r.match_id as result_match_id,r.home_score,r.away_score,r.source as result_source,
@@ -219,7 +219,7 @@ left join lateral(select payload,observed_at from app_live_event_frame
 left join app_match_result r on r.match_id=t.match_id
 where t.status in ('PENDING','OBSERVED')
 order by t.opened_at asc limit $1
-\`;
+`;
 /** A server-side task independent of browser sessions. Tests can be evaluated
  * after restart and need no admin to remain logged in.
  */
@@ -229,24 +229,24 @@ export async function refreshMarketLab({runQuery=query,now=Date.now,limit=250}={
  for(const row of rows){
   const decided=evaluateLabCase(row,{now:now()});
   if(!['PENDING','OBSERVED','PASS','FAIL','INCONCLUSIVE'].includes(decided.status))continue;
-  await runQuery(\`update app_live_market_test_case set status=$2,engine_status=$3,
+  await runQuery(`update app_live_market_test_case set status=$2,engine_status=$3,
      stitch_status=$4,evidence=$5::jsonb,last_checked_at=now(),
      finalized_at=case when $2 in ('PASS','FAIL','INCONCLUSIVE') then now() else null end
-     where id=$1 and status in ('PENDING','OBSERVED')\`,
+     where id=$1 and status in ('PENDING','OBSERVED')`,
    [row.id,decided.status,decided.engine,decided.stitch,
     JSON.stringify({reason:decided.reason,frameAt:row.frame_at,checkedAt:new Date(now()).toISOString()})]);
   const field={PASS:'passed',FAIL:'failed',INCONCLUSIVE:'inconclusive',PENDING:'pending',OBSERVED:'observed'}[decided.status];
   totals[field]++;
  }
- await runQuery(\`update app_live_market_test_run r set finished_at=now()
+ await runQuery(`update app_live_market_test_run r set finished_at=now()
    where finished_at is null
    and not exists(select 1 from app_live_market_test_case t where t.run_id=r.id
-     and t.status in ('PENDING','OBSERVED'))\`);
+     and t.status in ('PENDING','OBSERVED'))`);
  return {...totals,mode:'VIRTUAL_ONLY_NO_WALLET'};
 }
 export async function listMarketLab({runQuery=query,limit=8}={}){
  const cap=asInt(limit,1,30,8);
- const {rows:runs}=await runQuery(\`select r.id,r.started_at,r.finished_at,r.requested_matches,
+ const {rows:runs}=await runQuery(`select r.id,r.started_at,r.finished_at,r.requested_matches,
     r.selected_matches,r.coverage,
     count(t.id)::int as cases,
     count(t.id) filter(where t.status='PASS')::int as passed,
@@ -255,11 +255,11 @@ export async function listMarketLab({runQuery=query,limit=8}={}){
     count(t.id) filter(where t.status='PENDING')::int as pending,
     count(t.id) filter(where t.status='OBSERVED')::int as observed
    from app_live_market_test_run r left join app_live_market_test_case t on t.run_id=r.id
-   group by r.id order by r.started_at desc limit $1\`,[cap]);
+   group by r.id order by r.started_at desc limit $1`,[cap]);
  if(!runs.length)return {mode:'VIRTUAL_ONLY_NO_WALLET',runs:[],cases:[]};
- const {rows:cases}=await runQuery(\`select id,run_id,match_id,match_name,market_name,
+ const {rows:cases}=await runQuery(`select id,run_id,match_id,match_name,market_name,
    market_line,outcome_name,odds,contract,status,engine_status,stitch_status,
    evidence,opened_at,last_checked_at,finalized_at from app_live_market_test_case
-   where run_id=any($1::uuid[]) order by opened_at desc,match_id limit 400\`,[runs.map(r=>r.id)]);
+   where run_id=any($1::uuid[]) order by opened_at desc,match_id limit 400`,[runs.map(r=>r.id)]);
  return {mode:'VIRTUAL_ONLY_NO_WALLET',runs,cases};
 }
