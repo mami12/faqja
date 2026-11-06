@@ -1,6 +1,7 @@
 import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
 import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
 import MarketLab from '../components/Admin/MarketLab';
+import FootballInformationPanel from '../components/Admin/FootballInformationPanel';
 import MissingMarkets from '../components/Admin/MissingMarkets';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useMemo,useRef,useState } from 'react';
@@ -22,9 +23,9 @@ import CasinoSettings from '../components/Admin/CasinoSettings';
 import FinancialReset from '../components/Admin/FinancialReset';
 import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing, FlaskConical, Search, X, Command } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing, FlaskConical, Search, X, Command, Database } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch' | 'market-lab';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch' | 'market-lab' | 'football-info';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Puna e përditshme',
@@ -46,6 +47,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'match-exposure', label: 'Bastet dhe verifikimi', description: 'Ekspozimi për ndeshje dhe vendime manuale', icon: ShieldAlert },
       { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
+      { id:'football-info',label:'Burimet e futbollit',description:'AiScore + TheSports01 · lidhje dhe diagnostikim',icon:Database },
       { id:'sports-evidence',label:'Tregje që mungojnë',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
       { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
     ],
@@ -235,6 +237,7 @@ export default function AdminPage() {
               <AdminDashboard />
             </>}
             {tab === 'market-lab' && <MarketLab />}
+             {tab === 'football-info' && <FootballInformationPanel />}
             {tab === 'users' && <UserManagement />}
             {tab === 'market-catalog' && <MarketCatalog />}
             {tab === 'matches' && <MatchControl />}
