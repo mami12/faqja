@@ -51,6 +51,8 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  }
  if(contract.kind==='sequence'&&current?.home!=null&&current?.away!=null&&
     contract.target<=current.home+current.away)throw fail('Goli/korneri i kërkuar ka ndodhur tashmë.');
+ if(contract.kind==='nth-time'&&current?.home!=null&&current?.away!=null&&
+    contract.target<=current.home+current.away)throw fail('Goli i kërkuar ka ndodhur tashmë.');
  if(contract.kind==='race'&&current?.home!=null&&current?.away!=null&&
     (current.home>=contract.target||current.away>=contract.target))throw fail('Gara e golave/kornerave ka përfunduar.');
  if(contract.kind==='window'&&clock!=null&&clock>contract.to)throw fail('Intervali i këtij tregu ka përfunduar.');
