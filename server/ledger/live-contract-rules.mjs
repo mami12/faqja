@@ -143,8 +143,56 @@ export function parseEventWindow(line,clock=null) {
  return {version:1,kind:'window',event:kind,...(side?{side}:{}),from:start,to:end,choice,
   startExclusive:!!rolling,exactMinute:!!exactMinute,clockAtAcceptance:number(clock)};
 }
+/** Explicit Zizobet interval leader: who scores/takes MOST in X-Y.
+ * A tie is a distinct draw outcome; this is not a next-event or full-time bet.
+ */
+export function parseIntervalLeader(line) {
+ const name=norm(line.market_name??line.marketName??line.name);
+ const m=name.match(/^who\s+(?:scores\s+most\s+goals|takes\s+most\s+corners)\s+in\s+minutes?\s+(\d{1,3})\s*[-–]\s*(\d{1,3})\b/);
+ if(!m)return null;
+ const from=Number(m[1]),to=Number(m[2]);
+ if(from<0||to<from||to>130)return null;
+ const event=/corners/.test(name)?'corner':'goal';
+ const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
+ if(!side)return null;
+ return {version:1,kind:'interval-leader',event,from,to,side};
+}
+/** Count of goals/corners/cards in a provider's fixed minute range.
+ * Unlike a YES/NO incident window, the selection can be Over, Under,
+ * exactly N or at least N. Each is graded against persisted incident rows.
+ */
+export function parseIntervalCount(line) {
+ const name=norm(line.market_name??line.marketName??line.name);
+ const event=typeOf(name);
+ if(!event||/\b(?:which|who|race|next|first|last|winner|result|player|scorer|asian|handicap)\b|[&+]/.test(name))return null;
+ const m=name.match(/\bin\s+minutes?\s+(\d{1,3})\s*[-–]\s*(\d{1,3})\b/);
+ if(!m)return null;
+ const from=Number(m[1]),to=Number(m[2]);
+ if(from<0||to<from||to>130)return null;
+ const label=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ const raw=line.line??line.specifier;
+ const n=number(raw);
+ const over=label.match(/^over(?:\s+(\d+(?:[.,]\d+)?))?$/);
+ const under=label.match(/^under(?:\s+(\d+(?:[.,]\d+)?))?$/);
+ if(over||under){
+  const threshold=number(String((over??under)[1]??n??'').replace(',','.'));
+  if(threshold===null||threshold<0||threshold>300)return null;
+  return {version:1,kind:'window-total',event,from,to,
+   choice:over?'over':'under',threshold};
+ }
+ const exact=label.match(/^(?:exact(?:ly)?\s+)?(\d{1,3})$/);
+ if(exact)return {version:1,kind:'window-total',event,from,to,
+  choice:'exact',target:Number(exact[1])};
+ const atLeast=label.match(/^(\d{1,3})\s*(?:\+|or more)$/);
+ if(atLeast)return {version:1,kind:'window-total',event,from,to,
+  choice:'atLeast',target:Number(atLeast[1])};
+ return null;
+}
+
 export function parseSequenceBet(line,counts={}) {
  const name=norm(line.market_name??line.marketName??line.name);
+ // An event numbered inside a time band is not the same as the Nth event of the match.
+ if(/\b(?:minutes?|mins?|interval)\b/.test(name))return null;
  const event=/\bcorner/.test(name)?'corner':/\bgoal/.test(name)?'goal':null;
  if(!event)return null;
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
@@ -190,7 +238,7 @@ export function parseCountMarket(line) {
  return null;
 }
 export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
- parsePlayerGoalContract(line)??parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
+ parsePlayerGoalContract(line)??parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseIntervalLeader(line)??parseEventWindow(line,clock)??parseIntervalCount(line)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
