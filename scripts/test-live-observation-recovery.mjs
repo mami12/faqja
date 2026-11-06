@@ -51,8 +51,8 @@ const match={service:'LIVE',home_score:1,away_score:0,score_at:new Date(now),clo
  raw:{homeTeam:{id:'home'},awayTeam:{id:'away'}}};
 assert.equal(frozenLiveContract({market_name:'Next Goal',outcome_name:'2'},match,now).target,2);
 assert.equal(frozenLiveContract({market_name:'Next Goal',outcome_name:'Chelsea'},{...match,home:'Arsenal',away:'Chelsea'},now).side,'away');
-assert.equal(frozenLiveContract({market_name:'Corner in minutes 20-45',outcome_name:'Yes'},match,now).to,45);
-assert.equal(frozenLiveContract({market_name:'Chelsea corner in minutes 20-45',outcome_name:'Yes'},
+assert.equal(frozenLiveContract({market_name:'Corner in minutes 36-45',outcome_name:'Yes'},match,now).to,45);
+assert.equal(frozenLiveContract({market_name:'Chelsea corner in minutes 36-45',outcome_name:'Yes'},
  {...match,home:'Arsenal',away:'Chelsea'},now).side,'away');
 assert.equal(frozenLiveContract({market_name:'Total Goals',outcome_name:'Over',line:'2.5'},match,now).threshold,2.5);
 assert.throws(()=>frozenLiveContract({market_name:'Next Goal',outcome_name:'2'},
@@ -116,7 +116,7 @@ async function simulateLiveMatches(){
   const database={connect:async()=>({query,release(){}})};
   const player=(await query("insert into app_user(username,password_hash,balance) values('sim-live','test',500) returning id")).rows[0].id;
   const ticket=(await query("insert into app_ticket(user_id,stake,total_odds,potential_payout,ticket_type,placed_at) values($1,10,8,80,'COMBO',$2) returning id",[player,new Date(now-1000)])).rows[0].id;
-  const fixture={...match,home:'Arsenal',away:'Chelsea',stats:{home:{corners:0},away:{corners:0}}};
+  const fixture={...match,home:'Arsenal',away:'Chelsea',match_time_ms:34*60000,stats:{home:{corners:0},away:{corners:0}}};
   const selections=[
    [123,'Next Goal','Chelsea'],
    [123,'Goal in minutes 35-40','Yes'],
