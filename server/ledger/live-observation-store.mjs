@@ -104,11 +104,15 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
     'on conflict(match_id) do update set last_seen_at=excluded.last_seen_at '+
     'where app_live_event_cursor.last_seen_at<excluded.last_seen_at',
     [matchId,at]);
-  if(saved.rowCount>0)await persistVerifiedEventFacts(matchId,frame,client.query.bind(client));
+  // Recheck every valid full sample, including identical frames deduplicated
+  // in the raw archive. A second matching poll confirms the DB incident set.
+  await persistVerifiedEventFacts(matchId,frame,client.query.bind(client),at);
   // A complete PRIMARY timeline reconciled with the same feed counters
   // recovers missing polls without using fabricated "zero event" intervals.
-  const verifiedKinds=Object.keys(frame.coverage??{})
-    .filter(k=>k.endsWith('Through')).map(k=>k.slice(0,-7));
+  const confirmed=await client.query(`select kind from app_match_event_coverage
+    where match_id=$1 and provider='zizobet' and confirmed_at is not null
+      and observed_at=$2::timestamptz`,[matchId,at]);
+  const verifiedKinds=confirmed.rows.map(row=>row.kind);
   if(verifiedKinds.length)await client.query(`update app_live_event_recovery
     set status='RESOLVED_PRIMARY_RECONCILED',resolved_at=now()
     where match_id=$1 and status='AWAITING_BACKUP_API'
