@@ -43,15 +43,15 @@ export function parseTimedResultMarket(line){
  */
 export function parseTeamGoalMarket(line,teams={}){
  const original=String(line.market_name??line.marketName??line.name??'');
- if(/\\b(?:1st|first|2nd|second)\\s+half\\b|\\b(?:minutes?|interval|asian|handicap|player|scorer|both|each)\\b|[&+]/i.test(original))return null;
+ if(/\b(?:1st|first|2nd|second)\s+half\b|\b(?:minutes?|interval|asian|handicap|player|scorer|both|each)\b|[&+]/i.test(original))return null;
  const scope=goalTotalContract(line,teams)?.scope;
  if(scope!=='home'&&scope!=='away')return null;
  const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
- const kind=/^(?:over|lart|mbi)(?:\\s|$)/.test(choice)?'over':
-  /^(?:under|poshte|nen)(?:\\s|$)/.test(choice)?'under':null;
+ const kind=/^(?:over|lart|mbi)(?:\s|$)/.test(choice)?'over':
+  /^(?:under|poshte|nen)(?:\s|$)/.test(choice)?'under':null;
  if(!kind)return null;
- const rawLine=line.line??line.specifier??original.match(/\\((\\d+(?:[.,]\\d+)?)\\)\\s*$/)?.[1];
- const namedValue=choice.match(/(?:over|under|lart|mbi|poshte|nen)\\s+(\\d+(?:[.,]\\d+)?)/)?.[1];
+ const rawLine=line.line??line.specifier??original.match(/\((\d+(?:[.,]\d+)?)\)\s*$/)?.[1];
+ const namedValue=choice.match(/(?:over|under|lart|mbi|poshte|nen)\s+(\d+(?:[.,]\d+)?)/)?.[1];
  const threshold=number(String(namedValue??rawLine??'').replace(',','.'));
  if(threshold===null||threshold<0||threshold>100)return null;
  return {version:1,kind:'team-total-goals',event:'goal',side:scope,choice:kind,threshold};
@@ -160,7 +160,10 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
   const side=contract.side;
   if(!['home','away'].includes(side)||!['over','under'].includes(contract.choice))return null;
   const goals=nonNeg(evidence.teams?.goal?.[side]);
-  if(goals===null||clock===null||!fullCoverage(evidence,'goal',clock))return null;
+  // The primary per-team scoreboard is itself a confirmed count. A truncated
+  // event list may omit earlier goals, but cannot undo an already reached total.
+  // Financial writes still require two independent agreeing source observations.
+  if(goals===null||clock===null)return null;
   if(goals>contract.threshold)return contract.choice==='over'?'WON':'LOST';
   // Do not pay an UNDER or mark OVER lost while more goals can happen.
   if(!ended&&!scopeEnded)return null;
@@ -204,7 +207,12 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
    if(events.some(e=>e.minute===lo||e.minute===hi))return null;
    relevant=events.filter(e=>e.minute>lo&&e.minute<hi);
   }else relevant=events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
-  if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
+  // A named, non-cancelled primary event with a valid time is positive proof
+  // even when the short incident list omits older corners/cards. Never infer
+  // "no event" from that short list; those decisions still require coverage.
+  if(relevant.some(e=>e.id!=null&&String(e.id).length>0&&
+    Number.isFinite(Number(e.minute))&&Number(e.minute)<=clock&&
+    (!Number.isFinite(e.seconds)||e.seconds<=clock*60)))return contract.choice?'WON':'LOST';
   // An abandoned/early-closed match is not proof that a scheduled window elapsed.
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
   return null;
