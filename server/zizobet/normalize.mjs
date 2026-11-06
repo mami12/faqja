@@ -14,11 +14,12 @@ export function resolveMarketTitle(raw,q,{intervalWidth}={}){
  let name=text(raw).replace(/^\*\s*/,'');
  // Race-to-X is a quote parameter, NOT the literal letter X. Refuse an
  // ambiguous offer instead of showing a misleading threshold on the ticket.
- if (/^(?:which team wins (?:the )?)?race to x corners?\??$/i.test(name)) {
+ if (/^(?:which team wins (?:the )?)?race to x (?:corners?|goals?)\??$/i.test(name)) {
+  const kind=/goals?\??$/i.test(name)?'goals':'corners';
   const candidate=[q.h,q.p3].filter(v=>v!==null&&v!==undefined&&String(v).trim()!=='');
   const values=candidate.map(v=>Number(v));
   if(!values.length||values.some(v=>!Number.isSafeInteger(v)||v<1||v>100)||new Set(values).size!==1)return null;
-  name='Which team wins race to '+values[0]+' corners';
+  name='Which team wins race to '+values[0]+' '+kind;
  }
  if(/^When will next goal be scored/i.test(name)&&/^\d+$/.test(text(q.p3))){
   const explicit=name.match(/in (\d+) minutes interval/i)?.[1];
@@ -73,7 +74,7 @@ export function oddsOf(row,quotes,meta,live,open=true){
  const rows=[];
  const widths=new Map();for(const q of quotes??[]){const p=text(meta.positions?.get(String(q.pid))??q.pn).match(/^min\s+(\d+)-(\d+)$/i);if(!p)continue;const width=Number(p[2])-Number(p[1])+1;if(width<=0)continue;const counts=widths.get(Number(q.mid))??new Map();counts.set(width,(counts.get(width)??0)+1);widths.set(Number(q.mid),counts);}
  for(const q of quotes??[]){const id=Number(q.mid),def=(live?meta.liveMarkets:meta.preMarkets).get(id);if(!def)continue;
-  const rawName=def.Name??def.name;if(!rawName||def.IsHandicap===true||def.h===true||/handicap|asian|aziatik|handikap|spread/i.test(rawName+' '+(def.kn??'')))continue;
+  const rawName=def.Name??def.name;if(!rawName||def.IsHandicap===true||def.h===true||/handicap|handikap|spread|^asian (?:corners?|cards?)\b|\b(?:corners?|cards?)\.\s*asian\b/i.test(rawName+' '+(def.kn??'')))continue;
   if(isEarlyPayoutOfferMarket({name:rawName+' '+(def.kn??''),key:'zz'+id+'@'}))continue;
   if((def.IsOverUnder===true||def.ou===true)&&q.h!=null&&Math.abs(Number(q.h)*4)%2===1)continue;
   const params=Object.fromEntries(['p1','p2','p3','pl','comp','seq'].filter(k=>q[k]!=null).map(k=>[k,q[k]]));

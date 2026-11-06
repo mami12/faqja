@@ -50,33 +50,37 @@ export function isFootballFixture(row){
  // Unmarked fixtures cannot be proven football; safe failure.
  return false;
 }
+/**
+ * The PRIMARY feed alone grades goals, corners, race-to-X, event windows,
+ * cards and all ordinary totals. Request secondary information ONLY for a
+ * missing player identity or football shots-on-target/fouls statistics.
+ */
 export function marketInformationNeeds(markets=[]){
  const needs=new Set();
  for(const market of markets){
   const name=String(market.market_name??market.marketName??market.name??'').toLowerCase();
-  if(/\b(?:goals?|scorer|scores?|btts|assist|penalt|own goal|header|headed|first goal|next goal)\b/.test(name)){
-   needs.add('goal');needs.add('timeline');
+  if(/\b(?:goalscorer|goal scorer)\b|\bplayer\b.*\b(?:score|goals?|scoring)\b/.test(name)){
+   needs.add('player');needs.add('timeline');
   }
-  if(/\b(?:corners?|race to)\b/.test(name)){needs.add('corner');needs.add('timeline');needs.add('statistics');}
-  if(/\b(?:cards?|yellow|red card|bookings?)\b/.test(name)){needs.add('card');needs.add('timeline');needs.add('statistics');}
-  if(/\b(?:fouls?|shots?|offsides?)\b/.test(name)){needs.add('statistics');}
-  if(/\b(?:minutes?|intervals?|within)\b/.test(name))needs.add('timeline');
-  if(/\b(?:players?|scorer|assists?|goalscorer)\b/.test(name)){needs.add('player');needs.add('timeline');}
-  if(/\b(?:penalt|own goal|header|foot)\b/.test(name)){needs.add('goalMethod');needs.add('timeline');}
+  if(/\b(?:shots? on target|shots? on goal|goditje(?:t)? n[eë] port[eë])\b/.test(name)){
+   needs.add('shotsOnTarget');needs.add('statistics');
+  }
+  if(/\b(?:fouls?|faulle?)\b/.test(name)){
+   needs.add('fouls');needs.add('statistics');
+  }
  }
  return [...needs];
 }
 export const INFORMATION_ENDPOINTS=[
- {key:'aiscore:match',kind:'aiscore',needs:['timeline','goal','player','corner','card','goalMethod'],path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
- {key:'aiscore:data',kind:'aiscore',needs:['timeline','goal','player','goalMethod'],path:id=>ai+'/match/data?lang=2&match_id='+encodeURIComponent(id)+'&tz=08%3A00'},
- {key:'aiscore:mlive',kind:'aiscore',needs:['timeline','goal','player','corner','card','goalMethod'],path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'},
- {key:'aiscore:team_stats',kind:'aiscore',needs:['statistics'],path:id=>ai+'/match/team_stats?match_id='+encodeURIComponent(id)},
- {key:'thesports01:sd',kind:'thesports01',needs:['statistics'],path:id=>ts+'/f/sd?id='+encodeURIComponent(id)+'&lang=en'},
- {key:'thesports01:p',kind:'thesports01',needs:['timeline','goal','player','goalMethod','card'],path:id=>ts+'/f/p?id='+encodeURIComponent(id)},
- {key:'thesports01:vd',kind:'thesports01',needs:['timeline','corner','card'],path:id=>ts+'/f/vd?id='+encodeURIComponent(id)}
+ // Known candidate paths only. Data remains read-only until exact JSON is
+ // inspected and reconciled against the specific PRIMARY fixture.
+ {key:'thesports01:sd',kind:'thesports01',needs:['shotsOnTarget','fouls'],path:id=>ts+'/f/sd?id='+encodeURIComponent(id)+'&lang=en'},
+ {key:'aiscore:team_stats',kind:'aiscore',needs:['shotsOnTarget','fouls'],path:id=>ai+'/match/team_stats?match_id='+encodeURIComponent(id)},
+ {key:'aiscore:match',kind:'aiscore',needs:['player'],path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
+ {key:'aiscore:mlive',kind:'aiscore',needs:['player'],path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'},
+ {key:'thesports01:p',kind:'thesports01',needs:['player'],path:id=>ts+'/f/p?id='+encodeURIComponent(id)}
 ];
 export function selectedInformationEndpoints(map,needs){
- // No pending primary market => no secondary fetch, ever.
  if(!Array.isArray(needs)||!needs.length)return [];
  const wanted=new Set(needs);
  return INFORMATION_ENDPOINTS.filter(spec=>
@@ -138,11 +142,50 @@ export async function requestFootballInformation(url,{request=fetch,maxBytes=700
   return {ok:false,error:error?.name==='AbortError'?'TIMEOUT':'FETCH_UNAVAILABLE'};
  }finally{clearTimeout(timer);}
 }
-export async function sourceMatchNeeds(matchId,{runQuery=query}={}){
+const nonnegative=v=>v!=null&&v!==''&&Number.isInteger(Number(v))&&Number(v)>=0;
+const json=v=>{try{return typeof v==='string'?JSON.parse(v):v;}catch{return null;}};
+export function missingSupplementalNeeds(needs,{statistics,review,primaryEvents,providersEnabled=false}={}){
+ const selected=new Set(needs);
+ const stats=json(statistics)??{},assessed=json(review);
+ for(const field of ['shotsOnTarget','fouls']){
+  if(!selected.has(field))continue;
+  const candidate=stats[field]??(assessed?.conflicts?.[field]?null:assessed?.consensus?.[field]);
+  if(candidate&&nonnegative(candidate.home)&&nonnegative(candidate.away)){
+   selected.delete(field);continue;
+  }
+  // The configured five statistics providers must have their first chance
+  // before AiScore or TheSports01. A missing review isn't evidence of failure.
+  if(providersEnabled&&(!assessed?.complete||!Array.isArray(assessed.attempted)))selected.delete(field);
+ }
+ if(!selected.has('shotsOnTarget')&&!selected.has('fouls'))selected.delete('statistics');
+ if(selected.has('player')){
+  const events=json(primaryEvents)?.events;
+  const goals=Array.isArray(events)?events.filter(e=>e.type==='goal'&&!e.disabled):[];
+  if(goals.length&&goals.every(e=>typeof e.player==='string'&&e.player.trim()))
+    {selected.delete('player');selected.delete('timeline');}
+ }
+ return [...selected];
+}
+export async function sourceMatchNeeds(matchId,{runQuery=query,env=process.env}={}){
  const {rows}=await runQuery(
   "select distinct l.market_name from app_ticket_line l join app_ticket t on t.id=l.ticket_id "+
   "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING'",[matchId]);
- return marketInformationNeeds(rows);
+ const needs=marketInformationNeeds(rows);
+ if(!needs.length)return needs;
+ const facts=(await runQuery(
+  'select r.statistics,v.payload as review from (select $1::bigint as id) i '+
+  'left join app_match_result r on r.match_id=i.id '+
+  'left join app_stat_review v on v.match_id=i.id',[matchId])).rows[0]??{};
+ let primaryEvents=null;
+ if(needs.includes('player')){
+  primaryEvents=(await runQuery(
+   'select payload from app_match_event_evidence where match_id=$1',[matchId])).rows[0]?.payload??null;
+  if(!primaryEvents)primaryEvents=(await runQuery(
+   'select payload from app_live_event_frame where match_id=$1 order by observed_at desc,id desc limit 1',[matchId])).rows[0]?.payload??null;
+ }
+ return missingSupplementalNeeds(needs,{
+  ...facts,primaryEvents,providersEnabled:env.STATS_PROVIDERS_ENABLED==='true'
+ });
 }
 export async function setFootballInformationMapping({matchId,aiscoreId,thesports01Id,actorId},
  {runQuery=query,loadMatch=getMatchById}={}){

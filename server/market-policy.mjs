@@ -10,7 +10,6 @@ export function isHandicapOfferMarket(market = {}) {
   const name = String(market.name ?? market.market_name ?? '').trim().toLowerCase();
   const type = String(market.marketType ?? market.market_type ?? '').trim().toLowerCase();
   return type === 'handicap'
-    || /\b(?:asian|aziatik\w*)\b/.test(name)
     || /\b(handicap|handicaps|fora|spread|spreads)\b/.test(name)
     || /^asian (?:corners?|cards?)\b/.test(name)
     || /^(?:corners?|cards?)\.\s*asian\b/.test(name);

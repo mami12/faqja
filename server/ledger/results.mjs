@@ -124,8 +124,9 @@ export async function captureFinishedMatches() {
   const rows = await getMatches({ includeEnded: true, limit: 2000 });
 
   // Specifically check matches from any currently pending ticket lines
-  const pendingLines = await query(`select distinct match_id from app_ticket_line
-    where status = 'PENDING' order by match_id`);
+  const pendingLines = await query(`select distinct l.match_id from app_ticket_line l
+    join app_ticket t on t.id=l.ticket_id
+    where l.status='PENDING' and t.status='PENDING' order by l.match_id`);
   const pendingMatchIds = new Set(pendingLines.rows.map((r) => Number(r.match_id)));
 
   const candidateMatches = new Map(rows.map(row => [Number(row.match_id), row]));

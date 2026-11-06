@@ -7,6 +7,9 @@ import { normalizeEvents, gradeClosedCornerWindow } from '../server/ledger/event
 import { gradeLine, hasRequiredSettlementEvidence, settleClosedCornerWindows } from '../server/ledger/settler.mjs';
 
 assert.equal(resolveMarketTitle('Which team wins race to X corners', {h:5}), 'Which team wins race to 5 corners');
+assert.equal(resolveMarketTitle('Which team wins race to X goals', {h:6}), 'Which team wins race to 6 goals');
+assert.equal(resolveMarketTitle('Which team wins race to X goals', {}),null);
+assert.equal(resolveMarketTitle('Which team wins race to X goals', {h:6,p3:7}),null);
 assert.equal(resolveMarketTitle('Which team wins race to X corners', {}), null);
 assert.equal(resolveMarketTitle('Which team wins race to X corners', {h:5,p3:7}), null);
 assert.equal(resolveMarketTitle('Which team wins race to X corners', {h:1.5}), null);

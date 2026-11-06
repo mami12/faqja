@@ -59,8 +59,17 @@ jobs:
         run: |
           npm ci
           npm --prefix web ci
+      - name: Validate market identities and unknown-market exclusions
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: node scripts/test-market-identity.mjs
       - name: Validate live goal, corner, card and count contract rules
-        run: node scripts/test-live-contract-rules.mjs
+        run: |
+          node scripts/test-live-contract-rules.mjs
+          node scripts/test-primary-market-verification.mjs
+          node scripts/test-prematch-market-verification.mjs
+          node scripts/test-verified-live-settlement.mjs
+          node scripts/test-live-settlement-money-flow.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
       - name: Validate virtual live-market lab and independent second check
@@ -104,10 +113,6 @@ jobs:
         run: npm run test:protected
       - name: Validate sportsbook label regressions
         run: npm run test:sportsbook-labels
-      - name: Validate market identities and unknown-market exclusions
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/test
-        run: node scripts/test-market-identity.mjs
       - name: Validate server risk suspensions
         run: node scripts/test-live-risk.mjs
       - name: Validate live financial risk limits

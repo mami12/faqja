@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { decodePushMessage, describeMarket } from '../server/push-decode.mjs';
 import { isIdentifiedMarketName, buildMarkets } from '../server/collector.mjs';
@@ -110,7 +111,9 @@ function loadUiModule(url) {
   const compiled = ts.transpileModule(readFileSync(url, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  const localRequire = id => id.startsWith('.') ? loadUiModule(new URL(id + '.ts', url)) : require(id);
+  const localRequire = id => id.startsWith('.')
+    ? (/\.mjs$/.test(id) ? require(fileURLToPath(new URL(id,url))) : loadUiModule(new URL(id + '.ts', url)))
+    : require(id);
   new Function('exports', 'require', 'module', compiled)(mod.exports, localRequire, mod);
   return mod.exports;
 }
@@ -118,7 +121,7 @@ const ui = loadUiModule(new URL('../web/src/utils/marketCatalog.ts', import.meta
 const mk = (name, line = '', period = 0, marketType = 'OTHER', extId = '') =>
   ({ id: 'test-' + extId + name + line, name, line, period, marketType, extId });
 
-for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i Saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonat'], ['Result', 'Rezultati']]) {
+for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonët'], ['Result', 'Rezultati (1X2)']]) {
   assert.equal(ui.isIdentifiedMarket(mk(name)), true, name + ' is a real upstream name');
   assert.equal(ui.marketDisplayTitle(mk(name), 'al'), translated, name + ' is translated for display');
   assert.equal(ui.marketDisplayTitle(mk(name), 'en'), name, 'raw provider title remains available unchanged');

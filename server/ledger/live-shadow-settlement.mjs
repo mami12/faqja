@@ -35,7 +35,7 @@ export async function createLiveSettlementPreviews({
   const status=timeline&&delta&&timeline!==delta?null:timeline??delta;
   if(!['WON','LOST','VOID'].includes(status)){await clear(row.line_id);held++;continue;}
   const evidence={contract,frame:{source:frame.source,clock:frame.clock,counts:frame.counts,
-    coverage:frame.coverage,ended:frame.ended,events:frame.events},frameAt:row.frame_at,
+    teams:frame.teams,coverage:frame.coverage,ended:frame.ended,events:frame.events},frameAt:row.frame_at,
     recoveriesOpen:0,decision:'TEST_ONLY_NO_WALLET_WRITE'};
   await runQuery(
    'insert into app_live_settlement_preview(line_id,match_id,proposed_status,payload,updated_at) '+

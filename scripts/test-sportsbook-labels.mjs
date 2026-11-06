@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 const require = createRequire(import.meta.url), ts = require('typescript');
 import { loadUiModule } from './fixtures/load-ui-module.mjs';
 const module = { exports: loadUiModule(new URL('../web/src/utils/sportsbookLabels.ts', import.meta.url)) };
+const zizoTranslations=loadUiModule(new URL('../web/src/i18n/zizobetMarketLabels.ts',import.meta.url));
+assert.equal(zizoTranslations.translateZizobetMarketLabel('Which team wins race to 6 goals'),'Skuadra që arrin e para 6 gola');
+assert.equal(zizoTranslations.translateZizobetMarketLabel('Which team wins race to 6 corners'),'Skuadra që arrin e para 6 goditje këndore');
 
 const translations = {
   'markets.match_result': 'Rezultati i ndeshjes (1X2)',

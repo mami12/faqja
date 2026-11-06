@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
- marketInformationNeeds,selectedInformationEndpoints,describeJsonStructure,
+ marketInformationNeeds,selectedInformationEndpoints,missingSupplementalNeeds,describeJsonStructure,
  requestFootballInformation,canonicalHttpError,isFootballFixture,
  setFootballInformationMapping,inspectFootballInformation,
  createFootballInformationCollector,FOOTBALL_INFORMATION_SQL
@@ -14,12 +14,12 @@ assert.equal(isFootballFixture({sport_tag:'football'}),true);
 assert.equal(isFootballFixture({sport_id:2}),false);
 assert.equal(isFootballFixture({}),false);
 
-const goal=marketInformationNeeds([{market_name:'Next Goal (Goal 2)'},{market_name:'Player to Assist'}]);
-assert.ok(goal.includes('goal'));assert.ok(goal.includes('timeline'));assert.ok(goal.includes('player'));
-assert.ok(goal.includes('goalMethod')===false);
+const goal=marketInformationNeeds([{market_name:'Next Goal (Goal 2)'},{market_name:'Player to Score a Goal'}]);
+assert.deepEqual(goal,['player','timeline'],'Only missing player identity qualifies; Next Goal belongs to PRIMARY');
 const corners=marketInformationNeeds([{market_name:'Race to 7 Corners'},
- {market_name:'Total Fouls'},{market_name:'Red Cards'}]);
-for(const key of ['corner','card','statistics','timeline'])assert.ok(corners.includes(key),key);
+ {market_name:'Race to 6 Goals'},{market_name:'Goal in minutes 10-20'},
+ {market_name:'Total Fouls'},{market_name:'Red Cards'},{market_name:'Shots on Target'}]);
+assert.deepEqual(corners,['fouls','statistics','shotsOnTarget'],'No other markets trigger backup');
 assert.deepEqual(marketInformationNeeds([{market_name:'Full Time Result'}]),[]);
 const map={aiscore_id:'j374oi0xz04sgqo',thesports01_id:'4578950',mapping_status:'ADMIN_SUPPLIED_UNVERIFIED'};
 assert.deepEqual(selectedInformationEndpoints(map,[]),[]);
@@ -30,8 +30,23 @@ assert.ok(endpoints.every(x=>!x.url.includes('/match/team_stats')));
 assert.ok(endpoints.every(x=>!x.url.includes('/odds_list')));
 assert.ok(endpoints.every(x=>!x.url.includes('/user/info')));
 assert.ok(endpoints.every(x=>!x.url.includes('/chat/')));
-const statEndpoints=selectedInformationEndpoints(map,['statistics']);
-assert.deepEqual(statEndpoints.map(x=>x.key),['aiscore:team_stats','thesports01:sd']);
+const statEndpoints=selectedInformationEndpoints(map,['shotsOnTarget','statistics']);
+assert.deepEqual(statEndpoints.map(x=>x.key),['thesports01:sd','aiscore:team_stats']);
+assert.deepEqual(missingSupplementalNeeds(['shotsOnTarget','fouls','statistics'],{
+ statistics:{shotsOnTarget:{home:5,away:2},fouls:{home:10,away:12}},providersEnabled:true
+}),[],'PRIMARY has all facts, no backup call');
+assert.deepEqual(missingSupplementalNeeds(['fouls','statistics'],{
+ statistics:{},providersEnabled:true
+}),[],'Wait for the five existing providers to attempt their verification');
+assert.deepEqual(missingSupplementalNeeds(['fouls','statistics'],{
+ statistics:{},review:{complete:true,attempted:['bsd','sportapi'],consensus:{}},providersEnabled:true
+}),['fouls','statistics'],'Missing stats after providers attempt: AiScore becomes eligible');
+assert.deepEqual(missingSupplementalNeeds(['fouls','statistics'],{
+ statistics:{},review:{complete:true,attempted:['bsd'],consensus:{fouls:{home:3,away:0}}},providersEnabled:true
+}),[],'Other APIs supplied verified fouls; AiScore is unnecessary');
+assert.deepEqual(missingSupplementalNeeds(['player','timeline'],{
+ primaryEvents:{events:[{type:'goal',player:'Test scorer'}]}
+}),[],'PRIMARY already supplies scorer');
 assert.equal(canonicalHttpError(403),'AUTH_REQUIRED');
 assert.equal(canonicalHttpError(429),'RATE_LIMITED');
 
@@ -75,7 +90,9 @@ const sqlCalls=[],fetchedUrls=[];
 const db=async(sql,params)=>{
  sqlCalls.push({sql,params});
  if(sql.includes('from app_football_information_map where match_id'))return {rows:[map]};
- if(sql.includes('select distinct l.market_name'))return {rows:[{market_name:'Next Goal'}]};
+ if(sql.includes('select distinct l.market_name'))return {rows:[{market_name:'Player to Score a Goal'}]};
+ if(sql.includes('select r.statistics'))return {rows:[{statistics:{},review:null}]};
+ if(sql.includes('from app_match_event_evidence')||sql.includes('from app_live_event_frame'))return {rows:[]};
  if(sql.startsWith('insert into app_football_information_snapshot'))return {rowCount:1};
  if(sql.startsWith('update app_football_information_map'))return {rowCount:1};
  throw Error('Unexpected SQL '+sql);

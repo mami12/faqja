@@ -48,14 +48,14 @@ export function parseSequenceBet(line,counts={}) {
  if(!event)return null;
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
  const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:(?:who (?:scores|takes)|which team (?:scores|wins)) (?:the )?)?(?:goal|corner)\s*(\d+)\b|^which team (?:scores|wins) (?:the )?goal (\d+)\b/);
- const race=name.match(/\brace to (\d{1,3}) corners?\b/);
+ const race=name.match(/\brace to (\d{1,3}) (goals?|corners?)\b/);
  if(!isNext&&!numbered&&!race)return null;
  const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
  if(!side)return null;
  if(race){
   const threshold=Number(race[1]);
   if(!Number.isInteger(threshold)||threshold<1||threshold>100||side==='none')return null;
-  return {version:1,kind:'race',event:'corner',target:threshold,side};
+  return {version:1,kind:'race',event:/(?:goal)/.test(race[2])?'goal':'corner',target:threshold,side};
  }
  let target=numbered?Number(numbered[1]??numbered[2]??numbered[3]):null;
  if(isNext){
