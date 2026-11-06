@@ -105,6 +105,15 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
     'where app_live_event_cursor.last_seen_at<excluded.last_seen_at',
     [matchId,at]);
   if(saved.rowCount>0)await persistVerifiedEventFacts(matchId,frame,client.query.bind(client));
+  // A complete PRIMARY timeline reconciled with the same feed counters
+  // recovers missing polls without using fabricated "zero event" intervals.
+  const verifiedKinds=Object.keys(frame.coverage??{})
+    .filter(k=>k.endsWith('Through')).map(k=>k.slice(0,-7));
+  if(verifiedKinds.length)await client.query(`update app_live_event_recovery
+    set status='RESOLVED_PRIMARY_RECONCILED',resolved_at=now()
+    where match_id=$1 and status='AWAITING_BACKUP_API'
+      and event_types <@ $2::text[]`,[matchId,verifiedKinds]);
+
   await client.query('commit');
   return {stored:saved.rowCount>0,recovery,watching:watching.length};
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}
