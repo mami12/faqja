@@ -375,6 +375,7 @@ export async function settleClosedCornerWindows({runQuery=query,loadEvidence=loa
    where l.status='PENDING' and t.status='PENDING'
      and l.market_name ~* 'corner'
      and l.market_name ~* '(minute|from)'
+     and l.live_contract is null
      and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
    order by l.match_id,l.id`);
  const cache=new Map(),tickets=new Set();let graded=0;
