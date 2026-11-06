@@ -30,6 +30,22 @@ const next=parseSequenceBet(windowLine('Next Goal','Chelsea'),{goal:{home:1,away
 assert.equal(next,null,'Unknown team labels must use explicit provider identity');
 const g=parseSequenceBet(windowLine('Next Goal','2'),{goal:{home:1,away:0}});
 assert.deepEqual([g.target,g.side],[2,'away']);
+// The original Zizobet market title carries a FIXED goal ordinal. Never
+// collapse "Next Goal 2nd" into the bare dynamic "Next Goal".
+for(const [name,goalNumber] of [
+ ['Next Goal 1st',1],['Next Goal 2nd',2],['Next Goal 3rd',3],
+ ['Next Goal 4th',4],['Next Goal 10th',10],['Next Goal 2',2]
+]){
+ const c=parseSequenceBet(windowLine(name,'2'),{goal:{home:3,away:0}});
+ assert.deepEqual([c?.kind,c?.event,c?.target,c?.side],['sequence','goal',goalNumber,'away'],
+  'Provider ordinal preserved irrespective of current scoreboard: '+name);
+}
+const thirdCorner=parseSequenceBet(windowLine('Next Corner 3rd','1'),{corner:{home:4,away:4}});
+assert.equal(thirdCorner?.target,3,'Numbered NEXT corner does not become corner #9');
+assert.equal(parseSequenceBet(windowLine('Next Goal 2nd extra','2'),{goal:{home:0,away:0}}),null,
+ 'An unrecognized numbered market cannot default to the live next goal');
+assert.equal(parseSequenceBet(windowLine('Next Goal 2nd half','2'),{goal:{home:0,away:0}}),null,
+ 'Half-specific NEXT cannot be graded from full match goals');
 const early=obs('goal',[12,29],30,30);early.events[0].team='home';early.events[1].team='away';
 assert.equal(gradeLiveContract(g,early),'WON');
 assert.equal(gradeLiveContract({...g,side:'home'},early),'LOST');
