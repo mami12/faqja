@@ -24,7 +24,6 @@ export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): b
   const name = normalized(market.name);
   const type = normalized(market.marketType);
   return type === 'handicap'
-    || /\b(?:asian|aziatik\w*)\b/i.test(name)
     || /\b(handicap|handicaps|fora|spread|spreads)\b/i.test(name)
     || /^asian (?:corners?|cards?)\b/.test(name)
     || /^(?:corners?|cards?)\.\s*asian\b/.test(name);
