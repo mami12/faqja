@@ -190,5 +190,6 @@ const result = (home,away)=>({home_score:home,away_score:away,home_team:'Home',a
 assert.equal(gradeLine(frozen,result(2,1)),'WON');
 assert.equal(gradeLine(frozen,result(1,0)),'LOST');
 assert.equal(gradeLine(frozen,result(1,2)),'LOST');
-assert.equal(gradeLine({builder_legs:[...frozen.builder_legs,{market_name:'Unsupported',outcome_key:'X'}]},result(2,1)),'VOID');
+assert.equal(gradeLine({builder_legs:[...frozen.builder_legs,{market_name:'Unsupported',outcome_key:'X'}]},result(2,1)),null,
+  'Unrecognized builder leg lacks evidence and must stay PENDING');
 console.log('Universal builder market matching and frozen settlement passed');
