@@ -47,7 +47,7 @@ try{
  const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
  await page.goto('http://127.0.0.1:'+server.address().port);
- try{await page.waitForFunction(()=>document.body.textContent.includes('Laboratori LIVE i tregjeve'),{timeout:15000});}catch(e){console.error('Market lab initial render failed',{errors,html:(await page.content()).slice(0,1800),body:await page.$eval('body',x=>x.textContent?.slice(0,800))});throw e;}
+ try{await page.waitForFunction(()=>document.body.textContent.includes('Laboratori LIVE i tregjeve'),{timeout:15000});}catch(e){console.error('Market lab initial render failed',{errors,html:(await page.content()).slice(0,1800),body:await page.$eval('body',x=>x.textContent?.slice(0,800)),overlay:await page.evaluate(()=>document.querySelector('vite-error-overlay')?.shadowRoot?.textContent?.slice(0,1800))});throw e;}
  const click=label=>page.evaluate(label=>[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===label)?.click(),label);
  await click('Testo tregjet');
  await page.waitForFunction(()=>document.body.textContent.includes('Arsenal – Chelsea')&&document.body.textContent.includes('Nuk u ofrua'));
