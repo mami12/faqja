@@ -190,6 +190,11 @@ async function simulateLiveMatches(){
   assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:1,missing:5});
   const receipts=(await query('select verdict,expected_status,actual_status from app_stitch_settlement_audit where line_id=$1 order by id',[ids[5]])).rows;
   assert.deepEqual(receipts,[{verdict:'MATCH',expected_status:'WON',actual_status:'WON'},{verdict:'MISMATCH',expected_status:'LOST',actual_status:'WON'}]);
+  await query('update app_match_result set home_score=2 where match_id=123');
+  assert.equal((await auditSettledLiveSelections({runQuery:query})).matched,1,'returning to two goals must clear the old mismatch');
+  await query("update app_match_result set source='ADMIN' where match_id=123");
+  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:0,missing:6},
+    'admin-entered score alone must not count as independent evidence');
   assert.equal(Number((await query('select balance from app_user where id=$1',[player])).rows[0].balance),500);
   console.log('PASS Stitch replays settled selections, reports correction mismatches and missing data, and leaves wallets untouched');
   const pruned=(await evidenceStore.pruneUnbetMatchEvidence()).rows[0];
