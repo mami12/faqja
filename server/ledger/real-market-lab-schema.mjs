@@ -44,4 +44,4 @@ export const REAL_MARKET_LAB_SQL = [
   `create index if not exists app_real_market_test_ticket_idx
     on app_real_market_test_case(ticket_id)
     where ticket_id is not null`,
-].join('\n');
+].join(';\n')+';';
