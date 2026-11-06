@@ -4,6 +4,7 @@ import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
 import {manualReviewQueue} from './manual-review-queue.mjs';
+import {STITCH_SETTLEMENT_AUDIT_ADMIN_SQL} from './stitch-settlement-audit.mjs';
 import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
 import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -118,6 +119,6 @@ financialMonitoringRouter.get('/admin/live-event-test',safe(async(req,res)=>{
    where l.status='PENDING' and t.status='PENDING'`);
   return res.set('Cache-Control','no-store').json({count:rows[0].count});
  }
- const [p,g]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200])]);
- res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows});
+ const [p,g,a]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200]),query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100])]);
+ res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows,audits:a.rows});
 }));
