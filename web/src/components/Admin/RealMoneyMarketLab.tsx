@@ -11,7 +11,7 @@ type RealCase={id:string;run_id:string;match_name:string;match_id:number;market_
  ticket_id:string|null;ticket_status:string|null;line_status:string|null;
  expected_status:string|null;audit_status:string;audit_reason:string|null;
  rejected_reason:string|null;rejected_code:string|null;
- actual_stake:string|null;actual_payout:string|null;actual_odds:string|null;ticket_placed_at:string|null};
+ actual_stake:string|null;actual_payout:string|null;actual_odds:string|null;ticket_placed_at:string|null;ticket_username:string|null};
 type RealReport={mode:'REAL_MONEY';adminBalance:number;currency:string;runs:RealRun[];cases:RealCase[]};
 const formatted=new Intl.NumberFormat('sq-AL',{maximumFractionDigits:2});
 const date=(v:string|null)=>v?new Date(v).toLocaleString('sq-AL',{dateStyle:'short',timeStyle:'short'}):'—';
@@ -37,7 +37,6 @@ export default function RealMoneyMarketLab(){
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
  const [error,setError]=useState(''),[notice,setNotice]=useState('');
  const [stake,setStake]=useState(100),[ticketCount,setTicketCount]=useState(6);
- const [accepted,setAccepted]=useState(false),[phrase,setPhrase]=useState('');
  const [runId,setRunId]=useState<string|null>(null),[search,setSearch]=useState('');
  const [showOnlyProblems,setShowOnlyProblems]=useState(false);
  const requestKey=useRef<string|null>(null);
@@ -53,20 +52,20 @@ export default function RealMoneyMarketLab(){
  const selectedCases=useMemo(()=>report.cases.filter(c=>(!selected||c.run_id===selected.id)&&
   (!showOnlyProblems||c.audit_status==='MISMATCH'||c.audit_status==='UNSETTLED'||
    c.audit_status==='NO_EVIDENCE'||c.placement_status==='REJECTED')&&
-  (!search.trim()||[c.match_name,c.market_name,c.outcome_name,c.ticket_id??'',String(c.match_id)]
+  (!search.trim()||[c.match_name,c.market_name,c.outcome_name,c.ticket_id??'',c.ticket_username??'',String(c.match_id)]
    .some(x=>x.toLowerCase().includes(search.trim().toLowerCase())))),[report.cases,selected,search,showOnlyProblems]);
  const budget=stake*ticketCount;
  const valid=Number.isInteger(stake)&&stake>=100&&stake<=1000&&Number.isInteger(ticketCount)&&
   ticketCount>=1&&ticketCount<=20&&budget<=20000;
  const start=async()=>{
-  if(busy||!valid||!accepted||phrase.trim().toUpperCase()!=='REAL')return;
+  if(busy||!valid)return;
   setBusy(true);setNotice('');setError('');
   const id=requestKey.current??crypto.randomUUID();requestKey.current=id;
   try{
    const {data}=await apiClient.post('/admin/market-lab/real-runs',{
     stakePerTicket:stake,ticketCount,requestId:id
    });
-   requestKey.current=null;setRunId(data.runId);setAccepted(false);setPhrase('');
+   requestKey.current=null;setRunId(data.runId);
    setNotice(data.existing?'Kjo kërkesë ekziston tashmë. Asnjë biletë nuk u dublua.':
     data.queued>0?'U regjistruan '+data.queued+' përzgjedhje për baste REALE. Serveri po përdor kuotat dhe bilancin real.':
     'Nuk u gjetën tregje live të mbështetura. Asnjë lek nuk u zbrit.');
@@ -103,16 +102,8 @@ export default function RealMoneyMarketLab(){
     <div className="rounded-lg border border-amber-500/30 p-3 text-sm"><span className="block text-xs text-text-secondary">Shuma maksimale që mund të zbritet</span><strong>{formatted.format(budget)} LEK</strong></div>
    </div>
    {!valid&&<p className="mt-3 text-sm text-rose-300">Minimumi 100 LEK, maksimumi 1000 LEK për biletë, 20 bileta dhe 20 000 LEK për test.</p>}
-   <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-white">
-    <input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)} className="mt-1"/>
-    <span>E konfirmoj që këto janë baste me <strong>para reale</strong>, që bilanci im mund të ulet dhe rezultati mund të jetë humbje. Nuk kërkoj anulim automatik të rezultateve.</span>
-   </label>
    <div className="mt-3 flex flex-wrap items-end gap-2">
-    <label className="text-xs text-text-secondary">Shkruaj REAL për të autorizuar vendosjen
-     <input value={phrase} onChange={e=>setPhrase(e.target.value)} placeholder="REAL"
-      className="mt-1 block min-h-11 w-40 rounded-lg border border-tertiary bg-primary px-3 text-sm text-white"/>
-    </label>
-    <button type="button" disabled={busy||!accepted||!valid||phrase.trim().toUpperCase()!=='REAL'}
+    <button type="button" disabled={busy||!valid}
      onClick={()=>void start()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-400 px-5 font-black text-slate-950 disabled:opacity-40"><Play size={16}/> Vendos baste reale</button>
     <button type="button" onClick={()=>void refresh()} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-tertiary px-3 text-sm text-white disabled:opacity-50"><RefreshCcw size={16}/> Kontrollo tani</button>
    </div>
@@ -147,7 +138,7 @@ export default function RealMoneyMarketLab(){
     <div className="flex flex-wrap gap-2">
      {Object.entries(selected?.coverage??{}).map(([name,details])=><span key={name}
       className={'rounded-lg border px-2 py-1 '+(details.selected?'border-emerald-500/30 text-emerald-300':'border-tertiary text-text-secondary')}>
-      {name}: {details.selected} {details.available?'':'(mungon në feed)'}
+      {name}: {details.selected} {details.available?'':'(nuk u gjet në ndeshjet e testuara)'}
      </span>)}
     </div>
    </div>
@@ -162,10 +153,10 @@ export default function RealMoneyMarketLab(){
     </div>
     <div role="region" tabIndex={0} className="max-h-[660px] overflow-auto">
      <table className="w-full min-w-[800px] text-left text-xs">
-      <thead className="sticky top-0 bg-[#172231] text-slate-200"><tr className="[&_th]:px-3 [&_th]:py-3"><th>Ndeshja / Tregu</th><th>Bileta reale</th><th>Shuma</th><th>Bilanci i biletës</th><th>Stitch</th><th>Prova</th></tr></thead>
+      <thead className="sticky top-0 bg-[#172231] text-slate-200"><tr className="[&_th]:px-3 [&_th]:py-3"><th>Ndeshja / Tregu</th><th>Bileta reale / Përdoruesi / Data</th><th>Shuma</th><th>Bilanci i biletës</th><th>Stitch</th><th>Prova</th></tr></thead>
       <tbody>{selectedCases.map(item=><tr key={item.id} className="border-t border-tertiary [&_td]:px-3 [&_td]:py-3">
        <td><strong className="block text-white">{item.match_name}</strong><span>{item.market_name} · {item.outcome_name}</span></td>
-       <td className="max-w-[190px] break-all"><span className="font-semibold text-white">{item.placement_status}</span><p className="mt-1">{item.ticket_id??'Pa biletë'}</p></td>
+       <td className="max-w-[230px] break-all"><span className="font-semibold text-white">{item.placement_status}</span><p className="mt-1">{item.ticket_id??'Pa biletë'}</p><p className="mt-1">Përdoruesi: {item.ticket_username??'—'}</p><p className="mt-1">Vendosur: {date(item.ticket_placed_at)}</p></td>
        <td>{item.actual_stake?formatted.format(Number(item.actual_stake))+' LEK':'—'}</td>
        <td><span className="font-bold">{item.ticket_status??'—'}</span><p className="text-text-secondary">{item.actual_payout&&item.ticket_status==='WON'?'Paguar '+formatted.format(Number(item.actual_payout))+' LEK':''}</p></td>
        <td><span className={'inline-flex rounded-full border px-2 py-1 font-semibold '+(auditStyle[item.audit_status]??auditStyle.WAITING)}>{auditLabels[item.audit_status]??item.audit_status}</span>
