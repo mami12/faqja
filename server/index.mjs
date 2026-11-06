@@ -4,6 +4,7 @@ import {toClientMatches} from './ledger/view.mjs';
 import express from 'express';
 import cors from 'cors';
 import { existsSync } from 'node:fs';
+import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketServer } from 'socket.io';
@@ -78,6 +79,10 @@ let pusher = null;
 app.locals.loadMatchDetail=async id=>{boostMatch(Number(id));if(['ybets','zizobet'].includes(config.sportsProvider)){await collector?.focus(Number(id)).catch(()=>{});await flushFeedBuffer();}else pusher?.subscribeFull(Number(id));};
 let oddsStatus = { connected: false };
 let shuttingDown = false;
+// One ordered feed stream per process. Client detects missed broadcasts and
+// reconciles from the authoritative REST snapshot after reconnect.
+const feedStreamId=randomUUID();
+let liveBoardSequence=0,matchInfoSequence=0;
 let riskRefreshTimer = null;
 let socketTasks = 0;
 const backgroundTasks = new Set();
@@ -579,7 +584,7 @@ async function applyInfoFromFeed(info) {
         console.error('[settle] failed to preserve provider FT match', updated.match_id, e.message);
       }
     }
-    io?.emit('match:info', { ...enriched, ...updated, at: new Date().toISOString(), stats: statsFromRow(updated) });
+    io?.emit('match:info', { ...enriched, ...updated, at: new Date().toISOString(), stats: statsFromRow(updated),syncStream:feedStreamId,syncSequence:++matchInfoSequence });
     await broadcastLiveRiskLocks(info.matchId, updated);
   }
   return updated;
@@ -1031,7 +1036,7 @@ async function boot() {
         await expireStaleMatches(180);
         const rows=await getMatches({service:'LIVE',catalog:true});
         const matches=await withOdds(rows,Date.now(),{board:true}),counts=await getCounts();
-        io.emit('matches:live',{at:new Date().toISOString(),counts,matches:liveBoardFacts(matches)});
+        io.emit('matches:live',{at:new Date().toISOString(),counts,matches:liveBoardFacts(matches),syncStream:feedStreamId,syncSequence:++liveBoardSequence});
       },
       selectRows:rows=>{
         const visible=selectPublishedMatches(rows.filter(r=>!['closed','uncovered','ended'].includes(r.status)),{prematchLimit:0}).rows;
