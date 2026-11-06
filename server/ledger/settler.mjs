@@ -191,10 +191,21 @@ export function gradeLine(line, result) {
         if (result.cards_home === null || result.cards_away === null) return null;
         target = Number(result.cards_home) + Number(result.cards_away);
       }
-      if (lineValue === null) return null;
-      if (key === 'over' || /^over/.test(name)) return decide(target > lineValue);
-      if (key === 'under' || /^under/.test(name)) return decide(target < lineValue);
-      return null;
+      if (lineValue === null || !Number.isFinite(target)) return null;
+      // A TWO-WAY full-integer total (1.0, 2.0, 3.0...) pushes at
+      // exactly that count. A three-way total sells an explicit exact-count
+      // selection and MUST NOT be mistaken for the two-way push contract.
+      const threeWay = /\b(?:3[\s-]*way|three[\s-]*way|3[\s-]*outcomes?|three[\s-]*outcomes?)\b/i.test(String(line.market_name ?? ''));
+      const over = key === 'over' || /^over(?:\s|$)/.test(name);
+      const under = key === 'under' || /^under(?:\s|$)/.test(name);
+      if (over === under) {
+        const exact = threeWay && (key === 'exact' || key === 'exactly' || key === 'equal' ||
+          /^exact(?:ly)?(?:\s+\d+(?:[.,]\d+)?)?$/.test(name) ||
+          name.trim() === String(lineValue));
+        return exact ? decide(target === lineValue) : null;
+      }
+      if (!threeWay && Number.isInteger(lineValue) && target === lineValue) return 'VOID';
+      return decide(over ? target > lineValue : target < lineValue);
     }
 
     case 'HANDICAP': {
