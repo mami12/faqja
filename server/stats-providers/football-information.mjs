@@ -56,30 +56,21 @@ export function isFootballFixture(row){
  * cards and all ordinary totals. Request secondary information ONLY for a
  * missing player identity or football shots-on-target/fouls statistics.
  */
+/** AiScore supplies scorer names only. All game facts are Zizobet's. */
 export function marketInformationNeeds(markets=[]){
  const needs=new Set();
  for(const market of markets){
   const name=String(market.market_name??market.marketName??market.name??'').toLowerCase();
-  if(/\b(?:goalscorer|goal scorer)\b|\bplayer\b.*\b(?:score|goals?|scoring)\b/.test(name)){
-   needs.add('player');needs.add('timeline');
-  }
-  if(/\b(?:shots? on target|shots? on goal|goditje(?:t)? n[eë] port[eë])\b/.test(name)){
-   needs.add('shotsOnTarget');needs.add('statistics');
-  }
-  if(/\b(?:fouls?|faulle?)\b/.test(name)){
-   needs.add('fouls');needs.add('statistics');
-  }
+  if(/\b(?:goalscorer|goal scorer|scorer|player)\b.*\b(?:goal|score|scoring|sh[eë]non)\b|\b(?:first|last|anytime)\s+goalscorer/i.test(name))
+   needs.add('player');
  }
  return [...needs];
 }
 export const INFORMATION_ENDPOINTS=[
- // Known candidate paths only. Data remains read-only until exact JSON is
- // inspected and reconciled against the specific PRIMARY fixture.
- {key:'thesports01:sd',kind:'thesports01',needs:['shotsOnTarget','fouls'],path:id=>ts+'/f/sd?id='+encodeURIComponent(id)+'&lang=en'},
- {key:'aiscore:team_stats',kind:'aiscore',needs:['shotsOnTarget','fouls'],path:id=>ai+'/match/team_stats?match_id='+encodeURIComponent(id)},
- {key:'aiscore:match',kind:'aiscore',needs:['player'],path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
- {key:'aiscore:mlive',kind:'aiscore',needs:['player'],path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'},
- {key:'thesports01:p',kind:'thesports01',needs:['player'],path:id=>ts+'/f/p?id='+encodeURIComponent(id)}
+ {key:'aiscore:match',kind:'aiscore',needs:['player'],
+  path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
+ {key:'aiscore:mlive',kind:'aiscore',needs:['player'],
+  path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'}
 ];
 export function selectedInformationEndpoints(map,needs){
  if(!Array.isArray(needs)||!needs.length)return [];
