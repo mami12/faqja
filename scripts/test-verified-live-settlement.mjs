@@ -18,7 +18,7 @@ const frame={
 assert.equal(primaryLiveDecision(contract,frame),'WON');
 assert.equal(primaryLiveDecision(contract,{...frame,source:'aiscore'}),null,
  'AiScore discovery cannot authorize money movements');
-assert.equal(primaryLiveDecision(contract,{...frame,coverage:{}}),null,
+assert.equal(primaryLiveDecision({...contract,baseline:null},{...frame,coverage:{}}),null,
  'Without complete PRIMARY evidence or safe delta, no winner may be guessed');
 assert.match(VERIFIED_LIVE_PROPOSALS_SQL,/app_live_event_cursor/);
 assert.match(VERIFIED_LIVE_PROPOSALS_SQL,/app_live_event_recovery/);
