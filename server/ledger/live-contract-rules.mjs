@@ -221,6 +221,10 @@ export function parseSequenceBet(line,counts={}) {
  // the fixture, NOT blindly to current score + 1. Preserve their ordinal.
  // A bare "Next Goal" remains the live next goal from the accepted score.
  const providerOrdinal=name.match(/^next\s+(goal|corner)\s+(\d{1,3})(?:st|nd|rd|th)?$/);
+ // Do not collapse a malformed numbered/period-specific NEXT offer into
+ // the unnamed live-next market. Its meaning is unsupported, so hold it.
+ if(/^next\s+(?:goal|corner)\s+\d/.test(name)&&!providerOrdinal)return null;
+ if(/^next\s+(?:goal|corner)\b/.test(name)&&/\b(?:half|period)\b/.test(name))return null;
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
  const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:(?:who (?:scores|takes)|which team (?:scores|wins)) (?:the )?)?(?:goal|corner)\s*(\d+)\b|^which team (?:scores|wins) (?:the )?goal (\d+)\b/);
  const first=/^(?:(?:who|which team)\s+(?:scores|takes|wins)\s+(?:the\s+)?)?first\s+(?:goal|corner)\b/.test(name);
