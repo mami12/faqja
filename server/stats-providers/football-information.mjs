@@ -61,6 +61,7 @@ export function marketInformationNeeds(markets=[]){
  const needs=new Set();
  for(const market of markets){
   const name=String(market.market_name??market.marketName??market.name??'').toLowerCase();
+  if(market.live_contract?.kind==='player-goal'){needs.add('player');continue;}
   if(/\b(?:goalscorer|goal scorer|scorer|player)\b.*\b(?:goal|score|scoring|sh[eë]non)\b|\b(?:first|last|anytime)\s+goalscorer/i.test(name))
    needs.add('player');
  }
@@ -160,7 +161,7 @@ export function missingSupplementalNeeds(needs,{statistics,review,primaryEvents,
 }
 export async function sourceMatchNeeds(matchId,{runQuery=query,env=process.env}={}){
  const {rows}=await runQuery(
-  "select distinct l.market_name from app_ticket_line l join app_ticket t on t.id=l.ticket_id "+
+  "select distinct l.market_name,l.live_contract from app_ticket_line l join app_ticket t on t.id=l.ticket_id "+
   "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING'",[matchId]);
  const needs=marketInformationNeeds(rows);
  if(!needs.length)return needs;
