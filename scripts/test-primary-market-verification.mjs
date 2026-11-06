@@ -65,11 +65,11 @@ const under=parseCountMarket(bet('Total Goals','Under','2.5'));
 assert.equal(gradeLiveContract(over,goals),'WON');
 assert.equal(gradeLiveContract(under,goals),'LOST');
 assert.equal(gradeLiveContract(under,misses),null);
-assert.equal(gradeLiveContract(under,{...misses,ended:true}),'WON');
+assert.equal(gradeLiveContract(under,{...misses,ended:true},{ended:true}),'WON');
 const exact=parseCountMarket(bet('Total Corners','Exactly 6'));
 assert.equal(gradeLiveContract(exact,beforeSix),null);
 assert.equal(gradeLiveContract(exact,afterSix),'LOST');
-assert.equal(gradeLiveContract(exact,{...beforeSix,ended:true}),'WON');
+assert.equal(gradeLiveContract(exact,{...beforeSix,ended:true},{ended:true}),'WON');
 
 // A mixed quote requires BOTH legs, not whichever leg becomes true first.
 assert.equal(gradeMixedTotal('Result and Total',parseResultTotal('1 and Over 2.5'),2,1), 'WON');
