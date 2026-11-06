@@ -46,7 +46,8 @@ const line=(market_name,outcome_name)=>({market_name,outcome_name,outcome_key:'u
 assert.equal(gradeLine(line('Result and total','Lyon And Over 2.5'), result), 'WON');
 assert.equal(gradeLine(line('Total and both teams to score','Over 2.5 And Yes'), result), 'WON');
 assert.equal(gradeLine(line('Result and both teams to score','Lyon And Both To Score'), result), 'WON');
-assert.equal(gradeLine(line('1st half. Result and both teams to score','Lyon And Both To Score'), result), 'VOID');
+assert.equal(gradeLine(line('1st half. Result and both teams to score','Lyon And Both To Score'), result), null,
+  'Missing first-half result is PENDING, never a stake refund');
 console.log('All four provider mixed market contract regressions passed.');
 
 assert.deepEqual(verifiedFirstHalf([{t1:'1',t2:'1'}, {t1:'2',t2:'0'}]), {home:1,away:1});
