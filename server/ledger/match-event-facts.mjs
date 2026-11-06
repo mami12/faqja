@@ -95,7 +95,7 @@ export async function persistVerifiedEventFacts(matchId, frame, execute) {
  }
  return stored;
 }
-export const SUPPORTED_FACT_KINDS=new Set(['window','sequence','race','over','under','exact','atLeast','range','team-total-goals','interval-result','player-goal']);
+export const SUPPORTED_FACT_KINDS=new Set(['window','sequence','race','over','under','exact','atLeast','range','team-total-goals','interval-result','nth-time','player-goal']);
 /**
  * PostgreSQL counts the accepted, verified incidents. Returns null when the
  * accepted structured contract, ordering or coverage cannot prove an answer.
@@ -174,6 +174,17 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   if(!full&&through*60<c.toExclusiveSeconds)return null;
   const h=Number(data.window_home),a=Number(data.window_away);
   return decision((h>a?'home':a>h?'away':'none')===c.side);
+ }
+ if(c.kind==='nth-time'){
+  if(!Number.isInteger(c.target)||c.target<1)return null;
+  if(data.nth_team!=null){
+   if(data.ambiguous_order===true||Number(data.nth_same_time)>1)return null;
+   if(c.choice==='none')return 'LOST';
+   if(c.choice!=='range'||!Number.isInteger(c.from)||!Number.isInteger(c.to))return null;
+   return decision(Number(data.nth_minute)>=c.from&&Number(data.nth_minute)<=c.to);
+  }
+  if(!full)return null;
+  return c.choice==='none'?'WON':'LOST';
  }
  if(c.kind==='sequence'){
   if(data.nth_team!=null){
