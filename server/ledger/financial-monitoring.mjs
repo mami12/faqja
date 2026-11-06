@@ -4,7 +4,7 @@ import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
 import {manualReviewQueue} from './manual-review-queue.mjs';
-import {LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
+import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
 import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
@@ -113,5 +113,5 @@ financialMonitoringRouter.get('/admin/settlement-review-queue',safe(async(req,re
 /** Test-only predictions and missing-feed intervals; no wallet mutations. */
 financialMonitoringRouter.get('/admin/live-event-test',safe(async(_req,res)=>{
  const [p,g]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200])]);
- res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows,recovery:g.rows});
+ res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows});
 }));
