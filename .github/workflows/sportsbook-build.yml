@@ -73,6 +73,7 @@ jobs:
           node scripts/test-live-financial-safety.mjs
           node scripts/test-whole-line-sportsbook-push.mjs
           node scripts/test-provider-event-facts-sql.mjs
+          node scripts/test-persisted-primary-confirmation.mjs
           node scripts/test-zizobet-info-history.mjs
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
