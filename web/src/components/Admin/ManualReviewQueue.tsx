@@ -19,7 +19,8 @@ const labels:Record<string,string>={
  MISSING_FINAL_RESULT:'Mungon rezultati përfundimtar i konfirmuar',
 };
 const fresh:Decision={status:'PENDING',reason:'',source:''};
-export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
+export default function ManualReviewQueue({onlyLineId,onSaved}:{onlyLineId?:string;onSaved?:()=>void}={}){
+ const [approval,setApproval]=useState<{item:ReviewItem;decision:Decision}|null>(null);
  const [items,setItems]=useState<ReviewItem[]>([]);
  const [decisions,setDecisions]=useState<Record<string,Decision>>({});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState<string|null>(null);
@@ -36,8 +37,7 @@ export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
  const change=(id:string,key:keyof Decision,value:string)=>setDecisions(prev=>({
   ...prev,[id]:{...(prev[id]??fresh),[key]:value}
  }));
- async function decide(item:ReviewItem){
-  const entry=decisions[item.lineId]??fresh;
+ async function decide(item:ReviewItem,entry:Decision){
   if(!entry.reason.trim()||!entry.source.trim()){setError('Shkruaj arsyen dhe burimin e verifikimit.');return;}
   setBusy(item.lineId);setError('');setNotice('');
   try{
@@ -46,6 +46,8 @@ export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
    });
    setNotice('Vendimi u regjistrua për '+(res.data.changed?.length??0)+' biletë/a.');
    setDecisions(prev=>{const next={...prev};delete next[item.lineId];return next;});
+   setApproval(null);
+   onSaved?.();
    await load();
   }catch(e:any){setError(e.response?.data?.message??'Vendimi manual dështoi.');}
   finally{setBusy(null);}
@@ -60,6 +62,16 @@ export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
   {notice&&<p role="status" className="text-accent-green text-sm">{notice}</p>}
   {loading&&<p className="text-text-secondary">Duke ngarkuar…</p>}
   {!loading&&!items.length&&<p className="bg-secondary border border-tertiary rounded-xl p-4 text-text-secondary">Nuk ka bileta që kërkojnë verifikim manual.</p>}
+  {approval&&items.some(item=>item.lineId===approval.item.lineId)&&<section aria-label="Miratimi i vendimit" className="rounded-xl border border-tertiary bg-secondary p-4 space-y-2">
+   <p className="font-bold">Mirato vendimin për përzgjedhjen</p>
+   <p>{approval.item.matchName} · {approval.item.marketName} · {approval.item.outcomeName}</p>
+   <p>{({WON:'Fituese',LOST:'Humbëse',VOID:'E pavlefshme',PENDING:'Në pritje'} as Record<string,string>)[approval.decision.status]}</p>
+   <p className="break-words text-sm">Arsyeja: {approval.decision.reason} · Burimi: {approval.decision.source}</p>
+   <div className="flex flex-wrap gap-2">
+    <button type="button" disabled={busy!==null} className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>void decide(approval.item,approval.decision)}>Po, mirato</button>
+    <button type="button" disabled={busy!==null} className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>setApproval(null)}>Jo, kthehu</button>
+   </div>
+  </section>}
   {items.map(item=>{
    const decision=decisions[item.lineId]??fresh;
    return <section key={item.lineId} className="bg-secondary rounded-xl border border-tertiary p-4 space-y-3">
@@ -93,7 +105,7 @@ export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
     <div className="flex flex-wrap gap-3 items-center justify-between">
      <p className="text-[11px] text-text-secondary">Vendimet Fituese/Humbëse/E pavlefshme mund të ndryshojnë bilancin. Sistemi regjistron administratorin dhe diferencën financiare.</p>
      <button type="button" disabled={busy!==null||!decision.reason.trim()||!decision.source.trim()}
-      onClick={()=>void decide(item)} className="bg-accent-green text-primary rounded-lg px-4 py-2 font-bold text-sm disabled:opacity-40">
+      onClick={()=>onlyLineId?setApproval({item,decision:{...decision}}):void decide(item,decision)} className="bg-accent-green text-primary rounded-lg px-4 py-2 font-bold text-sm disabled:opacity-40">
       {busy===item.lineId?'Duke ruajtur…':'Ruaj vendimin'}
      </button>
     </div>
