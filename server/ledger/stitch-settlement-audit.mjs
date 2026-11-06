@@ -4,7 +4,7 @@ import {gradeLiveContract} from './live-contract-rules.mjs';
 export const STITCH_SETTLEMENT_AUDIT_SQL=`
 create table if not exists app_stitch_settlement_audit (
  id bigserial primary key,
- line_id uuid not null references app_ticket_line(id) on delete restrict,
+ line_id uuid not null,
  actual_status text not null,
  revision text not null,
  expected_status text,
@@ -37,7 +37,7 @@ function replay(row){
 
 /** Audits recorded decisions in a separate table. Never grades a ticket or moves funds. */
 export async function auditSettledLiveSelections({runQuery=query,limit=250}={}){
- const {rows}=await runQuery(`select l.id as line_id,l.status as actual_status,l.live_contract,t.placed_at,
+ const {rows}=await runQuery(`select l.id as line_id,l.status as actual_status,l.live_contract,t.placed_at,l.ticket_id,l.match_name,l.market_name,l.outcome_name,
    r.match_id as result_id,r.home_score,r.away_score,f.payload,f.observed_at,gap.open_gap,k.revision
   from app_ticket_line l join app_ticket t on t.id=l.ticket_id
   left join app_match_result r on r.match_id=l.match_id
@@ -57,7 +57,7 @@ export async function auditSettledLiveSelections({runQuery=query,limit=250}={}){
   const verdict=expected==null?'MISSING_EVIDENCE':expected===row.actual_status?'MATCH':'MISMATCH';
   const saved=await runQuery(`insert into app_stitch_settlement_audit(line_id,actual_status,revision,expected_status,verdict,evidence)
     values($1,$2,$3,$4,$5,$6::jsonb) on conflict(line_id,actual_status,revision) do nothing`,
-   [row.line_id,row.actual_status,row.revision,expected,verdict,JSON.stringify({contract:row.live_contract,...evidence})]);
+   [row.line_id,row.actual_status,row.revision,expected,verdict,JSON.stringify({contract:row.live_contract,ticketId:row.ticket_id,matchName:row.match_name,marketName:row.market_name,outcomeName:row.outcome_name,...evidence})]);
   if(saved.rowCount)totals[verdict==='MATCH'?'matched':verdict==='MISMATCH'?'mismatched':'missing']++;
  }
  return totals;
@@ -65,6 +65,7 @@ export async function auditSettledLiveSelections({runQuery=query,limit=250}={}){
 
 export const STITCH_SETTLEMENT_AUDIT_ADMIN_SQL=`
 select a.id,a.line_id,a.actual_status,a.expected_status,a.verdict,a.evidence,a.checked_at,
-       l.ticket_id,l.match_name,l.market_name,l.outcome_name
-from app_stitch_settlement_audit a join app_ticket_line l on l.id=a.line_id
+       a.evidence->>'ticketId' as ticket_id,a.evidence->>'matchName' as match_name,
+       a.evidence->>'marketName' as market_name,a.evidence->>'outcomeName' as outcome_name
+from app_stitch_settlement_audit a
 order by a.checked_at desc,a.id desc limit $1`;
