@@ -1,6 +1,6 @@
 import {useCallback,useState} from 'react';
 import {apiClient} from '../../api/client';
-import {Activity,AlertTriangle,Database,Info,Link2,RefreshCw,Search,ShieldCheck} from 'lucide-react';
+import {AlertTriangle,Database,Link2,RefreshCw,Search,ShieldCheck} from 'lucide-react';
 
 type Shape={topLevelKeys:string[];paths:string[];hasEventLikePath:boolean};
 type ProbeSource={source:string;ok:boolean;shape?:Shape;error?:string;httpStatus?:number};
