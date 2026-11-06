@@ -2,6 +2,7 @@
  * a prediction. Unknown identity, clock, order or completeness => PENDING.
  * This module never updates tickets, balances or database state.
  */
+import {goalTotalContract} from './goal-total-contract.mjs';
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 const number=v=>v==null||v===''||!Number.isFinite(Number(v))?null:Number(v);
 const yesNo=line=>{
@@ -16,6 +17,46 @@ const typeOf=name=>/\b(?:corners?|corner kicks?|kornera?)\b/.test(name)?'corner'
  /\b(?:cards?|bookings?|kartona?)\b/.test(name)?'card':
  /\b(?:fouls?|faulle?)\b/.test(name)?'foul':null;
 const nonNeg=v=>{const n=number(v);return n!==null&&Number.isInteger(n)&&n>=0?n:null;};
+/** Explicit Zizobet 00:00–09:59 minute RESULT, never today's match score.
+ * A period/result is scored ONLY from goals in that interval, from the full
+ * primary timeline, once its ending second has elapsed and goals reconcile.
+ */
+export function parseTimedResultMarket(line){
+ const raw=norm(line.market_name??line.marketName??line.name);
+ // Relative 2H intervals need a separately verified period clock. Do not
+ // silently map 00:00 to the first half of an already-started second half.
+ const title=raw.replace(/^(?:1st|first) half\s*[-–:.]\s*/,'');
+ if(/^(?:2nd|second) half\b/.test(title))return null;
+ const match=title.match(/^(\d{1,3}):([0-5]\d)\s*[-–]\s*(\d{1,3}):([0-5]\d)\s*(?:min(?:ute)?s?\.?)?\s*[-–]\s*(?:result|1x2)$/);
+ if(!match)return null;
+ const from=Number(match[1])*60+Number(match[2]),end=Number(match[3])*60+Number(match[4])+1;
+ if(from<0||end<=from||end>130*60||from%60!==0||end%60!==0)return null;
+ const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
+ if(!side)return null;
+ return {version:1,kind:'interval-result',event:'goal',side,
+  fromSeconds:from,toExclusiveSeconds:end};
+}
+
+/** Full-match team totals are irreversible once the team's confirmed
+ * score passes the offered line. Never infer a win from the opposite team or
+ * infer UNDER before the verified match conclusion.
+ */
+export function parseTeamGoalMarket(line,teams={}){
+ const original=String(line.market_name??line.marketName??line.name??'');
+ if(/\b(?:1st|first|2nd|second)\s+half\b|\b(?:minutes?|interval|asian|handicap|player|scorer|both|each)\b|[&+]/i.test(original))return null;
+ const scope=goalTotalContract(line,teams)?.scope;
+ if(scope!=='home'&&scope!=='away')return null;
+ const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ const kind=/^(?:over|lart|mbi)(?:\s|$)/.test(choice)?'over':
+  /^(?:under|poshte|nen)(?:\s|$)/.test(choice)?'under':null;
+ if(!kind)return null;
+ const rawLine=line.line??line.specifier??original.match(/\((\d+(?:[.,]\d+)?)\)\s*$/)?.[1];
+ const namedValue=choice.match(/(?:over|under|lart|mbi|poshte|nen)\s+(\d+(?:[.,]\d+)?)/)?.[1];
+ const threshold=number(String(namedValue??rawLine??'').replace(',','.'));
+ if(threshold===null||threshold<0||threshold>100)return null;
+ return {version:1,kind:'team-total-goals',event:'goal',side:scope,choice:kind,threshold};
+}
+
 export function parseEventWindow(line,clock=null) {
  let name=norm(line.market_name??line.marketName??line.name);
  const kind=typeOf(name);
@@ -26,11 +67,11 @@ export function parseEventWindow(line,clock=null) {
  if(home&&away)return null;
  const side=home?'home':away?'away':null;
  let start,end;
- const fixed=name.match(/\b(?:minutes?|mins?)\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\b|\b(?:between|from)\s+(?:minutes?\s+)?(\d{1,3})\s*(?:and|to|[-–])\s*(\d{1,3})\b/);
+ const fixed=name.match(/\b(?:minutes?|mins?)\s*(\d{1,3})\s*[-–]\s*(\d{1,3})\b|\b(?:between|from)\s+(?:minutes?\s+)?(\d{1,3})\s*(?:and|to|[-–])\s*(\d{1,3})\b|\bfrom\s+(\d{1,3}):00\s+to\s+(\d{1,3})\s*min\b/);
  const first=name.match(/\b(?:first|opening)\s+(\d{1,3})\s+minutes?\b/);
  const by=name.match(/\b(?:by|before|until)\s+(?:the\s+)?(?:minute\s+)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?\b/);
  const rolling=name.match(/\b(?:next|following)\s+(\d{1,2})\s+minutes?\b/);
- if(fixed){start=Number(fixed[1]??fixed[3]);end=Number(fixed[2]??fixed[4]);}
+ if(fixed){start=Number(fixed[1]??fixed[3]??fixed[5]);end=Number(fixed[2]??fixed[4]??fixed[6]);}
  else if(first){start=0;end=Number(first[1]);}
  else if(by){start=0;end=Number(by[1]);}
  else if(rolling){
@@ -86,8 +127,8 @@ export function parseCountMarket(line) {
  if(plus)return {version:1,kind:'atLeast',event,target:Number(plus[1])};
  return null;
 }
-export const liveContract=(line,{counts={},clock=null}={})=>
- parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseCountMarket(line);
+export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
+ parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
@@ -111,10 +152,46 @@ const fullCoverage=(evidence,event,through)=>{
  * 'ended' requires a confirmed terminal feed phase, not wall-clock time.
  */
 export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=false}={}){
- if(!contract||!['window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
+ if(!contract||!['interval-result','team-total-goals','window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
  const {event}=contract;
  const ordered=sortEvents(Array.isArray(evidence.events)?evidence.events:[],event);
  const clock=number(evidence.clock),count=number(eventCount(evidence.counts,event));
+ if(contract.kind==='team-total-goals'){
+  const side=contract.side;
+  if(!['home','away'].includes(side)||!['over','under'].includes(contract.choice))return null;
+  const goals=nonNeg(evidence.teams?.goal?.[side]);
+  // The primary per-team scoreboard is itself a confirmed count. A truncated
+  // event list may omit earlier goals, but cannot undo an already reached total.
+  // Financial writes still require two independent agreeing source observations.
+  if(goals===null||clock===null)return null;
+  if(goals>contract.threshold)return contract.choice==='over'?'WON':'LOST';
+  // Do not pay an UNDER or mark OVER lost while more goals can happen.
+  if(!ended&&!scopeEnded)return null;
+  if(Number.isInteger(contract.threshold)&&goals===contract.threshold)return 'VOID';
+  return contract.choice==='under'?'WON':'LOST';
+ }
+ if(contract.kind==='interval-result'){
+  if(!ordered||clock===null||!Number.isSafeInteger(contract.fromSeconds)||
+     !Number.isSafeInteger(contract.toExclusiveSeconds)||clock*60<contract.toExclusiveSeconds||
+     !fullCoverage(evidence,'goal',contract.toExclusiveSeconds/60))return null;
+  const goals=ordered.events;
+  // Exact provider times take priority. An integer minute without seconds
+  // safely identifies only its entire 00:00–00:59 bucket, which is enough
+  // for this provider's minute-aligned 00:00–09:59 contracts.
+  const eventSecond=e=>Number.isFinite(e.seconds)?e.seconds:Number.isInteger(e.minute)?e.minute*60:null;
+  if(goals.some(e=>eventSecond(e)===null))return null;
+  let home=0,away=0;
+  for(const e of goals){
+   const second=eventSecond(e);
+   if(second>=contract.fromSeconds&&second<contract.toExclusiveSeconds){
+    if(e.team==='home')home++;
+    else if(e.team==='away')away++;
+    else return null;
+   }
+  }
+  const result=home>away?'home':away>home?'away':'none';
+  return contract.side===result?'WON':'LOST';
+ }
  if(contract.kind==='window'){
   if(!ordered)return null;
   if(contract.side&&ordered.events.some(e=>!['home','away'].includes(e.team)))return null;
@@ -130,7 +207,12 @@ export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=
    if(events.some(e=>e.minute===lo||e.minute===hi))return null;
    relevant=events.filter(e=>e.minute>lo&&e.minute<hi);
   }else relevant=events.filter(e=>Number(e.minute)>=contract.from&&Number(e.minute)<=contract.to);
-  if(relevant.length&&relevant.some(e=>fullCoverage(evidence,event,Number(e.minute))))return contract.choice?'WON':'LOST';
+  // A named, non-cancelled primary event with a valid time is positive proof
+  // even when the short incident list omits older corners/cards. Never infer
+  // "no event" from that short list; those decisions still require coverage.
+  if(relevant.some(e=>e.id!=null&&String(e.id).length>0&&
+    Number.isFinite(Number(e.minute))&&Number(e.minute)<=clock&&
+    (!Number.isFinite(e.seconds)||e.seconds<=clock*60)))return contract.choice?'WON':'LOST';
   // An abandoned/early-closed match is not proof that a scheduled window elapsed.
   if(clock!==null&&clock>contract.to&&fullCoverage(evidence,event,contract.to))return contract.choice?'LOST':'WON';
   return null;

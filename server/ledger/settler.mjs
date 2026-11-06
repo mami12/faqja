@@ -25,6 +25,7 @@ import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
 import {auditSettledLiveSelections} from './stitch-settlement-audit.mjs';
 import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
+import {backfillPendingTeamGoalContracts} from './live-contract-backfill.mjs';
 import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
@@ -414,6 +415,11 @@ export async function recoverResolvedTickets() {
 
 /** one pass: store newly finished results, then settle everything that can be settled */
 export async function settleAll() {
+  // Recover contracts for already accepted team-goal tickets before reading
+  // the newest Zizobet frame or proposing a wallet settlement.
+  let backfilled={examined:0,filled:0};
+  try{backfilled=await backfillPendingTeamGoalContracts();}
+  catch(error){console.error('[settle] team-goal backfill failed:',error.message);}
   let captured = 0;
   // A malformed/unavailable catalogue must not block already stored results or
   // recovery of payments whose line grading succeeded in an earlier pass.
@@ -449,6 +455,7 @@ export async function settleAll() {
     lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded + verifiedLive.graded,
     closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + verifiedLive.closed.length + recovered.length,
     recovered: recovered.length,
+    backfilled,
     verifiedLive:{enabled:verifiedLive.enabled,examined:verifiedLive.examined,graded:verifiedLive.graded,closed:verifiedLive.closed.length},
     livePreview:preview,
   };

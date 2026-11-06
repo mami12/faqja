@@ -42,12 +42,12 @@ create index if not exists app_live_market_test_pending_idx on app_live_market_t
 create index if not exists app_live_market_test_runs_idx on app_live_market_test_case(run_id);
 `;
 
-const MARKET_GROUPS=Object.freeze(['next-goal','numbered-goal','next-corner','race-corners',
+const MARKET_GROUPS=Object.freeze(['next-goal','numbered-goal','next-corner','race-goals','race-corners',
  'goal-window','corner-window','card-window','foul-window','over-under','exact','range']);
 export {MARKET_GROUPS};
 const asInt=(v,min,max,defaultValue)=>Number.isSafeInteger(Number(v))&&Number(v)>=min&&Number(v)<=max?Number(v):defaultValue;
 const testGroup=(c,marketName='')=>c.kind==='sequence'?(c.event==='goal'?(/^next\s+goal\b/i.test(marketName)?'next-goal':'numbered-goal'):'next-corner'):
- c.kind==='race'?'race-corners':
+ c.kind==='race'?(c.event==='goal'?'race-goals':'race-corners'):
  c.kind==='window'?c.event+'-window':
  c.kind==='exact'?'exact':c.kind==='range'?'range':
  ['over','under','atLeast'].includes(c.kind)?'over-under':null;
@@ -86,7 +86,9 @@ export function selectLiveMarketCases(matches,{limit=36,perGroup=4}={}){
   }
  }
  return {items:candidates,coverage:Object.fromEntries(MARKET_GROUPS.map(group=>[
-  group,{created:counts[group],available:counts[group]>0}
+  group,{created:counts[group],available:counts[group]>0,
+   targets:[...new Set(candidates.filter(item=>item.group===group)
+    .map(item=>item.contract?.target).filter(value=>Number.isSafeInteger(value)&&value>0))].sort((a,b)=>a-b)}
  ]))};
 }
 const shuffle=(xs,random=Math.random)=>[...xs].map(item=>({item,key:random()}))

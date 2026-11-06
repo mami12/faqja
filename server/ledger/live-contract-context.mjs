@@ -33,7 +33,7 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  const windowSide=windowMarket&&(homeNamed||awayNamed)?(homeNamed?'home team':'away team'):null;
  const namedLine=windowSide?{...line,market_name:windowSide+' '+market}:line;
  const prepared=selected?{...line,outcome_name:selected,outcomeName:selected}:namedLine;
- const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners}});
+ const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners},teams:match});
  const name=String(line.market_name??line.marketName??'');
  if(service==='PREMATCH'&&!scheduled)throw fail('Ndeshja prematch nuk ka fillim të ardhshëm të verifikuar.');
  if(!contract){
@@ -54,6 +54,8 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  if(contract.kind==='race'&&current?.home!=null&&current?.away!=null&&
     (current.home>=contract.target||current.away>=contract.target))throw fail('Gara e golave/kornerave ka përfunduar.');
  if(contract.kind==='window'&&clock!=null&&clock>contract.to)throw fail('Intervali i këtij tregu ka përfunduar.');
+ if(contract.kind==='interval-result'&&clock!=null&&clock*60>=contract.toExclusiveSeconds)
+  throw fail('Intervali i rezultatit ka përfunduar.');
  // Live "Next Goal" needs *exactly* the current confirmed cumulative count.
  // Never infer it from the displayed odds or the browser's score.
  if(contract.kind==='sequence'&&/next/i.test(name)&&

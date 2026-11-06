@@ -1,6 +1,7 @@
 import {eventContract,eventInWindow} from './event-contract.mjs';
 const query=async(...args)=>(await import('../db.mjs')).query(...args);
 import {eventMarketRequirement} from './event-market-policy.mjs';
+import {parseTeamGoalMarket} from './live-contract-rules.mjs';
 export const needsEvents=m=>!!eventMarketRequirement(m)||/header|headed|own goal|scoring method|method of.*goal/i.test(m.market_name??m.name??'');
 /** One bounded snapshot per fixture, only while a matching ticket needs it.
  * An empty/error fallback cannot replace already complete event evidence. */
@@ -9,7 +10,7 @@ export function createEventEvidenceStore({runQuery=query,now=Date.now,cacheMs=10
  const init=()=>ready??=runQuery(`create table if not exists app_match_event_evidence(match_id bigint primary key,payload jsonb not null,observed_at timestamptz not null default now())`).catch(e=>{ready=null;throw e;});
  const eventWatchIds=async()=>{
   if(now()-pendingAt<cacheMs)return pending;
-  if(!watchFlight)watchFlight=(async()=>{const r=await runQuery("select l.match_id,l.market_name,l.live_contract from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING' union all select match_id,market_name,contract as live_contract from app_live_market_test_case where status in ('PENDING','OBSERVED')");pending=new Set(r.rows.filter(r=>r.live_contract!=null||needsEvents(r)).map(r=>String(r.match_id)));pendingAt=now();return pending;})().finally(()=>{watchFlight=null;});
+  if(!watchFlight)watchFlight=(async()=>{const r=await runQuery("select l.match_id,l.market_name,l.line,l.outcome_name,l.outcome_key,l.live_contract from app_ticket_line l join app_ticket t on t.id=l.ticket_id where l.status='PENDING' and t.status='PENDING' union all select match_id,market_name,market_line as line,outcome_name,outcome_key,contract as live_contract from app_live_market_test_case where status in ('PENDING','OBSERVED')");pending=new Set(r.rows.filter(r=>r.live_contract!=null||needsEvents(r)||parseTeamGoalMarket(r)!=null).map(r=>String(r.match_id)));pendingAt=now();return pending;})().finally(()=>{watchFlight=null;});
   return watchFlight;
  };
  return {eventWatchIds,async pruneUnbetMatchEvidence(){
@@ -49,9 +50,15 @@ export const eventWatchIds=()=>store.eventWatchIds();
 export const pruneUnbetMatchEvidence=()=>store.pruneUnbetMatchEvidence();
 export const saveEventEvidence=(id,payload)=>store.saveEventEvidence(id,payload);
 export const loadEventEvidence=id=>store.loadEventEvidence(id);
+function zizobetMinute(value){
+ const raw=String(value??'').trim(),match=raw.match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?$/);
+ if(!match)return null;
+ const minute=Number(match[1])+Number(match[2]??0);
+ return Number.isSafeInteger(minute)&&minute>=0&&minute<=130?minute:null;
+}
 function zizobetEventSeconds(clock,minute){
  const time=String(clock??'').match(/^(\d{1,3}):([0-5]\d)$/);
- if(!time||!Number.isFinite(minute))return null;
+ if(!time||minute===null)return null;
  const seconds=Number(time[1])*60+Number(time[2]);
  return Math.abs(seconds/60-minute)<=1?seconds:null;
 }
@@ -61,7 +68,7 @@ export function normalizeEvents(data,source){
  const active=e=>!e.disabled&&!e.cancelled&&!e.canceled&&e.isConfirmed!==false&&!/cancelled|canceled|voided/i.test(String(e.status??''));
  if(source==='sportradar')events=(data.doc?.[0]?.data?.events??[]).map(e=>({disabled:!active(e),id:e._id,type:e.type==='goal'?'goal':e.type==='corner'?'corner':e.type==='card'?'card':e.type,team:e.team,minute:e.time,seconds:e.seconds,injury:e.injurytime,player:e.scorer?.name??e.player?.name,playerId:e.scorer?._id??e.player?._id,own:e.owngoal,header:e.header,penalty:e.penalty,card:e.card,shootout:e.time===-1,phase:e.period??null,updatedAt:e.updated_uts??e.uts}));
  if(source==='betgenius')events=Object.values(data.data?.details?.playByPlayInfo??{}).flat().map(e=>({disabled:!active(e),id:e.id??`${e.type}|${e.teamId}|${e.timestamp}`,type:e.type==='Goal'?'goal':e.type==='Corner'?'corner':e.type==='Card'?'card':e.type,team:e.teamId,minute:parseInt(e.clock),player:e.actionDetails?.playerName,own:e.actionDetails?.isOwn,header:e.actionDetails?.isHeader,penalty:e.actionDetails?.penalty,phase:e.phase,qualifier:e.phaseQualifier,shootout:/shoot/i.test(e.phase??''),updatedAt:Date.parse(e.updatedTimestamp??e.timestamp??'')}));
- if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:e.gt==null||String(e.gt).trim()===''?NaN:Number(e.gt),seconds:zizobetEventSeconds(e.clk,Number(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
+ if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:zizobetMinute(e.gt)??NaN,seconds:zizobetEventSeconds(e.clk,zizobetMinute(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
  const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
  const retained=[...unique.values()].filter(e=>!e.disabled);
  // For closed corner windows, prove the timeline covers every corner observed

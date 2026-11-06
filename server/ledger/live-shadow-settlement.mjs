@@ -41,7 +41,9 @@ export async function createLiveSettlementPreviews({
    'insert into app_live_settlement_preview(line_id,match_id,proposed_status,payload,updated_at) '+
    'values($1,$2,$3,$4::jsonb,now()) '+
    'on conflict(line_id) do update set proposed_status=excluded.proposed_status, '+
-   'payload=excluded.payload,updated_at=excluded.updated_at',
+   'payload=excluded.payload,updated_at=excluded.updated_at '+
+   "where app_live_settlement_preview.proposed_status is distinct from excluded.proposed_status "+
+   "or app_live_settlement_preview.payload->>'frameAt' is distinct from excluded.payload->>'frameAt'",
    [row.line_id,row.match_id,status,JSON.stringify(evidence)]);
   proposed++;
  }

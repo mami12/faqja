@@ -59,19 +59,17 @@ try{
  await page.goto('http://127.0.0.1:'+server.address().port);
  try{await page.waitForFunction(()=>document.body.textContent.includes('Testim i tregjeve me bileta dhe shlyerje reale'),{timeout:15000});}catch(e){console.error('Market lab initial render failed',{errors,html:(await page.content()).slice(0,1800),body:await page.$eval('body',x=>x.textContent?.slice(0,800)),overlay:await page.evaluate(()=>document.querySelector('vite-error-overlay')?.shadowRoot?.textContent?.slice(0,1800))});throw e;}
  const click=label=>page.evaluate(label=>[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===label)?.click(),label);
- assert.equal(realCount,0,'No real wager until explicit administrator consent');
+ assert.equal(realCount,0,'No real wager before admin clicks the placement button');
  const before=await page.evaluate(()=>[...document.querySelectorAll('button')].find(x=>x.textContent.includes('Vendos baste reale'))?.disabled);
- assert.equal(before,true,'Real-money submit is disabled until confirmation');
- await page.$eval('input[type=checkbox]',e=>e.click());
- await page.type('input[placeholder="REAL"]','REAL');
- await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(x=>x.textContent.includes('Vendos baste reale')&&!x.disabled));
+ assert.equal(before,false,'Admin explicit button click is the consent; no REAL typing or checkbox');
+ assert.equal(await page.$('input[placeholder="REAL"]'),null);
  await click('Vendos baste reale');
  await page.waitForFunction(()=>document.body.textContent.includes('Nuk u gjetën tregje live të mbështetura'));
  assert.equal(realCount,1,'One explicit real-money request with no manufactured bets');
  await click('Simulime pa para');
  await page.waitForFunction(()=>document.body.textContent.includes('Laboratori LIVE i tregjeve'));
  await click('Testo tregjet');
- await page.waitForFunction(()=>document.body.textContent.includes('Arsenal – Chelsea')&&document.body.textContent.includes('Nuk u ofrua'));
+ await page.waitForFunction(()=>document.body.textContent.includes('Arsenal – Chelsea')&&document.body.textContent.includes('Nuk u testua në këtë kampion'));
  assert.equal(runCount,1,'One virtual run only');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,
   'Mobile lab viewport has no horizontal page overflow');

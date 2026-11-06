@@ -270,9 +270,10 @@ export async function listRealMarketTests({runQuery=query,actorId,limit=12}={}){
   c.last_checked_at,c.created_at,
   t.status as ticket_status,t.stake as actual_stake,t.total_odds as actual_odds,
   t.potential_payout as actual_payout,t.placed_at as ticket_placed_at,
-  l.status as line_status,l.live_contract
+  u.username as ticket_username,l.status as line_status,l.live_contract
  from app_real_market_test_case c
  left join app_ticket t on t.id=c.ticket_id
+ left join app_user u on u.id=t.user_id
  left join app_ticket_line l on l.ticket_id=t.id and l.match_id=c.match_id
  where c.run_id=any($1::uuid[])
  order by c.created_at desc,c.match_id,c.id limit 500`,

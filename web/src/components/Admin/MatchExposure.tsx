@@ -16,7 +16,7 @@ export default function MatchExposure() {
   const [busy, setBusy] = useState(false);
   const [matchId, setMatchId] = useState(''), [selection, setSelection] = useState('');
   const [scope, setScope] = useState('market'), [ticketId, setTicketId] = useState('');
-  const [status, setStatus] = useState('PENDING'), [reason, setReason] = useState(''), [source, setSource] = useState('');
+  const [status, setStatus] = useState('PENDING');
   async function load() {
     try {
       const [exposure, review] = await Promise.all([apiClient.get('/admin/match-exposure'), apiClient.get('/admin/statistics-review')]);
@@ -33,7 +33,7 @@ export default function MatchExposure() {
       const selected = selections.find((item: any) => item.id === selection);
       if (scope === 'market' && !selected) throw new Error('Zgjidh përzgjedhjen e tregut.');
       const target = scope === 'ticket' ? { ticketId: ticketId.trim() } : { matchId, marketKey: selected.market.marketKey, line: selected.market.line ?? '', outcomeKey: selected.outcome.key };
-      const result = await apiClient.post('/admin/manual-settlement', { ...target, status, reason, source });
+      const result = await apiClient.post('/admin/manual-settlement', { ...target, status });
       setMessage('Vendimi u regjistrua për ' + result.data.changed.length + ' bileta.'); await load();
     } catch (e: any) { setError(e.response?.data?.message || e.message || 'Vendimi nuk u ruajt.'); }
     finally { setBusy(false); }
@@ -56,12 +56,10 @@ export default function MatchExposure() {
         {Object.keys(review.unavailable || {}).length > 0 && <p className="text-text-secondary text-sm">Burime pa të dhëna përfundimtare: {Object.keys(review.unavailable).join(', ')}</p>}</>}
     </div></>}
     <form onSubmit={submit} className={panel}><h2 className="font-bold">Vendim manual i administratorit</h2>
-      <p className="text-sm text-text-secondary">Vendimi ruhet me administratorin, kohën, arsyen dhe burimin. Për tregun zgjidhet rezultati konkret. Për biletën vendimi zbatohet te të gjitha përzgjedhjet e saj. Bilanci korrigjohet vetëm me diferencën e pagesës.</p>
+      <p className="text-sm text-text-secondary">Vendimi ruhet me administratorin dhe kohën, pa kërkuar shënime shtesë. Për tregun zgjidhet rezultati konkret. Për biletën vendimi zbatohet te të gjitha përzgjedhjet e saj. Bilanci korrigjohet vetëm me diferencën e pagesës.</p>
       <label className="block">Niveli<select aria-label="Niveli i vendimit" value={scope} onChange={e => setScope(e.target.value)} className={input}><option value="market">Përzgjedhje tregu</option><option value="ticket">Biletë individuale</option></select></label>
       {scope === 'ticket' ? <label className="block">Identifikuesi i plotë i biletës<input aria-label="Identifikuesi i biletës" required value={ticketId} onChange={e => setTicketId(e.target.value)} className={input}/></label> : <label className="block">Përzgjedhja<select required aria-label="Përzgjedhja për verifikim" value={selection} onChange={e => setSelection(e.target.value)} className={input}><option value="">Zgjidh tregun dhe rezultatin</option>{selections.map((item: any) => <option key={item.id} value={item.id}>{translateMarketName(item.market.name, t)} {item.market.line} · {translateOutcomeName(item.outcome.name, t, item.market.name, match?.name, item.outcome.key)}</option>)}</select></label>}
-      <label className="block">Gjendja<select aria-label="Gjendja e vendimit" value={status} onChange={e => setStatus(e.target.value)} className={input}><option value="PENDING">Në pritje</option><option value="WON">Fituese</option><option value="LOST">Humbëse</option></select></label>
-      <label className="block">Arsyeja<textarea aria-label="Arsyeja e vendimit" required maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} className={input}/></label>
-      <label className="block">Burimi i verifikimit<input aria-label="Burimi i verifikimit" required maxLength={500} value={source} onChange={e => setSource(e.target.value)} className={input}/></label>
+      <label className="block">Gjendja<select aria-label="Gjendja e vendimit" value={status} onChange={e => setStatus(e.target.value)} className={input}><option value="PENDING">Në pritje</option><option value="WON">Fituese</option><option value="LOST">Humbëse</option><option value="VOID">E pavlefshme</option></select></label>
       <button disabled={busy} className="bg-accent-green text-primary font-bold rounded-lg px-4 py-2 disabled:opacity-50">{busy ? 'Duke ruajtur…' : 'Ruaj vendimin manual'}</button>
     </form>
   </div>;

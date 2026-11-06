@@ -58,17 +58,16 @@ try{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'page fits '+width+'px; tables may scroll within their wrappers');
   await page.screenshot({path:`test-artifacts/match-exposure/${width}.png`,fullPage:true});
   const before=requests.length;
-  // Required source/reason prevent an incomplete financial decision.
+  // The authenticated admin selects status directly; server records audit metadata.
   await page.select(label('Përzgjedhja për verifikim'),JSON.stringify(['corners','2.5','over']));
-  await page.select(label('Gjendja e vendimit'),'WON');await page.click('form button');assert.equal(requests.length,before);
-  await fill(label('Arsyeja e vendimit'),'Kornerat u verifikuan manualisht');await fill(label('Burimi i verifikimit'),'Raporti zyrtar i ndeshjes');
+  await page.select(label('Gjendja e vendimit'),'WON');
   await submit();assert.equal(requests.length,before+1,'one click posts one market decision');
-  assert.deepEqual(requests.at(-1),{matchId:'701',marketKey:'corners',line:'2.5',outcomeKey:'over',status:'WON',reason:'Kornerat u verifikuan manualisht',source:'Raporti zyrtar i ndeshjes'});
+  assert.deepEqual(requests.at(-1),{matchId:'701',marketKey:'corners',line:'2.5',outcomeKey:'over',status:'WON'});
   await page.select(label('Niveli i vendimit'),'ticket');await fill(label('Identifikuesi i biletës'),ticketB);
-  await page.select(label('Gjendja e vendimit'),'PENDING');await fill(label('Arsyeja e vendimit'),'Bileta në pritje të verifikimit');
+  await page.select(label('Gjendja e vendimit'),'PENDING');
   await submit();assert.equal(requests.length,before+2,'one click posts one individual-ticket decision');
-  assert.deepEqual(requests.at(-1),{ticketId:ticketB,status:'PENDING',reason:'Bileta në pritje të verifikimit',source:'Raporti zyrtar i ndeshjes'});
-  console.log('PASS match exposure '+width+'px: real members/stakes/odds/conditional payouts, conflicting providers, required decision inputs, exact market and ticket requests');
+  assert.deepEqual(requests.at(-1),{ticketId:ticketB,status:'PENDING'});
+  console.log('PASS match exposure '+width+'px: real members/stakes/odds/conditional payouts, conflicting providers, status-only admin decisions');
  }
  assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);assert.equal(requests.length,4);
 }finally{await browser?.close();await vite?.close();if(http){http.closeAllConnections();await new Promise(r=>http.close(r));}await pool.end();}
