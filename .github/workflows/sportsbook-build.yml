@@ -65,6 +65,14 @@ jobs:
         run: node scripts/test-live-observation-recovery.mjs
       - name: Validate virtual live-market lab and independent second check
         run: node scripts/test-live-market-lab.mjs
+      - name: Verify real-money admin lab only uses guarded accepted bets
+        run: node scripts/test-real-market-lab.mjs
+      - name: Validate 3-10-character player password rules
+        run: node scripts/test-account-password-policy.mjs
+      - name: Syntax check real-money admin lab
+        run: |
+          node --check server/ledger/real-market-lab.mjs
+          node --check server/ledger/real-market-lab-schema.mjs
       - name: Verify market lab and live-sync on mobile Chromium
         run: node scripts/test-market-lab-browser.mjs
       - name: Verify two-window live scores and reconnect synchronization

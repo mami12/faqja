@@ -1,5 +1,6 @@
 import {statsProviders} from './stats-providers/index.mjs';
 import {refreshMarketLab} from './ledger/live-market-lab.mjs';
+import {processRealMarketTestQueue,auditRealMarketTests} from './ledger/real-market-lab.mjs';
 import {toClientMatches} from './ledger/view.mjs';
 import express from 'express';
 import cors from 'cors';
@@ -230,6 +231,12 @@ async function runSettlement(why = 'periodic') {
   try {
     trackBackground(statsProviders.tick().catch(()=>{}));
     const out = await settleAll();
+    // Authorized real admin tests use production bet placement and a separate
+    // independent ticket audit, even when the admin closes the browser.
+    try{await processRealMarketTestQueue({limit:8});}
+    catch(error){console.warn('[real market lab] queue:',error.message);}
+    try{await auditRealMarketTests();}
+    catch(error){console.warn('[real market lab] audit:',error.message);}
     // Evaluate virtual tickets independently of admin sessions. Never write to wallets.
     try{await refreshMarketLab();}catch(error){console.warn('[market lab] evaluation failed:',error.message);}
     settlementHealth.lastSuccessAt = new Date().toISOString();
@@ -324,6 +331,8 @@ async function keepFeedForPendingLiveBets(){
     select 1 from app_live_market_test_case v
     left join app_match_result r on r.match_id=v.match_id
     where v.status in ('PENDING','OBSERVED') and r.match_id is null
+  ) or exists (
+    select 1 from app_real_market_test_case c where c.placement_status in ('QUEUED','PLACING')
   ) as active`);
   if(rows[0]?.active===true){idle.touch();return true;}
  }catch(error){console.warn('[live contracts] pending wager check:',error.message);}

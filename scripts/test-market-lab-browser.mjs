@@ -14,7 +14,7 @@ const html='<!doctype html><html><head><meta name="viewport" content="width=devi
  "createRoot(document.getElementById('root')).render(React.createElement(MarketLab));"+
  '</script></body></html>';
 const id='00000000-0000-4000-8000-000000000001';
-let created=false,refreshes=0,runCount=0,server,vite,browser;
+let created=false,refreshes=0,runCount=0,realCount=0,server,vite,browser;
 const run={id,started_at:new Date().toISOString(),finished_at:null,
  requested_matches:8,selected_matches:1,coverage:{
   'next-goal':{created:1,available:true},
@@ -40,6 +40,16 @@ try{
   res.json({runId:id,created:1,selectedMatches:1,coverage:run.coverage});
  });
  app.post('/app/api/admin/market-lab/refresh',(_req,res)=>{refreshes++;res.json({examined:1,passed:1});});
+ app.get('/app/api/admin/market-lab/real',(_req,res)=>res.json({
+  mode:'REAL_MONEY',adminBalance:1200,currency:'LEK',runs:[],cases:[]
+ }));
+ app.post('/app/api/admin/market-lab/real-runs',(req,res)=>{
+  assert.equal(req.body.stakePerTicket,100);
+  assert.equal(req.body.ticketCount,6);
+  assert.match(req.body.requestId,/^[0-9a-f-]{36}$/);
+  realCount++;
+  res.json({runId:id,queued:0,maxDebit:0,coverage:{}});
+ });
  app.get('/',async(_req,res)=>res.type('html').send(await vite.transformIndexHtml('/',html)));
  app.use(vite.middlewares);
  server=app.listen(0,'127.0.0.1');await new Promise(done=>server.once('listening',done));
@@ -47,8 +57,19 @@ try{
  const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
  await page.goto('http://127.0.0.1:'+server.address().port);
- try{await page.waitForFunction(()=>document.body.textContent.includes('Laboratori LIVE i tregjeve'),{timeout:15000});}catch(e){console.error('Market lab initial render failed',{errors,html:(await page.content()).slice(0,1800),body:await page.$eval('body',x=>x.textContent?.slice(0,800)),overlay:await page.evaluate(()=>document.querySelector('vite-error-overlay')?.shadowRoot?.textContent?.slice(0,1800))});throw e;}
+ try{await page.waitForFunction(()=>document.body.textContent.includes('Testim i tregjeve me bileta dhe shlyerje reale'),{timeout:15000});}catch(e){console.error('Market lab initial render failed',{errors,html:(await page.content()).slice(0,1800),body:await page.$eval('body',x=>x.textContent?.slice(0,800)),overlay:await page.evaluate(()=>document.querySelector('vite-error-overlay')?.shadowRoot?.textContent?.slice(0,1800))});throw e;}
  const click=label=>page.evaluate(label=>[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===label)?.click(),label);
+ assert.equal(realCount,0,'No real wager until explicit administrator consent');
+ const before=await page.evaluate(()=>[...document.querySelectorAll('button')].find(x=>x.textContent.includes('Vendos baste reale'))?.disabled);
+ assert.equal(before,true,'Real-money submit is disabled until confirmation');
+ await page.$eval('input[type=checkbox]',e=>e.click());
+ await page.type('input[placeholder="REAL"]','REAL');
+ await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(x=>x.textContent.includes('Vendos baste reale')&&!x.disabled));
+ await click('Vendos baste reale');
+ await page.waitForFunction(()=>document.body.textContent.includes('Nuk u gjetën tregje live të mbështetura'));
+ assert.equal(realCount,1,'One explicit real-money request with no manufactured bets');
+ await click('Simulime pa para');
+ await page.waitForFunction(()=>document.body.textContent.includes('Laboratori LIVE i tregjeve'));
  await click('Testo tregjet');
  await page.waitForFunction(()=>document.body.textContent.includes('Arsenal – Chelsea')&&document.body.textContent.includes('Nuk u ofrua'));
  assert.equal(runCount,1,'One virtual run only');

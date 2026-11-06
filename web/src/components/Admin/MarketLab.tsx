@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {apiClient} from '../../api/client';
+import RealMoneyMarketLab from './RealMoneyMarketLab';
 import {Activity,CheckCircle2,AlertTriangle,Clock3,RefreshCcw,Play,Search,ShieldCheck,Info,ChevronDown,ChevronUp} from 'lucide-react';
 
 type TestStatus='PENDING'|'OBSERVED'|'PASS'|'FAIL'|'INCONCLUSIVE';
@@ -38,7 +39,7 @@ const marketNames:Record<string,string>={
 const fmt=(v:string|null)=>v?new Date(v).toLocaleString('sq-AL',{dateStyle:'short',timeStyle:'short'}):'—';
 const states:(TestStatus|'ALL')[]=['ALL','PENDING','OBSERVED','PASS','FAIL','INCONCLUSIVE'];
 
-export default function MarketLab(){
+function VirtualMarketLab(){
  const [report,setReport]=useState<Report>({mode:'VIRTUAL_ONLY_NO_WALLET',runs:[],cases:[]});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  const [error,setError]=useState(''),[message,setMessage]=useState('');
@@ -160,4 +161,23 @@ export default function MarketLab(){
    </>}
   <p className="text-xs text-text-secondary">PASS kërkon përputhje të dy kontrolleve; INCONCLUSIVE tregon mungesë prove, jo bast të pavlefshëm. Rezultatet janë virtuale. Përdoruesit dhe kuletat reale nuk preken.</p>
  </section>;
+}
+
+/** Real accepted bets are the default. Existing no-money diagnostics remain
+ * available as a separate, explicitly labelled simulation mode. */
+export default function MarketLab(){
+ const [mode,setMode]=useState<'real'|'virtual'>('real');
+ return <div className="space-y-3">
+  <nav aria-label="Modaliteti i testimit të tregjeve" className="mx-auto flex max-w-7xl gap-2 px-3 pt-3 sm:px-6">
+   <button type="button" aria-pressed={mode==='real'} onClick={()=>setMode('real')}
+    className={'min-h-11 rounded-lg px-4 text-sm font-bold '+(mode==='real'?'bg-amber-400 text-slate-950':'border border-tertiary bg-secondary text-white')}>
+    Baste me para reale
+   </button>
+   <button type="button" aria-pressed={mode==='virtual'} onClick={()=>setMode('virtual')}
+    className={'min-h-11 rounded-lg px-4 text-sm font-bold '+(mode==='virtual'?'bg-emerald-400 text-slate-950':'border border-tertiary bg-secondary text-white')}>
+    Simulime pa para
+   </button>
+  </nav>
+  {mode==='real'?<RealMoneyMarketLab/>:<VirtualMarketLab/>}
+ </div>;
 }

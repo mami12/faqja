@@ -3,6 +3,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { pool, query } from '../db.mjs';
 import { requireAuth, hashPassword } from './auth.mjs';
+import {assertAccountPassword} from './account-password-policy.mjs';
 import * as ledger from './store.mjs';
 import { getManagerCommissionRates, managerCommissionReport } from './manager-finance.mjs';
 
@@ -137,7 +138,7 @@ export async function saveDirectoryUser(actor,id,input){
     const role=actor.role==='AGENT'?'MANAGER':String(input.role||existing?.role||'PLAYER');
     if(!roles.includes(role))throw fail(400,'Rol i pavlefshëm.');
     const username=String(input.username??existing?.username??'').trim();if(username.length<3||username.length>64)throw fail(400,'Emri duhet të ketë 3–64 karaktere.');
-    const password=String(input.password||'');if((!id&&!password)||(password&&password.length<6))throw fail(400,'Fjalëkalimi duhet të ketë të paktën 6 karaktere.');
+    const password=String(input.password||'');if(!id&&!password)throw fail(400,'Fjalëkalimi është i detyrueshëm.');if(password)assertAccountPassword(password,role);
     const status=String(input.status||existing?.status||'ACTIVE');if(!['ACTIVE','FROZEN','BANNED'].includes(status))throw fail(400,'Gjendje e pavlefshme.');
     if(id===actor.id&&(role!==actor.role||status!=='ACTIVE'))throw fail(400,'Nuk mund të heqësh të drejtat ose të bllokosh llogarinë tënde.');
     if(existing&&existing.role!==role){const children=await c.query('select 1 from app_user where (manager_id=$1 or agent_id=$1) and deleted_at is null limit 1',[id]);const history=await c.query('select exists(select 1 from app_ticket where user_id=$1) or exists(select 1 from app_transaction where user_id=$1) or exists(select 1 from app_casino_round where user_id=$1) or exists(select 1 from app_manager_commission where manager_id=$1 or player_id=$1) as present',[id]);if(children.rows.length||Number(existing.balance)!==0||history.rows[0].present)throw fail(409,'Llogaria ka bilanc, vartës ose histori. Krijo një llogari të re për rolin tjetër.');}
