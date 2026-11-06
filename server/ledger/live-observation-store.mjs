@@ -49,8 +49,7 @@ export const WATCHED_LIVE_LINES_SQL=
  'select l.id,l.live_contract,t.placed_at,false as is_lab from app_ticket_line l '+
  'join app_ticket t on t.id=l.ticket_id '+
  "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING' "+
- 'and l.live_contract is not null '+
-;
+ 'and l.live_contract is not null ';
 export const LIVE_OBSERVATION_SQL=[
  'create table if not exists app_live_event_frame (id bigserial primary key,match_id bigint not null,fingerprint text not null,payload jsonb not null,observed_at timestamptz not null default now());',
  'alter table app_live_event_frame drop constraint if exists app_live_event_frame_match_id_fingerprint_key;',
