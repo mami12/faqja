@@ -18,6 +18,7 @@ import { isDecidedLiveOutcome, isYbetsNativeOffer } from './decided-markets.mjs'
 import {isExcludedOfferMarket} from '../market-policy.mjs';
 import {marketDiagnosticAll} from '../market-diagnostic.mjs';
 import {trackerTeamStatistics} from '../match-statistics.mjs';
+import {statsProviders} from '../stats-providers/index.mjs';
 import {quoteValidUntil,quoteExpired} from './quote-validity.mjs';
 import {config} from '../config.mjs';
 import {feedIsRefreshing} from '../idle-mode.mjs';
