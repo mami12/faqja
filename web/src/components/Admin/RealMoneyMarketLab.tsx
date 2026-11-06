@@ -14,7 +14,7 @@ type RealCase={id:string;run_id:string;match_name:string;match_id:number;market_
  actual_stake:string|null;actual_payout:string|null;actual_odds:string|null;ticket_placed_at:string|null};
 type RealReport={mode:'REAL_MONEY';adminBalance:number;currency:string;runs:RealRun[];cases:RealCase[]};
 const formatted=new Intl.NumberFormat('sq-AL',{maximumFractionDigits:2});
-const date=v=>v?new Date(v).toLocaleString('sq-AL',{dateStyle:'short',timeStyle:'short'}):'—';
+const date=(v:string|null)=>v?new Date(v).toLocaleString('sq-AL',{dateStyle:'short',timeStyle:'short'}):'—';
 const auditLabels:Record<string,string>={PASS:'PASS',MISMATCH:'Gabim',UNSETTLED:'Pa shlyer',
  NO_EVIDENCE:'Mungojnë provat',IN_PROGRESS:'Ndeshje live',WAITING:'Në pritje'};
 const auditStyle:Record<string,string>={PASS:'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
