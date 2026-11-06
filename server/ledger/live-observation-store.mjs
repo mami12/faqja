@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {pool} from '../db.mjs';
 import {normalizeEvents} from './event-evidence.mjs';
+import {persistVerifiedEventFacts} from './match-event-facts.mjs';
 const whole=v=>v==null||v===''||!Number.isInteger(Number(v))||Number(v)<0?null:Number(v);
 const count=(a,b)=>a==null||b==null?null:a+b;
 const asClock=game=>{
@@ -49,8 +50,7 @@ export const WATCHED_LIVE_LINES_SQL=
  'join app_ticket t on t.id=l.ticket_id '+
  "where l.match_id=$1 and l.status='PENDING' and t.status='PENDING' "+
  'and l.live_contract is not null '+
- "union all select v.id,v.contract as live_contract,v.opened_at as placed_at,true as is_lab "+
- "from app_live_market_test_case v where v.match_id=$1 and v.status in ('PENDING','OBSERVED')";
+;
 export const LIVE_OBSERVATION_SQL=[
  'create table if not exists app_live_event_frame (id bigserial primary key,match_id bigint not null,fingerprint text not null,payload jsonb not null,observed_at timestamptz not null default now());',
  'alter table app_live_event_frame drop constraint if exists app_live_event_frame_match_id_fingerprint_key;',
@@ -105,6 +105,7 @@ export async function recordWatchedLiveFrame(matchId,data,{database=pool,now=Dat
     'on conflict(match_id) do update set last_seen_at=excluded.last_seen_at '+
     'where app_live_event_cursor.last_seen_at<excluded.last_seen_at',
     [matchId,at]);
+  if(saved.rowCount>0)await persistVerifiedEventFacts(matchId,frame,client.query.bind(client));
   await client.query('commit');
   return {stored:saved.rowCount>0,recovery,watching:watching.length};
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}
