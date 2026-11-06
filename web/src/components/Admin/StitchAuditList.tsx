@@ -1,3 +1,6 @@
+import {useEffect,useState} from 'react';
+import {apiClient} from '../../api/client';
+
 export type StitchAudit = {
  id: string; line_id: string; ticket_id: string; match_name: string; market_name: string; outcome_name: string;
  actual_status: string; expected_status: string | null;
@@ -29,4 +32,18 @@ export default function StitchAuditList({audits,missingOnly=false}:{audits:Stitc
    {typeof item.evidence?.counts?.goal==='number'&&<p className="text-sm">Gola të konfirmuar · {item.evidence.counts.goal}</p>}
   </article>)}
  </section>;
+}
+
+export function StitchMissingEvidence(){
+ const [audits,setAudits]=useState<StitchAudit[]|null>(null);
+ const [error,setError]=useState(false);
+ useEffect(()=>{
+  const controller=new AbortController();
+  apiClient.get<{audits:StitchAudit[]}>('/admin/live-event-test',{signal:controller.signal})
+   .then(({data})=>setAudits(Array.isArray(data.audits)?data.audits:[]))
+   .catch(()=>{if(!controller.signal.aborted)setError(true);});
+  return ()=>controller.abort();
+ },[]);
+ if(error)return <p role="alert">Lista e provave që mungojnë nuk u ngarkua.</p>;
+ return audits?<StitchAuditList audits={audits} missingOnly />:<p>Po kontrolloj biletat…</p>;
 }
