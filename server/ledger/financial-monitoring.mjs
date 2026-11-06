@@ -122,6 +122,10 @@ financialMonitoringRouter.get('/admin/live-event-test',safe(async(req,res)=>{
   ) recent where verdict='MISMATCH'`);
   return res.set('Cache-Control','no-store').json({count:rows[0].count,auditMismatchCount:attention.rows[0].count});
  }
- const [p,g,a]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200]),query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100])]);
+ if(req.query.audit==='missing'){
+  const result=await query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100,true]);
+  return res.set('Cache-Control','no-store').json({audits:result.rows});
+ }
+ const [p,g,a]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200]),query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100,false])]);
  res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows,audits:a.rows});
 }));
