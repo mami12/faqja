@@ -519,8 +519,11 @@ export async function settleAll() {
   // Re-verify a proposal against a subsequent fresh PRIMARY-provider poll
   // BEFORE refreshing it. Real writes require an explicit opt-in flag.
   let verifiedLive={enabled:false,examined:0,graded:0,closed:[]};
+  // The raw-frame preview is an audit aid, not a second payout authority.
+  // PRIMARY incident contracts are financially settled exclusively through
+  // gradeStoredEventContract against the reconciled PostgreSQL fact tables.
   try{verifiedLive=await settleVerifiedLiveProposals({
-    updateLine:updatePendingLine,closeTicket:recalcTicket
+    updateLine:updatePendingLine,closeTicket:recalcTicket,enabled:false
   });}
   catch(error){console.error('[settle] verified live settlement failed:',error.message);}
   let preview={examined:0,proposed:0,held:0,mode:'SHADOW_ONLY'};
