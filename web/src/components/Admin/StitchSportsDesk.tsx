@@ -3,7 +3,7 @@ import { apiClient } from '../../api/client';
 import ManualReviewQueue from './ManualReviewQueue';
 import './stitchSportsDesk.css';
 
-type Review = { lineId: string; matchName: string; marketName: string; outcomeName: string; notificationActive: boolean; reason: string };
+type Review = { lineId: string; matchId: string; marketKey: string; marketLine: string; matchName: string; marketName: string; outcomeName: string; notificationActive: boolean; reason: string };
 type DeskSection = { id: string; title: string; panel: () => ReactNode };
 type Overview = {
  database: 'ready';
@@ -14,10 +14,12 @@ type Overview = {
 };
 const formatNumber = new Intl.NumberFormat('sq-AL');
 const formatMoney = new Intl.NumberFormat('sq-AL', {style:'currency',currency:'ALL',maximumFractionDigits:2});
+const pauseReasons = new Set(['MISSING_EVENT_TIMELINE','MISSING_MARKET_STATISTICS','CONFLICTING_API_STATISTICS']);
+const marketIdFor = (item:Review) => [item.matchId,item.marketKey,item.marketLine??''].join('|');
 const explanations: Record<string,string> = {
- MISSING_EVENT_TIMELINE: 'Mungon kronologjia për të provuar këtë përzgjedhje.',
- CONFLICTING_API_STATISTICS: 'Burimet japin statistika që kundërshtojnë njëra-tjetrën.',
- MISSING_MARKET_STATISTICS: 'Mungojnë statistikat e kërkuara për këtë treg.',
+ MISSING_EVENT_TIMELINE: 'Na mungon lista që tregon kur ndodhën golat ose kornerat. Pa atë listë s’e dimë si del ky bast.',
+ CONFLICTING_API_STATISTICS: 'Dy burime japin numra të ndryshëm. Duhet të kontrollojmë cili është i saktë.',
+ MISSING_MARKET_STATISTICS: 'Na mungon numri që kërkon ky bast, për shembull sa goditje pati në portë.',
  MISSING_FINAL_RESULT: 'Mungon rezultati përfundimtar i konfirmuar.',
  VOID_NEEDS_CONFIRMATION: 'Anulimi kërkon kontroll.',
 };
@@ -31,6 +33,9 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
  const [refreshKey,setRefreshKey]=useState(0);
  const [updatedAt,setUpdatedAt]=useState<Date|null>(null);
  const [active,setActive]=useState('');
+ const [pause,setPause]=useState<Review|null>(null);
+ const [actionBusy,setActionBusy]=useState(false);
+ const [actionMessage,setActionMessage]=useState('');
  const [review,setReview]=useState<string|null>(null);
  useEffect(()=>{
   let mounted=true;
@@ -64,6 +69,36 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
   const timer=window.setInterval(()=>void refresh(),15000);
   return ()=>{mounted=false;window.clearInterval(timer);};
  },[refreshKey]);
+ async function approvePause(item:Review){
+  if(actionBusy)return;
+  setActionBusy(true);
+  setActionMessage('');
+  try{
+   const [fixture,queue]=await Promise.all([
+    apiClient.get('/admin/matches/'+encodeURIComponent(item.matchId)),
+    apiClient.get('/admin/settlement-review-queue',{params:{limit:100}}),
+   ]);
+   const current=(Array.isArray(queue.data.items)?queue.data.items:[]).find((row:Review)=>row.lineId===item.lineId);
+   const marketId=marketIdFor(item);
+   const match=fixture.data.item;
+   const market=Array.isArray(match?.markets)?match.markets.find((row:{id:string;status:string})=>row.id===marketId):null;
+   if(!current||!pauseReasons.has(current.reason)||marketIdFor(current)!==marketId||String(match?.id)!==item.matchId||market?.status!=='ACTIVE'){
+    setPause(null);
+    setActionMessage('Gjendja ka ndryshuar. Kontrolloje tregun përsëri para se ta pezullosh.');
+    setRefreshKey(key=>key+1);
+    return;
+   }
+   const result=await apiClient.patch('/admin/markets/'+encodeURIComponent(marketId)+'/suspend',{status:'SUSPENDED'});
+   if(result.data?.suspended!==true)throw new Error('Pezullimi nuk u konfirmua');
+   setPause(null);
+   setActionMessage('Tregu u pezullua për baste të reja. Bileta e pranuar më parë mbetet për kontroll.');
+   setReview(item.lineId);
+   setActive('');
+   setRefreshKey(key=>key+1);
+  }catch{
+   setActionMessage('Pezullimi nuk u konfirmua. Rifresko gjendjen dhe provo përsëri.');
+  }finally{setActionBusy(false);}
+ }
  const notices=items.filter(item=>item.notificationActive);
  const olderReviews=items.length-notices.length;
  const mascotState=checking?'checking':error||overviewError||items.length?'alert':'idle';
@@ -128,6 +163,16 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     </div>
    </dl>
   </section>}
+  {actionMessage&&<p role="status">{actionMessage}</p>}
+  {pause&&<section aria-label="Miratimi i pezullimit" className="space-y-2 rounded-xl border border-tertiary bg-secondary p-3">
+   <h3 className="font-bold">Ta ndalim këtë treg për baste të reja?</h3>
+   <p>{pause.matchName} · {pause.marketName} {pause.marketLine}</p>
+   <p className="text-sm">Bastet e vendosura mbeten në listë. Duhet ende t’i kontrollojmë.</p>
+   <div className="flex flex-wrap gap-2">
+    <button type="button" disabled={actionBusy} className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>void approvePause(pause)}>Po, pezullo tregun</button>
+    <button type="button" disabled={actionBusy} className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>setPause(null)}>Jo, lëre tregun</button>
+   </div>
+  </section>}
   {error&&<p role="alert">Njoftimet nuk u rifreskuan. Prova tjetër bëhet automatikisht.</p>}
   <section className="space-y-2" aria-label="Njoftime për verifikim">
    <h3 className="font-bold">Për verifikim ({notices.length})</h3>
@@ -139,6 +184,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     <p className="text-sm">{explanations[item.reason]??'Përzgjedhja kërkon verifikim manual.'}</p>
     <p className="text-sm">Sugjerimi im: kontrollo provën dhe burimin para se të vendosësh për këtë përzgjedhje.</p>
     <button type="button" className="min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>{setActive('');setReview(item.lineId);}}>Kontrollo përzgjedhjen</button>
+    {item.matchId&&item.marketKey&&pauseReasons.has(item.reason)&&<button type="button" disabled={actionBusy} className="ml-2 min-h-11 rounded-lg border border-tertiary px-4" onClick={()=>{setActionMessage('');setPause(item);}}>Pezullo këtë treg</button>}
    </article>)}
   </section>
   <nav className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Kontrollet e sportbasteve">
