@@ -129,7 +129,9 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
       and ($4::numeric is null or minute <= $4) and team='home')::int as window_home,
     count(*) filter(where ($3::numeric is null or minute >= $3)
       and ($4::numeric is null or minute <= $4) and team='away')::int as window_away,
-    count(*) filter(where (player_id is not null and player_id=$6)
+    count(*) filter(where ($6::text is not null and (
+       (player_id is not null and player_id=$6) or
+       (aiscore_verified=true and aiscore_player_id is not null and aiscore_player_id=$6)))
       or ($6::text is null and (
        (player_name is not null and lower(player_name)=lower($7)) or
        (aiscore_verified=true and aiscore_player_name is not null
@@ -210,9 +212,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   return decision(c.side===(h!==null&&(a===null||h<a)?'home':'away'));
  }
  if(c.kind==='player-goal'){
-  if(!full||!c.playerName&&!c.playerId)return null;
-  if(Number(data.player_goals)>0)return 'WON';
-  // No confirmed participation or complete player attribution => review.
+  if(!full||(!c.playerName&&!c.playerId)||typeof c.choice!=='boolean')return null;
+  if(Number(data.player_goals)>0)return c.choice?'WON':'LOST';
+  // A missing scorer name does not prove a player played or failed to score.
+  // Require verified player participation before a negative settlement.
   return null;
  }
  if(c.kind==='team-total-goals'){
