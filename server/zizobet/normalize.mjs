@@ -1,5 +1,4 @@
 import {competitionDecision,isSyntheticFootballMatch} from '../football-competitions.mjs';
-import {isEarlyPayoutOfferMarket} from '../market-policy.mjs';
 export const OFFSET=8_000_000_000_000;
 export const zId=id=>{if(!Number.isSafeInteger(Number(id))||Number(id)<=0||Number(id)>100000000000)throw Error('Invalid Zizobet ID');return OFFSET+Number(id);};
 export const isZizoId=id=>Number(id)>OFFSET&&Number(id)<OFFSET+100000000000;
@@ -75,8 +74,7 @@ export function oddsOf(row,quotes,meta,live,open=true){
  const rows=[];
  const widths=new Map();for(const q of quotes??[]){const p=text(meta.positions?.get(String(q.pid))??q.pn).match(/^min\s+(\d+)-(\d+)$/i);if(!p)continue;const width=Number(p[2])-Number(p[1])+1;if(width<=0)continue;const counts=widths.get(Number(q.mid))??new Map();counts.set(width,(counts.get(width)??0)+1);widths.set(Number(q.mid),counts);}
  for(const q of quotes??[]){const id=Number(q.mid),def=(live?meta.liveMarkets:meta.preMarkets).get(id);if(!def)continue;
-  const rawName=def.Name??def.name;if(!rawName||def.IsHandicap===true||def.h===true||/handicap|handikap|spread|^asian (?:corners?|cards?)\b|\b(?:corners?|cards?)\.\s*asian\b/i.test(rawName+' '+(def.kn??'')))continue;
-  if(isEarlyPayoutOfferMarket({name:rawName+' '+(def.kn??''),key:'zz'+id+'@'}))continue;
+  const rawName=def.Name??def.name;if(!rawName)continue;
   if((def.IsOverUnder===true||def.ou===true)&&q.h!=null&&Math.abs(Number(q.h)*4)%2===1)continue;
   const params=Object.fromEntries(['p1','p2','p3','pl','comp','seq'].filter(k=>q[k]!=null).map(k=>[k,q[k]]));
   const key='zz'+id+'@'+Buffer.from(JSON.stringify(params)).toString('base64url'),line=q.h!=null?String(q.h):'';
@@ -86,14 +84,12 @@ export function oddsOf(row,quotes,meta,live,open=true){
   let name=resolveMarketTitle(live&&id===18639?'Correct score [{score}]':rawName,q,{intervalWidth:measuredWidth});if(!name)continue;
   name=name.replace(/\bHometeam\b/gi,'Home team').replace(/\bAwayteam\b/gi,'Away team');
   if(q.pl&&!name.includes(String(q.pl)))name+=' · '+q.pl;
-  if(/^First goal interval$/i.test(name)&&def.kn)name=def.kn;
-  if(/^Full Time \d+UP$/i.test(name))name+=' (early payout)';
   const fullResult=(live&&id===602)||(!live&&id===448);
-  if(fullResult)name='Full Time Result';else if((live&&id===603)||(!live&&id===537))name='Total Goals';
+  const fullTotal=(live&&id===603)||(!live&&id===537);
   const label=resolveMarketTitle(position,q);if(!label)continue;
   const canonical=/^(?:1|x|2|1x|12|x2)$/i.test(label)?label.toUpperCase():/^(?:over|o)$/i.test(label)?'Over':/^(?:under|u)$/i.test(label)?'Under':/^(?:yes|no)$/i.test(label)?label[0].toUpperCase()+label.slice(1).toLowerCase():null;
   const price=Number(live?q.v:q.coef),suspended=!open||q.visible===false||q.lock===true||q.res!=null&&q.res!==0||!Number.isFinite(price)||price<=1;
-  rows.push({matchId:row.match_id,marketKey:key,marketName:name,line,outcomeKey:'z'+String(q.id),outcomeName:canonical??label,price:Number.isFinite(price)&&price>1?price:null,suspended,providerId:'ZIZOBET',isBase:fullResult||name==='Total Goals',column:fullResult?'result':name==='Total Goals'?'total':'other',order:Number(def.N??def.n??0),period:/\b(?:1st|first) half\b/i.test(name)?1:/\b(?:2nd|second) half\b/i.test(name)?2:0});
+  rows.push({matchId:row.match_id,marketKey:key,marketName:name,line,outcomeKey:'z'+String(q.id),outcomeName:label,price:Number.isFinite(price)&&price>1?price:null,suspended,providerId:'ZIZOBET',isBase:fullResult||fullTotal,column:fullResult?'result':fullTotal?'total':'other',order:Number(def.N??def.n??0),period:/\b(?:1st|first) half\b/i.test(name)?1:/\b(?:2nd|second) half\b/i.test(name)?2:0});
   // Canonical result/total keys are needed by existing builder and settlement rules.
   if(canonical)rows.at(-1).outcomeKey=canonical;
  }
