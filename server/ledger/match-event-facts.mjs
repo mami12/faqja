@@ -165,7 +165,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const c=line?.live_contract;
  if(!c||!SUPPORTED_FACT_KINDS.has(c.kind)||!validKind.has(c.event)||typeof execute!=='function')return null;
  const {rows}=await execute(`with covered as (
-   select through_minute,count_home,count_away,complete,observed_at,confirmed_at from app_match_event_coverage
+   select through_minute,count_home,count_away,complete,observed_at,confirmed_at,card_colors_verified from app_match_event_coverage
    where match_id=$1 and provider='zizobet' and kind=$2
  ), ordered as (
    select f.*,row_number() over(order by coalesce(f.seconds,f.minute*60),f.minute,f.provider_event_id) as ordinal,
@@ -176,6 +176,9 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
    select count(*)::int as total,
     count(*) filter(where team='home')::int as home,
     count(*) filter(where team='away')::int as away,
+    count(*) filter(where card_color=$15::text)::int as color_total,
+    count(*) filter(where team='home' and card_color=$15::text)::int as color_home,
+    count(*) filter(where team='away' and card_color=$15::text)::int as color_away,
     -- Fixed 10-20 minute markets use inclusive provider minutes.
     -- Rolling windows and clock-formatted score intervals instead use seconds.
     count(*) filter(where (
@@ -184,6 +187,13 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
         or ($10::boolean=false and ($3::numeric is null or minute >= $3)
          and ($4::numeric is null or minute <= $4)))
       and ($5::text is null or team=$5))::int as window_count,
+    count(*) filter(where (
+        ($10::boolean=true and coalesce(seconds,minute*60)>$11::numeric
+         and coalesce(seconds,minute*60)<=$12::numeric)
+        or ($10::boolean=false and ($3::numeric is null or minute >= $3)
+         and ($4::numeric is null or minute <= $4)))
+      and ($5::text is null or team=$5)
+      and card_color=$15::text)::int as color_window_count,
     count(*) filter(where (
       ($13::boolean=true and coalesce(seconds,minute*60)>=$11::numeric
        and coalesce(seconds,minute*60)<$12::numeric)
@@ -196,7 +206,8 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
       and team='away')::int as window_away,
     bool_or($10::boolean=true and seconds is null
       and (minute=floor($11::numeric/60) or minute=floor($12::numeric/60))) as rolling_boundary_uncertain,
-    count(*) filter(where ($6::text is not null and (
+    count(*) filter(where (own_goal=false or (own_goal is null and aiscore_verified=true))
+     and ($6::text is not null and (
        (player_id is not null and player_id=$6) or
        (aiscore_verified=true and aiscore_player_id is not null and aiscore_player_id=$6)))
       or ($6::text is null and (
@@ -206,7 +217,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
- select a.*,c.through_minute,c.count_home,c.count_away,c.complete,c.observed_at,c.confirmed_at,
+ select a.*,c.through_minute,c.count_home,c.count_away,c.complete,c.observed_at,c.confirmed_at,c.card_colors_verified,
   (select last_seen_at from app_live_event_cursor where match_id=$1) as second_poll_at,
   exists(select 1 from app_live_event_recovery g
     where g.match_id=$1 and g.status='AWAITING_BACKUP_API' and $9::uuid=any(g.line_ids)) as open_recovery_gap,
@@ -239,7 +250,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   c.kind==='window'&&c.startExclusive===true,
   c.kind==='interval-result'?c.fromSeconds:c.kind==='window'?c.from*60:null,
   c.kind==='interval-result'?c.toExclusiveSeconds:c.kind==='window'?c.to*60:null,
-  c.kind==='interval-result',c.kind==='interval-leader']);
+  c.kind==='interval-result',c.kind==='interval-leader',c.cardColor??null]);
  const data=rows[0];
  if(!data||data.through_minute==null||data.open_recovery_gap===true)return null;
  // A partial/corrected frame must not silently reclassify a missing event.
@@ -255,9 +266,13 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const cursor=new Date(data.second_poll_at).getTime();
  if(![confirmed,stored,cursor].every(Number.isFinite)||
     confirmed>stored||stored!==cursor)return null;
+ if(c.cardColor!=null&&
+   (c.event!=='card'||!['yellow','red'].includes(c.cardColor)||
+    data.card_colors_verified!==true))return null;
  const through=Number(data.through_minute);
  const scopeEnded=full||(Number.isFinite(c.to)&&through>Number(c.to));
- const count=Number(c.side==='home'?data.home:c.side==='away'?data.away:data.total);
+ const count=Number(c.cardColor?(c.side==='home'?data.color_home:c.side==='away'?data.color_away:data.color_total):
+   (c.side==='home'?data.home:c.side==='away'?data.away:data.total));
  const expected=Number(c.target??c.threshold);
  const decision=truth=>truth?'WON':'LOST';
  if(c.kind==='window'){
@@ -268,7 +283,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   // Minute-only data cannot classify an event in the first or last
   // fractional minute of a rolling market. No speculative wallet change.
   if(c.startExclusive===true&&data.rolling_boundary_uncertain===true)return null;
-  const num=Number(data.window_count);
+  const num=Number(c.cardColor?data.color_window_count:data.window_count);
   return decision(c.choice?(num>0):(num===0));
  }
  if(c.kind==='interval-result'){
@@ -286,7 +301,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  if(c.kind==='window-total'){
   const closesAt=Math.floor(Number(c.to))+1;
   if(!Number.isFinite(closesAt)||through<closesAt)return null;
-  const found=Number(data.window_count);
+  const found=Number(c.cardColor?data.color_window_count:data.window_count);
   if(c.choice==='over'||c.choice==='under'){
    if(!Number.isFinite(c.threshold)||!Number.isInteger(c.threshold*2))return null;
    if(found===c.threshold)return Number.isInteger(c.threshold)?'VOID':null;
@@ -325,7 +340,9 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   return decision(c.side===(h!==null&&(a===null||h<a)?'home':'away'));
  }
  if(c.kind==='player-goal'){
-  if(!full||(!c.playerName&&!c.playerId)||typeof c.choice!=='boolean')return null;
+  if((!c.playerName&&!c.playerId)||typeof c.choice!=='boolean')return null;
+  // A verified scorer proves YES/NO immediately; absence does not prove
+  // participation, an own goal, or a losing player proposition.
   if(Number(data.player_goals)>0)return c.choice?'WON':'LOST';
   // A missing scorer name does not prove a player played or failed to score.
   // Require verified player participation before a negative settlement.
