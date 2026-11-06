@@ -117,7 +117,10 @@ financialMonitoringRouter.get('/admin/live-event-test',safe(async(req,res)=>{
   const {rows}=await query(`select count(*)::int as count from app_live_settlement_preview p
    join app_ticket_line l on l.id=p.line_id join app_ticket t on t.id=l.ticket_id
    where l.status='PENDING' and t.status='PENDING'`);
-  return res.set('Cache-Control','no-store').json({count:rows[0].count});
+  const attention=await query(`select count(*)::int as count from (
+   select distinct on (line_id) verdict from app_stitch_settlement_audit order by line_id,id desc
+  ) recent where verdict='MISMATCH'`);
+  return res.set('Cache-Control','no-store').json({count:rows[0].count,auditMismatchCount:attention.rows[0].count});
  }
  const [p,g,a]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200]),query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100])]);
  res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows,audits:a.rows});
