@@ -122,13 +122,24 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
    select count(*)::int as total,
     count(*) filter(where team='home')::int as home,
     count(*) filter(where team='away')::int as away,
-    count(*) filter(where ($3::numeric is null or minute >= $3)
-      and ($4::numeric is null or minute <= $4)
+    -- Fixed 10-20 minute markets use inclusive provider minutes.
+    -- Rolling windows and clock-formatted score intervals instead use seconds.
+    count(*) filter(where (
+        ($10::boolean=true and coalesce(seconds,minute*60)>$11::numeric
+         and coalesce(seconds,minute*60)<=$12::numeric)
+        or ($10::boolean=false and ($3::numeric is null or minute >= $3)
+         and ($4::numeric is null or minute <= $4)))
       and ($5::text is null or team=$5))::int as window_count,
-    count(*) filter(where ($3::numeric is null or minute >= $3)
-      and ($4::numeric is null or minute <= $4) and team='home')::int as window_home,
-    count(*) filter(where ($3::numeric is null or minute >= $3)
-      and ($4::numeric is null or minute <= $4) and team='away')::int as window_away,
+    count(*) filter(where ($13::boolean=true
+      and coalesce(seconds,minute*60)>=$11::numeric
+      and coalesce(seconds,minute*60)<$12::numeric
+      and team='home')::int as window_home,
+    count(*) filter(where ($13::boolean=true
+      and coalesce(seconds,minute*60)>=$11::numeric
+      and coalesce(seconds,minute*60)<$12::numeric
+      and team='away')::int as window_away,
+    bool_or($10::boolean=true and seconds is null
+      and (minute=floor($11::numeric/60) or minute=floor($12::numeric/60))) as rolling_boundary_uncertain,
     count(*) filter(where ($6::text is not null and (
        (player_id is not null and player_id=$6) or
        (aiscore_verified=true and aiscore_player_id is not null and aiscore_player_id=$6)))
@@ -153,12 +164,26 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
    (select min(ordinal) from (
      select ordinal,team,count(*) over(partition by team order by ordinal) as team_number
      from ordered
-   ) race where team_number=$8 and team='away') as race_away
+   ) race where team_number=$8 and team='away') as race_away,
+   (select coalesce(seconds,minute*60) from ordered where ordinal=(
+     select min(ordinal) from (
+       select ordinal,team,count(*) over(partition by team order by ordinal) as team_number from ordered
+     ) race where team_number=$8 and team='home'
+   )) as race_home_time,
+   (select coalesce(seconds,minute*60) from ordered where ordinal=(
+     select min(ordinal) from (
+       select ordinal,team,count(*) over(partition by team order by ordinal) as team_number from ordered
+     ) race where team_number=$8 and team='away'
+   )) as race_away_time
  from aggregate a left join covered c on true`,
  [line.match_id,c.event,
   c.kind==='interval-result'?c.fromSeconds/60:c.from??null,
   c.kind==='interval-result'?(c.toExclusiveSeconds-1)/60:c.to??null,
-  c.side??null,c.playerId??null,c.playerName??null,c.target??1,line.id]);
+  c.side??null,c.playerId??null,c.playerName??null,c.target??1,line.id,
+  c.kind==='window'&&c.startExclusive===true,
+  c.kind==='interval-result'?c.fromSeconds:c.kind==='window'?c.from*60:null,
+  c.kind==='interval-result'?c.toExclusiveSeconds:c.kind==='window'?c.to*60:null,
+  c.kind==='interval-result']);
  const data=rows[0];
  if(!data||data.through_minute==null||data.open_recovery_gap===true)return null;
  // A partial/corrected frame must not silently reclassify a missing event.
@@ -177,7 +202,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const expected=Number(c.target??c.threshold);
  const decision=truth=>truth?'WON':'LOST';
  if(c.kind==='window'){
-  if(!scopeEnded)return null;
+  if(!scopeEnded||typeof c.choice!=='boolean')return null;
+  // Minute-only data cannot classify an event in the first or last
+  // fractional minute of a rolling market. No speculative wallet change.
+  if(c.startExclusive===true&&data.rolling_boundary_uncertain===true)return null;
   const num=Number(data.window_count);
   return decision(c.choice?(num>0):(num===0));
  }
@@ -189,7 +217,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  if(c.kind==='nth-time'){
   if(!Number.isInteger(c.target)||c.target<1)return null;
   if(data.nth_team!=null){
-   if(data.ambiguous_order===true||Number(data.nth_same_time)>1)return null;
+   if(Number(data.nth_same_time)>1)return null;
    if(c.choice==='none')return 'LOST';
    if(c.choice!=='range'||!Number.isInteger(c.from)||!Number.isInteger(c.to))return null;
    return decision(Number(data.nth_minute)>=c.from&&Number(data.nth_minute)<=c.to);
@@ -199,16 +227,19 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  }
  if(c.kind==='sequence'){
   if(data.nth_team!=null){
-   if(Number(data.nth_same_time)>1||data.ambiguous_order===true)return null;
+   if(Number(data.nth_same_time)>1)return null;
    return decision(data.nth_team===c.side);
   }
   if(!full)return null;
   return c.side==='none'?'WON':decision(false);
  }
  if(c.kind==='race'){
-  if(data.ambiguous_order===true||!['home','away'].includes(c.side))return null;
-  const h=data.race_home==null?null:Number(data.race_home),a=data.race_away==null?null:Number(data.race_away);
-  if(h===null&&a===null)return null;
+  if(!Number.isInteger(c.target)||c.target<1||!['home','away'].includes(c.side))return null;
+  const h=data.race_home_time==null?null:Number(data.race_home_time);
+  const a=data.race_away_time==null?null:Number(data.race_away_time);
+  if(h===null&&a===null)return full?'VOID':null; // race not reached in normal time
+  // Simultaneous or minute-only indistinguishable milestones require review.
+  if(h!==null&&a!==null&&h===a)return null;
   return decision(c.side===(h!==null&&(a===null||h<a)?'home':'away'));
  }
  if(c.kind==='player-goal'){
