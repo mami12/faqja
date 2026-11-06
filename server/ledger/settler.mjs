@@ -371,6 +371,42 @@ export async function settleMatch(matchId) {
   return { matchId: String(matchId), settled: graded, awaitingEvidence: lines.length - graded, tickets: closed };
 }
 
+/**
+ * Live PRIMARY incidents can close proven goal/corner/window contracts before
+ * full-time. Unknown, contradictory or unconfirmed provider facts stay PENDING.
+ * Bounded to avoid flooding the PostgreSQL server with extra reads.
+ */
+export async function settleVerifiedEventFacts({
+  runQuery=query, grade=gradeStoredEventContract, update=updatePendingLine,
+  recalc=recalcTicket, limit=120
+}={}){
+ const cap=Math.max(1,Math.min(300,Number(limit)||120));
+ const {rows}=await runQuery(`select l.* from app_ticket_line l
+   join app_ticket t on t.id=l.ticket_id
+   join app_match_event_coverage e on e.match_id=l.match_id
+     and e.kind=l.live_contract->>'event' and e.provider='zizobet'
+   where l.status='PENDING' and t.status='PENDING'
+     and l.live_contract is not null
+     and (l.market_key like 'zz%@%' or l.accepted_contract->>'providerMarketKey' like 'zz%@%')
+     and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
+   order by e.observed_at desc,l.match_id,l.id
+   limit $1`,[cap]);
+ if(!rows.length)return {examined:0,graded:0,closed:[]};
+ const ids=[...new Set(rows.map(l=>l.match_id))];
+ const finals=(await runQuery('select match_id,home_score,away_score from app_match_result where match_id=any($1::bigint[])',[ids])).rows;
+ const results=new Map(finals.map(r=>[String(r.match_id),r]));
+ const tickets=new Set();let graded=0;
+ for(const line of rows){
+  if(!SUPPORTED_FACT_KINDS.has(line.live_contract?.kind))continue;
+  const status=await grade(line,results.get(String(line.match_id))??null,{execute:runQuery});
+  if(!['WON','LOST','VOID'].includes(status))continue;
+  if(await update(line.id,status,line.ticket_id)){graded++;tickets.add(line.ticket_id);}
+ }
+ const closed=[];
+ for(const id of tickets){const done=await recalc(id);if(done)closed.push(done);}
+ return {examined:rows.length,graded,closed};
+}
+
 /** Grade only verified, elapsed corner YES/NO windows, independently of a
  * full-time result. Every other live market remains on the existing final
  * result path; missing evidence means PENDING rather than a guessed answer.
@@ -439,6 +475,9 @@ export async function settleAll() {
     try { results.push(await settleMatch(id)); }
     catch (e) { console.error('[settle] match', id, 'failed:', e.message); }
   }
+  let primaryFacts={examined:0,graded:0,closed:[]};
+  try{primaryFacts=await settleVerifiedEventFacts();}
+  catch(error){console.error('[settle] verified primary event facts failed:',error.message);}
   let windows={graded:0,closed:[]};
   try {windows=await settleClosedCornerWindows();}
   catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
@@ -457,10 +496,11 @@ export async function settleAll() {
   return {
     captured,
     matches: ids.length,
-    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded + verifiedLive.graded,
-    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + verifiedLive.closed.length + recovered.length,
+    lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded + primaryFacts.graded + verifiedLive.graded,
+    closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + primaryFacts.closed.length + verifiedLive.closed.length + recovered.length,
     recovered: recovered.length,
     backfilled,
+    primaryFacts:{examined:primaryFacts.examined,graded:primaryFacts.graded,closed:primaryFacts.closed.length},
     verifiedLive:{enabled:verifiedLive.enabled,examined:verifiedLive.examined,graded:verifiedLive.graded,closed:verifiedLive.closed.length},
     livePreview:preview,
   };
