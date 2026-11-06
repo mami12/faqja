@@ -63,6 +63,7 @@ jobs:
         run: |
           node scripts/test-live-contract-rules.mjs
           node scripts/test-primary-market-verification.mjs
+          node scripts/test-prematch-market-verification.mjs
           node scripts/test-verified-live-settlement.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
