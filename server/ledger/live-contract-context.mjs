@@ -33,7 +33,7 @@ export function frozenLiveContract(line,match={},at=Date.now()){
  const windowSide=windowMarket&&(homeNamed||awayNamed)?(homeNamed?'home team':'away team'):null;
  const namedLine=windowSide?{...line,market_name:windowSide+' '+market}:line;
  const prepared=selected?{...line,outcome_name:selected,outcomeName:selected}:namedLine;
- const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners}});
+ const contract=liveContract(prepared,{clock,counts:{goal:goals,corner:corners},teams:match});
  const name=String(line.market_name??line.marketName??'');
  if(service==='PREMATCH'&&!scheduled)throw fail('Ndeshja prematch nuk ka fillim të ardhshëm të verifikuar.');
  if(!contract){
