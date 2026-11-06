@@ -1,5 +1,4 @@
-﻿import {statsProviders} from '../stats-providers/index.mjs';
-/**
+﻿/**
  * Shapes our live board for the React app.
  *
  * The app was written against a backend with Match/Market/Outcome rows; we keep matches
@@ -19,8 +18,6 @@ import { isDecidedLiveOutcome, isYbetsNativeOffer } from './decided-markets.mjs'
 import {isExcludedOfferMarket} from '../market-policy.mjs';
 import {marketDiagnosticAll} from '../market-diagnostic.mjs';
 import {trackerTeamStatistics} from '../match-statistics.mjs';
-import {eventMarketRequirement} from './event-market-policy.mjs';
-import {isStatisticMarket,statisticMarketContract} from './statistic-markets.mjs';
 import {quoteValidUntil,quoteExpired} from './quote-validity.mjs';
 import {config} from '../config.mjs';
 import {feedIsRefreshing} from '../idle-mode.mjs';
@@ -106,15 +103,11 @@ export function toClientMatch(m) {
     const diagnostic=marketDiagnosticAll();
     if((!diagnostic&&isExcludedOfferMarket(mk))||!marketIsEnabled(mk,m))continue;
     const nativeOffer=isYbetsNativeOffer(mk,m);
-    const eventRequired=diagnostic?null:(eventMarketRequirement(mk,m)||/header|headed|own goal|scoring method|method of.*goal/i.test(mk.name??''));
-    if(!diagnostic&&statsProviders.enabled()&&eventRequired&&!statsProviders.allows(matchId,mk))continue;
-    if(!diagnostic&&!nativeOffer&&((eventRequired&&!statsProviders.allows(matchId,mk))||(isStatisticMarket(mk)&&!statisticMarketContract(mk).supported)))continue;
     const line = mk.line ?? '';
     const isResultMarket = mk.column === 'result' || /1x2|match result|full time result|\bwinner\b|moneyline/i.test(mk.name ?? '');
     const mType = isResultMarket ? '1X2' : (MARKET_TYPE_BY_COLUMN[mk.column] ?? 'OTHER');
     const marketOverride = overrides.marketOverride(matchId, mk.key, line);
     const outcomes = (mk.outcomes ?? [])
-      .filter(o=>diagnostic||!eventRequired||!statsProviders.enabled()||statsProviders.allows(matchId,{...mk,outcome_name:o.name,outcome_key:o.key}))
       .map((o) => {
         // an admin override wins over the feed: a pinned price, or a forced suspension
         const forced = overrides.outcomeOverride(matchId, mk.key, line, o.key);
