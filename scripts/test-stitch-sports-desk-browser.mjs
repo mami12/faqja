@@ -38,7 +38,12 @@ try{
   line_id:'line-a',match_name:'Arsenal – Chelsea',market_name:'Gol në interval',outcome_name:'Po',
   proposed_status:'WON',timelineCheck:'AGREES',
   payload:{contract:{kind:'window',event:'goal',from:35,to:40},frame:{source:'fixture',events:[{id:'goal',type:'goal',minute:36,team:'home'}]}},
- }]}));
+ }],audits:[
+  {id:'audit-a',line_id:'line-audit',ticket_id:'ticket-audit',match_name:'Ndeshja e provës',market_name:'Ekzakt 2 gola',outcome_name:'2',
+   verdict:'MATCH',actual_status:'WON',expected_status:'WON',evidence:{counts:{goal:2}}},
+  {id:'audit-b',line_id:'line-gap',ticket_id:'ticket-gap',match_name:'Ndeshja pa kronologji',market_name:'Goli i radhës',outcome_name:'1',
+   verdict:'MISSING_EVIDENCE',actual_status:'LOST',expected_status:null,evidence:{reason:'RECOVERY_OPEN'}},
+ ]}));
  app.get('/app/api/admin/stitch-overview',(_req,res)=>res.json(overview));
  app.get('/app/api/admin/settlement-review-queue',(_req,res)=>res.json({items}));
  app.get('/',async(_req,res)=>res.type('html').send(await vite.transformIndexHtml('/',html)));
@@ -57,6 +62,8 @@ try{
  await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.stitch-mascot')).animationName==='none');
  await page.waitForFunction(()=>document.body.textContent.includes('35 deri në 40')&&document.body.textContent.includes('Gol, minuta 36')&&document.body.textContent.includes('Më doli i njëjti rezultat.'));
+ await page.waitForFunction(()=>document.body.textContent.includes('Sistemi dhe testi dhanë të njëjtin rezultat')&&
+   document.body.textContent.includes('Gola të konfirmuar · 2')&&document.body.textContent.includes('Mungon historiku nga koha kur burimi u ndërpre'));
  const clickText=text=>page.evaluate(label=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===label).click(),text);
  await clickText('Pezullo këtë treg');
  await clickText('Jo, lëre tregun');
