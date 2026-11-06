@@ -60,7 +60,7 @@ export function marketInformationNeeds(markets=[]){
   if(/\b(?:corners?|race to)\b/.test(name)){needs.add('corner');needs.add('timeline');needs.add('statistics');}
   if(/\b(?:cards?|yellow|red card|bookings?)\b/.test(name)){needs.add('card');needs.add('timeline');needs.add('statistics');}
   if(/\b(?:fouls?|shots?|offsides?)\b/.test(name)){needs.add('statistics');}
-  if(/\b(?:minutes?|interval|when will|first|last|next|time|within)\b/.test(name))needs.add('timeline');
+  if(/\b(?:minutes?|intervals?|within)\b/.test(name))needs.add('timeline');
   if(/\b(?:players?|scorer|assists?|goalscorer)\b/.test(name)){needs.add('player');needs.add('timeline');}
   if(/\b(?:penalt|own goal|header|foot)\b/.test(name)){needs.add('goalMethod');needs.add('timeline');}
  }
