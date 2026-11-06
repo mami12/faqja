@@ -212,7 +212,9 @@ export function gradeLine(line, result) {
 }
 
 /**
- * Closes one ticket once all of its lines are decided, paying out when it won.
+ * Closes a ticket after all legs resolve, or immediately when any leg loses.
+ * A lost accumulator can close while unrelated lines are still PENDING.
+ *
  * Runs in a transaction and re-reads the ticket under a lock, so two settlement passes
  * can never pay the same ticket twice.
  */
@@ -229,12 +231,15 @@ export async function recalcTicket(ticketId, { database = pool } = {}) {
     }
 
     const lines = (await client.query('select * from app_ticket_line where ticket_id = $1', [ticketId])).rows;
-    if (lines.some((l) => l.status === 'PENDING')) {
-      await client.query('commit'); // still waiting for another match
+    const lost = lines.filter((l) => l.status === 'LOST');
+    // A standard accumulator is lost as soon as ANY accepted selection loses.
+    // Do not leave a provably lost ticket open just because other games remain live.
+    // Preserve other line statuses as PENDING for an honest per-match audit.
+    if (!lost.length && lines.some((l) => l.status === 'PENDING')) {
+      await client.query('commit'); // no losing leg; still waiting for another match
       return null;
     }
 
-    const lost = lines.filter((l) => l.status === 'LOST');
     const won = lines.filter((l) => l.status === 'WON');
     const voids = lines.filter((l) => l.status === 'VOID');
 
@@ -393,7 +398,8 @@ export async function recoverResolvedTickets() {
   const { rows } = await query(`select t.id from app_ticket t
     where t.status='PENDING'
       and exists(select 1 from app_ticket_line l where l.ticket_id=t.id)
-      and not exists(select 1 from app_ticket_line l where l.ticket_id=t.id and l.status='PENDING')
+      and (exists(select 1 from app_ticket_line l where l.ticket_id=t.id and l.status='LOST')
+        or not exists(select 1 from app_ticket_line l where l.ticket_id=t.id and l.status='PENDING'))
     order by t.placed_at,t.id`);
   const recovered = [];
   for (const { id } of rows) {
