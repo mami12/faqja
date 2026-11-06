@@ -76,6 +76,7 @@ const database={connect:async()=>({async query(sql,params=[]){
  // The primary incident writer now persists reconciled provider events and
  // coverage inside this transaction; this mock must understand those writes.
  if(sql.startsWith('select through_minute,complete'))return {rows:[]};
+ if(sql.startsWith('select kind from app_match_event_coverage'))return {rows:[]};
  if(sql.startsWith('update app_match_event_fact')||
     sql.startsWith('insert into app_match_event_fact')||
     sql.startsWith('insert into app_match_event_coverage')||
