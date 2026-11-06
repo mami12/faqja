@@ -1,3 +1,4 @@
+import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
 import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useState } from 'react';
@@ -74,6 +75,7 @@ export default function AdminPage() {
   const [reviewLine,setReviewLine]=useState<string|null>(null);
   const go=(next:AdminTab)=>{setReviewLine(null);setTab(next);};
   const [stitchCount,setStitchCount]=useState(0);
+  const [stitchMismatches,setStitchMismatches]=useState(0);
   useEffect(()=>{
     let active=true;
     const refresh=async()=>{
@@ -86,8 +88,8 @@ export default function AdminPage() {
     };
     const refreshStitch=async()=>{
       try{const res=await apiClient.get('/admin/live-event-test',{params:{summary:true}});
-        if(active)setStitchCount(Number(res.data?.count)||0);
-      }catch{if(active)setStitchCount(0);}
+        if(active){setStitchCount(Number(res.data?.count)||0);setStitchMismatches(Number(res.data?.auditMismatchCount)||0);}
+      }catch{if(active){setStitchCount(0);setStitchMismatches(0);}}
     };
     const refreshAll=()=>{void refresh();void refreshStitch();};
     refreshAll();
@@ -154,8 +156,11 @@ export default function AdminPage() {
             </label>
           </div>
           <main className="min-w-0 pb-10">
-            {tab!=='stitch'&&stitchCount>0&&<div className="mx-3 my-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-tertiary bg-secondary p-3">
-              <p className="text-sm"><strong>Stitch</strong> · Serveri ka gjetur rezultat të mundshëm për {stitchCount} përzgjedhje.</p>
+            {tab!=='stitch'&&(stitchCount>0||stitchMismatches>0)&&<div className="mx-3 my-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-tertiary bg-secondary p-3">
+              <div className="space-y-1 text-sm">
+                {stitchCount>0&&<p><strong>Stitch</strong> · Serveri ka gjetur rezultat të mundshëm për {stitchCount} përzgjedhje.</p>}
+                {stitchMismatches>0&&<p><strong>Stitch</strong> · Testi doli ndryshe nga sistemi për {stitchMismatches} përzgjedhje. Kontrolloji para çdo vendimi.</p>}
+              </div>
               <button type="button" onClick={()=>setTab('stitch')} className="min-h-11 rounded-lg border border-tertiary px-3">Shiko çfarë gjeti</button>
             </div>}
             {tab==='dashboard'&&notices.length>0&&<section aria-label="Bileta që kërkojnë kontroll" className="mx-3 my-3 space-y-2 rounded-xl border border-tertiary bg-secondary p-3">
@@ -233,6 +238,7 @@ export default function AdminPage() {
                    <p><strong>Mbaj aktiv tregun e verifikueshëm</strong> kur prova ekziston. Për shembull, një korner me minutë dhe skuadër nga burimi aktual mund të mbulojë kushtin përkatës, ndërsa mungesa e kornerit kërkon mbulim të plotë të intervalit.</p>
                    <p><strong>Rihape pas verifikimit</strong> të burimit për ligën dhe periudhën përkatëse, përfshirë rikuperimin pas ndërprerjes dhe korrigjimet. Biletat ekzistuese pa prova shkojnë për kontroll manual.</p>
                  </div>
+                 <StitchMissingEvidence />
                  <MarketCatalog evidenceOnly />
                </section>
              )}
