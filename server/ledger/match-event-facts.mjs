@@ -207,13 +207,13 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     bool_or($10::boolean=true and seconds is null
       and (minute=floor($11::numeric/60) or minute=floor($12::numeric/60))) as rolling_boundary_uncertain,
     count(*) filter(where (own_goal=false or (own_goal is null and aiscore_verified=true))
-     and ($6::text is not null and (
+     and (($6::text is not null and (
        (player_id is not null and player_id=$6) or
        (aiscore_verified=true and aiscore_player_id is not null and aiscore_player_id=$6)))
       or ($6::text is null and (
        (player_name is not null and lower(player_name)=lower($7)) or
        (aiscore_verified=true and aiscore_player_name is not null
-         and lower(aiscore_player_name)=lower($7)))))::int as player_goals,
+         and lower(aiscore_player_name)=lower($7))))))::int as player_goals,
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
