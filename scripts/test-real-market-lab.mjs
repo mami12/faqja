@@ -71,7 +71,7 @@ const claim={id:caseIds[0],run_id:'run-1',selection:{outcomeId:'103|next-goal||2
 let claims=0;const placementCalls=[],writes=[];
 const runQuery=async(sql,params=[])=>{
  writes.push({sql,params});
- if(sql.startsWith('update app_real_market_test_case c'))return {rows:claims++===0?[claim]:[]};
+ if(sql.trimStart().startsWith('update app_real_market_test_case c'))return {rows:claims++===0?[claim]:[]};
  if(sql.startsWith('select actor_id,stake_per_ticket'))return {rows:[{actor_id:admin.id,stake_per_ticket:100}]};
  if(sql.startsWith('select id,username,role,status'))return {rows:[admin]};
  if(sql.startsWith('update app_real_market_test_case set placement_status'))return {rowCount:1};
