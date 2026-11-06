@@ -9,7 +9,6 @@ import express from 'express';
 import { requireAuth, hashPassword } from './auth.mjs';
 import {assertAccountPassword} from './account-password-policy.mjs';
 import * as ledger from './store.mjs';
-import { stitchOverview } from './stitch-overview.mjs';
 import * as bets from './bets.mjs';
 import * as overrides from './overrides.mjs';
 import { settleMatch, settleAll } from './settler.mjs';
@@ -204,12 +203,6 @@ async function assertOwned(req, userId) {
 }
 
 /* ------------------------------------------------------------------- stats */
-
-adminRouter.get(
-  '/admin/stitch-overview',
-  ...admin,
-  guard(async (_req, res) => res.set('Cache-Control', 'no-store').json(await stitchOverview())),
-);
 
 /** dashboard numbers in the shape the admin screen expects */
 adminRouter.get(
