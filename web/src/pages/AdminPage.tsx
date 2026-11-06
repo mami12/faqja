@@ -1,6 +1,3 @@
-import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
-import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
-import MarketLab from '../components/Admin/MarketLab';
 import FootballInformationPanel from '../components/Admin/FootballInformationPanel';
 import MissingMarkets from '../components/Admin/MissingMarkets';
 import MarketCatalog from '../components/Admin/MarketCatalog';
@@ -23,17 +20,15 @@ import CasinoSettings from '../components/Admin/CasinoSettings';
 import FinancialReset from '../components/Admin/FinancialReset';
 import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
-import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing, FlaskConical, Search, X, Command, Database } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing, Search, X, Command, Database } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch' | 'market-lab' | 'football-info';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'football-info';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Puna e përditshme',
     items: [
       { id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
-      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
-      { id:'market-lab',label:'Testo tregjet LIVE',description:'Bileta virtuale dhe audit i pavarur',icon:FlaskConical },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
       { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
     ],
@@ -95,8 +90,6 @@ export default function AdminPage() {
   const [notices,setNotices]=useState<ReviewNotice[]>([]);
   const [reviewLine,setReviewLine]=useState<string|null>(null);
   const go=(next:AdminTab)=>{setReviewLine(null);setTab(next);};
-  const [stitchCount,setStitchCount]=useState(0);
-  const [stitchMismatches,setStitchMismatches]=useState(0);
   useEffect(()=>{
     let active=true;
     const refresh=async()=>{
@@ -107,12 +100,7 @@ export default function AdminPage() {
         }
       }catch{if(active)setReviewCount(0);}
     };
-    const refreshStitch=async()=>{
-      try{const res=await apiClient.get('/admin/live-event-test',{params:{summary:true}});
-        if(active){setStitchCount(Number(res.data?.count)||0);setStitchMismatches(Number(res.data?.auditMismatchCount)||0);}
-      }catch{if(active){setStitchCount(0);setStitchMismatches(0);}}
-    };
-    const refreshAll=()=>{void refresh();void refreshStitch();};
+    const refreshAll=()=>{void refresh();};
     refreshAll();
     const timer=window.setInterval(refreshAll,15000);
     return()=>{active=false;window.clearInterval(timer);};
@@ -189,13 +177,6 @@ export default function AdminPage() {
             </label>
           </div>
           <main className="min-w-0 pb-10">
-            {tab!=='stitch'&&(stitchCount>0||stitchMismatches>0)&&<div className="mx-3 my-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-tertiary bg-secondary p-3">
-              <div className="space-y-1 text-sm">
-                {stitchCount>0&&<p><strong>Stitch</strong> · Serveri ka gjetur rezultat të mundshëm për {stitchCount} përzgjedhje.</p>}
-                {stitchMismatches>0&&<p><strong>Stitch</strong> · Testi doli ndryshe nga sistemi për {stitchMismatches} përzgjedhje. Kontrolloji para çdo vendimi.</p>}
-              </div>
-              <button type="button" onClick={()=>setTab('stitch')} className="min-h-11 rounded-lg border border-tertiary px-3">Shiko çfarë gjeti</button>
-            </div>}
             {tab==='dashboard'&&notices.length>0&&<section aria-label="Bileta që kërkojnë kontroll" className="mx-3 my-3 space-y-2 rounded-xl border border-tertiary bg-secondary p-3">
               <h2 className="font-bold">Bileta që kërkojnë kontroll ({reviewCount})</h2>
               <ul className="divide-y divide-tertiary">
@@ -225,7 +206,7 @@ export default function AdminPage() {
                   <Command className="hidden text-text-secondary sm:block" size={24}/>
                 </div>
                 <nav aria-label="Veprime të shpejta" className="flex flex-wrap gap-2">
-                  {(['market-lab','stitch','matches','tickets','users','manual-review','risk'] as AdminTab[]).map(id=>{
+                  {(['matches','tickets','users','manual-review','risk'] as AdminTab[]).map(id=>{
                     const item=allItems.find(x=>x.id===id)!;const Icon=item.icon;
                     return <button key={id} type="button" onClick={()=>go(id)}
                       className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-tertiary bg-secondary px-3 text-xs font-semibold text-white transition hover:border-emerald-500/50 hover:bg-tertiary">
@@ -236,7 +217,6 @@ export default function AdminPage() {
               </div>
               <AdminDashboard />
             </>}
-            {tab === 'market-lab' && <MarketLab />}
              {tab === 'football-info' && <FootballInformationPanel />}
             {tab === 'users' && <UserManagement />}
             {tab === 'market-catalog' && <MarketCatalog />}
@@ -249,21 +229,6 @@ export default function AdminPage() {
                {reviewLine&&<button type="button" className="mx-3 min-h-11 rounded-lg border border-tertiary px-3" onClick={()=>setReviewLine(null)}>Shiko gjithë listën</button>}
                <ManualReviewQueue key={reviewLine??'all'} onlyLineId={reviewLine??undefined} />
              </>}
-             {tab === 'stitch' && <StitchSportsDesk sections={[
-               {id:'market-lab',title:'Testo tregjet LIVE',panel:()=> <MarketLab />},
-                {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
-               {id:'transactions',title:'Transaksionet',panel:()=> <TransactionHistoryPage embedded />},
-               {id:'tickets',title:'Biletat dhe historiku',panel:()=> <TicketAudit />},
-               {id:'review',title:'Verifikimet e hapura',panel:()=> <ManualReviewQueue />},
-               {id:'matches',title:'Ndeshjet',panel:()=> <MatchControl />},
-               {id:'publication',title:'Publikimi live dhe prematch',panel:()=> <BoardSettings />},
-               {id:'builders',title:'Kombinimet e tregjeve',panel:()=> <BetBuilderManager />},
-               {id:'evidence',title:'Tregjet që kërkojnë prova shtesë',panel:()=> <MarketCatalog evidenceOnly />},
-               {id:'markets',title:'Tregjet dhe koeficientët',panel:()=> <MarketCatalog />},
-               {id:'exposure',title:'Ekspozimi i basteve',panel:()=> <MatchExposure />},
-               {id:'risk',title:'Rreziku live',panel:()=> <LiveRiskManager />},
-               {id:'audit',title:'Historiku i veprimeve',panel:()=> <AdminAuditLog />},
-             ]}/>} 
              {tab === 'sports-roadmap' && (
                <section aria-labelledby="sports-roadmap-heading" className="mx-auto max-w-4xl space-y-4 p-3 sm:p-6">
                  <h2 id="sports-roadmap-heading" className="text-lg font-bold">Plani i sportbasteve</h2>
@@ -293,7 +258,6 @@ export default function AdminPage() {
                    <p><strong>Rihape pas verifikimit</strong> të burimit për ligën dhe periudhën përkatëse, përfshirë rikuperimin pas ndërprerjes dhe korrigjimet. Biletat ekzistuese pa prova shkojnë për kontroll manual.</p>
                  </div>
                  <MissingMarkets />
-                 <StitchMissingEvidence />
 
                </section>
              )}
