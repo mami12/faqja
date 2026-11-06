@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {eventContract,eventInWindow} from './event-contract.mjs';
 const query=async(...args)=>(await import('../db.mjs')).query(...args);
 import {eventMarketRequirement} from './event-market-policy.mjs';
@@ -75,7 +76,50 @@ export function normalizeEvents(data,source){
  const cornerNotTaken=e=>e.type==='corner_kick'&&
   (e.isTaken===false||e.taken===false||
    /^(?:awarded|not[_ -]?taken|unexecuted|not[_ -]?executed)$/i.test(String(e.status??'').trim()));
- if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e)||cornerNotTaken(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:zizobetMinute(e.gt)??NaN,seconds:zizobetEventSeconds(e.clk,zizobetMinute(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
+ const explicitCardColor=e=>{
+  const type=String(e.type??'').toLowerCase().replace(/[\s-]+/g,'_');
+  // Second-yellow dismissal semantics vary between providers. Do not silently
+  // assign it to either counter without a documented primary event type.
+  if(/second_yellow|yellow_red|yellowred/.test(type))return null;
+  const fromType=/^(?:yellow_card|yellowcard|card_yellow|booking_yellow)$/.test(type)?'yellow':
+   /^(?:red_card|redcard|card_red|booking_red)$/.test(type)?'red':null;
+  const raw=String(e.cardColor??e.card_color??e.color??'').toLowerCase().trim();
+  const fromField=/^yellow$/.test(raw)?'yellow':/^red$/.test(raw)?'red':null;
+  if(fromType&&fromField&&fromType!==fromField)return null;
+  return fromType??fromField;
+ };
+ const explicitOwnGoal=e=>{
+  for(const raw of [e.isOwnGoal,e.ownGoal,e.own_goal,e.own]){
+   if(typeof raw==='boolean')return raw;
+   if(raw===1||raw==='1'||raw==='true')return true;
+   if(raw===0||raw==='0'||raw==='false')return false;
+  }
+  if(/(?:\(\s*og\s*\)|\bown goal\b|\bautogol\b)/i.test(String(e.pl??'')))return true;
+  return null;
+ };
+ const stableZizoId=e=>{
+  if(e.id!=null&&String(e.id).trim())return String(e.id);
+  // Timeline indices change when the provider reorders/corrects old events.
+  // A content-derived identity is stable across polls; indistinguishable
+  // duplicate events fail reconciliation rather than fabricating order.
+  return 'anonymous:'+createHash('sha256').update(JSON.stringify([
+   e.type??null,e.team??null,e.gt??null,e.clk??null,
+   e.pl??null,e.playerId??e.player_id??null,e.cardColor??e.card_color??e.color??null
+  ])).digest('hex').slice(0,32);
+ };
+ if(source==='zizobet')events=(data.TimeLines??[]).map(e=>{
+  const type=String(e.type??'').toLowerCase();
+  const minute=zizobetMinute(e.gt),color=explicitCardColor(e);
+  return {disabled:!active(e)||cornerNotTaken(e),id:stableZizoId(e),
+   type:type==='score_change'?'goal':type==='corner_kick'?'corner':/card|booking/.test(type)?'card':e.type,
+   cardColor:/card|booking/.test(type)?color:null,
+   ownGoal:type==='score_change'?explicitOwnGoal(e):null,
+   team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,
+   minute:minute??NaN,seconds:zizobetEventSeconds(e.clk,minute),
+   player:typeof e.pl==='string'?e.pl.trim()||null:null,
+   playerId:e.playerId??e.player_id??null,
+   phase:e.phase??null,updatedAt:e.updated_uts??null};
+ });
  const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
  const retained=[...unique.values()].filter(e=>!e.disabled);
  // For closed corner windows, prove the timeline covers every corner observed
