@@ -48,6 +48,23 @@ assert.equal(verifiedSecondLiveDecision({...row,live_contract:{...contract,targe
 assert.equal(verifiedSecondLiveDecision({...row,proposed_status:'LOST'},{now}),null,
  'A stored verdict must agree with both live calculations');
 
+const counted={source:'zizobet',clock:20,counts:{goal:1},teams:{goal:{home:1,away:0}},
+ events:[],coverage:{},ended:false};
+const firstOnly={version:1,kind:'sequence',event:'goal',target:1,side:'home',baseline:{home:0,away:0}};
+const countersRow={...row,proposed_status:'WON',live_contract:firstOnly,
+ payload:{contract:firstOnly,frame:counted,frameAt:row.payload.frameAt},
+ provider_frame:counted};
+assert.equal(primaryLiveDecision(firstOnly,counted),'WON',
+ 'Verified one-goal difference in PRIMARY counters is enough for Next Goal');
+assert.equal(verifiedSecondLiveDecision(countersRow,{now}),'WON',
+ 'The retained PRIMARY per-team counters must survive the second verification');
+const cornerRace={version:1,kind:'race',event:'corner',target:6,side:'home',baseline:{home:2,away:1}};
+const cornerFrame={source:'zizobet',clock:50,counts:{corner:8},
+ teams:{corner:{home:6,away:2}},events:[],coverage:{},ended:false};
+assert.equal(primaryLiveDecision(cornerRace,cornerFrame),'WON',
+ 'Race to six corners can be proven by PRIMARY team counters without another API');
+
+
 const calls=[];
 const runQuery=async(sql)=>{assert.match(sql,/app_live_settlement_preview/);return {rows:[row,
  {...row,line_id:'line-b',open_recovery_gap:true}]};};
