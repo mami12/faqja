@@ -105,7 +105,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const c=line?.live_contract;
  if(!c||!SUPPORTED_FACT_KINDS.has(c.kind)||!validKind.has(c.event)||typeof execute!=='function')return null;
  const {rows}=await execute(`with covered as (
-   select through_minute,count_home,count_away,complete from app_match_event_coverage
+   select through_minute,count_home,count_away,complete,observed_at from app_match_event_coverage
    where match_id=$1 and provider='zizobet' and kind=$2
  ), ordered as (
    select f.*,row_number() over(order by coalesce(f.seconds,f.minute*60),f.minute,f.provider_event_id) as ordinal,
@@ -128,7 +128,8 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
- select a.*,c.through_minute,c.count_home,c.count_away,c.complete,
+ select a.*,c.through_minute,c.count_home,c.count_away,c.complete,c.observed_at,
+  (select last_seen_at from app_live_event_cursor where match_id=$1) as second_poll_at,
   exists(select 1 from app_live_event_recovery g
     where g.match_id=$1 and g.status='AWAITING_BACKUP_API' and $9::uuid=any(g.line_ids)) as open_recovery_gap,
    (select team from ordered where ordinal=$8) as nth_team,
@@ -154,6 +155,11 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
     Number(data.away)!==Number(data.count_away))return null;
  const full=!!(result&&data.complete===true&&
     (c.event!=='goal'||(data.home===Number(result.home_score)&&data.away===Number(result.away_score))));
+ // A financial decision based on a LIVE event needs a later real provider poll.
+ // The persisted cursor is updated even when identical frames are deduplicated.
+ const first=new Date(data.observed_at).getTime(),second=new Date(data.second_poll_at).getTime();
+ const verifiedAgain=full||(Number.isFinite(first)&&Number.isFinite(second)&&second-first>=5000);
+ if(!verifiedAgain)return null;
  const through=Number(data.through_minute);
  const scopeEnded=full||(Number.isFinite(c.to)&&through>Number(c.to));
  const count=Number(c.side==='home'?data.home:c.side==='away'?data.away:data.total);
@@ -189,19 +195,33 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   // No confirmed participation or complete player attribution => review.
   return null;
  }
- if(!full)return null;
  if(c.kind==='team-total-goals'){
   if(!Number.isFinite(c.threshold)||!['over','under'].includes(c.choice))return null;
-  if(count===c.threshold&&Number.isInteger(c.threshold))return 'VOID'; // genuine numeric push
-  return decision(c.choice==='over'?count>c.threshold:count<c.threshold);
+  if(count>c.threshold)return c.choice==='over'?'WON':'LOST';
+  if(!full)return null;
+  if(count===c.threshold&&Number.isInteger(c.threshold))return 'VOID';
+  return c.choice==='under'?'WON':'LOST';
  }
- if(!Number.isFinite(expected))return null;
  if(c.kind==='over'||c.kind==='under'){
+  if(!Number.isFinite(expected))return null;
+  if(count>expected)return c.kind==='over'?'WON':'LOST';
+  if(!full)return null;
   if(count===expected&&Number.isInteger(expected))return 'VOID';
-  return decision(c.kind==='over'?count>expected:count<expected);
+  return c.kind==='under'?'WON':'LOST';
  }
- if(c.kind==='exact')return decision(count===expected);
- if(c.kind==='atLeast')return decision(count>=expected);
- if(c.kind==='range'&&Number.isFinite(c.min)&&Number.isFinite(c.max))return decision(count>=c.min&&count<=c.max);
+ if(c.kind==='atLeast'){
+  if(!Number.isInteger(c.target))return null;
+  if(count>=c.target)return 'WON';
+  return full?'LOST':null;
+ }
+ if(c.kind==='exact'){
+  if(!Number.isInteger(c.target))return null;
+  if(count>c.target)return 'LOST';
+  return full?decision(count===c.target):null;
+ }
+ if(c.kind==='range'&&Number.isFinite(c.min)&&Number.isFinite(c.max)){
+  if(count>c.max)return 'LOST';
+  return full?decision(count>=c.min&&count<=c.max):null;
+ }
  return null;
 }
