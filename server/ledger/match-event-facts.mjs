@@ -202,7 +202,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  const expected=Number(c.target??c.threshold);
  const decision=truth=>truth?'WON':'LOST';
  if(c.kind==='window'){
-  if(!scopeEnded||typeof c.choice!=='boolean')return null;
+  // Provider minute ranges are inclusive: 10-20 covers ALL of minute 20.
+  // Only a rolling elapsed-seconds window closes at its exact deadline.
+  const closesAt=c.startExclusive===true?Number(c.to):Math.floor(Number(c.to))+1;
+  if(!Number.isFinite(closesAt)||through<closesAt||typeof c.choice!=='boolean')return null;
   // Minute-only data cannot classify an event in the first or last
   // fractional minute of a rolling market. No speculative wallet change.
   if(c.startExclusive===true&&data.rolling_boundary_uncertain===true)return null;
@@ -210,7 +213,7 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   return decision(c.choice?(num>0):(num===0));
  }
  if(c.kind==='interval-result'){
-  if(!full&&through*60<c.toExclusiveSeconds)return null;
+  if(!Number.isSafeInteger(c.toExclusiveSeconds)||through*60<c.toExclusiveSeconds)return null;
   const h=Number(data.window_home),a=Number(data.window_away);
   return decision((h>a?'home':a>h?'away':'none')===c.side);
  }
