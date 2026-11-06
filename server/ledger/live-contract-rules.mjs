@@ -216,12 +216,17 @@ export function parseSequenceBet(line,counts={}) {
  if(/\b(?:minutes?|mins?|interval)\b/.test(name))return null;
  const event=/\bcorner/.test(name)?'corner':/\bgoal/.test(name)?'goal':null;
  if(!event)return null;
+ // Zizobet publishes separate *absolute* numbered offers such as
+ // "Next Goal 1st" and "Next Goal 2nd". These refer to goal #1/#2 of
+ // the fixture, NOT blindly to current score + 1. Preserve their ordinal.
+ // A bare "Next Goal" remains the live next goal from the accepted score.
+ const providerOrdinal=name.match(/^next\s+(goal|corner)\s+(\d{1,3})(?:st|nd|rd|th)?$/);
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
  const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:(?:who (?:scores|takes)|which team (?:scores|wins)) (?:the )?)?(?:goal|corner)\s*(\d+)\b|^which team (?:scores|wins) (?:the )?goal (\d+)\b/);
  const first=/^(?:(?:who|which team)\s+(?:scores|takes|wins)\s+(?:the\s+)?)?first\s+(?:goal|corner)\b/.test(name);
  const reach=name.match(/^(?:which team\s+)?(?:reaches|gets|takes|scores)\s+(\d{1,3})\s+(goals?|corners?)\s+first\b/);
  const race=name.match(/\brace to (\d{1,3}) (goals?|corners?)\b/);
- if(!isNext&&!numbered&&!race&&!first&&!reach)return null;
+ if(!isNext&&!providerOrdinal&&!numbered&&!race&&!first&&!reach)return null;
  const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
  if(!side)return null;
  if(race||reach){
@@ -229,8 +234,9 @@ export function parseSequenceBet(line,counts={}) {
   if(!Number.isInteger(threshold)||threshold<1||threshold>100||side==='none')return null;
   return {version:1,kind:'race',event:/(?:goal)/.test((race??reach)[2])?'goal':'corner',target:threshold,side};
  }
- let target=numbered?Number(numbered[1]??numbered[2]??numbered[3]):first?1:null;
- if(isNext){
+ let target=providerOrdinal?Number(providerOrdinal[2]):
+  numbered?Number(numbered[1]??numbered[2]??numbered[3]):first?1:null;
+ if(isNext&&!providerOrdinal&&!numbered&&!first){
   const c=counts[event];
   const home=nonNeg(c?.home),away=nonNeg(c?.away);
   if(home===null||away===null)return null;
