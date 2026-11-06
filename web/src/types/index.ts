@@ -202,6 +202,7 @@ export interface PitchState {
 }
 
 export interface MatchEvent {
+  player?:string;
   id?:string;
   minuteLabel?:string;
   matchId: string;

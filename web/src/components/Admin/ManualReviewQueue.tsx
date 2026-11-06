@@ -18,6 +18,12 @@ const labels:Record<string,string>={
  UNRESOLVED_FINAL_SELECTION:'Ndeshja ka përfunduar, por përzgjedhja nuk është verifikuar',
  MISSING_FINAL_RESULT:'Mungon rezultati përfundimtar i konfirmuar',
 };
+function prepareDecision(item:ReviewItem,decision:Decision):Decision{
+ if(decision.status!=='VOID')return decision;
+ return {...decision,reason:decision.reason.trim()||'Anulim i miratuar nga administratori. '+(labels[item.reason]??'Përzgjedhja kërkonte kontroll.'),
+  source:decision.source.trim()||'Vendim manual nga paneli i adminit'};
+}
+
 const fresh:Decision={status:'PENDING',reason:'',source:''};
 export default function ManualReviewQueue({onlyLineId,onSaved}:{onlyLineId?:string;onSaved?:()=>void}={}){
  const [approval,setApproval]=useState<{item:ReviewItem;decision:Decision}|null>(null);
@@ -74,6 +80,7 @@ export default function ManualReviewQueue({onlyLineId,onSaved}:{onlyLineId?:stri
   </section>}
   {items.map(item=>{
    const decision=decisions[item.lineId]??fresh;
+   const prepared=prepareDecision(item,decision);
    return <section key={item.lineId} className="bg-secondary rounded-xl border border-tertiary p-4 space-y-3">
     <div className="flex flex-wrap justify-between gap-2">
      <div><h3 className="font-bold text-white">{item.matchName}</h3>
@@ -102,10 +109,11 @@ export default function ManualReviewQueue({onlyLineId,onSaved}:{onlyLineId?:stri
        placeholder="API / raport zyrtar / verifikim" className="w-full bg-primary border border-tertiary rounded-lg p-2 text-white"/>
      </label>
     </div>
+    {decision.status==='VOID'&&<p className="text-sm text-text-secondary">Për anulimin, shënimi i auditimit plotësohet vetë. Mund ta ndryshosh para miratimit.</p>}
     <div className="flex flex-wrap gap-3 items-center justify-between">
      <p className="text-[11px] text-text-secondary">Vendimet Fituese/Humbëse/E pavlefshme mund të ndryshojnë bilancin. Sistemi regjistron administratorin dhe diferencën financiare.</p>
-     <button type="button" disabled={busy!==null||!decision.reason.trim()||!decision.source.trim()}
-      onClick={()=>onlyLineId?setApproval({item,decision:{...decision}}):void decide(item,decision)} className="bg-accent-green text-primary rounded-lg px-4 py-2 font-bold text-sm disabled:opacity-40">
+     <button type="button" disabled={busy!==null||!prepared.reason.trim()||!prepared.source.trim()}
+      onClick={()=>onlyLineId||prepared.status==='VOID'?setApproval({item,decision:{...prepared}}):void decide(item,prepared)} className="bg-accent-green text-primary rounded-lg px-4 py-2 font-bold text-sm disabled:opacity-40">
       {busy===item.lineId?'Duke ruajtur…':'Ruaj vendimin'}
      </button>
     </div>

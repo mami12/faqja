@@ -9,6 +9,9 @@ import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '..
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
 import {checkStoredLivePreview,createLiveSettlementPreviews} from '../server/ledger/live-shadow-settlement.mjs';
 
+import {gradeLiveContract} from '../server/ledger/live-contract-rules.mjs';
+import {providerTimeline} from '../server/live-event-timeline.mjs';
+
 const now=Date.parse('2026-11-05T21:00:00Z');
 const game={Match:{Score:'1:1',MatchTimeExtended:'36:05',CornersTeam1:1,CornersTeam2:0,
  EventStatus:6,YellowCardsTeam1:0,YellowCardsTeam2:0,RedCardsTeam1:0,RedCardsTeam2:0},
@@ -21,6 +24,28 @@ assert.equal(frame.coverage.goalThrough,36+5/60);
 assert.equal(frame.coverage.cornerThrough,36+5/60);
 assert.equal(frame.ended,false);
 assert.equal(frame.events.length,3);
+// Field layout sampled from the public Zizobet live match detail.
+const sameMinuteGame={
+ Match:{Score:'1:0',MatchTimeExtended:'46:55',CornersTeam1:1,CornersTeam2:1,EventStatus:4},
+ TimeLines:[
+  {type:'corner_kick',gt:'47',clk:'46:39',team:'away',pl:null},
+  {type:'score_change',gt:'47',clk:'46:40',team:'home',pl:'Lojtari i provës'},
+  {type:'corner_kick',gt:'47',clk:'46:15',team:'home',pl:null},
+ ],
+};
+const timed=normalizeLiveFrame(sameMinuteGame);
+assert.equal(timed.coverage.cornerThrough,46+55/60);
+assert.equal(timed.coverage.goalThrough,46+55/60);
+assert.equal(timed.events.find(event=>event.type==='goal').player,'Lojtari i provës');
+assert.equal(providerTimeline(123,sameMinuteGame.TimeLines).find(event=>event.type==='goal').player,'Lojtari i provës');
+const firstCorner={kind:'sequence',event:'corner',target:1,side:'home'};
+assert.equal(gradeLiveContract(firstCorner,timed),'WON');
+assert.equal(gradeLiveContract({kind:'race',event:'corner',target:1,side:'away'},timed),'LOST');
+const withoutTime=normalizeLiveFrame({...sameMinuteGame,Match:{...sameMinuteGame.Match,MatchTimeExtended:'47:10'},
+ TimeLines:sameMinuteGame.TimeLines.map(event=>({...event,clk:'80:00'}))});
+assert.equal(gradeLiveContract(firstCorner,withoutTime),null,'unrelated clocks must never break a same-minute tie');
+assert.equal(timed.counts.foul,null,'missing fouls are not zero');
+
 const match={service:'LIVE',home_score:1,away_score:0,score_at:new Date(now),clock_at:new Date(now),
  match_time_ms:35*60000,stats:{home:{corners:2},away:{corners:0}},
  raw:{homeTeam:{id:'home'},awayTeam:{id:'away'}}};

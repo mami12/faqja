@@ -25,37 +25,45 @@ import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldC
 type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
-    title: 'Përmbledhja',
-    items: [{ id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard }],
-  },
-  {
-    title: 'Menaxhimi',
+    title: 'Puna e përditshme',
     items: [
-      { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
-      {id:'market-catalog',label:'Tregjet dhe renditja',description:'Aktivizimi global dhe radha e tregjeve',icon:Layers},
-      { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
-      { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
-      { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
-      { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
-      { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
-      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
-      { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
-      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
+      { id: 'dashboard', label: 'Paneli kryesor', description: 'Statistikat dhe financat', icon: LayoutDashboard },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
-      { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
+      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
+      { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id: 'users', label: 'Përdoruesit', description: 'Lojtarë, menaxherë dhe bilance', icon: Users },
     ],
   },
   {
-    title: 'Raportet',
+    title: 'Sportbastet',
     items: [
+      { id: 'matches', label: 'Ndeshjet dhe kuotat', description: 'Pezullime dhe ndryshime kuotash', icon: Trophy },
+      {id:'market-catalog',label:'Tregjet dhe renditja',description:'Aktivizimi global dhe radha e tregjeve',icon:Layers},
+      { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'match-exposure', label: 'Bastet dhe verifikimi', description: 'Ekspozimi për ndeshje dhe vendime manuale', icon: ShieldAlert },
+      { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
+      { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
+      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
+      { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
+    ],
+  },
+  {
+    title: 'Financat dhe historiku',
+    items: [
       { id: 'transactions', label: 'Transaksionet', description: 'Lëvizjet financiare', icon: Receipt },
-      { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
       { id: 'audit', label: 'Regjistri', description: 'Historiku i veprimeve', icon: ClipboardList },
+      { id: 'casino-finance', label: 'Financat Sport + Kazino', description: 'Përdoruesit, fitimet dhe humbjet', icon: Dices },
+    ],
+  },
+  {
+    title: 'Cilësime të avancuara',
+    items: [
+      { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
       { id: 'financial-reset', label: 'Zerimi financiar', description: 'Backup, bileta dhe bilance nga zero', icon: ShieldAlert },
     ],
   },
 ];
+type ReviewNotice = {lineId:string;matchName:string;marketName:string;outcomeName:string;notificationActive:boolean};
 const allItems = sections.flatMap(section => section.items);
 
 export default function AdminPage() {
@@ -63,13 +71,19 @@ export default function AdminPage() {
   const tr = (value: string) => adminUiText(value, lang);
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const [reviewCount,setReviewCount]=useState(0);
+  const [notices,setNotices]=useState<ReviewNotice[]>([]);
+  const [reviewLine,setReviewLine]=useState<string|null>(null);
+  const go=(next:AdminTab)=>{setReviewLine(null);setTab(next);};
   const [stitchCount,setStitchCount]=useState(0);
   const [stitchMismatches,setStitchMismatches]=useState(0);
   useEffect(()=>{
     let active=true;
     const refresh=async()=>{
       try{const res=await apiClient.get('/admin/settlement-review-queue',{params:{limit:200}});
-        if(active)setReviewCount(Number(res.data?.notificationCount)||0);
+        if(active){
+          setReviewCount(Number(res.data?.notificationCount)||0);
+          setNotices((Array.isArray(res.data?.items)?res.data.items:[]).filter((item:ReviewNotice)=>item.notificationActive).slice(0,5));
+        }
       }catch{if(active)setReviewCount(0);}
     };
     const refreshStitch=async()=>{
@@ -112,7 +126,7 @@ export default function AdminPage() {
                         key={item.id}
                         type="button"
                         aria-current={selected ? 'page' : undefined}
-                        onClick={() => setTab(item.id)}
+                        onClick={() => go(item.id)}
                         className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${selected ? 'bg-accent-green/15 text-accent-green ring-1 ring-accent-green/30' : 'text-text-secondary hover:text-white hover:bg-tertiary/70'}`}
                       >
                         <Icon size={19} className="shrink-0" />
@@ -132,23 +146,14 @@ export default function AdminPage() {
         </aside>
         <div className="min-w-0 flex-1">
           <div className="lg:hidden sticky top-0 z-20 border-b border-tertiary bg-secondary/95 backdrop-blur-md">
-            <nav aria-label={tr("Menuja e administratorit")} className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {allItems.map(item => {
-                const Icon = item.icon;
-                const selected = item.id === tab;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-current={selected ? 'page' : undefined}
-                    onClick={() => setTab(item.id)}
-                    className={`shrink-0 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold whitespace-nowrap transition-colors ${selected ? 'bg-accent-green text-primary' : 'bg-primary text-text-secondary hover:text-white'}`}
-                  >
-                    <Icon size={15} /> {tr(item.label)}{item.id==='manual-review'&&reviewCount>0&&<span className="rounded-full bg-rose-600 text-white px-1.5 text-[10px]">{reviewCount}</span>}
-                  </button>
-                );
-              })}
-            </nav>
+            <label className="block px-3 py-2 text-xs font-semibold">
+              {tr("Menuja e administratorit")}
+              <select className="mt-1 min-h-11 w-full rounded-lg border border-tertiary bg-primary px-3 text-sm text-white" value={tab} onChange={event=>go(event.target.value as AdminTab)}>
+                {sections.map(section=><optgroup key={section.title} label={tr(section.title)}>
+                  {section.items.map(item=><option key={item.id} value={item.id}>{tr(item.label)}{item.id==='manual-review'&&reviewCount>0?` (${reviewCount})`:''}</option>)}
+                </optgroup>)}
+              </select>
+            </label>
           </div>
           <main className="min-w-0 pb-10">
             {tab!=='stitch'&&(stitchCount>0||stitchMismatches>0)&&<div className="mx-3 my-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-tertiary bg-secondary p-3">
@@ -158,7 +163,17 @@ export default function AdminPage() {
               </div>
               <button type="button" onClick={()=>setTab('stitch')} className="min-h-11 rounded-lg border border-tertiary px-3">Shiko çfarë gjeti</button>
             </div>}
-            {tab !== 'matches' && <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
+            {tab==='dashboard'&&notices.length>0&&<section aria-label="Bileta që kërkojnë kontroll" className="mx-3 my-3 space-y-2 rounded-xl border border-tertiary bg-secondary p-3">
+              <h2 className="font-bold">Bileta që kërkojnë kontroll ({reviewCount})</h2>
+              <ul className="divide-y divide-tertiary">
+                {notices.map(item=><li key={item.lineId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <div className="min-w-0 break-words"><p className="font-semibold">{item.matchName}</p><p className="text-sm">{item.marketName} · {item.outcomeName}</p></div>
+                  <button type="button" className="min-h-11 rounded-lg border border-tertiary px-3" onClick={()=>{setReviewLine(item.lineId);setTab('manual-review');}}>Kontrollo biletën</button>
+                </li>)}
+              </ul>
+              {reviewCount>notices.length&&<button type="button" className="min-h-11 px-3 text-sm underline" onClick={()=>go('manual-review')}>Shiko të gjitha</button>}
+            </section>}
+            {tab !== 'matches' && tab !== 'dashboard' && <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary border border-tertiary text-accent-green">
                   <ActiveIcon size={19} />
@@ -177,7 +192,10 @@ export default function AdminPage() {
             {tab === 'builders' && <BetBuilderManager />}
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
-             {tab === 'manual-review' && <ManualReviewQueue />}
+             {tab === 'manual-review' && <>
+               {reviewLine&&<button type="button" className="mx-3 min-h-11 rounded-lg border border-tertiary px-3" onClick={()=>setReviewLine(null)}>Shiko gjithë listën</button>}
+               <ManualReviewQueue key={reviewLine??'all'} onlyLineId={reviewLine??undefined} />
+             </>}
              {tab === 'stitch' && <StitchSportsDesk sections={[
                {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
                {id:'transactions',title:'Transaksionet',panel:()=> <TransactionHistoryPage embedded />},

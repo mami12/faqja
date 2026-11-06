@@ -8,7 +8,7 @@ type Review = { lineId: string; matchId: string; marketKey: string; marketLine: 
 type LivePreview = {
  line_id:string; match_name:string; market_name:string; outcome_name:string;
  proposed_status:'WON'|'LOST'|'VOID'; timelineCheck:'AGREES'|'DIFFERS'|'INSUFFICIENT';
- payload?:{contract?:{kind:string;event:string;from?:number;to?:number};frame?:{source?:string;clock?:number;events?:Array<{id:string;type:string;minute:number;team:string}>}};
+ payload?:{contract?:{kind:string;event:string;from?:number;to?:number};frame?:{source?:string;clock?:number;events?:Array<{id:string;type:string;minute:number;team:string;player?:string|null}>}};
 };
 const statusName = {WON:'Fituese',LOST:'Humbëse',VOID:'E pavlefshme'};
 const eventName:Record<string,string> = {goal:'Gol',corner:'Korner',card:'Karton',foul:'Faull'};
@@ -214,7 +214,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
        ? 'Lista e ngjarjeve jep rezultat tjetër. Duhet ta shikojmë me dorë.'
        : 'Lista e ngjarjeve nuk mjafton për një kontroll të dytë.'}</p>
      {events.length>0&&<ul className="list-disc pl-5 text-sm">{events.slice(0,12).map(event=><li key={event.id}>
-      {eventName[event.type]??event.type}, minuta {formatNumber.format(event.minute)} · {event.team==='home'?'Skuadra vendase':event.team==='away'?'Skuadra mike':'Skuadra e panjohur'}
+      {eventName[event.type]??event.type}, minuta {formatNumber.format(event.minute)} · {event.team==='home'?'Skuadra vendase':event.team==='away'?'Skuadra mike':'Skuadra e panjohur'}{event.player?' · '+event.player:''}
      </li>)}</ul>}
      {events.length>12&&<p className="text-xs">Po shfaqen 12 nga {events.length} ngjarje.</p>}
      {frame?.source&&<p className="text-xs">Burimi · {frame.source}</p>}

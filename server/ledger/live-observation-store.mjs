@@ -24,12 +24,12 @@ export function normalizeLiveFrame(data){
    {home:yellows.home+reds.home,away:yellows.away+reds.away};
  const events=Array.isArray(data?.TimeLines)?
   normalizeEvents(data,'zizobet').events.filter(e=>['goal','corner','card','foul'].includes(e.type))
-    .map(e=>({id:String(e.id),type:e.type,team:e.team,minute:e.minute,seconds:e.seconds??null,phase:e.phase??null})):null;
+    .map(e=>({id:String(e.id),type:e.type,team:e.team,minute:e.minute,seconds:e.seconds??null,player:e.player??null,phase:e.phase??null})):null;
  const coverage={};
  const verify=(kind,counters)=>{
   if(!events||!counters||clock===null||counters.home==null||counters.away==null)return;
   const filtered=events.filter(e=>e.type===kind);
-  if(filtered.some(e=>!Number.isFinite(e.minute)||e.minute<0||e.minute>clock||!['home','away'].includes(e.team)))return;
+  if(filtered.some(e=>!Number.isFinite(e.minute)||e.minute<0||(Number.isFinite(e.seconds)?e.seconds/60:e.minute)>clock||!['home','away'].includes(e.team)))return;
   if(filtered.filter(e=>e.team==='home').length!==counters.home||
      filtered.filter(e=>e.team==='away').length!==counters.away)return;
   coverage[kind+'Through']=clock;
