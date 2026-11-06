@@ -16,6 +16,26 @@ const typeOf=name=>/\b(?:corners?|corner kicks?|kornera?)\b/.test(name)?'corner'
  /\b(?:cards?|bookings?|kartona?)\b/.test(name)?'card':
  /\b(?:fouls?|faulle?)\b/.test(name)?'foul':null;
 const nonNeg=v=>{const n=number(v);return n!==null&&Number.isInteger(n)&&n>=0?n:null;};
+/** Explicit Zizobet 00:00–09:59 minute RESULT, never today's match score.
+ * A period/result is scored ONLY from goals in that interval, from the full
+ * primary timeline, once its ending second has elapsed and goals reconcile.
+ */
+export function parseTimedResultMarket(line){
+ const raw=norm(line.market_name??line.marketName??line.name);
+ // Relative 2H intervals need a separately verified period clock. Do not
+ // silently map 00:00 to the first half of an already-started second half.
+ const title=raw.replace(/^(?:1st|first) half\s*[-–:.]\s*/,'');
+ if(/^(?:2nd|second) half\b/.test(title))return null;
+ const match=title.match(/^(\d{1,3}):([0-5]\d)\s*[-–]\s*(\d{1,3}):([0-5]\d)\s*(?:min(?:ute)?s?\.?)?\s*[-–]\s*(?:result|1x2)$/);
+ if(!match)return null;
+ const from=Number(match[1])*60+Number(match[2]),end=Number(match[3])*60+Number(match[4])+1;
+ if(from<0||end<=from||end>130*60||from%60!==0||end%60!==0)return null;
+ const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
+ if(!side)return null;
+ return {version:1,kind:'interval-result',event:'goal',side,
+  fromSeconds:from,toExclusiveSeconds:end};
+}
+
 export function parseEventWindow(line,clock=null) {
  let name=norm(line.market_name??line.marketName??line.name);
  const kind=typeOf(name);
@@ -87,7 +107,7 @@ export function parseCountMarket(line) {
  return null;
 }
 export const liveContract=(line,{counts={},clock=null}={})=>
- parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseCountMarket(line);
+ parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
@@ -111,10 +131,32 @@ const fullCoverage=(evidence,event,through)=>{
  * 'ended' requires a confirmed terminal feed phase, not wall-clock time.
  */
 export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=false}={}){
- if(!contract||!['window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
+ if(!contract||!['interval-result','window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
  const {event}=contract;
  const ordered=sortEvents(Array.isArray(evidence.events)?evidence.events:[],event);
  const clock=number(evidence.clock),count=number(eventCount(evidence.counts,event));
+ if(contract.kind==='interval-result'){
+  if(!ordered||clock===null||!Number.isSafeInteger(contract.fromSeconds)||
+     !Number.isSafeInteger(contract.toExclusiveSeconds)||clock*60<contract.toExclusiveSeconds||
+     !fullCoverage(evidence,'goal',contract.toExclusiveSeconds/60))return null;
+  const goals=ordered.events;
+  // Exact provider times take priority. An integer minute without seconds
+  // safely identifies only its entire 00:00–00:59 bucket, which is enough
+  // for this provider's minute-aligned 00:00–09:59 contracts.
+  const eventSecond=e=>Number.isFinite(e.seconds)?e.seconds:Number.isInteger(e.minute)?e.minute*60:null;
+  if(goals.some(e=>eventSecond(e)===null))return null;
+  let home=0,away=0;
+  for(const e of goals){
+   const second=eventSecond(e);
+   if(second>=contract.fromSeconds&&second<contract.toExclusiveSeconds){
+    if(e.team==='home')home++;
+    else if(e.team==='away')away++;
+    else return null;
+   }
+  }
+  const result=home>away?'home':away>home?'away':'none';
+  return contract.side===result?'WON':'LOST';
+ }
  if(contract.kind==='window'){
   if(!ordered)return null;
   if(contract.side&&ordered.events.some(e=>!['home','away'].includes(e.team)))return null;
