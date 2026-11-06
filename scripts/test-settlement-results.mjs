@@ -87,7 +87,7 @@ assert.equal(gradeLine({...firstHalfTotal,outcome_key:'Under',outcome_name:'Unde
 assert.equal(gradeLine({...firstHalfTotal,market_name:'Full time Total'},resolved),'WON');
 assert.equal(gradeLine({...firstHalfTotal,market_name:'1st half. Total'},{
   ...resolved,half_home_score:null,half_away_score:null,
-}), 'VOID', 'missing half-time facts cannot be silently replaced with full-time totals');
+}), null, 'missing half-time facts stay PENDING; they cannot use full-time totals');
 assert.equal(hasRequiredSettlementEvidence(firstHalfTotal,resolved),true);
 assert.equal(hasRequiredSettlementEvidence(firstHalfTotal,{...resolved,half_home_score:null}),false,
   'wait for authoritative half-time score before grading');
