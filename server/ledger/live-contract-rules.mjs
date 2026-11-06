@@ -2,6 +2,7 @@
  * a prediction. Unknown identity, clock, order or completeness => PENDING.
  * This module never updates tickets, balances or database state.
  */
+import {goalTotalContract} from './goal-total-contract.mjs';
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 const number=v=>v==null||v===''||!Number.isFinite(Number(v))?null:Number(v);
 const yesNo=line=>{
@@ -34,6 +35,26 @@ export function parseTimedResultMarket(line){
  if(!side)return null;
  return {version:1,kind:'interval-result',event:'goal',side,
   fromSeconds:from,toExclusiveSeconds:end};
+}
+
+/** Full-match team totals are irreversible once the team's confirmed
+ * score passes the offered line. Never infer a win from the opposite team or
+ * infer UNDER before the verified match conclusion.
+ */
+export function parseTeamGoalMarket(line,teams={}){
+ const original=String(line.market_name??line.marketName??line.name??'');
+ if(/\\b(?:1st|first|2nd|second)\\s+half\\b|\\b(?:minutes?|interval|asian|handicap|player|scorer|both|each)\\b|[&+]/i.test(original))return null;
+ const scope=goalTotalContract(line,teams)?.scope;
+ if(scope!=='home'&&scope!=='away')return null;
+ const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ const kind=/^(?:over|lart|mbi)(?:\\s|$)/.test(choice)?'over':
+  /^(?:under|poshte|nen)(?:\\s|$)/.test(choice)?'under':null;
+ if(!kind)return null;
+ const rawLine=line.line??line.specifier??original.match(/\\((\\d+(?:[.,]\\d+)?)\\)\\s*$/)?.[1];
+ const namedValue=choice.match(/(?:over|under|lart|mbi|poshte|nen)\\s+(\\d+(?:[.,]\\d+)?)/)?.[1];
+ const threshold=number(String(namedValue??rawLine??'').replace(',','.'));
+ if(threshold===null||threshold<0||threshold>100)return null;
+ return {version:1,kind:'team-total-goals',event:'goal',side:scope,choice:kind,threshold};
 }
 
 export function parseEventWindow(line,clock=null) {
@@ -106,8 +127,8 @@ export function parseCountMarket(line) {
  if(plus)return {version:1,kind:'atLeast',event,target:Number(plus[1])};
  return null;
 }
-export const liveContract=(line,{counts={},clock=null}={})=>
- parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseCountMarket(line);
+export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
+ parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
@@ -131,10 +152,21 @@ const fullCoverage=(evidence,event,through)=>{
  * 'ended' requires a confirmed terminal feed phase, not wall-clock time.
  */
 export function gradeLiveContract(contract,evidence={}, {ended=false,scopeEnded=false}={}){
- if(!contract||!['interval-result','window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
+ if(!contract||!['interval-result','team-total-goals','window','sequence','race','over','under','exact','range','atLeast'].includes(contract.kind))return null;
  const {event}=contract;
  const ordered=sortEvents(Array.isArray(evidence.events)?evidence.events:[],event);
  const clock=number(evidence.clock),count=number(eventCount(evidence.counts,event));
+ if(contract.kind==='team-total-goals'){
+  const side=contract.side;
+  if(!['home','away'].includes(side)||!['over','under'].includes(contract.choice))return null;
+  const goals=nonNeg(evidence.teams?.goal?.[side]);
+  if(goals===null||clock===null||!fullCoverage(evidence,'goal',clock))return null;
+  if(goals>contract.threshold)return contract.choice==='over'?'WON':'LOST';
+  // Do not pay an UNDER or mark OVER lost while more goals can happen.
+  if(!ended&&!scopeEnded)return null;
+  if(Number.isInteger(contract.threshold)&&goals===contract.threshold)return 'VOID';
+  return contract.choice==='under'?'WON':'LOST';
+ }
  if(contract.kind==='interval-result'){
   if(!ordered||clock===null||!Number.isSafeInteger(contract.fromSeconds)||
      !Number.isSafeInteger(contract.toExclusiveSeconds)||clock*60<contract.toExclusiveSeconds||
