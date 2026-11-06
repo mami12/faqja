@@ -1,4 +1,5 @@
 import {statsProviders} from './stats-providers/index.mjs';
+import {footballInformation} from './stats-providers/football-information.mjs';
 import {refreshMarketLab} from './ledger/live-market-lab.mjs';
 import {processRealMarketTestQueue,auditRealMarketTests} from './ledger/real-market-lab.mjs';
 import {toClientMatches} from './ledger/view.mjs';
@@ -230,6 +231,9 @@ async function runSettlement(why = 'periodic') {
   settlementHealth.lastAttemptAt = new Date().toISOString();
   try {
     trackBackground(statsProviders.tick().catch(()=>{}));
+    // Optional read-only football enrichment: only mapped primary matches
+    // with pending bets and available upstream market names are eligible.
+    trackBackground(footballInformation.tick().catch(error=>console.warn('[football information] tick:',error.message)));
     const out = await settleAll();
     // Authorized real admin tests use production bet placement and a separate
     // independent ticket audit, even when the admin closes the browser.
