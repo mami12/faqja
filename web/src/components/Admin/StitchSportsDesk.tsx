@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { apiClient } from '../../api/client';
+import StitchAuditList, {type StitchAudit} from './StitchAuditList';
 import ManualReviewQueue from './ManualReviewQueue';
 import './stitchSportsDesk.css';
 
@@ -7,7 +8,7 @@ type Review = { lineId: string; matchId: string; marketKey: string; marketLine: 
 type LivePreview = {
  line_id:string; match_name:string; market_name:string; outcome_name:string;
  proposed_status:'WON'|'LOST'|'VOID'; timelineCheck:'AGREES'|'DIFFERS'|'INSUFFICIENT';
- payload?:{contract?:{kind:string;event:string;from?:number;to?:number};frame?:{source?:string;clock?:number;events?:Array<{id:string;type:string;minute:number;team:string}>}};
+ payload?:{contract?:{kind:string;event:string;from?:number;to?:number};frame?:{source?:string;clock?:number;events?:Array<{id:string;type:string;minute:number;team:string;player?:string|null}>}};
 };
 const statusName = {WON:'Fituese',LOST:'Humbëse',VOID:'E pavlefshme'};
 const eventName:Record<string,string> = {goal:'Gol',corner:'Korner',card:'Karton',foul:'Faull'};
@@ -34,6 +35,7 @@ const explanations: Record<string,string> = {
 export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
  const [items,setItems]=useState<Review[]>([]);
  const [error,setError]=useState(false);
+ const [audits,setAudits]=useState<StitchAudit[]>([]);
  const [livePreviews,setLivePreviews]=useState<LivePreview[]>([]);
  const [previewError,setPreviewError]=useState(false);
  const [overview,setOverview]=useState<Overview|null>(null);
@@ -57,7 +59,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     const [noticesResult,overviewResult,previewResult]=await Promise.allSettled([
      apiClient.get('/admin/settlement-review-queue',{params:{limit:100}}),
      apiClient.get<Overview>('/admin/stitch-overview'),
-     apiClient.get<{previews:LivePreview[]}>('/admin/live-event-test'),
+     apiClient.get<{previews:LivePreview[];audits:StitchAudit[]}>('/admin/live-event-test'),
     ]);
     if(!mounted)return;
     setError(noticesResult.status==='rejected');
@@ -66,7 +68,11 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
      setItems(Array.isArray(data.items)?data.items:[]);
     }
     setPreviewError(previewResult.status==='rejected');
-    if(previewResult.status==='fulfilled')setLivePreviews(Array.isArray(previewResult.value.data.previews)?previewResult.value.data.previews:[]);
+    if(previewResult.status==='fulfilled'){
+     const {data}=previewResult.value;
+     setLivePreviews(Array.isArray(data.previews)?data.previews:[]);
+     setAudits(Array.isArray(data.audits)?data.audits:[]);
+    }
     setOverviewError(overviewResult.status==='rejected');
     if(overviewResult.status==='fulfilled'){
      setOverview(overviewResult.value.data);
@@ -208,7 +214,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
        ? 'Lista e ngjarjeve jep rezultat tjetër. Duhet ta shikojmë me dorë.'
        : 'Lista e ngjarjeve nuk mjafton për një kontroll të dytë.'}</p>
      {events.length>0&&<ul className="list-disc pl-5 text-sm">{events.slice(0,12).map(event=><li key={event.id}>
-      {eventName[event.type]??event.type}, minuta {formatNumber.format(event.minute)} · {event.team==='home'?'Skuadra vendase':event.team==='away'?'Skuadra mike':'Skuadra e panjohur'}
+      {eventName[event.type]??event.type}, minuta {formatNumber.format(event.minute)} · {event.team==='home'?'Skuadra vendase':event.team==='away'?'Skuadra mike':'Skuadra e panjohur'}{event.player?' · '+event.player:''}
      </li>)}</ul>}
      {events.length>12&&<p className="text-xs">Po shfaqen 12 nga {events.length} ngjarje.</p>}
      {frame?.source&&<p className="text-xs">Burimi · {frame.source}</p>}
@@ -216,6 +222,7 @@ export default function StitchSportsDesk({sections}:{sections:DeskSection[]}) {
     </article>;
    })}
   </section>
+  <StitchAuditList audits={audits} />
   <section className="space-y-2" aria-label="Njoftime për verifikim">
    <h3 className="font-bold">Për verifikim ({notices.length})</h3>
    {olderReviews>0&&<p className="text-sm">{olderReviews} përzgjedhje nga lista mbeten të hapura edhe pse njoftimi ka skaduar.</p>}
