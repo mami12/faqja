@@ -215,7 +215,25 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>}
-            {tab === 'dashboard' && <AdminDashboard />}
+            {tab === 'dashboard' && <>
+              <div className="mx-auto max-w-7xl px-3 pt-4 sm:px-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <div><p className="text-xs font-bold uppercase tracking-widest text-emerald-300">Qendra e kontrollit</p>
+                   <h1 className="text-2xl font-black text-white">Përmbledhja e administratorit</h1></div>
+                  <Command className="hidden text-text-secondary sm:block" size={24}/>
+                </div>
+                <nav aria-label="Veprime të shpejta" className="flex flex-wrap gap-2">
+                  {(['market-lab','stitch','matches','tickets','users','manual-review','risk'] as AdminTab[]).map(id=>{
+                    const item=allItems.find(x=>x.id===id)!;const Icon=item.icon;
+                    return <button key={id} type="button" onClick={()=>go(id)}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-tertiary bg-secondary px-3 text-xs font-semibold text-white transition hover:border-emerald-500/50 hover:bg-tertiary">
+                      <Icon size={15}/>{item.label}
+                    </button>;
+                  })}
+                </nav>
+              </div>
+              <AdminDashboard />
+            </>}
             {tab === 'market-lab' && <MarketLab />}
             {tab === 'users' && <UserManagement />}
             {tab === 'market-catalog' && <MarketCatalog />}
