@@ -1,3 +1,4 @@
+import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
 import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useState } from 'react';
@@ -215,6 +216,7 @@ export default function AdminPage() {
                    <p><strong>Mbaj aktiv tregun e verifikueshëm</strong> kur prova ekziston. Për shembull, një korner me minutë dhe skuadër nga burimi aktual mund të mbulojë kushtin përkatës, ndërsa mungesa e kornerit kërkon mbulim të plotë të intervalit.</p>
                    <p><strong>Rihape pas verifikimit</strong> të burimit për ligën dhe periudhën përkatëse, përfshirë rikuperimin pas ndërprerjes dhe korrigjimet. Biletat ekzistuese pa prova shkojnë për kontroll manual.</p>
                  </div>
+                 <StitchMissingEvidence />
                  <MarketCatalog evidenceOnly />
                </section>
              )}
