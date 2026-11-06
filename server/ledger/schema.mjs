@@ -1,6 +1,7 @@
 import {MANAGER_CASINO_SQL} from '../casino/manager-settings.mjs';
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
+import {LIVE_OBSERVATION_SQL} from './live-observation-store.mjs';
 /**
  * Ledger schema - users, money, tickets.
  *
@@ -217,6 +218,8 @@ create table if not exists app_ticket_line (
   status           text not null default 'PENDING' -- PENDING | WON | LOST | VOID
 );
 alter table app_ticket_line add column if not exists builder_legs jsonb;
+-- Frozen goal/corner/window/count contract accepted with the exact ticket quote.
+alter table app_ticket_line add column if not exists live_contract jsonb;
 create index if not exists app_ticket_line_ticket_idx on app_ticket_line (ticket_id);
 create index if not exists app_ticket_line_match_idx  on app_ticket_line (match_id);
 
@@ -365,6 +368,11 @@ alter table app_casino_freespin_state add column if not exists custom_round json
 
 ${ORIGINAL_WALLET_SQL}
 ${SETTLEMENT_REVIEW_SQL}
+create table if not exists app_manual_review_notice (
+  line_id uuid primary key references app_ticket_line(id) on delete cascade,
+  first_seen_at timestamptz not null
+);
+${LIVE_OBSERVATION_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.

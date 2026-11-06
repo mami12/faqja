@@ -6,6 +6,7 @@ type ReviewItem={
  lineId:string;ticketId:string;matchId:string;marketName:string;matchName:string;
  outcomeName:string;marketLine:string;lineStatus:string;ticketStatus:string;
  username:string|null;placedAt:string;stake:string|number;odds:string|number;
+ notificationActive:boolean;noticeExpiresAt:string;
  finalScore:string|null;reason:string;conflicts?:Record<string,unknown>|null;
 };
 type Decision={status:string;reason:string;source:string};
@@ -18,7 +19,7 @@ const labels:Record<string,string>={
  MISSING_FINAL_RESULT:'Mungon rezultati përfundimtar i konfirmuar',
 };
 const fresh:Decision={status:'PENDING',reason:'',source:''};
-export default function ManualReviewQueue(){
+export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
  const [items,setItems]=useState<ReviewItem[]>([]);
  const [decisions,setDecisions]=useState<Record<string,Decision>>({});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState<string|null>(null);
@@ -26,12 +27,12 @@ export default function ManualReviewQueue(){
  async function load(){
   try{
    const res=await apiClient.get('/admin/settlement-review-queue',{params:{limit:200}});
-   setItems(Array.isArray(res.data?.items)?res.data.items:[]);
+   setItems(Array.isArray(res.data?.items)?res.data.items.filter((item:ReviewItem)=>!onlyLineId||item.lineId===onlyLineId):[]);
    setError('');
   }catch(e:any){setError(e.response?.data?.message??'Lista e verifikimeve nuk u ngarkua.');}
   finally{setLoading(false);}
  }
- useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id);},[]);
+ useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id);},[onlyLineId]);
  const change=(id:string,key:keyof Decision,value:string)=>setDecisions(prev=>({
   ...prev,[id]:{...(prev[id]??fresh),[key]:value}
  }));
@@ -52,7 +53,7 @@ export default function ManualReviewQueue(){
  return <div className="mx-auto max-w-7xl p-3 sm:p-6 space-y-4">
   <div className="flex flex-wrap items-center justify-between gap-3">
    <div><h2 className="text-lg font-bold text-white flex gap-2 items-center"><AlertTriangle size={18}/> Bileta për verifikim manual ({items.length})</h2>
-    <p className="text-xs text-text-secondary">Biletat e pavlefshme dhe përzgjedhjet pa prova të mjaftueshme nga API-ja. Asnjë vendim nuk merret automatikisht.</p></div>
+    <p className="text-xs text-text-secondary">Njoftimi qëndron aktiv 48 orë nga shfaqja e parë. Përzgjedhjet e pazgjidhura mbeten në këtë listë për kontroll.</p></div>
    <button type="button" onClick={()=>void load()} className="px-3 py-2 border border-tertiary rounded-lg flex items-center gap-2 text-sm"><RefreshCw size={14}/> Rifresko</button>
   </div>
   {error&&<p role="alert" className="text-rose-400 text-sm">{error}</p>}
@@ -69,6 +70,9 @@ export default function ManualReviewQueue(){
       {item.finalScore&&<p className="text-sm">Rezultati final: {item.finalScore}</p>}</div>
      <span className="text-xs text-amber-300 font-bold">{item.lineStatus==='VOID'?'E PAVLEFSHME':'NË PRITJE'}</span>
     </div>
+    <p className="text-xs text-text-secondary">{item.notificationActive
+     ? 'Njoftimi aktiv deri më ' + new Date(item.noticeExpiresAt).toLocaleString('sq-AL')
+     : 'Njoftimi ka skaduar · Verifikimi mbetet i hapur'}</p>
     <div className="text-amber-200 text-sm">{labels[item.reason]??item.reason}</div>
     {item.conflicts&&Object.keys(item.conflicts).length>0&&<p className="text-xs text-rose-300">Statistika kontradiktore: {Object.keys(item.conflicts).join(', ')}</p>}
     <div className="grid gap-3 sm:grid-cols-3">

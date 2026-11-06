@@ -23,6 +23,7 @@ import { isStatisticMarket, hasStatisticEvidence, gradeStatisticLine } from './s
 import {goalTotalContract} from './goal-total-contract.mjs';
 import {cornerTotalContract} from './corner-total-contract.mjs';
 import {statisticsNeedReview} from './settlement-review.mjs';
+import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -420,6 +421,9 @@ export async function settleAll() {
   let windows={graded:0,closed:[]};
   try {windows=await settleClosedCornerWindows();}
   catch(error){console.error('[settle] elapsed corner windows failed:',error.message);}
+  let preview={examined:0,proposed:0,held:0,mode:'SHADOW_ONLY'};
+  try{preview=await createLiveSettlementPreviews();}
+  catch(error){console.warn('[settle] live shadow preview failed:',error.message);}
   const recovered = await recoverResolvedTickets();
 
   return {
@@ -428,6 +432,7 @@ export async function settleAll() {
     lines: results.reduce((acc, r) => acc + r.settled, 0) + windows.graded,
     closed: results.reduce((acc, r) => acc + (r.tickets?.length ?? 0), 0) + windows.closed.length + recovered.length,
     recovered: recovered.length,
+    livePreview:preview,
   };
 }
 

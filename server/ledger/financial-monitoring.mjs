@@ -4,6 +4,8 @@ import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
 import {manualReviewQueue} from './manual-review-queue.mjs';
+import {LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
+import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
 const splitCents=(amount,keys)=>{
@@ -102,9 +104,14 @@ export async function manualSettlement(input,actor,{database=pool}={}){
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}finally{client.release();}
 }
 export const financialMonitoringRouter=express.Router();
-financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
+financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue','/admin/live-event-test'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res)).catch(error=>error.status?res.status(error.status).json({message:error.message}):next(error));
 financialMonitoringRouter.get('/admin/match-exposure',safe(async(_req,res)=>res.set('Cache-Control','no-store').json(await matchExposure())));
 financialMonitoringRouter.get('/admin/statistics-review',safe(async(_req,res)=>res.set('Cache-Control','no-store').json({reviews:(await query('select match_id,payload,updated_at from app_stat_review order by updated_at desc')).rows})));
 financialMonitoringRouter.post('/admin/manual-settlement',safe(async(req,res)=>res.json(await manualSettlement(req.body??{},req.user))));
 financialMonitoringRouter.get('/admin/settlement-review-queue',safe(async(req,res)=>res.set('Cache-Control','no-store').json(await manualReviewQueue({limit:req.query.limit}))));
+/** Test-only predictions and missing-feed intervals; no wallet mutations. */
+financialMonitoringRouter.get('/admin/live-event-test',safe(async(_req,res)=>{
+ const [p,g]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200])]);
+ res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows,recovery:g.rows});
+}));

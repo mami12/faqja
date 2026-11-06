@@ -42,6 +42,7 @@ import { eventMarketRequirement } from './event-market-policy.mjs';
 import { statisticMarketContract } from './statistic-markets.mjs';
 import {quoteValidUntil,quoteExpired} from './quote-validity.mjs';
 import {isSyntheticFootballMatch} from '../football-competitions.mjs';
+import {frozenLiveContract} from './live-contract-context.mjs';
 
 const MIN_STAKE = 100; // LEK
 // Prematch prices are refreshed hourly (SUBSCRIBE/PREMATCH_REFRESH_MS) unless the fixture is
@@ -185,6 +186,7 @@ async function resolveSelectionInternal(selection, {executor = query} = {}) {
     marketName: row.market_name ?? parsed.marketKey,
     matchName: `${match.home} vs ${match.away}`,
     price,
+    liveContract:frozenLiveContract({...row,market_name:row.market_name??row.marketName??parsed.marketKey,outcome_name:row.outcome_name??parsed.outcomeKey},match),
   };
 }
 
@@ -275,7 +277,8 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
     const old = lines[index];
     const current = await resolve({...selection,oddsAtPlacement:old.price,odds:old.price},{executor});
     const changed = frozenSelectionPrice(current.price) !== frozenSelectionPrice(old.price) ||
-      JSON.stringify(current.builderLegs ?? null) !== JSON.stringify(old.builderLegs ?? null);
+      JSON.stringify(current.builderLegs ?? null) !== JSON.stringify(old.builderLegs ?? null) ||
+      JSON.stringify(current.liveContract ?? null) !== JSON.stringify(old.liveContract ?? null);
     if (changed) {
       throw Object.assign(badRequest('Koeficienti ka ndryshuar gjatë vendosjes së bastit.'), {
         code:'ODDS_CHANGED', outcomeId:selection.outcomeId, oldOdds:old.price,newOdds:current.price,
@@ -285,6 +288,21 @@ export async function revalidateSelections(selections, lines, resolve = resolveS
   }));
   const rejected = results.find(result => result.status === 'rejected');
   if (rejected) throw rejected.reason;
+}
+
+/** Optional live contracts freeze inside the same wallet debit transaction.
+ * Standard ticket inserts and historical tickets are unaffected.
+ */
+async function persistLiveContracts(runQuery,ticketId,lines){
+ for(const line of lines){
+  if(!line?.liveContract)continue;
+  const updated=await runQuery(`update app_ticket_line
+    set live_contract=$1::jsonb
+    where ticket_id=$2 and match_id=$3 and market_key=$4
+      and line=$5 and outcome_key=$6 and live_contract is null`,
+    [JSON.stringify(line.liveContract),ticketId,line.matchId,line.marketKey,String(line.line??''),line.outcomeKey]);
+  if(updated.rowCount!==1)throw Object.assign(new Error('Kushti live i biletës nuk u ruajt.'),{status:409});
+ }
 }
 
 const round = (n, digits = 2) => Number(Number(n).toFixed(digits));
@@ -485,6 +503,7 @@ export async function placeBet({ user, stake, selections = [], ticketType = null
       );
     }
 
+    await persistLiveContracts(client.query.bind(client),ticketId,lines);
     await client.query('update app_user set balance = $2, updated_at = now() where id = $1', [user.id, after]);
     await client.query(
       `insert into app_transaction (user_id, amount, type, reference_id, balance_after, description)
@@ -648,6 +667,7 @@ return async function placeSystemColumns({ user, totalStake, stake, selections, 
          (ticket_id,match_id,market_key,line,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status,builder_legs)
          values ${tuples.join(',')}`, params,
       );
+      await persistLiveContracts(client.query.bind(client),id,lines);
       debitedCents += moneyCents(columnStake);
       const after = (moneyCents(balance) - debitedCents) / 100;
       await client.query(
@@ -715,6 +735,7 @@ export async function bookTicket({ stake, selections = [], ticketType = null, sy
     );
   }
 
+  await persistLiveContracts(query,ticketId,lines);
   return { bookingCode: code, ticket: await getTicketWithLines(ticketId) };
 }
 

@@ -27,7 +27,24 @@ const rows=[
  {...base,line_id:'line-d',ticket_id:'ticket-d',result_id:null,feed_status:'live',match_status:'live'},
 ];
 let observedSql='',observedParams;
-const queue=await manualReviewQueue({runQuery:async(sql,params)=>{observedSql=sql;observedParams=params;return {rows};},now,limit:25});
+const notices=new Map();
+const runQuery=async(sql,params)=>{
+ if(sql.includes('insert into app_manual_review_notice')){
+  if(!notices.has(params[0]))notices.set(params[0],params[1]);
+  return {rows:[{first_seen_at:notices.get(params[0])}]};
+ }
+ observedSql=sql;observedParams=params;
+ return {rows:rows.map(row=>({...row,first_seen_at:notices.get(row.line_id)}))};
+};
+const queue=await manualReviewQueue({runQuery,now,limit:25});
+assert.equal(queue.notificationCount,3);
+assert.equal(queue.items[0].noticeExpiresAt,new Date(now+48*3600000).toISOString());
+const justBefore=await manualReviewQueue({runQuery,now:now+48*3600000-1,limit:25});
+assert.equal(justBefore.notificationCount,3);
+const expired=await manualReviewQueue({runQuery,now:now+48*3600000,limit:25});
+assert.equal(expired.notificationCount,0);
+assert.equal(expired.items.length,3,'expiry does not close unresolved cases');
+assert.match(observedSql,/o.status='PENDING'/,'an explicit pending decision keeps the review open');
 assert.equal(queue.items.length,3);
 assert.deepEqual(queue.items.map(r=>r.lineId),['line-a','line-b','line-c']);
 assert.equal(queue.items[0].finalScore,'2 - 1');

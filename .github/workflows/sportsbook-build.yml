@@ -59,6 +59,10 @@ jobs:
         run: |
           npm ci
           npm --prefix web ci
+      - name: Validate live goal, corner, card and count contract rules
+        run: node scripts/test-live-contract-rules.mjs
+      - name: Validate selective offline backup queue and live shadow settlement
+        run: node scripts/test-live-observation-recovery.mjs
       - name: Validate 48-hour finished favorite history
         run: node scripts/test-finished-favorites.mjs
       - name: Validate admin manual-review notifications and decisions
@@ -70,6 +74,10 @@ jobs:
           node --check server/ledger/manual-review-queue.mjs
           node --check server/ledger/settler.mjs
           node --check server/ledger/financial-monitoring.mjs
+      - name: Verify Stitch on mobile Chromium
+        run: node scripts/test-stitch-sports-desk-browser.mjs
+      - name: Build Vite frontend
+        run: npm run build:web
       - name: Validate protected requirements with isolated databases and feeds
         run: npm run test:protected
       - name: Validate sportsbook label regressions
@@ -124,8 +132,6 @@ jobs:
           node --check server/casino/transactions.mjs
           node --check server/casino/rtp-profiles.mjs
           node --check server/casino/sizzling-real.mjs
-      - name: Build Vite frontend
-        run: npm run build:web
       - name: Validate Sizzling RTP profiles and reel math
         run: node scripts/test-casino-math.mjs
       - name: Verify original Sizzling demo protocol and Goldsvet math

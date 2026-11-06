@@ -17,6 +17,7 @@ import { ledgerRouter } from './ledger/routes.mjs';
 import { adminRouter } from './ledger/admin.mjs';
 import {financialMonitoringRouter} from './ledger/financial-monitoring.mjs';
 import { directoryRouter } from './ledger/directory.mjs';
+import {pruneUnbetMatchEvidence} from './ledger/event-evidence.mjs';
 import {matchSnapshots} from './ledger/match-snapshots.mjs';
 import {mergeTeamStats} from './match-statistics.mjs';
 import {pool as financialDatabase} from './db.mjs';
@@ -142,6 +143,7 @@ async function probeDb() {
 /** the ledger tables (users/tickets/results) are created on boot and retried until the database answers */
 let ledgerReady = false;
 let settleTimer = null;
+let pendingLiveMonitor = null;
 let settlementBusy = false;
 let lastUnresolvedCheck = 0;
 // De-duplicate repeated full-time frames after durable result persistence.
@@ -213,6 +215,7 @@ function broadcastFeedState() {
  * whose lines are all decided. Retries and payment recovery remain idempotent.
  */
 let lastDeletedHistoryCleanup = 0;
+let lastUnbetEvidenceCleanup = 0;
 const settlementHealth = {lastAttemptAt:null,lastSuccessAt:null,lastError:null,lastResult:null};
 async function runSettlement(why = 'periodic') {
   if (shuttingDown || !ledgerReady || settlementBusy) return null;
@@ -253,6 +256,11 @@ async function runSettlement(why = 'periodic') {
         if (cleaned.purged) console.log('[ledger] removed-player history cleanup:', cleaned.purged, 'cutoff:', cleaned.cutoff);
       } catch (error) { console.error('[ledger] removed-player history cleanup failed:', error.message); }
     }
+    if (Date.now() - lastUnbetEvidenceCleanup >= 60 * 60 * 1000) {
+      lastUnbetEvidenceCleanup = Date.now();
+      try { await pruneUnbetMatchEvidence(); }
+      catch(error) { console.error('[ledger] temporary match evidence cleanup failed:',error.message); }
+    }
     try { await pendingResults.refresh(); }
     catch(error) { console.error('[settle] pending result subscriptions could not refresh:',error.message); }
     settlementBusy = false;
@@ -291,6 +299,24 @@ const idle = createIdleMonitor({
   },
   onMode: () => broadcastFeedState(),
 });
+
+/** Accepted event wagers require a live feed even when no browser is open.
+ * This is one LOCAL DB check every 15 seconds, not an extra provider request.
+ */
+async function keepFeedForPendingLiveBets(){
+ if(shuttingDown||!ledgerReady)return false;
+ try{
+  const {rows}=await query(`select exists(
+    select 1 from app_ticket_line l
+    join app_ticket t on t.id=l.ticket_id
+    left join app_match_result r on r.match_id=l.match_id
+    where l.status='PENDING' and t.status='PENDING'
+      and l.live_contract is not null and r.match_id is null
+  ) as active`);
+  if(rows[0]?.active===true){idle.touch();return true;}
+ }catch(error){console.warn('[live contracts] pending wager check:',error.message);}
+ return false;
+}
 
 /**
  * What counts as a visitor: a board socket (see io.on('connection')) or a call to the app's
@@ -1045,6 +1071,9 @@ async function boot() {
   }
 
   idle.start();
+  pendingLiveMonitor=setInterval(()=>trackBackground(keepFeedForPendingLiveBets()),15000);
+  pendingLiveMonitor.unref?.();
+  void keepFeedForPendingLiveBets();
   console.log(`[idle] ${idle.state().enabled ? 'enabled' : 'disabled'}; feed pauses after ${Math.round(idle.state().idleAfterMs / 1000)}s without visitors.`);
 
 }
@@ -1061,6 +1090,7 @@ installGracefulShutdown({
     pusher?.close();
     stopProbe();
     clearInterval(settleTimer);
+    clearInterval(pendingLiveMonitor);
     clearInterval(feedFlushTimer);
     clearInterval(riskRefreshTimer);
   },

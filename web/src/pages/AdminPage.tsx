@@ -1,3 +1,4 @@
+import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useState } from 'react';
 import {apiClient} from '../api/client';
@@ -20,7 +21,7 @@ import BoardSettings from '../components/Admin/BoardSettings';
 import MatchExposure from '../components/Admin/MatchExposure';
 import { LayoutDashboard, Users, Trophy, Ticket, ClipboardList, Receipt, ShieldCheck, ChevronRight, Layers, ShieldAlert, Dices, BellRing } from 'lucide-react';
 
-type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review';
+type AdminTab = 'match-exposure' | 'market-catalog' | 'dashboard' | 'users' | 'matches' | 'builders' | 'risk' | 'tickets' | 'transactions' | 'audit' | 'casino-finance' | 'casino-settings' | 'financial-reset' | 'board-settings' | 'manual-review' | 'sports-evidence' | 'sports-roadmap' | 'stitch';
 const sections: { title: string; items: { id: AdminTab; label: string; description: string; icon: typeof Users }[] }[] = [
   {
     title: 'Përmbledhja',
@@ -36,6 +37,9 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
       { id: 'risk', label: 'Menaxhimi i rrezikut', description: 'Mbyllja e tregjeve dhe kufijtë e basteve drejtpërdrejt', icon: ShieldAlert },
       { id: 'tickets', label: 'Skedinat', description: 'Kontrolli i basteve', icon: Ticket },
+      { id:'stitch',label:'Stitch',description:'Njoftime dhe veprime për sportbastet',icon:BellRing },
+      { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
+      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
       { id:'manual-review',label:'Njoftime: bileta për kontroll',description:'Të pavlefshme ose pa prova nga API-ja',icon:BellRing },
       { id: 'casino-settings', label: 'Cilësimet Kazino / RTP', description: 'Profile të verifikuara dhe aktivizimi', icon: Dices },
     ],
@@ -62,7 +66,7 @@ export default function AdminPage() {
     let active=true;
     const refresh=async()=>{
       try{const res=await apiClient.get('/admin/settlement-review-queue',{params:{limit:200}});
-        if(active)setReviewCount(Number(res.data?.count)||0);
+        if(active)setReviewCount(Number(res.data?.notificationCount)||0);
       }catch{if(active)setReviewCount(0);}
     };
     void refresh();
@@ -158,6 +162,51 @@ export default function AdminPage() {
             {tab === 'risk' && <LiveRiskManager />}
             {tab === 'tickets' && <TicketAudit />}
              {tab === 'manual-review' && <ManualReviewQueue />}
+             {tab === 'stitch' && <StitchSportsDesk sections={[
+               {id:'players',title:'Përdoruesit',panel:()=> <UserManagement />},
+               {id:'transactions',title:'Transaksionet',panel:()=> <TransactionHistoryPage embedded />},
+               {id:'tickets',title:'Biletat dhe historiku',panel:()=> <TicketAudit />},
+               {id:'review',title:'Verifikimet e hapura',panel:()=> <ManualReviewQueue />},
+               {id:'matches',title:'Ndeshjet',panel:()=> <MatchControl />},
+               {id:'publication',title:'Publikimi live dhe prematch',panel:()=> <BoardSettings />},
+               {id:'builders',title:'Kombinimet e tregjeve',panel:()=> <BetBuilderManager />},
+               {id:'evidence',title:'Tregjet që kërkojnë prova shtesë',panel:()=> <MarketCatalog evidenceOnly />},
+               {id:'markets',title:'Tregjet dhe koeficientët',panel:()=> <MarketCatalog />},
+               {id:'exposure',title:'Ekspozimi i basteve',panel:()=> <MatchExposure />},
+               {id:'risk',title:'Rreziku live',panel:()=> <LiveRiskManager />},
+               {id:'audit',title:'Historiku i veprimeve',panel:()=> <AdminAuditLog />},
+             ]}/>} 
+             {tab === 'sports-roadmap' && (
+               <section aria-labelledby="sports-roadmap-heading" className="mx-auto max-w-4xl space-y-4 p-3 sm:p-6">
+                 <h2 id="sports-roadmap-heading" className="text-lg font-bold">Plani i sportbasteve</h2>
+                 <ol className="list-decimal space-y-3 pl-6">
+                   <li><strong>Verifiko tregjet dhe njoftimet në shfletues.</strong> Provo që tregu i fshehur refuzohet në një bast të ri dhe që një vendim manual prek vetëm përzgjedhjen e zgjedhur.</li>
+                   <li><strong>Lidh API-në rezervë.</strong> Merr kronologjinë vetëm për ndeshjet dhe përzgjedhjet e prekura që presin verifikim.</li>
+                   <li><strong>Mat mbulimin për ligat dhe tregjet.</strong> Kontrollo rendin dhe minutën e ngjarjeve, korrigjimet, intervalet dhe mospërputhjet e burimeve.</li>
+                   <li><strong>Arkivo provën e çdo vendimi.</strong> Lidhe burimin, ngjarjen dhe arsyen me përzgjedhjen në historikun e biletës.</li>
+                   <li><strong>Provo shlyerjen para aktivizimit.</strong> Krahaso parashikimet me feed real dhe verifiko që kombinimet paguhen vetëm sipas gjendjes së të gjitha përzgjedhjeve, pa kreditim të dyfishtë.</li>
+                   <li><strong>Përfundo pastrimin e ndeshjeve pa bast.</strong> Hiq edhe rekordet e tepërta pa humbur përmbledhjen 48-orëshe te Favorites ose provat e biletave.</li>
+                 </ol>
+               </section>
+             )}
+             {tab === 'sports-evidence' && (
+               <section aria-labelledby="sports-evidence-heading" className="space-y-3">
+                 <h2 id="sports-evidence-heading" className="text-lg font-bold">Tregje pa prova të plota</h2>
+                 <p className="text-sm">Këto përzgjedhje kërkojnë prova shtesë kur burimi aktual nuk mbulon kushtin e bastit. Biletat konkrete për kontroll gjenden te Njoftimet.</p>
+                 <dl className="space-y-3">
+                   <div><dt className="font-semibold">Goli ose korneri i radhës, gara deri në X kornera</dt><dd>Kur mungon rendi pas ndërprerjes, duhet kronologjia me skuadrën dhe rendin ose sekondat e ngjarjeve.</dd></div>
+                   <div><dt className="font-semibold">Gol, korner ose karton në interval</dt><dd>Duhet minuta reale dhe skuadra kur tregu është sipas skuadrës. Për përgjigjen Jo duhet kronologjia e plotë deri në mbylljen e intervalit.</dd></div>
+                   <div><dt className="font-semibold">Faulle dhe goditje në portë</dt><dd>Për totalet duhet numri i verifikuar për periudhën e tregut. Për intervalet duhet minuta e çdo ngjarjeje dhe, sipas tregut, skuadra.</dd></div>
+                   <div><dt className="font-semibold">Ngjarje të anuluara ose burime kontradiktore</dt><dd>Duhet statusi i korrigjimit ose një vendim i dokumentuar i adminit për përzgjedhjen e prekur.</dd></div>
+                 </dl>
+                 <div className="space-y-1 text-sm">
+                   <p><strong>Fshih tregun për baste të reja</strong> kur burimet aktuale nuk provojnë kushtin e tij. Për shembull, numri total i faulleve nuk mjafton për një bast mbi faullet në minutat 20–30.</p>
+                   <p><strong>Mbaj aktiv tregun e verifikueshëm</strong> kur prova ekziston. Për shembull, një korner me minutë dhe skuadër nga burimi aktual mund të mbulojë kushtin përkatës, ndërsa mungesa e kornerit kërkon mbulim të plotë të intervalit.</p>
+                   <p><strong>Rihape pas verifikimit</strong> të burimit për ligën dhe periudhën përkatëse, përfshirë rikuperimin pas ndërprerjes dhe korrigjimet. Biletat ekzistuese pa prova shkojnë për kontroll manual.</p>
+                 </div>
+                 <MarketCatalog evidenceOnly />
+               </section>
+             )}
             {tab === 'match-exposure' && <MatchExposure />}
             {tab === 'transactions' && <TransactionHistoryPage embedded />}
             {tab === 'audit' && <AdminAuditLog />}
