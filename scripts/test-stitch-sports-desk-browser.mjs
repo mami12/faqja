@@ -84,6 +84,18 @@ try{
  assert.deepEqual(decisions,[{lineId:'line-a',status:'WON',reason:'Korneri u konfirmua',source:'Feed testimi'}]);
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Përdoruesit').click());
  await page.waitForFunction(()=>document.body.textContent.includes('Paneli i përdoruesve')&&!document.querySelector('select'));
+ await clickText('Kontrollo përzgjedhjen');
+ await page.waitForSelector('select');
+ await page.select('select','VOID');
+ await clickText('Ruaj vendimin');
+ await page.waitForSelector('[aria-label="Miratimi i vendimit"]');
+ await clickText('Po, mirato');
+ await page.waitForFunction(()=>document.body.textContent.includes('Vendimi u regjistrua'));
+ assert.equal(decisions.length,2);
+ assert.equal(decisions[1].status,'VOID');
+ assert.equal(decisions[1].lineId,'line-a');
+ assert.match(decisions[1].reason,/Anulim i miratuar nga administratori/);
+ assert.equal(decisions[1].source,'Vendim manual nga paneli i adminit');
  assert.deepEqual(errors,[]);
  console.log('PASS Stitch mobile: sports summary, animated and reduced-motion states, exact review and section actions');
 }finally{
