@@ -3,6 +3,7 @@
  * No CF cookies, browser impersonation, MQTT subscription or wallet changes.
  */
 import {createHash} from 'node:crypto';
+import {enrichPrimaryScorerNames} from './aiscore-scorer-enrichment.mjs';
 import {query} from '../db.mjs';
 import {getMatchById} from '../matches.mjs';
 
@@ -206,6 +207,21 @@ export async function setFootballInformationMapping({matchId,aiscoreId,thesports
   [id,aiscore_id,thesports01_id,actorId]);
  return rows[0];
 }
+/** Trust scorer identity only after the same AiScore match ID, home
+ * team and away team are explicitly confirmed against the main fixture.
+ */
+export function aiscoreFixtureMatches(payload,mappedId,match){
+ const detail=payload?.data?.match??payload?.data?.fixture??payload?.data?.match_info??null;
+ if(!detail||typeof detail!=='object')return false;
+ const identifier=detail.id??detail.match_id??detail.matchId;
+ const name=side=>{
+  const v=detail[side+'_team']??detail[side+'Team']??detail[side];
+  return typeof v==='string'?v:v?.name??v?.Name??null;
+ };
+ const tidy=s=>String(s??'').normalize('NFC').trim().toLowerCase().replace(/\s+/g,' ');
+ return identifier!=null&&String(identifier)===String(mappedId)&&
+  tidy(name('home'))===tidy(match?.home)&&tidy(name('away'))===tidy(match?.away);
+}
 export async function inspectFootballInformation(matchId,{runQuery=query,request=fetch,loadMatch=getMatchById,now=Date.now}={}){
  const id=Number(matchId);
  if(!Number.isSafeInteger(id)||id<=0)throw Object.assign(new Error('ID ndeshjeje i pavlefshëm.'),{status:400});
@@ -227,6 +243,14 @@ export async function inspectFootballInformation(matchId,{runQuery=query,request
   await runQuery('insert into app_football_information_snapshot(match_id,source,payload_hash,payload) '+
    'values($1,$2,$3,$4::jsonb) on conflict(match_id,source,payload_hash) do nothing',
    [id,endpoint.key,hash,JSON.stringify(checked.payload)]);
+  if(endpoint.key==='aiscore:match'&&aiscoreFixtureMatches(checked.payload,mapped.aiscore_id,row)){
+   await runQuery("update app_football_information_map set mapping_status='CONFIRMED',updated_at=now() where match_id=$1 and aiscore_id=$2 and mapping_status='ADMIN_SUPPLIED_UNVERIFIED'",
+     [id,mapped.aiscore_id]);
+   mapped.mapping_status='CONFIRMED';
+  }
+  if(endpoint.key.startsWith('aiscore:')&&mapped.mapping_status==='CONFIRMED')
+   await enrichPrimaryScorerNames(id,checked.payload,{execute:runQuery});
+
  }
  await runQuery('update app_football_information_map set last_checked_at=now(),'+
   'next_check_at=now()+interval \'60 seconds\',last_error=$2 where match_id=$1',
