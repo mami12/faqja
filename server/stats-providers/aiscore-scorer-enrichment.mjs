@@ -56,12 +56,12 @@ export async function enrichPrimaryScorerNames(matchId,payload,{execute}={}){
    "select provider_event_id from app_match_event_fact where match_id=$1 and provider='zizobet' and kind='goal' and active=true and team=$2 and minute=$3",
    [matchId,item.team,item.minute]);
   if(rows.length!==1)continue;
-  const found=await execute(\`update app_match_event_fact
+  const found=await execute(`update app_match_event_fact
    set aiscore_player_name=$4,aiscore_player_id=$5,aiscore_verified=true
    where match_id=$1 and provider='zizobet' and kind='goal' and active=true
      and provider_event_id=$2 and team=$3 and
        (aiscore_player_name is null or aiscore_player_name=$4)
-   returning provider_event_id\`,
+   returning provider_event_id`,
     [matchId,rows[0].provider_event_id,item.team,item.playerName,item.playerId]);
   if(found.rowCount===1)updated++;
  }
