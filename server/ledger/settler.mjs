@@ -69,6 +69,8 @@ const isSecondHalfLine = (marketName = '') =>
  */
 export function hasRequiredSettlementEvidence(line, result) {
   if (!result) return false;
+  // A final aggregate card count cannot tell red from yellow cards.
+  if(/\b(?:yellow|red)\s+cards?\b/i.test(String(line?.market_name??'')))return false;
   if(statisticsNeedReview(line,result))return false;
   if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
   if (needsEvents(line)) return ['WON','LOST','VOID'].includes(gradeEventLine(line,result));
