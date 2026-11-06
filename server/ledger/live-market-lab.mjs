@@ -192,7 +192,7 @@ export function evaluateLabCase(row,{now=Date.now()}={}){
  const fresh=Number.isFinite(frameAt)&&frameAt>=startedAt&&frameAt<=now+5000;
  const gap=row.open_gap===true||Number(row.open_gap)>0;
  const ended=frame?.ended===true||!!finalResult;
- const engine=fresh&&!gap?gradeLiveContract(contract,frame,{ended:frame?.ended===true})??
+ const engine=frame&&fresh&&!gap?gradeLiveContract(contract,frame,{ended:frame.ended===true})??
   gradeFromAcceptedCounters(contract,frame):null;
  const stitch=fresh&&!gap?independentLabVerdict(contract,frame,finalResult):
   (finalResult&&['over','under','atLeast','exact','range'].includes(contract.kind)?
