@@ -9,6 +9,8 @@ import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settle
 import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 import {createMarketLabRun,listMarketLab,refreshMarketLab} from './live-market-lab.mjs';
 import {createRealMarketTestRun,processRealMarketTestQueue,auditRealMarketTests,listRealMarketTests} from './real-market-lab.mjs';
+import {setFootballInformationMapping,inspectFootballInformation,sourceMatchNeeds,describeJsonStructure} from '../stats-providers/football-information.mjs';
+import {getMatchById} from '../matches.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
 const splitCents=(amount,keys)=>{
@@ -107,7 +109,7 @@ export async function manualSettlement(input,actor,{database=pool}={}){
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}finally{client.release();}
 }
 export const financialMonitoringRouter=express.Router();
-financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue','/admin/live-event-test','/admin/market-lab','/admin/market-lab/runs','/admin/market-lab/refresh'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
+financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue','/admin/live-event-test','/admin/market-lab','/admin/market-lab/runs','/admin/market-lab/refresh','/admin/market-lab/real','/admin/market-lab/real-runs','/admin/market-lab/real-check','/admin/football-information/fixture','/admin/football-information/map','/admin/football-information/probe'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res)).catch(error=>error.status?res.status(error.status).json({message:error.message}):next(error));
 financialMonitoringRouter.get('/admin/match-exposure',safe(async(_req,res)=>res.set('Cache-Control','no-store').json(await matchExposure())));
 financialMonitoringRouter.get('/admin/statistics-review',safe(async(_req,res)=>res.set('Cache-Control','no-store').json({reviews:(await query('select match_id,payload,updated_at from app_stat_review order by updated_at desc')).rows})));
@@ -175,4 +177,37 @@ financialMonitoringRouter.post('/admin/market-lab/real-check',safe(async(req,res
  const placement=await processRealMarketTestQueue({limit:8});
  const audited=await auditRealMarketTests();
  res.set('Cache-Control','no-store').json({placement,audited});
+}));
+
+/** Read-only football enrichment diagnostics, isolated from settlement and money. */
+financialMonitoringRouter.get('/admin/football-information/fixture',safe(async(req,res)=>{
+ const id=Number(req.query.matchId);
+ if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({message:'ID e ndeshjes është e pavlefshme.'});
+ const match=await getMatchById(id);
+ const [map,needs,snapshots]=await Promise.all([
+  query('select match_id,aiscore_id,thesports01_id,mapping_status,last_checked_at,last_error from app_football_information_map where match_id=$1',[id]),
+  sourceMatchNeeds(id),
+  query('select distinct on(source) source,payload,observed_at from app_football_information_snapshot where match_id=$1 order by source,observed_at desc',[id])
+ ]);
+ res.set('Cache-Control','no-store').json({
+  match:match?{matchId:id,home:match.home,away:match.away,startAt:match.start_at,
+    football:match.sport_tag==='football'||[1,18].includes(Number(match.sport_id))}:null,
+  mapping:map.rows[0]??null,needs,
+  snapshots:snapshots.rows.map(row=>({source:row.source,observedAt:row.observed_at,
+    shape:describeJsonStructure(row.payload)}))
+ });
+}));
+financialMonitoringRouter.post('/admin/football-information/map',safe(async(req,res)=>{
+ const data=await setFootballInformationMapping({
+  matchId:req.body?.matchId,aiscoreId:req.body?.aiscoreId,
+  thesports01Id:req.body?.thesports01Id,actorId:req.user.id
+ });
+ res.set('Cache-Control','no-store').json({mapping:data,
+  note:'Lidhja e burimeve është manuale dhe e paverifikuar për pagesat.'});
+}));
+financialMonitoringRouter.post('/admin/football-information/probe',safe(async(req,res)=>{
+ const id=Number(req.body?.matchId);
+ if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({message:'ID e ndeshjes është e pavlefshme.'});
+ const report=await inspectFootballInformation(id);
+ res.set('Cache-Control','no-store').json(report);
 }));
