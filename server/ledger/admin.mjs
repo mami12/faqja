@@ -7,6 +7,7 @@
  */
 import express from 'express';
 import { requireAuth, hashPassword } from './auth.mjs';
+import {assertAccountPassword} from './account-password-policy.mjs';
 import * as ledger from './store.mjs';
 import { stitchOverview } from './stitch-overview.mjs';
 import * as bets from './bets.mjs';
@@ -288,12 +289,13 @@ const createUser = (resolveRole) =>
   guard(async (req, res) => {
     const { username, password, initialBalance = 0, managerId = null } = req.body ?? {};
     if (!username || !password) throw badRequest('username and password are required');
-    if (String(password).length < 4) throw badRequest('password must be at least 4 characters');
+
 
     const name = String(username).trim();
     if (await ledger.findUserByUsername(name)) throw badRequest('this username is already taken');
 
     const role = resolveRole(req);
+    assertAccountPassword(password,role,{staffMin:4});
     const owner = role !== 'PLAYER' ? null : req.user.role === 'MANAGER' ? req.user.id : managerId || null;
 
     const openingValue = Number(initialBalance);
@@ -343,6 +345,9 @@ adminRouter.patch(
       await query('update app_user set username = $2, updated_at = now() where id = $1', [id, String(username).trim()]);
     }
     if (password) {
+      const existing=await ledger.getUserById(id);
+      if(!existing)throw badRequest('Përdoruesi nuk u gjet.');
+      assertAccountPassword(password,role?String(role).toUpperCase():existing.role,{staffMin:4});
       await query('update app_user set password_hash = $2, updated_at = now() where id = $1', [id, hashPassword(password)]);
     }
     if (role) await ledger.updateUser(id, { role: String(role).toUpperCase() });
@@ -365,6 +370,7 @@ adminRouter.patch(
       await query('update app_user set username = $2, updated_at = now() where id = $1', [id, String(username).trim()]);
     }
     if (password) {
+      assertAccountPassword(password,'PLAYER',{staffMin:4});
       await query('update app_user set password_hash = $2, updated_at = now() where id = $1', [id, hashPassword(password)]);
     }
 
