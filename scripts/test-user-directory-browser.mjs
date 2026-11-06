@@ -39,9 +39,9 @@ try{
    // keystrokes; otherwise it can move focus mid-type and fail native minLength.
    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
    const expectedName=mode==='admin'?'new.agent':'new.manager';
-   await page.type('.ud-form input[autocomplete="off"]',expectedName);await page.type('.ud-form input[type="password"]','test-password');
+   await page.type('.ud-form input[autocomplete="off"]',expectedName);await page.type('.ud-form input[type="password"]','abc123');
    assert.equal(await page.$eval('.ud-form input[autocomplete="off"]',input=>input.value),expectedName,'complete username entered after dialog focus');
-   assert.equal(await page.$eval('.ud-form input[type="password"]',input=>input.value),'test-password');
+   assert.equal(await page.$eval('.ud-form input[type="password"]',input=>input.value),'abc123');
    if(mode==='admin')await page.select('.ud-form select','AGENT');
    assert.deepEqual(await page.$$eval('.ud-form input,.ud-form select',inputs=>inputs.filter(input=>!input.validity.valid).map(input=>({name:input.type,value:input.value,message:input.validationMessage}))),[],'fixture form passes native validation');
    if(width===320){await click(page,'.ud-dialog-footer button','Confirm & save');await page.waitForFunction(()=>!document.querySelector('.ud-form'));assert.equal(writes.at(-1).role,mode==='admin'?'AGENT':'MANAGER');}
