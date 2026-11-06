@@ -180,6 +180,27 @@ try {
   await settleAll(); await recalcTicket(interrupted);
   assert.equal((await local.query("select count(*) as count from app_transaction where reference_id=$1 and type='BET_WON'", [interrupted])).rows[0].count, 1, 'Retries never duplicate the payout.');
 
+  // A lost leg closes an accumulator even when another match has not finished.
+  // A failed close is retried without creating a payout or duplicate settlement.
+  const earlyLostTicket = randomUUID();
+  await local.query("insert into app_ticket(id,user_id,stake,total_odds,potential_payout,ticket_type,status) values($1,$2,50,4,200,'COMBO','PENDING')",
+    [earlyLostTicket,userId]);
+  await local.query(`insert into app_ticket_line
+    (ticket_id,match_id,market_key,outcome_key,outcome_name,market_name,match_name,odds_at_placement,status)
+    values ($1,9191,'result','1','Home','Full Time Result','First',2,'LOST'),
+           ($1,9192,'result','1','Home','Full Time Result','Second',2,'PENDING')`,[earlyLostTicket]);
+  injectedFailures=1;
+  await assert.rejects(recalcTicket(earlyLostTicket),/interrupted ticket payment/);
+  assert.equal((await local.query('select status from app_ticket where id=$1',[earlyLostTicket])).rows[0].status,'PENDING');
+  const earlyRecovered=await settleAll();
+  assert.equal(earlyRecovered.recovered,1,'An interrupted loss with pending matches must be recovered.');
+  assert.equal((await local.query('select status from app_ticket where id=$1',[earlyLostTicket])).rows[0].status,'LOST');
+  assert.equal((await local.query("select status from app_ticket_line where ticket_id=$1 and match_id=9192",[earlyLostTicket])).rows[0].status,'PENDING',
+    'Other match lines retain their accurate in-progress state.');
+  assert.equal(Number((await local.query('select balance from app_user where id=$1',[userId])).rows[0].balance),1200,
+    'An early loss must not credit the player.');
+  assert.equal(await recalcTicket(earlyLostTicket),null,'A finalized loss cannot be closed twice.');
+
   // More than the old 200-match cap lack corner evidence. A gradeable later
   // result must still be reached in the same pass, without voiding the others.
   await local.query("insert into app_match_result(match_id,home_team,away_team,home_score,away_score) select n,'Home','Away',2,1 from generate_series(1000,1204) as n");
