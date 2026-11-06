@@ -49,12 +49,21 @@ export const eventWatchIds=()=>store.eventWatchIds();
 export const pruneUnbetMatchEvidence=()=>store.pruneUnbetMatchEvidence();
 export const saveEventEvidence=(id,payload)=>store.saveEventEvidence(id,payload);
 export const loadEventEvidence=id=>store.loadEventEvidence(id);
+function zizobetEventSeconds(clock,minute){
+ const time=String(clock??'').match(/^(\d{1,3}):([0-5]\d)$/);
+ if(!time||!Number.isFinite(minute))return null;
+ const seconds=Number(time[1])*60+Number(time[2]);
+ return Math.abs(seconds/60-minute)<=1?seconds:null;
+}
+
 export function normalizeEvents(data,source){
  let events=[];
  const active=e=>!e.disabled&&!e.cancelled&&!e.canceled&&e.isConfirmed!==false&&!/cancelled|canceled|voided/i.test(String(e.status??''));
  if(source==='sportradar')events=(data.doc?.[0]?.data?.events??[]).map(e=>({disabled:!active(e),id:e._id,type:e.type==='goal'?'goal':e.type==='corner'?'corner':e.type==='card'?'card':e.type,team:e.team,minute:e.time,seconds:e.seconds,injury:e.injurytime,player:e.scorer?.name??e.player?.name,playerId:e.scorer?._id??e.player?._id,own:e.owngoal,header:e.header,penalty:e.penalty,card:e.card,shootout:e.time===-1,phase:e.period??null,updatedAt:e.updated_uts??e.uts}));
  if(source==='betgenius')events=Object.values(data.data?.details?.playByPlayInfo??{}).flat().map(e=>({disabled:!active(e),id:e.id??`${e.type}|${e.teamId}|${e.timestamp}`,type:e.type==='Goal'?'goal':e.type==='Corner'?'corner':e.type==='Card'?'card':e.type,team:e.teamId,minute:parseInt(e.clock),player:e.actionDetails?.playerName,own:e.actionDetails?.isOwn,header:e.actionDetails?.isHeader,penalty:e.actionDetails?.penalty,phase:e.phase,qualifier:e.phaseQualifier,shootout:/shoot/i.test(e.phase??''),updatedAt:Date.parse(e.updatedTimestamp??e.timestamp??'')}));
- if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:e.gt==null?NaN:Number(e.gt),player:e.pl,phase:e.phase??null}));
+ if(source==='zizobet')events=(data.TimeLines??[]).map((e,i)=>({disabled:!active(e),id:String(e.id??i),type:e.type==='score_change'?'goal':e.type==='corner_kick'?'corner':/card/.test(String(e.type))?'card':e.type,team:/^(?:1|home|h)$/i.test(String(e.team))?'home':/^(?:2|away|a)$/i.test(String(e.team))?'away':null,minute:e.gt==null||String(e.gt).trim()===''?NaN:Number(e.gt),seconds:zizobetEventSeconds(e.clk,Number(e.gt)),player:typeof e.pl==='string'?e.pl.trim()||null:null,phase:e.phase??null}));
+ const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
+ const retained=[...unique.values()].filter(e=>!e.disabled);
  // For closed corner windows, prove the timeline covers every corner observed
  // by this same provider at its own clock. Missing counters, invalid teams
  // or inconsistent totals mean NO coverage and must leave the bet pending.
@@ -66,15 +75,13 @@ export function normalizeEvents(data,source){
    game.MatchTime!=null&&String(game.MatchTime).trim()!==''?Number(game.MatchTime):NaN;
   const h=game.CornersTeam1,a=game.CornersTeam2;
   const count=[h,a].map(v=>v!=null&&String(v).trim()!==''&&/^\d+$/.test(String(v))?Number(v):null);
-  const corners=events.filter(e=>e.type==='corner'&&!e.disabled);
+  const corners=retained.filter(e=>e.type==='corner');
   const actual=[corners.filter(e=>e.team==='home').length,corners.filter(e=>e.team==='away').length];
   const verified=Number.isFinite(minute)&&minute>=0&&minute<=130&&
    count.every(v=>v!==null)&&count.every((v,i)=>v===actual[i])&&
-   corners.every(e=>Number.isFinite(e.minute)&&e.minute>=0&&e.minute<=minute&&e.team!=null);
+   corners.every(e=>Number.isFinite(e.minute)&&e.minute>=0&&(Number.isFinite(e.seconds)?e.seconds/60:e.minute)<=minute&&e.team!=null);
   if(verified)coverage={cornersThrough:Math.floor(minute)};
  }
- const unique=new Map();for(const event of events){const key=String(event.id),old=unique.get(key);if(!old||Number(event.updatedAt??0)>=Number(old.updatedAt??0)||!Number.isFinite(Number(old.updatedAt)))unique.set(key,event);}
- const retained=[...unique.values()].filter(e=>!e.disabled);
  return {source,complete:source==='sportradar'&&retained.some(e=>e.type==='match_started')&&retained.some(e=>e.type==='match_ended'),methodsVerified:source==='sportradar'&&data.doc?.[0]?.data?.match?.coverage?.deepercoverage===true,events:retained,...(coverage?{coverage}:{})};
 }
 const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
