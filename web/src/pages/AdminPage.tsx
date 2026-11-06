@@ -1,5 +1,6 @@
 import {StitchMissingEvidence} from '../components/Admin/StitchAuditList';
 import StitchSportsDesk from '../components/Admin/StitchSportsDesk';
+import MissingMarkets from '../components/Admin/MissingMarkets';
 import MarketCatalog from '../components/Admin/MarketCatalog';
 import { useEffect,useState } from 'react';
 import {apiClient} from '../api/client';
@@ -43,7 +44,7 @@ const sections: { title: string; items: { id: AdminTab; label: string; descripti
       { id: 'match-exposure', label: 'Bastet dhe verifikimi', description: 'Ekspozimi për ndeshje dhe vendime manuale', icon: ShieldAlert },
       { id: 'board-settings', label: 'Lista e ndeshjeve', description: 'Kufiri para fillimit dhe ligat kryesore', icon: Trophy },
       { id: 'builders', label: 'Kombinime ndeshjeje', description: 'Kombinime nga tregjet e ndeshjeve', icon: Layers },
-      { id:'sports-evidence',label:'Tregje pa prova të plota',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
+      { id:'sports-evidence',label:'Tregje që mungojnë',description:'Çfarë duhet për verifikimin e tregjeve sportive',icon:BellRing },
       { id:'sports-roadmap',label:'Plani i sportbasteve',description:'Punët e mbetura dhe rendi i zbatimit',icon:Layers },
     ],
   },
@@ -225,7 +226,7 @@ export default function AdminPage() {
              )}
              {tab === 'sports-evidence' && (
                <section aria-labelledby="sports-evidence-heading" className="space-y-3">
-                 <h2 id="sports-evidence-heading" className="text-lg font-bold">Tregje pa prova të plota</h2>
+                 <h2 id="sports-evidence-heading" className="text-lg font-bold">Tregje që mungojnë</h2>
                  <p className="text-sm">Këto përzgjedhje kërkojnë prova shtesë kur burimi aktual nuk mbulon kushtin e bastit. Biletat konkrete për kontroll gjenden te Njoftimet.</p>
                  <dl className="space-y-3">
                    <div><dt className="font-semibold">Goli ose korneri i radhës, gara deri në X kornera</dt><dd>Kur mungon rendi pas ndërprerjes, duhet kronologjia me skuadrën dhe rendin ose sekondat e ngjarjeve.</dd></div>
@@ -238,8 +239,9 @@ export default function AdminPage() {
                    <p><strong>Mbaj aktiv tregun e verifikueshëm</strong> kur prova ekziston. Për shembull, një korner me minutë dhe skuadër nga burimi aktual mund të mbulojë kushtin përkatës, ndërsa mungesa e kornerit kërkon mbulim të plotë të intervalit.</p>
                    <p><strong>Rihape pas verifikimit</strong> të burimit për ligën dhe periudhën përkatëse, përfshirë rikuperimin pas ndërprerjes dhe korrigjimet. Biletat ekzistuese pa prova shkojnë për kontroll manual.</p>
                  </div>
+                 <MissingMarkets />
                  <StitchMissingEvidence />
-                 <MarketCatalog evidenceOnly />
+
                </section>
              )}
             {tab === 'match-exposure' && <MatchExposure />}
