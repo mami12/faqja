@@ -68,6 +68,8 @@ jobs:
           node scripts/test-live-contract-rules.mjs
           node scripts/test-primary-market-verification.mjs
           node scripts/test-prematch-market-verification.mjs
+          node scripts/test-zizobet-partial-interval-evidence.mjs
+          node scripts/test-zizobet-info-history.mjs
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
       - name: Validate selective offline backup queue and live shadow settlement
