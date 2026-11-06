@@ -126,17 +126,22 @@ export function parseEventWindow(line,clock=null) {
  const first=name.match(/\b(?:first|opening)\s+(\d{1,3})\s+minutes?\b/);
  const by=name.match(/\b(?:by|before|until)\s+(?:the\s+)?(?:minute\s+)?(\d{1,3})(?:st|nd|rd|th)?(?:\s+minute)?\b/);
  const rolling=name.match(/\b(?:next|following)\s+(\d{1,2})\s+minutes?\b/);
+ // Exact provider minute is preserved at ticket acceptance.
+ const exactMinute=name.match(/\b(?:in|at|during)\s+(?:the\s+)?(?:minute\s+(\d{1,3})|(\d{1,3})(?:st|nd|rd|th)?\s+minute)\b/);
  if(fixed){start=Number(fixed[1]??fixed[3]??fixed[5]);end=Number(fixed[2]??fixed[4]??fixed[6]);}
- else if(first){start=0;end=Number(first[1]);}
+ else if(exactMinute){start=Number(exactMinute[1]??exactMinute[2]);end=start;}
+ else if(first){start=0;end=Number(first[1])-1;}
  else if(by){start=0;end=Number(by[1]);}
  else if(rolling){
   const current=number(clock);
   if(current===null||current<0||current>=130)return null;
   start=current;end=current+Number(rolling[1]);
  }else return null;
- if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||start>=end||end>130)return null;
+ if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||
+    (exactMinute?start>end:start>=end)||end>130)return null;
  // Freeze the window at selection acceptance. No later moving reference clocks.
- return {version:1,kind:'window',event:kind,...(side?{side}:{}),from:start,to:end,choice,startExclusive:!!rolling,clockAtAcceptance:number(clock)};
+ return {version:1,kind:'window',event:kind,...(side?{side}:{}),from:start,to:end,choice,
+  startExclusive:!!rolling,exactMinute:!!exactMinute,clockAtAcceptance:number(clock)};
 }
 export function parseSequenceBet(line,counts={}) {
  const name=norm(line.market_name??line.marketName??line.name);
@@ -144,16 +149,18 @@ export function parseSequenceBet(line,counts={}) {
  if(!event)return null;
  const isNext=/^(?:next|who (?:scores|takes) (?:the )?next)\s+(?:goal|corner)\b|^(?:which team )?(?:scores|wins) next (?:goal|corner)/.test(name);
  const numbered=name.match(/^(?:(?:who (?:scores|takes) (?:the )?)|(?:which team (?:scores|wins) (?:the )?))?(\d+)(?:st|nd|rd|th)?\s+(?:goal|corner)\b|^(?:(?:who (?:scores|takes)|which team (?:scores|wins)) (?:the )?)?(?:goal|corner)\s*(\d+)\b|^which team (?:scores|wins) (?:the )?goal (\d+)\b/);
+ const first=/^(?:(?:who|which team)\s+(?:scores|takes|wins)\s+(?:the\s+)?)?first\s+(?:goal|corner)\b/.test(name);
+ const reach=name.match(/^(?:which team\s+)?(?:reaches|gets|takes|scores)\s+(\d{1,3})\s+(goals?|corners?)\s+first\b/);
  const race=name.match(/\brace to (\d{1,3}) (goals?|corners?)\b/);
- if(!isNext&&!numbered&&!race)return null;
+ if(!isNext&&!numbered&&!race&&!first&&!reach)return null;
  const side=sideOf(line.outcome_name??line.outcomeName)??sideOf(line.outcome_key??line.outcomeKey);
  if(!side)return null;
- if(race){
-  const threshold=Number(race[1]);
+ if(race||reach){
+  const threshold=Number((race??reach)[1]);
   if(!Number.isInteger(threshold)||threshold<1||threshold>100||side==='none')return null;
-  return {version:1,kind:'race',event:/(?:goal)/.test(race[2])?'goal':'corner',target:threshold,side};
+  return {version:1,kind:'race',event:/(?:goal)/.test((race??reach)[2])?'goal':'corner',target:threshold,side};
  }
- let target=numbered?Number(numbered[1]??numbered[2]??numbered[3]):null;
+ let target=numbered?Number(numbered[1]??numbered[2]??numbered[3]):first?1:null;
  if(isNext){
   const c=counts[event];
   const home=nonNeg(c?.home),away=nonNeg(c?.away);
