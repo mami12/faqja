@@ -62,6 +62,7 @@ export default function AdminPage() {
   const tr = (value: string) => adminUiText(value, lang);
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const [reviewCount,setReviewCount]=useState(0);
+  const [stitchCount,setStitchCount]=useState(0);
   useEffect(()=>{
     let active=true;
     const refresh=async()=>{
@@ -69,8 +70,14 @@ export default function AdminPage() {
         if(active)setReviewCount(Number(res.data?.notificationCount)||0);
       }catch{if(active)setReviewCount(0);}
     };
-    void refresh();
-    const timer=window.setInterval(()=>void refresh(),15000);
+    const refreshStitch=async()=>{
+      try{const res=await apiClient.get('/admin/live-event-test',{params:{summary:true}});
+        if(active)setStitchCount(Number(res.data?.count)||0);
+      }catch{if(active)setStitchCount(0);}
+    };
+    const refreshAll=()=>{void refresh();void refreshStitch();};
+    refreshAll();
+    const timer=window.setInterval(refreshAll,15000);
     return()=>{active=false;window.clearInterval(timer);};
   },[tab]);
   const active = allItems.find(item => item.id === tab)!;
@@ -142,6 +149,10 @@ export default function AdminPage() {
             </nav>
           </div>
           <main className="min-w-0 pb-10">
+            {tab!=='stitch'&&stitchCount>0&&<div className="mx-3 my-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-tertiary bg-secondary p-3">
+              <p className="text-sm"><strong>Stitch</strong> · Serveri ka gjetur rezultat të mundshëm për {stitchCount} përzgjedhje.</p>
+              <button type="button" onClick={()=>setTab('stitch')} className="min-h-11 rounded-lg border border-tertiary px-3">Shiko çfarë gjeti</button>
+            </div>}
             {tab !== 'matches' && <div className="mx-auto max-w-7xl px-3 pt-5 pb-1 sm:px-6 sm:pt-6">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary border border-tertiary text-accent-green">

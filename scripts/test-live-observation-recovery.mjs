@@ -6,7 +6,7 @@ import {stitchOverview} from '../server/ledger/stitch-overview.mjs';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '../server/ledger/live-observation-store.mjs';
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
-import {createLiveSettlementPreviews} from '../server/ledger/live-shadow-settlement.mjs';
+import {checkStoredLivePreview,createLiveSettlementPreviews} from '../server/ledger/live-shadow-settlement.mjs';
 
 const now=Date.parse('2026-11-05T21:00:00Z');
 const game={Match:{Score:'1:1',MatchTimeExtended:'36:05',CornersTeam1:1,CornersTeam2:0,
@@ -133,6 +133,10 @@ async function simulateLiveMatches(){
   await record(123,frameAt('36:10','1:1',0,[g1,g2]));
   await check(['WON','WON',null,null,null,null,null]);
 
+  const saved=(await query('select proposed_status,payload from app_live_settlement_preview where line_id=$1',[ids[1]])).rows[0];
+  assert.equal(checkStoredLivePreview(saved).timelineCheck,'AGREES');
+  assert.equal(checkStoredLivePreview({...saved,proposed_status:'LOST'}).timelineCheck,'DIFFERS');
+  assert.equal(checkStoredLivePreview({...saved,payload:{}}).timelineCheck,'INSUFFICIENT');
   elapsed=60000;
   assert.equal((await record(123,baseline)).stored,true,'A → B → A must retain the rollback as a new observation');
   assert.equal((await record(123,baseline)).stored,false,'Consecutive identical frames can be deduplicated');

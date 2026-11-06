@@ -4,7 +4,7 @@ import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
 import {manualReviewQueue} from './manual-review-queue.mjs';
-import {LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
+import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
 import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const cents=n=>Math.round(Number(n)*100),money=n=>Number((n/100).toFixed(2));
@@ -111,7 +111,13 @@ financialMonitoringRouter.get('/admin/statistics-review',safe(async(_req,res)=>r
 financialMonitoringRouter.post('/admin/manual-settlement',safe(async(req,res)=>res.json(await manualSettlement(req.body??{},req.user))));
 financialMonitoringRouter.get('/admin/settlement-review-queue',safe(async(req,res)=>res.set('Cache-Control','no-store').json(await manualReviewQueue({limit:req.query.limit}))));
 /** Test-only predictions and missing-feed intervals; no wallet mutations. */
-financialMonitoringRouter.get('/admin/live-event-test',safe(async(_req,res)=>{
+financialMonitoringRouter.get('/admin/live-event-test',safe(async(req,res)=>{
+ if(req.query.summary==='true'){
+  const {rows}=await query(`select count(*)::int as count from app_live_settlement_preview p
+   join app_ticket_line l on l.id=p.line_id join app_ticket t on t.id=l.ticket_id
+   where l.status='PENDING' and t.status='PENDING'`);
+  return res.set('Cache-Control','no-store').json({count:rows[0].count});
+ }
  const [p,g]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200])]);
- res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows,recovery:g.rows});
+ res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows});
 }));

@@ -47,6 +47,14 @@ export async function createLiveSettlementPreviews({
  }
  return {examined:rows.length,proposed,held,mode:'SHADOW_ONLY'};
 }
+/** Recheck a stored proposal against the exact retained timeline, without a wallet write. */
+export function checkStoredLivePreview(row) {
+ const payload=typeof row.payload==='string'?JSON.parse(row.payload):row.payload;
+ const contract=payload?.contract,frame=payload?.frame;
+ const timeline=contract&&frame?gradeLiveContract(contract,frame,{ended:frame.ended===true}):null;
+ return {...row,timelineCheck:timeline===row.proposed_status?'AGREES':timeline?'DIFFERS':'INSUFFICIENT'};
+}
+
 export const LIVE_SHADOW_ADMIN_SQL=
  'select p.line_id,p.match_id,p.proposed_status,p.payload,p.updated_at, '+
  'l.ticket_id,l.market_name,l.outcome_name,l.match_name,l.status as line_status '+
