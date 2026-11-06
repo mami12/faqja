@@ -18,7 +18,7 @@ const request=async url=>{
 };
 const feed=startZizoFeed({autoStart:false,request,now:()=>200000,connectMqtt:()=>({stop(){},pause(){},resume(){},setLiveIds(){}}),onMatch(){},onInfo(){},onOdds:rows=>odds.push(...rows)});
 try{
- await feed.tick();assert.equal(calls.filter(c=>c.includes('getprematchgameall')).length,1);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,0);assert.ok(odds.length>0);assert.ok(odds.every(o=>o.marketName==='Full Time Result'));
+ await feed.tick();assert.equal(calls.filter(c=>c.includes('getprematchgameall')).length,1);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,0);assert.ok(odds.length>0);assert.ok(odds.every(o=>o.marketName==='Match result'),'Board must preserve the original provider market title, not rewrite it as Full Time Result');
  await feed.focus(OFFSET+11);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,1);assert.ok(calls.find(c=>c.endsWith('/11')));assert.ok(!calls.some(c=>c.endsWith('/12')));assert.ok(odds.some(o=>o.matchId===OFFSET+11&&o.marketName==='Total Corners'));assert.ok(!odds.some(o=>o.matchId===OFFSET+12&&o.marketName==='Total Corners'));
  await feed.focus(OFFSET+11);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,1,'fresh detail response shared across viewers');
  console.log('PASS provider batch board quotes only; unopened fixtures never fetch full markets; selected detail loads all its markets, with shared freshness cache and no unrelated fixture requests');
@@ -43,7 +43,7 @@ try{
   at+=301000;price=3;const count=changes.length;await liveFeed.tick();
   assert.equal(fullReads,1,'closed detail does not keep fetching all live markets');
   assert.equal(changes.at(-1).price,3,'lightweight main prices keep updating after focus expires');
-  assert.ok(changes.slice(count).every(r=>r.marketName==='Full Time Result'),'header never tombstones stored full-market quotes');
+  assert.ok(changes.slice(count).every(r=>r.marketName==='Match result'),'Header must retain native Match result quotes without tombstoning full-market detail');
   assert.equal(infos.at(-1).homeScore,1);
   console.log('PASS live main prices continue after detail interest expires; no blanket full fetch or stored extra-market deletion');
  }finally{liveFeed.stop();await liveFeed.drain();}
