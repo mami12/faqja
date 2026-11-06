@@ -12,12 +12,12 @@ export function parseAiScoreScorers(payload){
   for(const event of events){
    if(!event||typeof event!=='object')continue;
    const kind=String(event.event_type??event.eventType??event.incidentType??event.type??'').toLowerCase();
-   if(!['goal','score_change','penalty_goal'].includes(kind)||event.cancelled||event.reversed)continue;
+   if(!['goal','score_change','penalty_goal'].includes(kind)||event.cancelled||event.reversed||event.own_goal===true||event.ownGoal===true||event.isOwnGoal===true)continue;
    const team=event.team==='home'||event.isHome===true||event.home_event===1?'home':
     event.team==='away'||event.isHome===false||event.home_event===0?'away':null;
    const rawMinute=event.minute??event.time??event.gt;
-   const match=String(rawMinute??'').match(/^(\d{1,3})(?:\s*\+\s*\d{1,2})?$/);
-   const minute=match?Number(match[1]):null;
+   const match=String(rawMinute??'').match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?$/);
+   const minute=match?Number(match[1])+Number(match[2]??0):null;
    const player=event.scorer??event.player??event.detail?.player;
    const playerName=typeof player==='string'?player:
      player&&typeof player.name==='string'?player.name:
