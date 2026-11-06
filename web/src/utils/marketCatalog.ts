@@ -1,8 +1,4 @@
 import type { Market } from '../types';
-import al from '../i18n/al';
-import en from '../i18n/en';
-import { formatOddsButtonLabel, translateMarketName, translateOutcomeName } from './sportsbookLabels';
-import type { Translate } from './sportsbookLabels';
 import {isComboMarket} from './comboPolicy';
 
 /**
@@ -20,13 +16,8 @@ const normalized = (value: unknown): string =>
  * "Asian Total" is not necessarily a handicap, so do not discard it simply
  * because its name includes "Asian".
  */
-export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): boolean {
-  const name = normalized(market.name);
-  const type = normalized(market.marketType);
-  return type === 'handicap'
-    || /\b(handicap|handicaps|fora|spread|spreads)\b/i.test(name)
-    || /^asian (?:corners?|cards?)\b/.test(name)
-    || /^(?:corners?|cards?)\.\s*asian\b/.test(name);
+export function isHandicapMarket(_market: Pick<Market, 'name' | 'marketType'>): boolean {
+  return false; // no name-based market exclusion; admin/provider state owns availability
 }
 
 /** Hide unnamed/generated placeholders, not real short provider names.
@@ -35,7 +26,6 @@ export function isHandicapMarket(market: Pick<Market, 'name' | 'marketType'>): b
 export function isIdentifiedMarket(market: Market): boolean {
   const name = String(market.name ?? '').trim();
   if (!name) return false;
-  if (/[{}]|\[[^\[\]]*[a-z!_][^\[\]]*\]/i.test(name)) return false;
   return !/^(?:market|unknown|unverified market(?:\b.*)?|cols-?\d+|total-2|fora-2|match market)$/i.test(name);
 }
 
@@ -133,36 +123,18 @@ export function marketCategoryOf(market: Market): MarketCategory {
   return 'other';
 }
 
-const translator = (lang: MarketLanguage): Translate => Object.assign((key: string): string => {
-  const [section, ...rest] = key.split('.');
-  const dictionary = (lang === 'en' ? en : al) as unknown as Record<string, Record<string, string>>;
-  return dictionary[section]?.[rest.join('.')] ?? key;
-}, { lang });
-const translators = { al: translator('al'), en: translator('en') };
-
-/** Translate the rendered heading after grouping by the untouched contract. */
-export function marketDisplayTitle(market: Market, lang: MarketLanguage, withLine = false): string {
-  const translate = translators[lang];
-  if (!withLine) {
-    const syntheticGroup = betBuilderGroup(market);
-    if (syntheticGroup) return translateMarketName(syntheticGroup.title, translate);
-  }
-  const raw = String(market.name ?? '').trim();
-  if (!withLine) return translateMarketName(marketBaseName(market), translate);
-  const line = marketLineValue(market);
-  const label = translateMarketName(raw, translate);
-  const shownLines = label.match(/-?\d+(?:[.,]\d+)?/g) ?? [];
-  if (!line || shownLines.some(value => value.replace(',', '.') === line.replace(',', '.'))) return label;
-  return label + ' (' + line + ')';
+/** Display the exact provider wording; localisation is a separate future task. */
+export function marketDisplayTitle(market: Market, _lang: MarketLanguage, withLine = false): string {
+  const raw=String(market.name??'');
+  if(!withLine)return raw;
+  const line=String(market.line??'').trim();
+  return line&& !raw.includes(line)?raw+' ('+line+')':raw;
 }
 
-/** One formatter for odds buttons, selected bets and printed receipts. */
-export function marketSelectionLabel(raw: string, lang: MarketLanguage, marketName?: string,
-  matchName?: string, outcomeCode?: string, marketLine?: string): string {
-  const translate = translators[lang];
-  return marketName
-    ? formatOddsButtonLabel(raw, marketName, marketLine, translate, matchName, outcomeCode)
-    : translateOutcomeName(raw, translate, marketName, matchName, outcomeCode);
+/** Never rewrite selection names, especially native player identities. */
+export function marketSelectionLabel(raw: string, _lang: MarketLanguage, _marketName?: string,
+  _matchName?: string, _outcomeCode?: string, _marketLine?: string): string {
+  return String(raw??'');
 }
 
 const EN_CATEGORY_LABELS: Record<MarketCategory, string> = {
