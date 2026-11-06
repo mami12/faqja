@@ -67,6 +67,8 @@ jobs:
         run: node scripts/test-live-market-lab.mjs
       - name: Verify real-money admin lab only uses guarded accepted bets
         run: node scripts/test-real-market-lab.mjs
+      - name: Validate 3-10-character player password rules
+        run: node scripts/test-account-password-policy.mjs
       - name: Syntax check real-money admin lab
         run: |
           node --check server/ledger/real-market-lab.mjs
