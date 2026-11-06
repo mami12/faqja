@@ -73,6 +73,13 @@ const database={connect:async()=>({async query(sql,params=[]){
  if(sql.startsWith('insert into app_live_event_recovery'))return {rowCount:1};
  if(sql.startsWith('insert into app_live_event_frame'))return {rowCount:1};
  if(sql.startsWith('insert into app_live_event_cursor'))return {rowCount:1};
+ // The primary incident writer now persists reconciled provider events and
+ // coverage inside this transaction; this mock must understand those writes.
+ if(sql.startsWith('select through_minute,complete'))return {rows:[]};
+ if(sql.startsWith('update app_match_event_fact')||
+    sql.startsWith('insert into app_match_event_fact')||
+    sql.startsWith('insert into app_match_event_coverage')||
+    sql.startsWith('update app_live_event_recovery'))return {rowCount:1};
  if(sql==='begin'||sql==='commit'||sql==='rollback')return {rowCount:0};
  throw new Error('Unexpected statement: '+sql);
  },release(){}})};
