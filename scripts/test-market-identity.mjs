@@ -66,15 +66,17 @@ for (const name of ['Market', 'Unknown', 'cols-2', 'Unverified market (g999)']) 
 for (const name of ['Total', 'Correct score', 'Corners', 'Cards', 'Result', 'Match Result (2-way)']) {
   assert.equal(isIdentifiedMarketName(name), true, name);
 }
+// Provider and admin state, not market names, decide which offers are excluded.
 for (const name of ['Handicap', 'Asian Handicap', 'Corners. Handicap', 'Asian Corners', 'European Handicap']) {
-  assert.equal(isHandicapOfferMarket({ name }), true, name + ' must not appear in any market API response');
+  assert.equal(isHandicapOfferMarket({ name }), false, name + ' remains provider-controlled');
+  assert.equal(isHandicapOfferMarket({ name, explicitlyExcluded: true }), true,
+    name + ' is blocked when explicitly excluded');
 }
 for (const name of ['Asian Total', 'Total', 'Corners. Result', 'Yellow cards. Total', 'Correct score']) {
   assert.equal(isHandicapOfferMarket({ name }), false, name + ' is not a handicap');
 }
 
-// buildMarkets supplies the API, so it must include named groups but exclude
-// handicap contracts, even if the client accidentally fails to filter them.
+// buildMarkets keeps identified named groups unless explicitly excluded.
 const rows = [
   ['Unverified market (g1)', 'g1'],
   ['Total', 'g6379'],
@@ -92,7 +94,7 @@ const rows = [
 }));
 const named = buildMarkets(rows).map(x => x.name);
 assert.deepEqual(new Set(named),
-  new Set(['Total', 'Correct score', 'Corners', 'Corners. Result', 'Yellow cards. Total', 'Asian Total']));
+  new Set(['Total', 'Correct score', 'Corners', 'Corners. Result', 'Yellow cards. Total', 'Handicap', 'Asian Corners', 'Asian Total']));
 
 // Identical text is not proof that two provider group IDs describe one bet.
 const distinct = buildMarkets(['g11111', 'g22222'].map(id => ({
@@ -121,23 +123,23 @@ const ui = loadUiModule(new URL('../web/src/utils/marketCatalog.ts', import.meta
 const mk = (name, line = '', period = 0, marketType = 'OTHER', extId = '') =>
   ({ id: 'test-' + extId + name + line, name, line, period, marketType, extId });
 
-for (const [name, translated] of [['Total', 'Totali i golave'], ['Correct score', 'Rezultati i saktë'], ['Corners', 'Goditje këndore'], ['Cards', 'Kartonët'], ['Result', 'Rezultati (1X2)']]) {
+for (const [name, translated] of [['Total', 'Total'], ['Correct score', 'Correct score'], ['Corners', 'Corners'], ['Cards', 'Cards'], ['Result', 'Result']]) {
   assert.equal(ui.isIdentifiedMarket(mk(name)), true, name + ' is a real upstream name');
   assert.equal(ui.marketDisplayTitle(mk(name), 'al'), translated, name + ' is translated for display');
   assert.equal(ui.marketDisplayTitle(mk(name), 'en'), name, 'raw provider title remains available unchanged');
 }
 assert.equal(ui.isIdentifiedMarket(mk('Unverified market')), false);
-assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Totali i golave (4.5)');
-assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Goditjet këndore (1X2)');
-assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Totali i kartonave të verdhë');
-assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Totali i goditjeve këndore (9.5)');
+assert.equal(ui.marketDisplayTitle(mk('Total', '4.5', 0, 'OVER_UNDER', 'g6379'), 'al', true), 'Total (4.5)');
+assert.equal(ui.marketDisplayTitle(mk('Corners. Result'), 'al'), 'Corners. Result');
+assert.equal(ui.marketDisplayTitle(mk('Yellow cards. Total'), 'al'), 'Yellow cards. Total');
+assert.equal(ui.marketDisplayTitle(mk('Total Corners', '9.5'), 'al', true), 'Total Corners (9.5)');
 assert.equal(ui.marketCategoryOf(mk('Corners. Double chance')), 'corners');
 assert.equal(ui.marketCategoryOf(mk('Corners. Result', '', 0, '1X2')), 'corners');
 assert.equal(ui.marketCategoryOf(mk('Yellow cards. Result')), 'cards');
 assert.equal(ui.marketCategoryOf(mk('Correct score')), 'goals');
 assert.equal(ui.marketCategoryOf(mk('Result and total')), 'mixed');
-assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Lart 9.5');
-assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'X');
+assert.equal(ui.marketSelectionLabel('Over 9.5', 'al'), 'Over 9.5');
+assert.equal(ui.marketSelectionLabel('Draw', 'al'), 'Draw');
 assert.equal(ui.marketCategoryLabel('corners', 'en'), 'Corners');
 
 // Synthetic Bet Builder offers are visually grouped by the market contracts,
@@ -157,18 +159,18 @@ const doubleChanceTotals = [
 assert.equal(new Set(doubleChanceTotals.map(ui.marketGroupKey)).size, 1,
   'all Double Chance + Total Goals options share one visual group');
 assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en'),
-  'Bet Builder: Double Chance + Total Goals');
+  'Bet Builder: X/2&P_2.5');
 assert.equal(ui.marketDisplayTitle(doubleChanceTotals[0], 'en', true),
   'Bet Builder: X/2&P_2.5', 'individual template names remain unchanged');
 const bttsTotal = builder('4', 'G/G&+2.5', 'BTTS Yes + TOTAL Over 2.5', 2.4);
-assert.equal(ui.marketDisplayTitle(bttsTotal, 'al'), 'Kombinim ndeshjeje: Shënojnë të dyja skuadrat & Totali i golave');
-assert.equal(ui.marketSelectionLabel(bttsTotal.outcomes[0].name, 'al', bttsTotal.name, 'Arsenal vs Chelsea'), 'Po + Lart 2.5');
+assert.equal(ui.marketDisplayTitle(bttsTotal, 'al'), 'Bet Builder: G/G&+2.5');
+assert.equal(ui.marketSelectionLabel(bttsTotal.outcomes[0].name, 'al', bttsTotal.name, 'Arsenal vs Chelsea'), 'BTTS Yes + TOTAL Over 2.5');
 assert.equal(ui.marketDisplayTitle(mk('BTTS + Total Goals 2.5', '2.5'), 'al', true),
-  'Shënojnë të dyja skuadrat & Totali i golave (2.5)', 'translation must retain the exact market line');
+  'BTTS + Total Goals 2.5', 'translation must retain the exact market line');
 const resultBtts = builder('5', '1&G/G', '1X2 1 + BTTS Yes', 4.4);
 const chanceBtts = builder('6', '1/X&G/G', 'DC 1X + BTTS Yes', 2.5);
-assert.equal(ui.marketDisplayTitle(bttsTotal, 'en'), 'Bet Builder: Both Teams to Score + Total Goals');
-assert.equal(ui.marketDisplayTitle(resultBtts, 'en'), 'Bet Builder: 1X2 + Both Teams to Score');
+assert.equal(ui.marketDisplayTitle(bttsTotal, 'en'), 'Bet Builder: G/G&+2.5');
+assert.equal(ui.marketDisplayTitle(resultBtts, 'en'), 'Bet Builder: 1&G/G');
 assert.equal(new Set([doubleChanceTotals[0], bttsTotal, resultBtts, chanceBtts].map(ui.marketGroupKey)).size, 4,
   'different types of combinations must never merge');
 assert.equal(doubleChanceTotals.map(x => x.outcomes[0].odds).join(','), '3.1,3.9,4.2',
@@ -187,7 +189,7 @@ assert.notEqual(ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g320
   ui.marketGroupKey(mk('Total Corners', '9.5', 0, 'CORNERS', 'g900')),
   'different provider group IDs must never merge');
 for (const name of ['Handicap', 'Asian Handicap', 'Corners. Handicap', 'Asian Corners']) {
-  assert.equal(ui.isHandicapMarket(mk(name)), true, name);
+  assert.equal(ui.isHandicapMarket(mk(name)), false, name + ' is not unilaterally hidden in the UI');
 }
 assert.equal(ui.isHandicapMarket(mk('Asian Total')), false);
 assert.equal(ui.isHandicapMarket(mk('Total')), false);
@@ -229,4 +231,4 @@ assert.deepEqual(new Set(timingFrame.rows.map(r => r.outcomeKey)),
   new Set(goalTimeSelections.map(([name]) => name)),
   'each interval needs its own unique bettable outcome ID');
 
-console.log('Provider names, category grouping and handicap exclusions passed');
+console.log('Provider names, category grouping and explicit market exclusions passed');
