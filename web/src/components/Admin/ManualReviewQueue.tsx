@@ -19,7 +19,7 @@ const labels:Record<string,string>={
  MISSING_FINAL_RESULT:'Mungon rezultati përfundimtar i konfirmuar',
 };
 const fresh:Decision={status:'PENDING',reason:'',source:''};
-export default function ManualReviewQueue(){
+export default function ManualReviewQueue({onlyLineId}:{onlyLineId?:string}={}){
  const [items,setItems]=useState<ReviewItem[]>([]);
  const [decisions,setDecisions]=useState<Record<string,Decision>>({});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState<string|null>(null);
@@ -27,12 +27,12 @@ export default function ManualReviewQueue(){
  async function load(){
   try{
    const res=await apiClient.get('/admin/settlement-review-queue',{params:{limit:200}});
-   setItems(Array.isArray(res.data?.items)?res.data.items:[]);
+   setItems(Array.isArray(res.data?.items)?res.data.items.filter((item:ReviewItem)=>!onlyLineId||item.lineId===onlyLineId):[]);
    setError('');
   }catch(e:any){setError(e.response?.data?.message??'Lista e verifikimeve nuk u ngarkua.');}
   finally{setLoading(false);}
  }
- useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id);},[]);
+ useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id);},[onlyLineId]);
  const change=(id:string,key:keyof Decision,value:string)=>setDecisions(prev=>({
   ...prev,[id]:{...(prev[id]??fresh),[key]:value}
  }));
