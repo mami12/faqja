@@ -21,6 +21,33 @@ const nonNeg=v=>{const n=number(v);return n!==null&&Number.isInteger(n)&&n>=0?n:
  * Provider labels are used only during initial quote interpretation.
  * Settlement uses the immutable numbered contract, not this text.
  */
+/** Freeze the native Zizobet player selection only at purchase.
+ * All actual goal times and teams continue to come from Zizobet.
+ */
+export function parsePlayerGoalContract(line){
+ const key=String(line.market_key??line.marketKey??'');
+ let quotedPlayer=null;
+ try{
+  const raw=key.split('@')[1];
+  if(raw)quotedPlayer=JSON.parse(Buffer.from(raw,'base64url').toString())?.pl;
+ }catch{return null;}
+ const name=String(line.market_name??line.marketName??line.name??'').trim();
+ const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ if(typeof quotedPlayer==='string'&&quotedPlayer.trim()&&
+  /\bto score\b|\bgoalscorer\b/i.test(name)&&!/first|last|assist|header|penalty|exact|more|hat.?trick/i.test(name)){
+  if(!['yes','no','po','jo'].includes(choice))return null;
+  return {version:1,kind:'player-goal',event:'goal',playerName:quotedPlayer,
+   choice:['yes','po'].includes(choice)};
+ }
+ if(/^(?:anytime|any time) goalscorers?$/i.test(name)&&choice&&
+   !['no goalscorer','none','no goal'].includes(choice)){
+  const player=String(line.outcome_name??line.outcomeName??'').trim();
+  if(!player||/^(yes|no|po|jo|over|under)$/i.test(player))return null;
+  return {version:1,kind:'player-goal',event:'goal',playerName:player,choice:true};
+ }
+ return null;
+}
+
 export function parseOrdinalGoalTime(line){
  const title=String(line.market_name??line.marketName??line.name??'').trim();
  if(!/^when will (?:next )?goal\b/i.test(title))return null;
@@ -156,7 +183,7 @@ export function parseCountMarket(line) {
  return null;
 }
 export const liveContract=(line,{counts={},clock=null,teams={}}={})=>
- parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
+ parsePlayerGoalContract(line)??parseOrdinalGoalTime(line)??parseTimedResultMarket(line)??parseEventWindow(line,clock)??parseSequenceBet(line,counts)??parseTeamGoalMarket(line,teams)??parseCountMarket(line);
 
 const sortEvents=(events,event)=>{
  const all=events.filter(e=>e.type===event&&e.disabled!==true&&e.cancelled!==true);
