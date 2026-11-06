@@ -13,7 +13,7 @@ create table if not exists app_stitch_settlement_audit (
  checked_at timestamptz not null default now(),
  unique(line_id,actual_status,revision)
 );
-create index if not exists app_stitch_settlement_audit_recent_idx on app_stitch_settlement_audit(checked_at desc,id desc);
+create index if not exists app_stitch_settlement_audit_line_idx on app_stitch_settlement_audit(line_id,id desc);
 `;
 
 const countKinds=new Set(['over','under','atLeast','exact','range']);
@@ -67,5 +67,5 @@ export const STITCH_SETTLEMENT_AUDIT_ADMIN_SQL=`
 select a.id,a.line_id,a.actual_status,a.expected_status,a.verdict,a.evidence,a.checked_at,
        a.evidence->>'ticketId' as ticket_id,a.evidence->>'matchName' as match_name,
        a.evidence->>'marketName' as market_name,a.evidence->>'outcomeName' as outcome_name
-from app_stitch_settlement_audit a
-order by a.checked_at desc,a.id desc limit $1`;
+from (select distinct on(line_id) * from app_stitch_settlement_audit order by line_id,id desc) a
+order by (a.verdict='MISMATCH') desc,a.checked_at desc,a.id desc limit $1`;
