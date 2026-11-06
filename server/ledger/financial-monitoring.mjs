@@ -4,11 +4,6 @@ import {requireAuth} from './auth.mjs';
 import {isLedgerReady} from './store.mjs';
 import {systemColumnPayout} from './system-columns.mjs';
 import {manualReviewQueue} from './manual-review-queue.mjs';
-import {STITCH_SETTLEMENT_AUDIT_ADMIN_SQL} from './stitch-settlement-audit.mjs';
-import {checkStoredLivePreview,LIVE_SHADOW_ADMIN_SQL} from './live-shadow-settlement.mjs';
-import {RECOVERY_TICKETS_SQL} from './live-observation-store.mjs';
-import {createMarketLabRun,listMarketLab,refreshMarketLab} from './live-market-lab.mjs';
-import {createRealMarketTestRun,processRealMarketTestQueue,auditRealMarketTests,listRealMarketTests} from './real-market-lab.mjs';
 import {setFootballInformationMapping,inspectFootballInformation,sourceMatchNeeds,describeJsonStructure} from '../stats-providers/football-information.mjs';
 import {getMatchById} from '../matches.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
@@ -114,76 +109,12 @@ export async function manualSettlement(input,actor,{database=pool}={}){
  }catch(error){await client.query('rollback').catch(()=>{});throw error;}finally{client.release();}
 }
 export const financialMonitoringRouter=express.Router();
-financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue','/admin/live-event-test','/admin/market-lab','/admin/market-lab/runs','/admin/market-lab/refresh','/admin/market-lab/real','/admin/market-lab/real-runs','/admin/market-lab/real-check','/admin/football-information/fixture','/admin/football-information/map','/admin/football-information/probe'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
+financialMonitoringRouter.use(['/admin/match-exposure','/admin/statistics-review','/admin/manual-settlement','/admin/settlement-review-queue','/admin/football-information/fixture','/admin/football-information/map','/admin/football-information/probe'],requireAuth,(req,res,next)=>req.user.role!=='ADMIN'?res.status(403).json({message:'Vetëm administratori.'}):!isLedgerReady()?res.status(503).json({message:'Databaza nuk është gati.'}):next());
 const safe=fn=>(req,res,next)=>Promise.resolve(fn(req,res)).catch(error=>error.status?res.status(error.status).json({message:error.message}):next(error));
 financialMonitoringRouter.get('/admin/match-exposure',safe(async(_req,res)=>res.set('Cache-Control','no-store').json(await matchExposure())));
 financialMonitoringRouter.get('/admin/statistics-review',safe(async(_req,res)=>res.set('Cache-Control','no-store').json({reviews:(await query('select match_id,payload,updated_at from app_stat_review order by updated_at desc')).rows})));
 financialMonitoringRouter.post('/admin/manual-settlement',safe(async(req,res)=>res.json(await manualSettlement(req.body??{},req.user))));
 financialMonitoringRouter.get('/admin/settlement-review-queue',safe(async(req,res)=>res.set('Cache-Control','no-store').json(await manualReviewQueue({limit:req.query.limit}))));
-/** Test-only predictions and missing-feed intervals; no wallet mutations. */
-financialMonitoringRouter.get('/admin/live-event-test',safe(async(req,res)=>{
- if(req.query.summary==='true'){
-  const {rows}=await query(`select count(*)::int as count from app_live_settlement_preview p
-   join app_ticket_line l on l.id=p.line_id join app_ticket t on t.id=l.ticket_id
-   where l.status='PENDING' and t.status='PENDING'`);
-  const attention=await query(`select count(*)::int as count from (
-   select distinct on (line_id) verdict from app_stitch_settlement_audit order by line_id,id desc
-  ) recent where verdict='MISMATCH'`);
-  return res.set('Cache-Control','no-store').json({count:rows[0].count,auditMismatchCount:attention.rows[0].count});
- }
- if(req.query.audit==='missing'){
-  const result=await query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100,true]);
-  return res.set('Cache-Control','no-store').json({audits:result.rows});
- }
- const [p,g,a]=await Promise.all([query(LIVE_SHADOW_ADMIN_SQL,[200]),query(RECOVERY_TICKETS_SQL,[200]),query(STITCH_SETTLEMENT_AUDIT_ADMIN_SQL,[100,false])]);
- res.set('Cache-Control','no-store').json({mode:'SHADOW_ONLY',previews:p.rows.map(checkStoredLivePreview),recovery:g.rows,audits:a.rows});
-}));
-
-/** Virtual tickets never touch app_ticket, app_ticket_line or any wallet. */
-financialMonitoringRouter.get('/admin/market-lab',safe(async(req,res)=>
- res.set('Cache-Control','no-store').json(await listMarketLab({limit:req.query.limit}))));
-financialMonitoringRouter.post('/admin/market-lab/runs',safe(async(req,res)=>{
- if(req.user.status!=='ACTIVE')return res.status(403).json({message:'Vetëm administratori aktiv.'});
- const count=Number(req.body?.matchCount??8);
- if(!Number.isSafeInteger(count)||count<1||count>12)return res.status(400).json({message:'Zgjidh 1 deri në 12 ndeshje.'});
- const created=await createMarketLabRun({actorId:req.user.id,matchCount:count});
- res.set('Cache-Control','no-store').status(201).json(created);
-}));
-financialMonitoringRouter.post('/admin/market-lab/refresh',safe(async(req,res)=>{
- if(req.user.status!=='ACTIVE')return res.status(403).json({message:'Vetëm administratori aktiv.'});
- res.set('Cache-Control','no-store').json(await refreshMarketLab());
-}));
-
-/** Real stakes debit ONLY the authenticated admin wallet, via placeBet().
- * Starting a run is a financial action and cannot be triggered by GET/polling.
- * A request UUID makes retries safe even if the browser loses its response.
- */
-financialMonitoringRouter.get('/admin/market-lab/real',safe(async(req,res)=>{
- const [report,wallet]=await Promise.all([
-  listRealMarketTests({actorId:req.user.id,limit:req.query.limit}),
-  query('select balance,currency from app_user where id=$1',[req.user.id])
- ]);
- res.set('Cache-Control','no-store').json({...report,
-  adminBalance:Number(wallet.rows[0]?.balance??0),currency:wallet.rows[0]?.currency??'LEK'});
-}));
-financialMonitoringRouter.post('/admin/market-lab/real-runs',safe(async(req,res)=>{
- const created=await createRealMarketTestRun({
-  actor:req.user,stakePerTicket:req.body?.stakePerTicket,ticketCount:req.body?.ticketCount,
-  requestId:req.body?.requestId
- });
- if(!created.existing&&created.queued>0){
-  // No manual ledger writes. Durable queued cases continue after an admin exits.
-  void processRealMarketTestQueue({limit:8}).catch(error=>
-   console.error('[real market lab] initial placement task failed:',error.message));
- }
- res.set('Cache-Control','no-store').status(201).json(created);
-}));
-financialMonitoringRouter.post('/admin/market-lab/real-check',safe(async(req,res)=>{
- const placement=await processRealMarketTestQueue({limit:8});
- const audited=await auditRealMarketTests();
- res.set('Cache-Control','no-store').json({placement,audited});
-}));
-
 /** Read-only football enrichment diagnostics, isolated from settlement and money. */
 financialMonitoringRouter.get('/admin/football-information/fixture',safe(async(req,res)=>{
  const id=Number(req.query.matchId);
