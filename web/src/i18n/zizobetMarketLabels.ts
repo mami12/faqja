@@ -160,6 +160,10 @@ export function translateZizobetMarketLabel(raw:string):string|null {
  // not prose: translate only the contract and preserve its spelling verbatim.
  const split=normalized.indexOf(' · ');
  if(split>=0){const translated=translateZizobetMarketLabel(normalized.slice(0,split));return translated?translated+normalized.slice(split):null;}
+ // Numbered provider offers are distinct wagers. Never display
+ // "Next Goal 1st / 2nd" as the generic Albanian "Goli i radhës".
+ // Keep the exact original English market title, including the ordinal.
+ if(/^Next\s+(?:Goal|Corner)\s+[1-9]\d{0,2}(?:st|nd|rd|th)?$/i.test(normalized))return normalized;
  const exact=labels[normalized.toLowerCase()];if(exact)return exact;
  const period=normalized.match(/^(1st|first|2nd|second) half\s*(?:[-–:.]\s*|\s+)(.+)$/i);
  if(period){const label=translateZizobetMarketLabel(period[2]);if(label)return (/^(?:1st|first)$/i.test(period[1])?'Pjesa e parë: ':'Pjesa e dytë: ')+label;}
