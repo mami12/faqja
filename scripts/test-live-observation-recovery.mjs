@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {createEventEvidenceStore} from '../server/ledger/event-evidence.mjs';
 import {stitchOverview} from '../server/ledger/stitch-overview.mjs';
+import {auditSettledLiveSelections} from '../server/ledger/stitch-settlement-audit.mjs';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {normalizeLiveFrame,recordWatchedLiveFrame,RECOVERY_TICKETS_SQL} from '../server/ledger/live-observation-store.mjs';
 import {frozenLiveContract} from '../server/ledger/live-contract-context.mjs';
@@ -205,6 +206,22 @@ async function simulateLiveMatches(){
   }
   await query("update app_ticket_line set status='WON' where match_id=123");
   await query("update app_ticket set status='WON' where id=$1",[ticket]);
+  // Exactly two goals, recorded as WON: replay against archived final facts.
+  await query('update app_match_result set home_score=2 where match_id=123');
+  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:1,mismatched:0,missing:5});
+  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:0,missing:0});
+  // A corrected final total reveals the old decision disagrees. Keep both receipts.
+  await query('update app_match_result set home_score=3 where match_id=123');
+  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:1,missing:5});
+  const receipts=(await query('select verdict,expected_status,actual_status from app_stitch_settlement_audit where line_id=$1 order by id',[ids[5]])).rows;
+  assert.deepEqual(receipts,[{verdict:'MATCH',expected_status:'WON',actual_status:'WON'},{verdict:'MISMATCH',expected_status:'LOST',actual_status:'WON'}]);
+  await query('update app_match_result set home_score=2 where match_id=123');
+  assert.equal((await auditSettledLiveSelections({runQuery:query})).matched,1,'returning to two goals must clear the old mismatch');
+  await query("update app_match_result set source='ADMIN' where match_id=123");
+  assert.deepEqual(await auditSettledLiveSelections({runQuery:query}),{matched:0,mismatched:0,missing:6},
+    'admin-entered score alone must not count as independent evidence');
+  assert.equal(Number((await query('select balance from app_user where id=$1',[player])).rows[0].balance),500);
+  console.log('PASS Stitch replays settled selections, reports correction mismatches and missing data, and leaves wallets untouched');
   const pruned=(await evidenceStore.pruneUnbetMatchEvidence()).rows[0];
   assert.deepEqual(pruned,{evidence:2,snapshots:1});
   for(const [table,remaining] of [
