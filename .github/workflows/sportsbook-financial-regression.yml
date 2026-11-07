@@ -25,6 +25,10 @@ jobs:
       - run: npm ci
       - name: Validate LIVE and PREMATCH market conditions and event chronology
         run: |
+          node scripts/test-basic-outcomes.mjs
+          node scripts/test-aggregate-outcomes.mjs
+          node scripts/test-advanced-settlement-market-keys.mjs
+          node scripts/test-event-collector-queue.mjs
           node scripts/test-live-contract-rules.mjs
           node scripts/test-primary-market-verification.mjs
           node scripts/test-prematch-market-verification.mjs
