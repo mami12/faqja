@@ -19,8 +19,8 @@ assert.deepEqual([twentyThree.kind,twentyThree.from,twentyThree.to],['window',23
 assert.equal(noTwentyThree.choice,false);
 assert.equal(noTwentyTwo.from,22);
 // An unanchored or misspelled market cannot silently turn into another event.
-assert.equal(frozenLiveContract({market_name:'Goal in next 10 minutes',outcome_name:'Yes'},
- prematch,t)?.kind,null,'A rolling market needs an observed acceptance clock');
+assert.throws(()=>frozenLiveContract({market_name:'Goal in next 10 minutes',outcome_name:'Yes'},
+ prematch,t),/verifikueshëm/,'A rolling market needs an observed acceptance clock');
 
 const db=new PGlite();
 try{
