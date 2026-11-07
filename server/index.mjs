@@ -32,7 +32,7 @@ import {
   getMatches, getMatchById, getLeagues, getCounts, applyMatchInfo, knownMatchIds,
   getSubscriptionIds, getFeedFreshness, matchStats, boostMatch, upsertMatches, expireStaleMatches,
 } from './matches.mjs';
-import { normalizeOddsPayload, applyOddsRows, groupByMatch } from './odds.mjs';
+import {normalizeOddsPayload,applyOddsRows,groupByMatch,providerOfferArchiveHealth} from './odds.mjs';
 import * as oddsStore from './odds-store.mjs';
 import { decodePushBatch } from './push-decode.mjs';
 import { startPusher } from './pusher.mjs';
@@ -350,6 +350,7 @@ app.get('/health', (_req, res) => {
     matches: matchStats(),
     ledger: { ready: ledgerReady },
     odds: { ...oddsStore.stats(), mode: config.oddsStore },
+    providerOfferArchive: providerOfferArchiveHealth(),
     providers: oddsStore.providerReport(10),
     collector: collector?.state ?? null,
     oddsSocket: oddsStatus,
