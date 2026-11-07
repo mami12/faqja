@@ -34,16 +34,23 @@ export function parsePlayerGoalContract(line){
  const name=String(line.market_name??line.marketName??line.name??'').trim();
  const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
  if(typeof quotedPlayer==='string'&&quotedPlayer.trim()&&
-  /\bto score\b|\bgoalscorer\b/i.test(name)&&!/first|last|assist|header|penalty|exact|more|hat.?trick/i.test(name)){
+  /\bto score\b|\bgoalscorer\b/i.test(name)&&!/first|last|assist|header|penalty|exact|hat.?trick/i.test(name)){
+  // "To score 2+ goals" is NOT an anytime scorer bet. Freeze the numeric
+  // requirement at purchase. An unrecognised numeric/exact offer must hold.
+  const multi=name.match(/\bto score\s+(\d{1,2})\s*(?:\+|or more)\s+goals?\b/i);
+  if((/\bto score\s+\d+\b|\b\d+\s*\+?\s+goals?\b|\bmore goals?\b/i.test(name))&&!multi)return null;
+  const targetGoals=multi?Number(multi[1]):1;
+  if(!Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10||
+    (multi&&targetGoals<2))return null;
   if(!['yes','no','po','jo'].includes(choice))return null;
-  return {version:1,kind:'player-goal',event:'goal',playerName:quotedPlayer,
+  return {version:1,kind:'player-goal',event:'goal',playerName:quotedPlayer,targetGoals,
    choice:['yes','po'].includes(choice)};
  }
  if(/^(?:anytime|any time) goalscorers?$/i.test(name)&&choice&&
    !['no goalscorer','none','no goal'].includes(choice)){
   const player=String(line.outcome_name??line.outcomeName??'').trim();
   if(!player||/^(yes|no|po|jo|over|under)$/i.test(player))return null;
-  return {version:1,kind:'player-goal',event:'goal',playerName:player,choice:true};
+  return {version:1,kind:'player-goal',event:'goal',playerName:player,targetGoals:1,choice:true};
  }
  return null;
 }
