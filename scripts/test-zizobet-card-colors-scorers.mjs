@@ -20,7 +20,8 @@ const hatTrick=playerOffer('Player to score 3 or more goals');
 assert.equal(brace?.kind,'player-goal');assert.equal(brace?.targetGoals,2);
 assert.equal(hatTrick?.targetGoals,3);
 assert.equal(playerOffer('Player to score 2 goals'),null);
-assert.equal(playerOffer('Player to score exactly 2 goals'),null);
+const exactTwo=playerOffer('Player to score exactly 2 goals');
+assert.equal(exactTwo?.targetGoals,2);assert.equal(exactTwo?.countMode,'exact');
 assert.equal(yellow?.cardColor,'yellow');assert.equal(red?.cardColor,'red');
 assert.equal(minute?.cardColor,'yellow');assert.equal(scorer?.kind,'player-goal');
 assert.equal(contract('Second Yellow Cards','Over','0.5'),null);
@@ -41,12 +42,14 @@ const db=new PGlite();try{
  const put=async(c,name)=>(await q("insert into app_ticket_line(ticket_id,match_id,market_key,outcome_key,outcome_name,market_name,match_name,odds_at_placement,live_contract) values($1,$2,$3,'Yes','Yes',$3,'Home vs Away',2,$4::jsonb) returning *",[ticket,matchId,name,JSON.stringify(c)])).rows[0];
  const y=await put(yellow,'yellow'),r=await put(red,'red'),p=await put(scorer,'scorer'),m=await put(minute,'minute');
  const braceLine=await put(brace,'brace');
+ const exactLine=await put(exactTwo,'exact');
  const capture=(f,ms)=>recordWatchedLiveFrame(matchId,f,{database,now:()=>now+ms});
  const judge=l=>gradeStoredEventContract(l,null,{execute:q});
  await capture(frame(),0);assert.equal(await judge(y),null);
  await capture(frame(),6000);assert.equal(await judge(y),'WON');
  assert.equal(await judge(r),null);assert.equal(await judge(p),'WON');
  assert.equal(await judge(braceLine),null,'One scorer goal must not pay a 2+ selection');
+ assert.equal(await judge(exactLine),null,'Exactly 2 cannot win until final confirmation');
  assert.equal(await judge(m),'WON');
  await capture(frame('card'),12000);assert.equal(await judge(y),null);
  await capture(frame('card'),18000);assert.equal(await judge(y),null);
@@ -83,6 +86,7 @@ const db=new PGlite();try{
  assert.equal(await judge(multi),null,'One poll cannot trigger a multi-goal payout');
  await captureMulti(true,66000);
  assert.equal(await judge(multi),'WON','Two verified goals satisfy 2+ scorer market');
+ assert.equal(await judge(exactLine),null,'Other fixture events cannot settle exact count');
  assert.equal(Number((await q('select balance from app_user where id=$1',[user])).rows[0].balance),1000);
  console.log('PASS separate yellow/red cards, verified scorer and own-goal correction in PostgreSQL');
 }finally{await db.close();}
