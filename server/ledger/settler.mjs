@@ -430,7 +430,6 @@ export async function settleVerifiedEventFacts({
      and e.kind=l.live_contract->>'event' and e.provider='zizobet'
    where l.status='PENDING' and t.status='PENDING'
      and l.live_contract is not null
-     and (l.market_key like 'zz%@%' or l.accepted_contract->>'providerMarketKey' like 'zz%@%')
      and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
    order by e.observed_at desc,l.match_id,l.id
    limit $1`,[cap]);
