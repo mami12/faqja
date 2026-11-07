@@ -424,7 +424,11 @@ export async function settleVerifiedEventFacts({
      and e.kind=l.live_contract->>'event' and e.provider='zizobet'
    where l.status='PENDING' and t.status='PENDING'
      and l.live_contract is not null
-     and (l.market_key like 'zz%@%' or l.accepted_contract->>'providerMarketKey' like 'zz%@%')
+     -- A verified, frozen event contract is the authority for grading.
+     -- Do not silently skip legitimate provider offers whose market key has
+     -- another encoding (the exact native key is still archived on the bet).
+     -- The PRIMARY facts + coverage check in gradeStoredEventContract remains
+     -- mandatory before changing ticket status or wallet balance.
      and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
    order by e.observed_at desc,l.match_id,l.id
    limit $1`,[cap]);
