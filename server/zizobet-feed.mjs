@@ -4,7 +4,7 @@ import {rowOf,infoOf,oddsOf,isZizoId,OFFSET} from './zizobet/normalize.mjs';
 import {collectEventEvidence} from './zizobet/event-collector.mjs';
 import {providerTimeline} from './live-event-timeline.mjs';
 export {isZizoId};
-export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,selectRows=r=>r,getWatchedIds=()=>[],request=get,connectMqtt=startMqtt,autoStart=true,now=()=>Date.now(),transitionGraceMs=120000,retentionMs=21600000}={}){
+export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,onMarketDefinitions=()=>{},selectRows=r=>r,getWatchedIds=()=>[],request=get,connectMqtt=startMqtt,autoStart=true,now=()=>Date.now(),transitionGraceMs=120000,retentionMs=21600000}={}){
  const meta={teams:new Map(),regions:new Map(),champs:new Map(),liveMarkets:new Map(),preMarkets:new Map(),positions:new Map(),statuses:new Map()};
  const state={provider:'ZIZOBET',transport:'MQTT cache invalidations + HTTP snapshots',running:false,cycles:0,syncedAt:null,lastError:null,received:0,kept:0,paused:false,pauses:0,resumes:0};
  const games=new Map(),quotes=new Map(),focused=new Map(),inflight=new Map(),dirty=new Set(),versions=new Map(),fullObserved=new Map(),transitions=new Map();let stopped=false,work=Promise.resolve(),mqtt,catalogAt=0,revision=0;
@@ -50,6 +50,20 @@ export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,selectRows
   const definitions=Array.isArray(pre)?pre[0]:pre?.['1'];if(!definitions||Object.keys(definitions).length<10)throw Error('Full Zizobet market dictionary unavailable');
   for(const[id,m]of Object.entries(definitions))meta.preMarkets.set(Number(id),m);
   catalogAt=now();
+  // These dictionaries are ALREADY fetched for odds parsing. Persist their
+  // native titles and rule metadata without any additional HTTP API calls.
+  const definitions=[
+   ...[...meta.liveMarkets].map(([id,definition])=>({
+    provider:'ZIZOBET',scope:'LIVE',id,name:definition.Name??definition.nm,
+    definition
+   })),
+   ...[...meta.preMarkets].map(([id,definition])=>({
+    provider:'ZIZOBET',scope:'PREMATCH',id,
+    name:definition.Name??definition.name,definition
+   }))
+  ];
+  void Promise.resolve().then(()=>onMarketDefinitions(definitions))
+   .catch(e=>console.warn('[zizobet] native market catalog archive:',e.message));
  }
  async function liveList(){
   if(stopped||state.paused)return;
