@@ -2,6 +2,7 @@ import {MANAGER_CASINO_SQL} from '../casino/manager-settings.mjs';
 import {ORIGINAL_WALLET_SQL} from '../casino/original-wallet-schema.mjs';
 import {SETTLEMENT_REVIEW_SQL} from './settlement-review.mjs';
 import {MATCH_EVENT_FACT_SQL} from './match-event-facts.mjs';
+import {PROVIDER_OFFER_ARCHIVE_SQL} from './provider-offer-archive.mjs';
 import {LIVE_OBSERVATION_SQL} from './live-observation-store.mjs';
 import {FOOTBALL_INFORMATION_SQL} from '../stats-providers/football-information.mjs';
 /**
@@ -379,6 +380,7 @@ create table if not exists app_manual_review_notice (
 ${LIVE_OBSERVATION_SQL}
 ${FOOTBALL_INFORMATION_SQL}
 ${MATCH_EVENT_FACT_SQL}
+${PROVIDER_OFFER_ARCHIVE_SQL}
 insert into app_casino_settings(id) values (1) on conflict(id) do nothing;
 -- Migrate the old disabled-by-default casino exactly once. Afterwards the
 -- administrator's OFF switch is persistent even across future restarts.
