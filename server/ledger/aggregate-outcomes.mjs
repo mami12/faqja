@@ -64,11 +64,29 @@ const cards=result=>{
  const home=whole(result?.cards_home),away=whole(result?.cards_away);
  return home==null||away==null?null:{home,away};
 };
-const periodPrefix='(?:1st|first|2nd|second)';
+const statSpec=name=>{
+ const raw=fold(name);
+ const m=raw.match(/^(?:(?:full time|match) )?(?:(total|home(?: team)?|away(?: team)?|team [12]) )?(shots? on (?:target|goal)|shots?|fouls?(?: committed)?)\s*(?:\((exact|bands|range|odd\/even|1x2)\)|(exact|bands|range|odd\/even|1x2))$/);
+ if(!m)return null;
+ const stat=/on (?:target|goal)/.test(m[2])?'shotsOnTarget':/fouls?/.test(m[2])?'fouls':'shots';
+ const type=(m[3]??m[4]);
+ const label=m[1]??'total';
+ const side=/^home|team 1/.test(label)?'home':/^away|team 2/.test(label)?'away':'total';
+ if(type==='1x2'&&side!=='total')return null;
+ return {stat,side,type};
+};
+const statPair=(result,stat)=>{
+ let data=result?.statistics;
+ if(typeof data==='string'){try{data=JSON.parse(data);}catch{return null;}}
+ const home=whole(data?.[stat]?.home),away=whole(data?.[stat]?.away);
+ return home==null||away==null?null:{home,away};
+};
 const excluded=/(?:\b(?:early payout|asian|handicap|booking points|player|scorer|minutes?|interval|first to|race|next|method|shootout|penalty|extra time|overtime)\b)/;
 export function aggregateOutcomeFamily(marketName=''){
  const name=fold(marketName).replace(/[–—]/g,'-');
  if(!name||excluded.test(name))return null;
+ const ss=statSpec(name);
+ if(ss)return ss.type==='odd/even'?'STAT_ODD_EVEN':ss.type==='1x2'?'STAT_1X2':'STAT_BAND';
  if(/^(?:2nd|second) half[ .:-]+(?:result|1x2|winner)$/.test(name))return 'SECOND_HALF_RESULT';
  if(/^(?:2nd|second) half[ .:-]+(?:double chance)$/.test(name))return 'SECOND_HALF_DC';
  if(/^(?:2nd|second) half[ .:-]+(?:both teams to score|btts)$/.test(name))return 'SECOND_HALF_BTTS';
@@ -146,6 +164,8 @@ const gradeDC=(line,score)=>{
  return null;
 };
 const requireEvidence=(family,result)=>{
+ if(['STAT_BAND','STAT_ODD_EVEN','STAT_1X2'].includes(family))
+  return false; // handled using the actual market statistic in hasAggregateOutcomeEvidence
  if(['CORNERS_1X2','CORNERS_ODD_EVEN','CORNERS_BAND'].includes(family))return corners(result)!=null;
  if(['CARDS_ODD_EVEN','CARDS_BAND'].includes(family))return cards(result)!=null;
  if(['SECOND_HALF_RESULT','SECOND_HALF_DC','SECOND_HALF_BTTS','SECOND_HALF_TOTAL','SECOND_HALF_SCORE'].includes(family))return secondScores(result)!=null;
@@ -154,13 +174,33 @@ const requireEvidence=(family,result)=>{
 };
 export function hasAggregateOutcomeEvidence(line,result){
  const family=aggregateOutcomeFamily(line?.market_name);
- return family!==null&&requireEvidence(family,result);
+ if(family===null)return false;
+ if(['STAT_BAND','STAT_ODD_EVEN','STAT_1X2'].includes(family)){
+  const spec=statSpec(line?.market_name);
+  return spec!=null&&statPair(result,spec.stat)!=null;
+ }
+ return requireEvidence(family,result);
 }
 /** Verified aggregate grading only. Null is PENDING, not VOID or LOST. */
 export function gradeAggregateOutcome(line,result){
  const family=aggregateOutcomeFamily(line?.market_name);
- if(!family||!requireEvidence(family,result))return null;
+ if(!family||!hasAggregateOutcomeEvidence(line,result))return null;
  const ft=scores(result),second=secondScores(result),half=halfScores(result),corner=corners(result),card=cards(result);
+ if(['STAT_BAND','STAT_ODD_EVEN','STAT_1X2'].includes(family)){
+  const spec=statSpec(line.market_name);
+  const pair=spec&&statPair(result,spec.stat);
+  if(!pair)return null;
+  if(family==='STAT_1X2'){
+   const selected=outcomeSide(line,result);
+   return selected?decide(selected===victory(pair.home,pair.away)):null;
+  }
+  const count=spec.side==='home'?pair.home:spec.side==='away'?pair.away:pair.home+pair.away;
+  if(family==='STAT_ODD_EVEN'){
+   const choice=oddEven(line);
+   return choice===null?null:decide(count%2===choice);
+  }
+  return gradeBand(count,bandSelection(line));
+ }
  if(family==='SECOND_HALF_RESULT') {
   const selected=outcomeSide(line,result);
   return selected?decide(selected===victory(second.home,second.away)):null;
@@ -185,7 +225,8 @@ export function gradeAggregateOutcome(line,result){
  }
  if(family==='WIN_TO_NIL'){
   const selected=outcomeSide(line,result);
-  if(!selected)return null;
+  // A bookmaker's draw option is not necessarily "Neither team to nil".
+  if(!selected||selected==='draw')return null;
   const winner=ft.home>ft.away&&ft.away===0?'home':
    ft.away>ft.home&&ft.home===0?'away':'draw';
   return decide(winner===selected);
