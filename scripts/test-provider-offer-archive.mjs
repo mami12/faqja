@@ -87,13 +87,19 @@ try{
   ready:()=>ready,onError:()=>{failed++;},
   execute:async (...args)=>{if(down)throw Error('database connection lost');return execute(...args);}
  });
- const novel={...rows[0],price:4.25};
+ const novel={...rows[0],price:4.25,nativeMarketName:'Next Goal {seq}',nativeQuote:{id:100,mid:81,seq:1,v:4.25}};
  archive.observe([novel]);assert.equal(archive.status().pending,0,'No writes before schema is ready');
  ready=true;archive.observe([novel]);await archive.flush();
  assert.equal(failed,1);assert.equal(archive.status().pending,1,'DB outage retains pending archive item');
  down=false;archive.observe([novel]);await archive.flush();
  assert.equal(archive.status().pending,0,'Next provider poll retries unarchived quotes');
  assert.equal(Number((await execute('select price from app_provider_offer_current where market_key=$1',[novel.marketKey])).rows[0].price),4.25);
+ const queued=(await execute('select native_market_name,native_quote,native_parameters from app_provider_offer_current where market_key=$1',
+  [novel.marketKey])).rows[0];
+ assert.equal(queued.native_market_name,'Next Goal {seq}',
+  'Asynchronous retry must not replace raw source name with its display label');
+ assert.equal(queued.native_quote.seq,1,'Asynchronous retry retains the raw source quote');
+ assert.equal(queued.native_parameters.seq,1,'Asynchronous retry retains native numbered market parameters');
  assert.equal(Number((await execute('select balance from app_user where id=$1',[user])).rows[0].balance),1000,
   'Archiving odds cannot change wallet balances');
  console.log('PASS PostgreSQL provider-offer archive: original quote IDs, English market names, exact minutes, prices, suspended history, dedupe and retry');
