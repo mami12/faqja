@@ -95,6 +95,35 @@ assert.equal(gradeLine(scored('Double Chance And Both To Score','1X & Yes'),reso
 assert.equal(gradeLine(scored('Double Chance And Both To Score','X2 & Yes'),resolved),'LOST');
 assert.equal(gradeLine(scored('Double Chance And Both To Score','1X'),resolved),null);
 
+// Confirm that the production dispatcher, not only the pure helper,
+// routes all explicit aggregate contracts without generic corner/total math.
+const advanced={...resolved,statistics:{shots:{home:10,away:7},
+ shotsOnTarget:{home:5,away:3},fouls:{home:11,away:13}}};
+for(const [name,pick,expected] of [
+ ['2nd Half Result','X','WON'],
+ ['2nd Half BTTS','Yes','WON'],
+ ['2nd Half Total Goals','Under 2.5','WON'],
+ ['First Half Correct Score','1:0','WON'],
+ ['Total Goals (Bands)','2-3','WON'],
+ ['Total Corners (Exact)','10','WON'],
+ ['Corners 1X2','Home','WON'],
+ ['Total Cards (Bands)','2-4','WON'],
+ ['Total Shots on Target (Exact)','8','WON'],
+ ['Fouls (Bands)','23-25','WON'],
+ ['Home Team Clean Sheet','No','WON'],
+ ['Winning Margin','Home by 1','WON']
+]){
+ const selection=scored(name,pick);
+ assert.equal(hasRequiredSettlementEvidence(selection,advanced),true,'evidence for '+name);
+ assert.equal(gradeLine(selection,advanced),expected,'integrated '+name);
+}
+assert.equal(gradeLine(scored('2nd Half Result','X'),
+ {...advanced,half_away_score:null}),null);
+assert.equal(hasRequiredSettlementEvidence(scored('Corners 1X2','Home'),
+ {...advanced,corners_home:null}),false);
+assert.equal(gradeLine(scored('Total Shots on Target (Exact)','8'),
+ {...advanced,statistics:{}}),null);
+
 const firstHalfTotal = {market_name:'1st half. Total',outcome_key:'Over',outcome_name:'Over',
   line:'1.5', builder_legs:null};
 assert.equal(gradeLine(firstHalfTotal, resolved),'LOST',
