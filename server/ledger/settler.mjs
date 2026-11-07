@@ -28,6 +28,7 @@ import {gradeStoredEventContract,SUPPORTED_FACT_KINDS} from './match-event-facts
 import {backfillPendingTeamGoalContracts} from './live-contract-backfill.mjs';
 import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
 import {basicOutcomeFamily,gradeBasicOutcome,isProvenDrawNoBetPush} from './basic-outcomes.mjs';
+import {aggregateOutcomeFamily,hasAggregateOutcomeEvidence,gradeAggregateOutcome} from './aggregate-outcomes.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -75,6 +76,7 @@ export function hasRequiredSettlementEvidence(line, result) {
   if(statisticsNeedReview(line,result))return false;
   if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
   if (needsEvents(line)) return ['WON','LOST','VOID'].includes(gradeEventLine(line,result));
+  if (aggregateOutcomeFamily(line.market_name))return hasAggregateOutcomeEvidence(line,result);
   if (isStatisticMarket(line)) return hasStatisticEvidence(line,result);
   const marketName = String(line.market_name ?? '');
   if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
@@ -109,6 +111,10 @@ export function gradeLine(line, result) {
   // the generic TOTAL or 1X2 handlers.
   const basicFamily=basicOutcomeFamily(line.market_name);
   if(basicFamily)return gradeBasicOutcome(line,result,basicFamily);
+  if(aggregateOutcomeFamily(line.market_name)){
+    if(statisticsNeedReview(line,result))return null;
+    return gradeAggregateOutcome(line,result);
+  }
   // 1H totals and BTTS cannot be graded from the full-time score. Their
   // original ticket contract is snapshotted in market_name.
   if (!hasRequiredSettlementEvidence(line, result)) return null;
