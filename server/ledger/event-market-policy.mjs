@@ -13,7 +13,7 @@ export function eventMarketRequirement(market = {},teams={}) {
       /\bto score\s+(?:a goal|[2-9]\+? goals?|two|three|four)\b/.test(name)) return 'PLAYER_EVENT_DATA_REQUIRED';
   if(/\b(?:headed goals?|header goals?|penalty goals?|left[ -]foot|right[ -]foot|scoring method|method of (?:the )?goal)\b/.test(name))return 'GOAL_CONTRACT_DATA_REQUIRED';
   if(/\banytime\b/.test(name)&&/\b(?:score|scoring)\b/.test(name))return 'PLAYER_EVENT_DATA_REQUIRED';
-  if(/\bto score\b/.test(name)&&!(/\bboth (?:teams?|sides?)\b/.test(name)||/^(?:home(?: team)?|away(?: team)?|team [12]) to score$/.test(name)))return 'PLAYER_EVENT_DATA_REQUIRED';
+  if(/\bto score\b/.test(name)&&!(/\bboth (?:(?:teams?|sides?) )?(?:to )?score\b/.test(name)||/^(?:home(?: team)?|away(?: team)?|team [12]) to score$/.test(name)))return 'PLAYER_EVENT_DATA_REQUIRED';
   if (/^when will (?:the )?(?:goal \d+|next goal) be scored\b/.test(name))return 'TIMED_EVENT_DATA_REQUIRED';
   if (/\b(?:minutes?|mins?|time of|scoring time|timed? goal|goal time|koha e|minuten?|minuta)\b/.test(name) ||
       /\b(?:goals?|scores?|scoring|to score)\s+(?:before|after|within|between|until|during|by|in)\b/.test(name) ||
