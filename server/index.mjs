@@ -1,6 +1,7 @@
 import {statsProviders} from './stats-providers/index.mjs';
 import {footballInformation} from './stats-providers/football-information.mjs';
 import {toClientMatches} from './ledger/view.mjs';
+import {persistProviderMarketDefinitions} from './ledger/provider-offer-archive.mjs';
 import express from 'express';
 import cors from 'cors';
 import { existsSync } from 'node:fs';
@@ -1026,6 +1027,12 @@ async function boot() {
       pollMs:config.pollIntervalMs,
       onMatch:row=>upsertMatches([row]),
       onOdds:rows=>{oddsBuffer.push(...rows);},
+      onMarketDefinitions:definitions=>{
+        if(!ledgerReady||config.sportsProvider!=='zizobet')return;
+        // Never block the provider refresh on a slow/offline database.
+        trackBackground(persistProviderMarketDefinitions(definitions,{execute:query})
+          .catch(error=>console.warn('[market archive] dictionary:',error.message)));
+      },
       onInfo:info=>{if(info.homeScore==null&&info.matchTimeMs==null)return applyMatchInfo(info);infoBuffer.set(info.matchId,mergeInfo(infoBuffer.get(info.matchId),info));},
       onStatus:s=>{oddsStatus={...oddsStatus,...s,provider:config.sportsProvider.toUpperCase()};io.emit('odds:socket',oddsStatus);},
       onCycle:async()=>{
