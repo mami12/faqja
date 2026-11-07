@@ -27,7 +27,14 @@ export const PROVIDER_OFFER_ARCHIVE_SQL = [
  ' native_parameters jsonb, native_quote jsonb, contract_hint jsonb,',
  ' evidence_requirement text, price numeric(18,8), suspended boolean not null,',
  ' period integer not null, recorded_at timestamptz not null default now());',
- 'create index if not exists app_provider_offer_change_match_idx on app_provider_offer_change(match_id,recorded_at desc);'
+ 'create index if not exists app_provider_offer_change_match_idx on app_provider_offer_change(match_id,recorded_at desc);',
+ 'create table if not exists app_provider_market_definition (',
+ ' provider_id text not null, scope text not null, native_market_id text not null,',
+ ' native_market_name text not null, definition jsonb not null,',
+ ' first_seen_at timestamptz not null default now(),',
+ ' last_changed_at timestamptz not null default now(),',
+ ' primary key(provider_id,scope,native_market_id));',
+ 'create index if not exists app_provider_market_definition_name_idx on app_provider_market_definition(provider_id,scope);'
 ].join('\n');
 
 const decodeNativeParameters=key=>{
@@ -108,6 +115,44 @@ export async function persistProviderOffers(rows,{execute,chunkSize=250}={}){
   recorded+=rowCount??0;
  }
  return {seen:offers.length,recorded};
+}
+
+/**
+ * The upstream market dictionaries describe even markets for which no match
+ * currently publishes a quote. Preserve all their definitions without an
+ * extra provider request, so complex future rule work has original names/IDs.
+ */
+export async function persistProviderMarketDefinitions(rows,{execute,chunkSize=250}={}){
+ if(typeof execute!=='function')throw Error('PostgreSQL executor is required');
+ const definitions=new Map();
+ for(const source of rows??[]){
+  const definition=source.definition??source.raw??{};
+  const provider_id=safeText(source.provider??'ZIZOBET');
+  const scope=safeText(source.scope);
+  const native_market_id=safeText(source.id??definition.ID??definition.it);
+  const native_market_name=safeText(source.name??definition.Name??definition.nm);
+  if(!provider_id||!['LIVE','PREMATCH'].includes(scope)||
+     !native_market_id||!native_market_name)continue;
+  const normalized={provider_id,scope,native_market_id,native_market_name,
+   definition:jsonValue(definition)??{}};
+  definitions.set([provider_id,scope,native_market_id].join('|'),normalized);
+ }
+ const records=[...definitions.values()],step=Math.max(1,Math.min(500,Number(chunkSize)||250));
+ let stored=0;
+ const sql='insert into app_provider_market_definition as t '+
+  '(provider_id,scope,native_market_id,native_market_name,definition) '+
+  'select x.provider_id,x.scope,x.native_market_id,x.native_market_name,x.definition '+
+  'from jsonb_to_recordset($1::jsonb) as x('+
+  'provider_id text,scope text,native_market_id text,native_market_name text,definition jsonb) '+
+  'on conflict(provider_id,scope,native_market_id) do update set '+
+  'native_market_name=excluded.native_market_name,definition=excluded.definition,last_changed_at=now() '+
+  'where (t.native_market_name,t.definition) is distinct from '+
+  '(excluded.native_market_name,excluded.definition) returning native_market_id';
+ for(let i=0;i<records.length;i+=step){
+  const result=await execute(sql,[JSON.stringify(records.slice(i,i+step))]);
+  stored+=result.rowCount??0;
+ }
+ return {seen:records.length,stored};
 }
 
 /** A bounded, single-flight retry queue. No waiting on DB in the odds stream. */
