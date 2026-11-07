@@ -214,6 +214,10 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
        (player_name is not null and lower(player_name)=lower($7)) or
        (aiscore_verified=true and aiscore_player_name is not null
          and lower(aiscore_player_name)=lower($7))))))::int as player_goals,
+    count(*) filter(where own_goal is distinct from true
+      and player_id is null and coalesce(nullif(trim(player_name),''),'')=''
+      and not(aiscore_verified=true
+        and coalesce(nullif(trim(aiscore_player_name),''),'')<>''))::int as unknown_scorer_goals,
     bool_or(same_time>1) as ambiguous_order
    from ordered
  )
@@ -341,15 +345,20 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
  }
  if(c.kind==='player-goal'){
   const targetGoals=c.targetGoals==null?1:Number(c.targetGoals);
+  const mode=c.countMode??'atLeast';
   if((!c.playerName&&!c.playerId)||typeof c.choice!=='boolean'||
-     !Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10)return null;
-  // A verified scorer count reaching the wager's explicit 2+/3+ threshold
-  // proves the positive or negative selection. One goal is NOT a 2+ win.
-  // Absence at FT cannot prove participation, so stays PENDING.
-  if(Number(data.player_goals)>=targetGoals)return c.choice?'WON':'LOST';
-  // A missing scorer name does not prove a player played or failed to score.
-  // Require verified player participation before a negative settlement.
-  return null;
+     !Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10||
+     !['atLeast','exact'].includes(mode))return null;
+  const found=Number(data.player_goals);
+  if(!Number.isSafeInteger(found)||found<0)return null;
+  // Positive player incident identity is independently reconciled with the
+  // PRIMARY timeline. Negative FT claims also require every goal's scorer
+  // to be identified, and evidence this player actually appeared.
+  if(mode==='atLeast'&&found>=targetGoals)return c.choice?'WON':'LOST';
+  if(mode==='exact'&&found>targetGoals)return c.choice?'LOST':'WON';
+  if(!full||Number(data.unknown_scorer_goals)!==0||found===0)return null;
+  const trueCondition=mode==='exact'?found===targetGoals:found>=targetGoals;
+  return trueCondition===c.choice?'WON':'LOST';
  }
  if(c.kind==='team-total-goals'){
   if(!Number.isFinite(c.threshold)||!['over','under'].includes(c.choice))return null;
