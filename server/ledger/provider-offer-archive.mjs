@@ -61,17 +61,23 @@ export function normalizeProviderOffer(row){
  const providerId=safeText(row?.providerId??row?.provider_id);
  const candidate={market_key:marketKey,market_name:marketName,
   outcome_key:outcomeKey,outcome_name:outcomeName,line};
- const contract=liveContract(candidate,{counts:{},clock:null,teams:{}});
- const requirement=eventMarketRequirement(candidate)??null;
+ const preNormalized=Object.prototype.hasOwnProperty.call(row,'contract_hint')&&
+  Object.prototype.hasOwnProperty.call(row,'native_parameters');
+ let contract=null,requirement=null;
+ if(preNormalized){contract=row.contract_hint??null;requirement=row.evidence_requirement??null;}
+ else{
+  try{contract=liveContract(candidate,{counts:{},clock:null,teams:{}});}catch{}
+  try{requirement=eventMarketRequirement(candidate)??null;}catch{requirement='RULE_REVIEW_REQUIRED';}
+ }
  return {
   match_id:matchId,market_key:marketKey,line,outcome_key:outcomeKey,
   market_name:marketName,outcome_name:outcomeName,
-  provider_id:providerId,native_market_id:safeText(row?.nativeMarketId??marketKey.split('@')[0]),
-  native_outcome_id:safeText(row?.nativeOutcomeId??outcomeKey),
-  native_market_name:safeText(row?.nativeMarketName??marketName),
-  native_outcome_name:safeText(row?.nativeOutcomeName??outcomeName),
-  native_parameters:jsonValue(row?.nativeParameters??decodeNativeParameters(marketKey)),
-  native_quote:jsonValue(row?.nativeQuote),
+  provider_id:providerId,native_market_id:safeText(row?.nativeMarketId??row?.native_market_id??marketKey.split('@')[0]),
+  native_outcome_id:safeText(row?.nativeOutcomeId??row?.native_outcome_id??outcomeKey),
+  native_market_name:safeText(row?.nativeMarketName??row?.native_market_name??marketName),
+  native_outcome_name:safeText(row?.nativeOutcomeName??row?.native_outcome_name??outcomeName),
+  native_parameters:jsonValue(row?.nativeParameters??row?.native_parameters??decodeNativeParameters(marketKey)),
+  native_quote:jsonValue(row?.nativeQuote??row?.native_quote),
   contract_hint:jsonValue(contract),
   evidence_requirement:requirement??(contract?'INCIDENT_FACTS':'UNCLASSIFIED'),
   price:safePrice(row?.price),suspended:row?.suspended===true,
