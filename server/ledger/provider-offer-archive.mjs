@@ -121,7 +121,7 @@ export function createProviderOfferArchive({execute,ready=()=>true,maxTracked=60
  async function flush(){
   if(active)return active;
   if(!ready()||!pending.size)return {pending:pending.size};
-  active=(async()=>{
+  const work=(async()=>{
    while(ready()&&pending.size){
     const entries=[...pending].slice(0,250);
     const result=await persistProviderOffers(entries.map(([,v])=>v.quote),{execute});
@@ -134,9 +134,14 @@ export function createProviderOfferArchive({execute,ready=()=>true,maxTracked=60
    }
    return {pending:pending.size};
   })();
-  try{return await active;}
-  catch(e){failed++;lastError=e.message;onError(e);return {pending:pending.size,error:e.message};}
-  finally{active=null;}
+  // Every concurrent caller must receive the HANDLED promise, never the
+  // rejecting raw database write. Otherwise one failed DB connection can
+  // produce an unhandled rejection from a second flush() call.
+  active=work.catch(e=>{
+   failed++;lastError=e.message;onError(e);
+   return {pending:pending.size,error:e.message};
+  }).finally(()=>{active=null;});
+  return active;
  }
  function observe(rows){
   if(!ready())return;
