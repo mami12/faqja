@@ -2,7 +2,7 @@ import './fixtures/isolated-casino-env.mjs';
 import assert from 'node:assert/strict';
 import {startZizoFeed} from '../server/zizobet-feed.mjs';
 import {OFFSET} from '../server/zizobet/normalize.mjs';
-const calls=[],odds=[],defs=Object.fromEntries(Array.from({length:10},(_,i)=>[i+1,{Name:'Unused',pos:[]}]));
+const calls=[],odds=[],archivedDefinitions=[],defs=Object.fromEntries(Array.from({length:10},(_,i)=>[i+1,{Name:'Unused',pos:[]}]));
 defs[448]={Name:'Match result',pos:[{id:1,nm:'1'},{id:2,nm:'X'},{id:3,nm:'2'}]};defs[800]={Name:'Total Corners',pos:[{id:4,nm:'Over'}]};
 const game=id=>({id,s:0,ev:{448:{a:{pos:1,coef:2},b:{pos:2,coef:3},c:{pos:3,coef:4}},800:{d:{pos:4,coef:2,h:4.5}}}});
 const request=async url=>{
@@ -16,9 +16,9 @@ const request=async url=>{
  if(url.includes('getprematchgamefull/'))return {game:JSON.stringify(game(Number(url.split('/').at(-1))))};
  throw Error('Unexpected request');
 };
-const feed=startZizoFeed({autoStart:false,request,now:()=>200000,connectMqtt:()=>({stop(){},pause(){},resume(){},setLiveIds(){}}),onMatch(){},onInfo(){},onOdds:rows=>odds.push(...rows)});
+const feed=startZizoFeed({autoStart:false,request,now:()=>200000,connectMqtt:()=>({stop(){},pause(){},resume(){},setLiveIds(){}}),onMatch(){},onInfo(){},onOdds:rows=>odds.push(...rows),onMarketDefinitions:defs=>archivedDefinitions.push(...defs)});
 try{
- await feed.tick();assert.equal(calls.filter(c=>c.includes('getprematchgameall')).length,1);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,0);assert.ok(odds.length>0);assert.ok(odds.every(o=>o.marketName==='Match result'),'Board must preserve the original provider market title, not rewrite it as Full Time Result');
+ await feed.tick();assert.ok(archivedDefinitions.some(d=>d.scope==='PREMATCH'&&d.id===448&&d.name==='Match result'),'Provider already-fetched market dictionary is sent for archiving');assert.equal(calls.filter(c=>c.includes('getprematchgameall')).length,1);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,0);assert.ok(odds.length>0);assert.ok(odds.every(o=>o.marketName==='Match result'),'Board must preserve the original provider market title, not rewrite it as Full Time Result');
  await feed.focus(OFFSET+11);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,1);assert.ok(calls.find(c=>c.endsWith('/11')));assert.ok(!calls.some(c=>c.endsWith('/12')));assert.ok(odds.some(o=>o.matchId===OFFSET+11&&o.marketName==='Total Corners'));assert.ok(!odds.some(o=>o.matchId===OFFSET+12&&o.marketName==='Total Corners'));
  await feed.focus(OFFSET+11);assert.equal(calls.filter(c=>c.includes('getprematchgamefull')).length,1,'fresh detail response shared across viewers');
  console.log('PASS provider batch board quotes only; unopened fixtures never fetch full markets; selected detail loads all its markets, with shared freshness cache and no unrelated fixture requests');
