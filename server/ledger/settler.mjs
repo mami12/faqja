@@ -75,6 +75,7 @@ export function hasRequiredSettlementEvidence(line, result) {
   if(/\b(?:yellow|red)\s+cards?\b/i.test(String(line?.market_name??'')))return false;
   if(statisticsNeedReview(line,result))return false;
   if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
+  if (aggregateOutcomeFamily(line.market_name))return hasAggregateOutcomeEvidence(line,result);
   if (needsEvents(line)) return ['WON','LOST','VOID'].includes(gradeEventLine(line,result));
   if (aggregateOutcomeFamily(line.market_name))return hasAggregateOutcomeEvidence(line,result);
   if (isStatisticMarket(line)) return hasStatisticEvidence(line,result);
@@ -98,6 +99,13 @@ export function hasRequiredSettlementEvidence(line, result) {
  * VOID is allowed only for a proved settlement-rule push/cancellation.
  */
 export function gradeLine(line, result) {
+  // Explicit aggregate categories may also be described as provider EVENT
+  // markets. Their verified FT/HT counters are sufficient, whereas an
+  // incident timeline is mandatory only for time-ordered propositions.
+  if(!Array.isArray(line.builder_legs)&&aggregateOutcomeFamily(line.market_name)){
+    if(!hasRequiredSettlementEvidence(line,result))return null;
+    return gradeAggregateOutcome(line,result);
+  }
   if(needsEvents(line)&&!Array.isArray(line.builder_legs))return gradeEventLine(line,result)??null;
   if (line.builder_legs !== null && line.builder_legs !== undefined) {
     const legs = line.builder_legs;
