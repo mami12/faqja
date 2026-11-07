@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {LEDGER_SQL} from '../server/ledger/schema.mjs';
 import {oddsOf} from '../server/zizobet/normalize.mjs';
-import {normalizeProviderOffer,persistProviderOffers,createProviderOfferArchive} from '../server/ledger/provider-offer-archive.mjs';
+import {normalizeProviderOffer,persistProviderOffers,createProviderOfferArchive,persistProviderMarketDefinitions} from '../server/ledger/provider-offer-archive.mjs';
 
 const rawDefs=new Map([
  [81,{Name:'Next Goal 1st'}],[82,{Name:'Next Goal 2nd'}],
@@ -38,6 +38,26 @@ try{
  await db.exec(LEDGER_SQL);
  const execute=(sql,params=[])=>db.query(sql,params);
  const user=(await execute("insert into app_user(username,password_hash,balance) values('quote-archive','isolated',1000) returning id")).rows[0].id;
+
+ const dictionary=[
+  {provider:'ZIZOBET',scope:'LIVE',id:81,name:'Next Goal 1st',definition:{ID:81,Name:'Next Goal 1st'}},
+  {provider:'ZIZOBET',scope:'LIVE',id:99330,name:'Hard player interval prop',
+   definition:{ID:99330,Name:'Hard player interval prop',RequiredParams:['pl','p1','p2']}},
+  {provider:'ZIZOBET',scope:'PREMATCH',id:99330,name:'Hard player interval prop',
+   definition:{ID:99330,Name:'Hard player interval prop',pos:[{id:1,nm:'Yes'}]}}
+ ];
+ assert.deepEqual(await persistProviderMarketDefinitions(dictionary,{execute}),{seen:3,stored:3});
+ assert.deepEqual(await persistProviderMarketDefinitions(dictionary,{execute}),{seen:3,stored:0});
+ const notQuoted=(await execute(
+  "select definition from app_provider_market_definition where native_market_id='99330' and scope='LIVE'"
+ )).rows[0];
+ assert.deepEqual(notQuoted.definition.RequiredParams,['pl','p1','p2'],
+  'Store every original API market definition even if nobody opens its match');
+ assert.deepEqual(await persistProviderMarketDefinitions(
+  [{...dictionary[1],name:'Hard player interval prop (v2)',
+    definition:{...dictionary[1].definition,Name:'Hard player interval prop (v2)'}}],{execute}
+ ),{seen:1,stored:1},'Changed provider dictionary is recorded without deleting old quotes');
+
  const a=await persistProviderOffers(rows,{execute});
  assert.deepEqual(a,{seen:6,recorded:6});
  const current=(await execute('select * from app_provider_offer_current order by native_market_id::integer')).rows;
