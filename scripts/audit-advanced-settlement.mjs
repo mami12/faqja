@@ -48,7 +48,7 @@ with facts as (
   final_result_id is not null as has_final
  from pending
 )
-select market_name,contract_kind,reason,has_final,count(*)::int as tickets
+select market_name,contract_kind,reason,has_final,count(*)::int as lines
 from diagnosed
 group by market_name,contract_kind,reason,has_final
 order by tickets desc,market_name,reason
