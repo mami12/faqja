@@ -79,6 +79,22 @@ assert.deepEqual(idStats, params, 'real feed-shaped stats must settle corners/ca
 const resolved = { home_team:'Home', away_team:'Away', home_score:2, away_score:1,
   half_home_score:1, half_away_score:0, corners_home:6, corners_away:4,
   cards_home:2, cards_away:1 };
+// Explicit FT families must never fall through generic TOTAL / 1X2 logic.
+const scored=(market_name,outcome_name,outcome_key='')=>({
+  market_name,outcome_name,outcome_key,builder_legs:null,
+});
+assert.equal(gradeLine(scored('Correct Score','2:1'),resolved),'WON');
+assert.equal(gradeLine(scored('Correct Score','3:1'),resolved),'LOST');
+assert.equal(gradeLine(scored('Correct Score','Other'),resolved),null);
+assert.equal(gradeLine(scored('Odd/Even','Odd'),resolved),'WON');
+assert.equal(gradeLine(scored('Draw No Bet','Home'),resolved),'WON');
+assert.equal(gradeLine(scored('Draw No Bet','Home'),{...resolved,home_score:1,away_score:1}),'VOID');
+assert.equal(gradeLine(scored('HT/FT','1/1'),resolved),'WON');
+assert.equal(gradeLine(scored('HT/FT','1/1'),{...resolved,half_home_score:null}),null);
+assert.equal(gradeLine(scored('Double Chance And Both To Score','1X & Yes'),resolved),'WON');
+assert.equal(gradeLine(scored('Double Chance And Both To Score','X2 & Yes'),resolved),'LOST');
+assert.equal(gradeLine(scored('Double Chance And Both To Score','1X'),resolved),null);
+
 const firstHalfTotal = {market_name:'1st half. Total',outcome_key:'Over',outcome_name:'Over',
   line:'1.5', builder_legs:null};
 assert.equal(gradeLine(firstHalfTotal, resolved),'LOST',
