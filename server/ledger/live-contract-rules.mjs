@@ -31,26 +31,34 @@ export function parsePlayerGoalContract(line){
   const raw=key.split('@')[1];
   if(raw)quotedPlayer=JSON.parse(Buffer.from(raw,'base64url').toString())?.pl;
  }catch{return null;}
- const name=String(line.market_name??line.marketName??line.name??'').trim();
+ const title=String(line.market_name??line.marketName??line.name??'').split(' · ')[0].trim();
+ const name=norm(title);
  const choice=norm(line.outcome_name??line.outcomeName??line.outcome_key??line.outcomeKey);
+ // The native player id/name comes from the accepted provider quote, not
+ // from a UI search, browser metadata or fuzzy text matching at payout time.
  if(typeof quotedPlayer==='string'&&quotedPlayer.trim()&&
-  /\bto score\b|\bgoalscorer\b/i.test(name)&&!/first|last|assist|header|penalty|exact|hat.?trick/i.test(name)){
-  // "To score 2+ goals" is NOT an anytime scorer bet. Freeze the numeric
-  // requirement at purchase. An unrecognised numeric/exact offer must hold.
-  const multi=name.match(/\bto score\s+(\d{1,2})\s*(?:\+|or more)\s+goals?\b/i);
-  if((/\bto score\s+\d+\b|\b\d+\s*\+?\s+goals?\b|\bmore goals?\b/i.test(name))&&!multi)return null;
-  const targetGoals=multi?Number(multi[1]):1;
-  if(!Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10||
-    (multi&&targetGoals<2))return null;
+   /\bto score\b|\bgoalscorer\b|\bhat[ -]?trick\b/.test(name)&&
+   !/\b(?:first|last|assist|header|headed|penalty|own goal|method|half|minutes?|interval|odd|even)\b/.test(name)){
+  let countMode='atLeast',targetGoals=1;
+  const atLeast=name.match(/\b(?:to score\s+)?(\d{1,2})\s*(?:\+|or more)\s+goals?\b/);
+  const exact=name.match(/\b(?:to score\s+)?(?:exactly\s+(\d{1,2})\s+goals?|\b(\d{1,2})\s+goals?\s+exactly)\b/);
+  const hat=/\bhat[ -]?trick\b/.test(name);
+  const digits=/\b\d{1,2}\s*(?:\+|or more|goals?)\b/.test(name);
+  if(atLeast){targetGoals=Number(atLeast[1]);}
+  else if(exact){targetGoals=Number(exact[1]??exact[2]);countMode='exact';}
+  else if(hat){targetGoals=3;}
+  else if(digits||/\b(?:exact|more|at least)\b/.test(name))return null;
+  if(!Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10)return null;
   if(!['yes','no','po','jo'].includes(choice))return null;
-  return {version:1,kind:'player-goal',event:'goal',playerName:quotedPlayer,targetGoals,
-   choice:['yes','po'].includes(choice)};
+  return {version:1,kind:'player-goal',event:'goal',playerName:quotedPlayer,
+   targetGoals,countMode,choice:['yes','po'].includes(choice)};
  }
- if(/^(?:anytime|any time) goalscorers?$/i.test(name)&&choice&&
-   !['no goalscorer','none','no goal'].includes(choice)){
+ if(/^(?:anytime|any time) goalscorers?$/.test(name)&&choice&&
+    !['no goalscorer','none','no goal'].includes(choice)){
   const player=String(line.outcome_name??line.outcomeName??'').trim();
   if(!player||/^(yes|no|po|jo|over|under)$/i.test(player))return null;
-  return {version:1,kind:'player-goal',event:'goal',playerName:player,targetGoals:1,choice:true};
+  return {version:1,kind:'player-goal',event:'goal',playerName:player,
+   targetGoals:1,countMode:'atLeast',choice:true};
  }
  return null;
 }
