@@ -89,7 +89,18 @@ export function oddsOf(row,quotes,meta,live,open=true){
   const label=resolveMarketTitle(position,q);if(!label)continue;
   const canonical=/^(?:1|x|2|1x|12|x2)$/i.test(label)?label.toUpperCase():/^(?:over|o)$/i.test(label)?'Over':/^(?:under|u)$/i.test(label)?'Under':/^(?:yes|no)$/i.test(label)?label[0].toUpperCase()+label.slice(1).toLowerCase():null;
   const price=Number(live?q.v:q.coef),suspended=!open||q.visible===false||q.lock===true||q.res!=null&&q.res!==0||!Number.isFinite(price)||price<=1;
-  rows.push({matchId:row.match_id,marketKey:key,marketName:name,line,outcomeKey:'z'+String(q.id),outcomeName:label,price:Number.isFinite(price)&&price>1?price:null,suspended,providerId:'ZIZOBET',isBase:fullResult||fullTotal,column:fullResult?'result':fullTotal?'total':'other',order:Number(def.N??def.n??0),period:/\b(?:1st|first) half\b/i.test(name)?1:/\b(?:2nd|second) half\b/i.test(name)?2:0});
+  // Preserve the untouched public API name/selection and quote parameters
+  // for the durable PostgreSQL archive. Browser labels are a separate layer.
+  const nativeQuote=Object.fromEntries(
+   ['mid','id','pid','pos','pn','h','p1','p2','p3','pl','comp','seq','v','coef','visible','lock','res']
+    .filter(k=>q[k]!==undefined).map(k=>[k,q[k]]));
+  rows.push({matchId:row.match_id,marketKey:key,marketName:name,line,outcomeKey:'z'+String(q.id),
+   outcomeName:label,price:Number.isFinite(price)&&price>1?price:null,suspended,
+   providerId:'ZIZOBET',nativeMarketId:String(id),nativeOutcomeId:String(q.id),
+   nativeMarketName:String(rawName),nativeOutcomeName:String(position),
+   nativeParameters:params,nativeQuote,isBase:fullResult||fullTotal,
+   column:fullResult?'result':fullTotal?'total':'other',order:Number(def.N??def.n??0),
+   period:/\b(?:1st|first) half\b/i.test(name)?1:/\b(?:2nd|second) half\b/i.test(name)?2:0});
   // Canonical result/total keys are needed by existing builder and settlement rules.
   if(canonical)rows.at(-1).outcomeKey=canonical;
  }
