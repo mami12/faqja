@@ -340,10 +340,13 @@ export async function gradeStoredEventContract(line,result,{execute}={}){
   return decision(c.side===(h!==null&&(a===null||h<a)?'home':'away'));
  }
  if(c.kind==='player-goal'){
-  if((!c.playerName&&!c.playerId)||typeof c.choice!=='boolean')return null;
-  // A verified scorer proves YES/NO immediately; absence does not prove
-  // participation, an own goal, or a losing player proposition.
-  if(Number(data.player_goals)>0)return c.choice?'WON':'LOST';
+  const targetGoals=c.targetGoals==null?1:Number(c.targetGoals);
+  if((!c.playerName&&!c.playerId)||typeof c.choice!=='boolean'||
+     !Number.isInteger(targetGoals)||targetGoals<1||targetGoals>10)return null;
+  // A verified scorer count reaching the wager's explicit 2+/3+ threshold
+  // proves the positive or negative selection. One goal is NOT a 2+ win.
+  // Absence at FT cannot prove participation, so stays PENDING.
+  if(Number(data.player_goals)>=targetGoals)return c.choice?'WON':'LOST';
   // A missing scorer name does not prove a player played or failed to score.
   // Require verified player participation before a negative settlement.
   return null;
