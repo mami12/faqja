@@ -4,6 +4,7 @@
  */
 import {createHash} from 'node:crypto';
 import {enrichPrimaryScorerNames} from './aiscore-scorer-enrichment.mjs';
+import {parseAiScoreStatCandidates} from './aiscore-stat-candidates.mjs';
 import {query} from '../db.mjs';
 import {getMatchById} from '../matches.mjs';
 
@@ -62,15 +63,21 @@ export function marketInformationNeeds(markets=[]){
  for(const market of markets){
   const name=String(market.market_name??market.marketName??market.name??'').toLowerCase();
   if(market.live_contract?.kind==='player-goal'){needs.add('player');continue;}
+  // Supplementary team statistics are requested only when a player has
+  // actually placed a matching bet. The configured providers take priority.
+  if(!/\b(?:player|players|lojtari|individual)\b/.test(name)){
+   if(/\bshots? on (?:target|goal)\b|goditj\w* ne porte/.test(name))needs.add('shotsOnTarget');
+   if(/\bfouls?\b|\bfaulle?\b/.test(name))needs.add('fouls');
+  }
   if(/\b(?:goalscorer|goal scorer|scorer|player)\b.*\b(?:goal|score|scoring|sh[eë]non)\b|\b(?:first|last|anytime)\s+goalscorer/i.test(name))
    needs.add('player');
  }
  return [...needs];
 }
 export const INFORMATION_ENDPOINTS=[
- {key:'aiscore:match',kind:'aiscore',needs:['player'],
+ {key:'aiscore:match',kind:'aiscore',needs:['player','shotsOnTarget','fouls'],
   path:id=>ai+'/match/s?match_id='+encodeURIComponent(id)},
- {key:'aiscore:mlive',kind:'aiscore',needs:['player'],
+ {key:'aiscore:mlive',kind:'aiscore',needs:['player','shotsOnTarget','fouls'],
   path:id=>ai+'/match/mlive?lang=2&match_id='+encodeURIComponent(id)+'&country_code=AL'}
 ];
 export function selectedInformationEndpoints(map,needs){
@@ -242,8 +249,18 @@ export async function inspectFootballInformation(matchId,{runQuery=query,request
      [id,mapped.aiscore_id]);
    mapped.mapping_status='CONFIRMED';
   }
-  if(endpoint.key.startsWith('aiscore:')&&mapped.mapping_status==='CONFIRMED')
+  const fixtureVerified=endpoint.key.startsWith('aiscore:')&&
+   mapped.mapping_status==='CONFIRMED'&&
+   aiscoreFixtureMatches(checked.payload,mapped.aiscore_id,row);
+  if(fixtureVerified){
    await enrichPrimaryScorerNames(id,checked.payload,{execute:runQuery});
+   // Read-only candidates are shown to administrators for comparison. An
+   // undocumented web response is NEVER copied into settlement statistics.
+   // Financial review is still owned by the configured authoritative sources.
+   const candidateStats=parseAiScoreStatCandidates(checked.payload);
+   if(Object.keys(candidateStats).length)
+    descriptor.statCandidates={...candidateStats,settlementAuthorized:false};
+  }
 
  }
  await runQuery('update app_football_information_map set last_checked_at=now(),'+

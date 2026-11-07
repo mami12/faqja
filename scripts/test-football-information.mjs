@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {parseAiScoreStatCandidates} from '../server/stats-providers/aiscore-stat-candidates.mjs';
 import {
  marketInformationNeeds,selectedInformationEndpoints,missingSupplementalNeeds,describeJsonStructure,
  requestFootballInformation,canonicalHttpError,isFootballFixture,
@@ -19,7 +20,8 @@ assert.deepEqual(goal,['player'],'Only missing player identity qualifies; Next G
 const corners=marketInformationNeeds([{market_name:'Race to 7 Corners'},
  {market_name:'Race to 6 Goals'},{market_name:'Goal in minutes 10-20'},
  {market_name:'Total Fouls'},{market_name:'Red Cards'},{market_name:'Shots on Target'}]);
-assert.deepEqual(corners,[],'All goal, corner and statistic markets use PRIMARY or dedicated statistic providers; do not route them through the player-only secondary API');
+assert.deepEqual(corners,['fouls','shotsOnTarget'],
+ 'Goal/corner chronology stays PRIMARY; supplementary AiScore stats are candidate-only');
 assert.deepEqual(marketInformationNeeds([{market_name:'Full Time Result'}]),[]);
 const map={aiscore_id:'j374oi0xz04sgqo',thesports01_id:'4578950',mapping_status:'ADMIN_SUPPLIED_UNVERIFIED'};
 assert.deepEqual(selectedInformationEndpoints(map,[]),[]);
@@ -31,8 +33,18 @@ assert.ok(endpoints.every(x=>!x.url.includes('/odds_list')));
 assert.ok(endpoints.every(x=>!x.url.includes('/user/info')));
 assert.ok(endpoints.every(x=>!x.url.includes('/chat/')));
 const statEndpoints=selectedInformationEndpoints(map,['shotsOnTarget','statistics']);
-assert.deepEqual(statEndpoints.map(x=>x.key),[],
- 'The player-identity-only information adapter must not fetch unverified team statistics');
+assert.deepEqual(statEndpoints.map(x=>x.key),['aiscore:match','aiscore:mlive'],
+ 'Only existing safe AiScore fixture endpoints may be probed for statistic candidates');
+assert.deepEqual(parseAiScoreStatCandidates({data:{match:{statistics:{
+ home:{shots_on_target:5,fouls:11},away:{shots_on_target:3,fouls:13}
+}}}}),{shotsOnTarget:{home:5,away:3},fouls:{home:11,away:13}});
+assert.deepEqual(parseAiScoreStatCandidates({data:{stats:[
+ {type:'Shots on Goal',home:5,away:3},{type:'Fouls',home:11,away:13}
+]}}),{shotsOnTarget:{home:5,away:3},fouls:{home:11,away:13}});
+assert.deepEqual(parseAiScoreStatCandidates({data:{statistics:{
+ home:{shotsOnTarget:5},away:{shotsOnTarget:3}},
+ stats:[{type:'Shots on Goal',home:6,away:3}]
+}}),{},'Conflicting AiScore statistic candidates cannot be trusted');
 assert.deepEqual(missingSupplementalNeeds(['shotsOnTarget','fouls','statistics'],{
  statistics:{shotsOnTarget:{home:5,away:2},fouls:{home:10,away:12}},providersEnabled:true
 }),[],'PRIMARY has all facts, no backup call');

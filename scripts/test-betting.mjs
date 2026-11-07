@@ -10,7 +10,7 @@ const suites = [
   'test-mobile-sportsbar.mjs', 'test-language-browser.mjs', 'test-match-order.mjs', 'test-user-removal.mjs',
   'test-match-pages.mjs', 'test-pending-results.mjs', 'test-subscribe-plan.mjs',
   'test-ticket-pricing.mjs', 'test-manager-finance.mjs', 'test-player-control-policy.mjs',
-  'test-live-risk.mjs', 'test-live-money-risk.mjs', 'test-result-btts.mjs',
+  'test-live-risk.mjs', 'test-live-money-risk.mjs', 'test-basic-outcomes.mjs', 'test-result-btts.mjs',
   'test-mixed-combos.mjs', 'test-bet-builder-admin.mjs', 'test-bet-builder.mjs',
   'test-system-columns.mjs', 'test-system-columns-ledger.mjs', 'test-system-columns-feed.mjs',
   'test-automatic-combos.mjs', 'test-combo-risk-settings.mjs', 'test-combo-placement.mjs', 'test-combo-feasibility.mjs',

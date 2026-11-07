@@ -17,6 +17,8 @@ import {goalTotalContract} from '../server/ledger/goal-total-contract.mjs';
 import {cornerTotalContract} from '../server/ledger/corner-total-contract.mjs';
 import {isResultTotalMarket,isTotalBttsMarket,parseResultTotal,parseTotalBtts} from '../server/ledger/mixed-combos.mjs';
 import {isResultBttsMarket,parseResultBttsOutcome} from '../server/ledger/result-btts.mjs';
+import {basicOutcomeFamily} from '../server/ledger/basic-outcomes.mjs';
+import {aggregateOutcomeFamily} from '../server/ledger/aggregate-outcomes.mjs';
 
 const fold=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
  .toLowerCase().replace(/\s+/g,' ').trim();
@@ -35,6 +37,14 @@ export function auditOffer(row){
  // Highest-risk aliases: the old generic score grader can misinterpret these.
  if(/\b(?:early payout|extra time|overtime|shootout|to qualify|qualif(?:y|ication)|lift the trophy)\b/.test(n))
   return category('DANGER_WRONG_RESULT','Kerkon rregulla per fitimin/promovimin ose kohe tjeter nga 90 minutat');
+ const explicit=basicOutcomeFamily(n)??aggregateOutcomeFamily(n);
+ if(explicit){
+  const statistic=/^STAT_|^CORNERS_|^CARDS_/.test(explicit);
+  return statistic?category('STATS_EVIDENCE_REQUIRED',
+   explicit+': kërkon statistika përfundimtare, të përputhura dhe përzgjedhje të njohur'):
+   category('SCORE_GRADEABLE',
+   explicit+': kërkon rezultat/HT final të verifikuar dhe përzgjedhje të njohur');
+ }
  if(/\b(?:asian|quarter|european)\b/.test(n)||/\bhandicap\b/.test(n))
   return category('DANGER_WRONG_RESULT','Handicap/Asian: linja, baseline live dhe kthimet e pjesshme duhen vertetuar');
  if(/\b(?:first|1st|half.?time)\s*half\b/.test(n)&&/\b(?:cards?|bookings?)\b/.test(n))

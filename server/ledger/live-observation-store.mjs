@@ -21,6 +21,7 @@ export function normalizeLiveFrame(data){
  const corners={home:whole(game.CornersTeam1),away:whole(game.CornersTeam2)};
  const yellows={home:whole(game.YellowCardsTeam1),away:whole(game.YellowCardsTeam2)};
  const reds={home:whole(game.RedCardsTeam1),away:whole(game.RedCardsTeam2)};
+ const fouls={home:whole(game.FoulsTeam1),away:whole(game.FoulsTeam2)};
  const cards=yellows.home==null||yellows.away==null||reds.home==null||reds.away==null?null:
    {home:yellows.home+reds.home,away:yellows.away+reds.away};
  const events=Array.isArray(data?.TimeLines)?
@@ -37,7 +38,7 @@ export function normalizeLiveFrame(data){
      filtered.filter(e=>e.team==='away').length!==counters.away)return;
   coverage[kind+'Through']=clock;
  };
- verify('goal',goals);verify('corner',corners);verify('card',cards);
+ verify('goal',goals);verify('corner',corners);verify('card',cards);verify('foul',fouls);
  // A generic `card` marker is not proof of its colour. Reconcile the
  // separately reported provider totals with every explicitly coloured event.
  const cardEvents=events?.filter(e=>e.type==='card')??[];
@@ -51,8 +52,8 @@ export function normalizeLiveFrame(data){
    goal:goals?goals.home+goals.away:null,
    corner:count(corners.home,corners.away),
    card:cards?cards.home+cards.away:null,
-   foul:null
-  },teams:{goal:goals,corner:corners,card:cards,
+   foul:count(fouls.home,fouls.away)
+  },teams:{goal:goals,corner:corners,card:cards,foul:fouls,
     yellowCard:yellows,redCard:reds},cardColorsVerified,events:events??[],
   coverage,ended:Number(game.EventStatus??game.MatchStatusID)===40,
   eventListAvailable:!!events};
@@ -71,6 +72,39 @@ export const LIVE_OBSERVATION_SQL=[
  'create index if not exists app_live_event_recovery_pending_idx on app_live_event_recovery(status,created_at desc);',
  "create table if not exists app_live_settlement_preview (line_id uuid primary key references app_ticket_line(id) on delete cascade,match_id bigint not null,proposed_status text not null check(proposed_status in ('WON','LOST','VOID')),payload jsonb not null,updated_at timestamptz not null default now());"
 ].join('\n');
+/**
+ * Minimal, durable facts for a live fixture even before its first ticket.
+ * Unlike watched-ticket archives, this stores only reconciled event rows and
+ * coverage, never every raw price/frame, so thousands of offered fixtures do
+ * not multiply API requests or fill disk with identical snapshots.
+ *
+ * The live feed already supplied this payload; this function makes no network
+ * request. A second matching observation confirms incidents. A vanished or
+ * truncated timeline cannot delete valid previously reconciled history.
+ */
+export async function recordPrimaryMatchFacts(matchId,data,{database=pool,now=Date.now}={}){
+ if(!Number.isSafeInteger(Number(matchId))||Number(matchId)<1)
+  return {stored:false,reason:'INVALID_MATCH'};
+ const frame=normalizeLiveFrame(data),stamp=new Date(now());
+ if(!Number.isFinite(stamp.getTime()))return {stored:false,reason:'INVALID_TIME'};
+ if(!frame.eventListAvailable||!Object.keys(frame.coverage).length)
+  return {stored:false,reason:'NO_RECONCILED_EVENTS'};
+ const client=await database.connect();
+ try{
+  await client.query('begin');
+  // The cursor supplies a monotonic confirmation heartbeat for facts
+  // captured before any customer bet. No ticket recovery gap is invented.
+  await client.query('insert into app_live_event_cursor(match_id,last_seen_at) '+
+   'values($1,$2::timestamptz) '+
+   'on conflict(match_id) do update set last_seen_at=excluded.last_seen_at '+
+   'where app_live_event_cursor.last_seen_at<excluded.last_seen_at',[matchId,stamp]);
+  const stored=await persistVerifiedEventFacts(matchId,frame,client.query.bind(client),stamp);
+  await client.query('commit');
+  return {stored:true,events:stored,coverage:Object.keys(frame.coverage).length};
+ }catch(error){await client.query('rollback').catch(()=>{});throw error;}
+ finally{client.release();}
+}
+
 /** Only accepted pending matching bets trigger writes or recovery requests.
  * There is deliberately NO outgoing backup API call until a provider is added.
  */

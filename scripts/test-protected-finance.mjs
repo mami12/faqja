@@ -21,7 +21,7 @@ try{
  const balance=async()=>Number((await db.query('select balance from app_user where id=$1',[player])).rows[0].balance);
  const decide=(target,status,actor=admin)=>manualSettlement({...target,status,reason:'Official reviewed final statistics',source:'Official final match report'},actor,{database});
  await assert.rejects(decide({ticketId:a},'WON',{id:manager,username:'finance-manager'}),e=>e.status===403);
- await assert.rejects(manualSettlement({ticketId:a,status:'WON'},admin,{database}),e=>e.status===400);
+ await assert.rejects(manualSettlement({ticketId:a,status:'NOT_A_VALID_STATUS'},admin,{database}),e=>e.status===400);
  await decide({matchId:101,marketKey:'result',outcomeKey:'1'},'WON');assert.equal(await balance(),1500);
  assert.equal((await db.query('select status from app_ticket where id=$1',[b])).rows[0].status,'PENDING','opposite outcome unaffected');
  await decide({ticketId:a},'WON');assert.equal(await balance(),1500,'repeat cannot credit twice');

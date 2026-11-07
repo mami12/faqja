@@ -10,6 +10,18 @@ const yellow=contract('Total Yellow Cards','Over','0.5');
 const red=contract('Total Red Cards','Over','0.5');
 const scorer=contract('Anytime Goalscorer','Player Alpha');
 const minute=contract('Yellow card in minutes 10-20','Yes');
+// Multi-goal scorer offers must not be silently degraded to Anytime.
+const playerKey='zz900@'+Buffer.from(JSON.stringify({pl:'Player Alpha'})).toString('base64url');
+const playerOffer=(name,label='Yes')=>liveContract({
+ market_name:name,outcome_name:label,market_key:playerKey
+});
+const brace=playerOffer('Player to score 2+ goals');
+const hatTrick=playerOffer('Player to score 3 or more goals');
+assert.equal(brace?.kind,'player-goal');assert.equal(brace?.targetGoals,2);
+assert.equal(hatTrick?.targetGoals,3);
+assert.equal(playerOffer('Player to score 2 goals'),null);
+const exactTwo=playerOffer('Player to score exactly 2 goals');
+assert.equal(exactTwo?.targetGoals,2);assert.equal(exactTwo?.countMode,'exact');
 assert.equal(yellow?.cardColor,'yellow');assert.equal(red?.cardColor,'red');
 assert.equal(minute?.cardColor,'yellow');assert.equal(scorer?.kind,'player-goal');
 assert.equal(contract('Second Yellow Cards','Over','0.5'),null);
@@ -29,11 +41,15 @@ const db=new PGlite();try{
  const ticket=(await q("insert into app_ticket(user_id,stake,total_odds,potential_payout,status,placed_at) values($1,50,2,100,'PENDING',$2) returning id",[user,new Date(now-10000)])).rows[0].id;
  const put=async(c,name)=>(await q("insert into app_ticket_line(ticket_id,match_id,market_key,outcome_key,outcome_name,market_name,match_name,odds_at_placement,live_contract) values($1,$2,$3,'Yes','Yes',$3,'Home vs Away',2,$4::jsonb) returning *",[ticket,matchId,name,JSON.stringify(c)])).rows[0];
  const y=await put(yellow,'yellow'),r=await put(red,'red'),p=await put(scorer,'scorer'),m=await put(minute,'minute');
+ const braceLine=await put(brace,'brace');
+ const exactLine=await put(exactTwo,'exact');
  const capture=(f,ms)=>recordWatchedLiveFrame(matchId,f,{database,now:()=>now+ms});
  const judge=l=>gradeStoredEventContract(l,null,{execute:q});
  await capture(frame(),0);assert.equal(await judge(y),null);
  await capture(frame(),6000);assert.equal(await judge(y),'WON');
  assert.equal(await judge(r),null);assert.equal(await judge(p),'WON');
+ assert.equal(await judge(braceLine),null,'One scorer goal must not pay a 2+ selection');
+ assert.equal(await judge(exactLine),null,'Exactly 2 cannot win until final confirmation');
  assert.equal(await judge(m),'WON');
  await capture(frame('card'),12000);assert.equal(await judge(y),null);
  await capture(frame('card'),18000);assert.equal(await judge(y),null);
@@ -47,6 +63,30 @@ const db=new PGlite();try{
  const facts=(await q('select kind,card_color,own_goal from app_match_event_fact where match_id=$1 and active',[matchId])).rows;
  assert.equal(facts.find(f=>f.kind==='card').card_color,'red');
  assert.equal(facts.find(f=>f.kind==='goal').own_goal,true);
+ // A separate watched fixture proves the accepted 2+ target after two stable polls.
+ const braceMatchId=matchId+1;
+ const multi=(await q("insert into app_ticket_line(ticket_id,match_id,market_key,outcome_key,outcome_name,market_name,match_name,odds_at_placement,live_contract) values($1,$2,$3,'Yes','Yes','Player to score 2+ goals','Home vs Away',2,$4::jsonb) returning *",
+  [ticket,braceMatchId,playerKey,JSON.stringify(brace)])).rows[0];
+ const goalFrame=two=>({
+  Match:{Score:two?'2:0':'1:0',MatchTimeExtended:'32:00',EventStatus:6,
+   CornersTeam1:0,CornersTeam2:0,YellowCardsTeam1:0,YellowCardsTeam2:0,
+   RedCardsTeam1:0,RedCardsTeam2:0},
+  TimeLines:[
+   {id:'g1',type:'score_change',team:1,gt:9,clk:'08:35',pl:'Player Alpha',ownGoal:false},
+   ...(two?[{id:'g2',type:'score_change',team:1,gt:29,clk:'28:12',
+    pl:'Player Alpha',ownGoal:false}]:[])
+  ]
+ });
+ const captureMulti=(two,ms)=>recordWatchedLiveFrame(braceMatchId,goalFrame(two),{
+  database,now:()=>now+ms
+ });
+ await captureMulti(false,48000);await captureMulti(false,54000);
+ assert.equal(await judge(multi),null,'One confirmed goal still fails 2+ threshold');
+ await captureMulti(true,60000);
+ assert.equal(await judge(multi),null,'One poll cannot trigger a multi-goal payout');
+ await captureMulti(true,66000);
+ assert.equal(await judge(multi),'WON','Two verified goals satisfy 2+ scorer market');
+ assert.equal(await judge(exactLine),null,'Other fixture events cannot settle exact count');
  assert.equal(Number((await q('select balance from app_user where id=$1',[user])).rows[0].balance),1000);
  console.log('PASS separate yellow/red cards, verified scorer and own-goal correction in PostgreSQL');
 }finally{await db.close();}

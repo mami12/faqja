@@ -27,6 +27,8 @@ import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
 import {gradeStoredEventContract,SUPPORTED_FACT_KINDS} from './match-event-facts.mjs';
 import {backfillPendingTeamGoalContracts} from './live-contract-backfill.mjs';
 import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
+import {basicOutcomeFamily,gradeBasicOutcome,isProvenDrawNoBetPush} from './basic-outcomes.mjs';
+import {aggregateOutcomeFamily,hasAggregateOutcomeEvidence,gradeAggregateOutcome} from './aggregate-outcomes.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -73,7 +75,9 @@ export function hasRequiredSettlementEvidence(line, result) {
   if(/\b(?:yellow|red)\s+cards?\b/i.test(String(line?.market_name??'')))return false;
   if(statisticsNeedReview(line,result))return false;
   if (Array.isArray(line.builder_legs)) return line.builder_legs.every(leg => hasRequiredSettlementEvidence(leg, result));
+  if (aggregateOutcomeFamily(line.market_name))return hasAggregateOutcomeEvidence(line,result);
   if (needsEvents(line)) return ['WON','LOST','VOID'].includes(gradeEventLine(line,result));
+  if (aggregateOutcomeFamily(line.market_name))return hasAggregateOutcomeEvidence(line,result);
   if (isStatisticMarket(line)) return hasStatisticEvidence(line,result);
   const marketName = String(line.market_name ?? '');
   if (isFirstHalfLine(marketName) && (result.half_home_score == null || result.half_away_score == null)) return false;
@@ -95,6 +99,13 @@ export function hasRequiredSettlementEvidence(line, result) {
  * VOID is allowed only for a proved settlement-rule push/cancellation.
  */
 export function gradeLine(line, result) {
+  // Explicit aggregate categories may also be described as provider EVENT
+  // markets. Their verified FT/HT counters are sufficient, whereas an
+  // incident timeline is mandatory only for time-ordered propositions.
+  if(!Array.isArray(line.builder_legs)&&aggregateOutcomeFamily(line.market_name)){
+    if(!hasRequiredSettlementEvidence(line,result))return null;
+    return gradeAggregateOutcome(line,result);
+  }
   if(needsEvents(line)&&!Array.isArray(line.builder_legs))return gradeEventLine(line,result)??null;
   if (line.builder_legs !== null && line.builder_legs !== undefined) {
     const legs = line.builder_legs;
@@ -102,6 +113,15 @@ export function gradeLine(line, result) {
     const statuses = legs.map(leg => gradeLine(leg,result));
     if (statuses.includes('LOST')) return 'LOST';
     return statuses.every(s => s === 'WON') ? 'WON' : statuses.every(s => ['WON','VOID'].includes(s)) ? 'VOID' : null;
+  }
+  // Full-time result-only contracts use exact market families; never allow
+  // a correct-score / DNB / HT-FT / correlated DC+BTTS label to fall into
+  // the generic TOTAL or 1X2 handlers.
+  const basicFamily=basicOutcomeFamily(line.market_name);
+  if(basicFamily)return gradeBasicOutcome(line,result,basicFamily);
+  if(aggregateOutcomeFamily(line.market_name)){
+    if(statisticsNeedReview(line,result))return null;
+    return gradeAggregateOutcome(line,result);
   }
   // 1H totals and BTTS cannot be graded from the full-time score. Their
   // original ticket contract is snapshotted in market_name.
@@ -377,11 +397,17 @@ export async function settleMatch(matchId) {
     // never parsed from a translated/displayed name at settlement time.
     if(line.live_contract&&SUPPORTED_FACT_KINDS.has(line.live_contract.kind)){
       status=await gradeStoredEventContract(line,result,{execute:query});
+      // An FT aggregate (e.g. goals/corners in a fixed band) needs only
+      // confirmed FT counters. Never require a full timeline to prove an
+      // outcome whose original contract is explicitly result-only.
+      if(status==null&&aggregateOutcomeFamily(line.market_name)&&
+         hasRequiredSettlementEvidence(line,result))
+        status=gradeAggregateOutcome(line,result);
     }else if(hasRequiredSettlementEvidence(line,result)){
       status=gradeLine(line,result);
       // Only a proved two-way integer push is refundable on the legacy path.
       // Unsupported parsing remains PENDING.
-      if(status==='VOID'&&!isProvenTwoWayTotalPush(line,result))status=null;
+      if(status==='VOID'&&!isProvenTwoWayTotalPush(line,result)&&!isProvenDrawNoBetPush(line,result))status=null;
     }
     if(!['WON','LOST','VOID'].includes(status))continue; // incomplete feed => PENDING
     const updated=await updatePendingLine(line.id,status,line.ticket_id);
@@ -424,7 +450,6 @@ export async function settleVerifiedEventFacts({
      and e.kind=l.live_contract->>'event' and e.provider='zizobet'
    where l.status='PENDING' and t.status='PENDING'
      and l.live_contract is not null
-     and (l.market_key like 'zz%@%' or l.accepted_contract->>'providerMarketKey' like 'zz%@%')
      and not exists(select 1 from app_settlement_override o where o.line_id=l.id)
    order by e.observed_at desc,l.match_id,l.id
    limit $1`,[cap]);
