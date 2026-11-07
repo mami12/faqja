@@ -389,6 +389,12 @@ export async function settleMatch(matchId) {
     // never parsed from a translated/displayed name at settlement time.
     if(line.live_contract&&SUPPORTED_FACT_KINDS.has(line.live_contract.kind)){
       status=await gradeStoredEventContract(line,result,{execute:query});
+      // An FT aggregate (e.g. goals/corners in a fixed band) needs only
+      // confirmed FT counters. Never require a full timeline to prove an
+      // outcome whose original contract is explicitly result-only.
+      if(status==null&&aggregateOutcomeFamily(line.market_name)&&
+         hasRequiredSettlementEvidence(line,result))
+        status=gradeAggregateOutcome(line,result);
     }else if(hasRequiredSettlementEvidence(line,result)){
       status=gradeLine(line,result);
       // Only a proved two-way integer push is refundable on the legacy path.
