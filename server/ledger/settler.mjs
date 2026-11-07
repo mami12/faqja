@@ -27,6 +27,7 @@ import {createLiveSettlementPreviews} from './live-shadow-settlement.mjs';
 import {gradeStoredEventContract,SUPPORTED_FACT_KINDS} from './match-event-facts.mjs';
 import {backfillPendingTeamGoalContracts} from './live-contract-backfill.mjs';
 import {settleVerifiedLiveProposals} from './verified-live-settlement.mjs';
+import {basicOutcomeFamily,gradeBasicOutcome,isProvenDrawNoBetPush} from './basic-outcomes.mjs';
 
 const round = (n) => Number(Number(n).toFixed(2));
 
@@ -103,6 +104,11 @@ export function gradeLine(line, result) {
     if (statuses.includes('LOST')) return 'LOST';
     return statuses.every(s => s === 'WON') ? 'WON' : statuses.every(s => ['WON','VOID'].includes(s)) ? 'VOID' : null;
   }
+  // Full-time result-only contracts use exact market families; never allow
+  // a correct-score / DNB / HT-FT / correlated DC+BTTS label to fall into
+  // the generic TOTAL or 1X2 handlers.
+  const basicFamily=basicOutcomeFamily(line.market_name);
+  if(basicFamily)return gradeBasicOutcome(line,result,basicFamily);
   // 1H totals and BTTS cannot be graded from the full-time score. Their
   // original ticket contract is snapshotted in market_name.
   if (!hasRequiredSettlementEvidence(line, result)) return null;
@@ -381,7 +387,7 @@ export async function settleMatch(matchId) {
       status=gradeLine(line,result);
       // Only a proved two-way integer push is refundable on the legacy path.
       // Unsupported parsing remains PENDING.
-      if(status==='VOID'&&!isProvenTwoWayTotalPush(line,result))status=null;
+      if(status==='VOID'&&!isProvenTwoWayTotalPush(line,result)&&!isProvenDrawNoBetPush(line,result))status=null;
     }
     if(!['WON','LOST','VOID'].includes(status))continue; // incomplete feed => PENDING
     const updated=await updatePendingLine(line.id,status,line.ticket_id);
