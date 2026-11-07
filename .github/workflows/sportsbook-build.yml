@@ -80,6 +80,11 @@ jobs:
           node scripts/test-zizobet-info-history.mjs
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
+      - name: Validate advanced market-key settlement and fair event collection
+        run: |
+          node scripts/test-advanced-settlement-market-keys.mjs
+          node scripts/test-event-collector-queue.mjs
+          node --check scripts/audit-advanced-settlement.mjs
       - name: Validate selective offline backup queue and live shadow settlement
         run: node scripts/test-live-observation-recovery.mjs
       - name: Validate 3-10-character player password rules
