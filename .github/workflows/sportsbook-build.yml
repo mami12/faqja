@@ -75,6 +75,8 @@ jobs:
           node scripts/test-provider-event-facts-sql.mjs
           node scripts/test-persisted-primary-confirmation.mjs
           node scripts/test-zizobet-card-colors-scorers.mjs
+          node scripts/test-provider-offer-archive.mjs
+          node scripts/test-exact-minute-provider-settlement.mjs
           node scripts/test-zizobet-info-history.mjs
           node scripts/test-verified-live-settlement.mjs
           node scripts/test-live-settlement-money-flow.mjs
