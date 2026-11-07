@@ -52,7 +52,7 @@ export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,onMarketDe
   catalogAt=now();
   // These dictionaries are ALREADY fetched for odds parsing. Persist their
   // native titles and rule metadata without any additional HTTP API calls.
-  const definitions=[
+  const archivalDefinitions=[
    ...[...meta.liveMarkets].map(([id,definition])=>({
     provider:'ZIZOBET',scope:'LIVE',id,name:definition.Name??definition.nm,
     definition
@@ -62,7 +62,7 @@ export function startZizoFeed({onMatch,onInfo,onOdds,onStatus,onCycle,onMarketDe
     name:definition.Name??definition.name,definition
    }))
   ];
-  void Promise.resolve().then(()=>onMarketDefinitions(definitions))
+  void Promise.resolve().then(()=>onMarketDefinitions(archivalDefinitions))
    .catch(e=>console.warn('[zizobet] native market catalog archive:',e.message));
  }
  async function liveList(){
